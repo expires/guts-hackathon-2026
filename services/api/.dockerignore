@@ -1,0 +1,25 @@
+# Keep the build context small and free of secrets. Owned by W8.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.cache/
+
+# Tests and recorded fixtures are not needed at runtime.
+tests/
+
+Dockerfile
+.dockerignore
+.DS_Store
