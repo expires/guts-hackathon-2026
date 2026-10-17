@@ -1,0 +1,16 @@
+# INDEX formula weights. The ONLY place these numbers live. See docs/index.md.
+#
+#   R(t)     = (NetWorth(t) - NetWorth(0)) / max(AnnualIncome(0), min_income0)
+#   Index(t) = base * (1 + r_weight * (R_player(t) - R_autopilot(t)))
+#              - missed_payment_penalty * missedPayments
+#              - drawdown_penalty * maxDrawdownFraction_player
+#   floored at `floor`.
+
+[index]
+base = 100.0
+r_weight = 0.1
+missed_payment_penalty = 2.0
+drawdown_penalty = 20.0
+floor = 0.0
+# Guards R(t) against division by a zero or tiny starting income (students, carers).
+min_income0 = 10000.0

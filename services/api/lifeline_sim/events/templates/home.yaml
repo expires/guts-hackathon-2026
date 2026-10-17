@@ -1,0 +1,396 @@
+# Home events. Schema: lifeline_sim/events/schema.py
+
+- id: home.rent_rise
+  area: home
+  emoji: "🏠"
+  title: Your rent is going up
+  text: "Your landlord wants £{rent_increase_monthly:,.0f} more a month. Rents in your area rose {rent_change_pct:.1f}% this year."
+  concept_id: inflation
+  eligible:
+    age: [16, 110]
+    housing: [rent]
+    when: rent > 0
+  probability: clamp(0.3 + rent_change / 15, 0.1, 0.8)
+  facts:
+    rent_change_pct: rent_change
+    rent_increase_monthly: round(rent * max(rent_change, 2) / 100)
+    annual_increase: rent_increase_monthly * 12
+    move_cost: round(max(600 * price_level, rent * 0.8))
+    cheaper_saving: round(rent * 0.1)
+  choices:
+    - id: accept
+      label: Pay it
+      emoji: "💷"
+      hint: "-£{annual_increase:,.0f} a year"
+      default: true
+      text: "You pay the extra £{rent_increase_monthly:,.0f} a month."
+      good: false
+      effects: { rent: rent_increase_monthly }
+    - id: move
+      label: Move somewhere cheaper
+      emoji: "📦"
+      hint: "-£{move_cost:,.0f} once, then £{cheaper_saving:,.0f} a month less"
+      text: "You moved to a cheaper flat. Moving cost £{move_cost:,.0f}."
+      good: true
+      effects: { cash: -move_cost, rent: -cheaper_saving, happiness: -3 }
+
+- id: home.deal_ends
+  area: home
+  priority: 3
+  tags: [mortgage_deal_end]
+  emoji: "📅"
+  title: Your mortgage deal is ending
+  text: "Your fixed rate ends this year. A 2-year fix is {rate_2y:.2f}% and a 5-year fix is {rate_5y:.2f}%. A tracker starts at {tracker_rate:.2f}% and moves with the Bank Rate. Doing nothing moves you to {svr:.2f}%."
+  concept_id: interest-rates
+  eligible:
+    age: [18, 110]
+    housing: [mortgage]
+    when: has_mortgage and fixed_until <= year
+  probability: 1
+  facts:
+    rate_2y: mortgage_2y_fix
+    rate_5y: mortgage_5y_fix
+    svr: svr_rate
+    bank_now: bank_rate
+    tracker_rate: bank_rate + tracker_margin
+    balance: round(mortgage_balance)
+    years_left: mortgage_years_left
+    pay_2y: round(balance * (rate_2y / 1200) / (1 - (1 + rate_2y / 1200) ** -(max(years_left, 1) * 12)))
+    pay_5y: round(balance * (rate_5y / 1200) / (1 - (1 + rate_5y / 1200) ** -(max(years_left, 1) * 12)))
+    pay_svr: round(balance * (svr / 1200) / (1 - (1 + svr / 1200) ** -(max(years_left, 1) * 12)))
+    two: 2
+    five: 5
+    zero: 0
+    tracker_years: tracker_deal_years
+    on: 1
+  choices:
+    - id: fix_2y
+      label: Fix for 2 years
+      emoji: "2️⃣"
+      hint: "{rate_2y:.2f}%, about £{pay_2y:,.0f} a month for 2 years"
+      default: true
+      text: "You fixed at {rate_2y:.2f}% for 2 years. Your payment is about £{pay_2y:,.0f} a month."
+      good: rate_2y <= svr
+      effects: { set_mortgage_rate: rate_2y, set_mortgage_fix_years: two }
+    - id: fix_5y
+      label: Fix for 5 years
+      emoji: "5️⃣"
+      hint: "{rate_5y:.2f}%, about £{pay_5y:,.0f} a month for 5 years"
+      text: "You fixed at {rate_5y:.2f}% for 5 years. Your payment is about £{pay_5y:,.0f} a month."
+      good: rate_5y <= svr
+      effects: { set_mortgage_rate: rate_5y, set_mortgage_fix_years: five }
+    - id: tracker
+      label: Take a tracker
+      emoji: "📈"
+      hint: "{tracker_rate:.2f}% now, moves with the Bank Rate"
+      text: "You took a tracker at {tracker_rate:.2f}%. It moves with the Bank Rate for 2 years."
+      good: tracker_rate <= rate_2y
+      effects: { set_mortgage_rate: tracker_rate, set_mortgage_fix_years: tracker_years, set_mortgage_tracker: on }
+    - id: svr
+      label: Do nothing
+      emoji: "🤷"
+      aliases: [keep, do_nothing, variable]
+      hint: "{svr:.2f}%, about £{pay_svr:,.0f} a month, and it can change"
+      text: "You moved to the standard rate of {svr:.2f}%."
+      good: false
+      effects: { set_mortgage_rate: svr, set_mortgage_fix_years: zero }
+
+- id: home.boiler_breaks
+  area: home
+  tags: [emergency_fund]
+  emoji: "🔥"
+  title: The boiler breaks
+  text: "No hot water. A new boiler costs £{replace_cost:,.0f}. A repair is £{patch_cost:,.0f} but may not last."
+  concept_id: emergency-fund
+  eligible:
+    housing: [own, mortgage]
+  probability: 0.08
+  facts:
+    replace_cost: round(2800 * price_level)
+    patch_cost: round(350 * price_level)
+    second_bill: round(replace_cost + patch_cost)
+  choices:
+    - id: replace
+      label: Replace it
+      emoji: "🆕"
+      hint: "-£{replace_cost:,.0f}"
+      default: true
+      text: "New boiler fitted for £{replace_cost:,.0f}."
+      good: true
+      effects: { cash: -replace_cost, happiness: 1 }
+    - id: patch
+      label: Patch it up
+      emoji: "🔧"
+      hint: "-£{patch_cost:,.0f}, it might fail again"
+      branches:
+        - p: 0.55
+          text: "The £{patch_cost:,.0f} repair held up."
+          good: true
+          effects: { cash: -patch_cost }
+        - text: "It broke again in winter. You paid £{second_bill:,.0f} in total."
+          good: false
+          effects: { cash: -second_bill, health: -2, happiness: -3 }
+
+- id: home.price_crash
+  area: home
+  priority: 2
+  emoji: "📉"
+  title: House prices are falling
+  text: "Homes in your area lost {drop_pct:.1f}% of their value this year. Yours fell about £{value_loss:,.0f} to £{home_value:,.0f}. You owe £{owed:,.0f} on it."
+  concept_id: house-prices
+  eligible:
+    housing: [own, mortgage]
+  probability: clamp((-house_price_change - 2) / 8, 0, 1)
+  facts:
+    drop_pct: -house_price_change
+    home_value: round(property_value)
+    value_loss: round(property_value * drop_pct / (100 - drop_pct))
+    owed: round(mortgage_balance)
+    equity: home_value - owed
+    sale_loss: round(property_value * 0.05)
+    overpay: round(min(savings * 0.3, mortgage_balance))
+  choices:
+    - id: hold
+      label: Sit tight
+      emoji: "🧘"
+      hint: No cost unless you sell
+      default: true
+      text: "You stay put and wait for prices to recover."
+      good: true
+      effects: { happiness: -2 }
+    - id: overpay
+      label: Pay some mortgage off
+      emoji: "🏦"
+      hint: "Move £{overpay:,.0f} of savings to the mortgage"
+      text: "You overpaid £{overpay:,.0f}. You are further from negative equity."
+      good: true
+      effects: { savings: -overpay, mortgage_balance: -overpay }
+    - id: panic
+      label: Sell before it gets worse
+      emoji: "😱"
+      hint: "Fees and a low price, about -£{sale_loss:,.0f}"
+      text: "You sold low and moved. Fees and the low price cost about £{sale_loss:,.0f}."
+      good: false
+      effects: { property_value: -sale_loss, happiness: -5 }
+
+- id: home.negative_equity
+  area: home
+  priority: 2
+  emoji: "⚠️"
+  title: You owe more than your home is worth
+  text: "After a {drop_pct:.1f}% fall, your home is worth £{home_value:,.0f} but you owe £{owed:,.0f}. You cannot remortgage until prices recover or you pay down £{gap:,.0f}."
+  concept_id: house-prices
+  eligible:
+    housing: [mortgage]
+    when: mortgage_balance > property_value
+  probability: 1 if house_price_change < 0 else 0
+  facts:
+    drop_pct: -house_price_change
+    home_value: round(property_value)
+    owed: round(mortgage_balance)
+    gap: owed - home_value
+    pay_down: round(min(savings * 0.5, gap))
+    fees: round(home_value * 0.03)
+    rent_est: round(home_value * 0.045 / 12)
+  choices:
+    - id: wait
+      label: Wait it out
+      emoji: "⏳"
+      hint: Keep paying, prices may recover
+      default: true
+      text: "You keep paying and wait for prices to recover."
+      good: true
+      effects: { happiness: -4 }
+    - id: pay_down
+      label: Pay some off from savings
+      emoji: "🏦"
+      hint: "-£{pay_down:,.0f} of savings"
+      text: "You paid £{pay_down:,.0f} off the mortgage."
+      good: true
+      effects: { savings: -pay_down, mortgage_balance: -pay_down }
+    - id: sell
+      label: Sell and rent
+      emoji: "📦"
+      hint: "Turn a £{gap:,.0f} gap into debt"
+      text: "You sold for £{home_value:,.0f}. The £{gap:,.0f} still owed plus £{fees:,.0f} fees is now a loan, and you rent."
+      good: false
+      effects:
+        property_value: -home_value
+        mortgage_balance: -owed
+        other_debt: gap + fees
+        set_housing: rent
+        rent: rent_est
+        happiness: -8
+
+- id: home.buy_the_dip
+  area: home
+  priority: 1
+  emoji: "🏷️"
+  title: House prices have fallen
+  text: "Homes in your area fell {drop_pct:.1f}% this year. A flat now costs about £{price:,.0f}. The {deposit_pct:.0f}% deposit is £{deposit:,.0f}, and a 2-year fix is {rate:.2f}%."
+  concept_id: house-prices
+  eligible:
+    age: [21, 55]
+    housing: [rent]
+    when: employed
+  probability: clamp((-house_price_change - 3) / 8, 0, 0.9)
+  facts:
+    drop_pct: -house_price_change
+    price: round(house_price * 0.8)
+    deposit_pct: 15
+    deposit: round(price * deposit_pct / 100)
+    can_afford: 1 if liquid >= deposit + 2000 else 0
+    loan: price - deposit
+    rate: mortgage_2y_fix
+    payment: round(loan * (rate / 1200) / (1 - (1 + rate / 1200) ** -300))
+    fees: round(1800 * price_level)
+    rent_now: rent
+    term: 25
+    fix: 2
+  choices:
+    - id: keep_renting
+      label: Keep renting
+      emoji: "🏢"
+      hint: Wait and see
+      default: true
+      text: "You keep renting. Prices might fall further, or bounce back."
+      good: true
+      effects: { }
+    - id: buy
+      label: Buy now
+      emoji: "🏡"
+      hint: "-£{deposit:,.0f} deposit, about £{payment:,.0f} a month"
+      branches:
+        - p: can_afford
+          text: "You bought a flat for £{price:,.0f} after the fall."
+          good: true
+          effects:
+            cash: -deposit - fees
+            property_value: price
+            mortgage_balance: loan
+            rent: -rent_now
+            set_housing: mortgage
+            set_mortgage_rate: rate
+            set_mortgage_fix_years: fix
+            set_mortgage_years_left: term
+            happiness: 8
+        - text: "Lenders want a {deposit_pct:.0f}% deposit after the crash. You could not raise £{deposit:,.0f}."
+          good: false
+          effects: { happiness: -3 }
+
+- id: home.variable_rate_cut
+  area: home
+  tags: [mortgage_rate_change]
+  priority: 1
+  emoji: "⬇️"
+  title: Your mortgage payment falls
+  text: "The Bank Rate fell from {old_rate:.2f}% to {new_rate:.2f}%. On a variable rate your mortgage is now {variable_pct:.2f}%, about £{saving_monthly:,.0f} a month less."
+  concept_id: interest-rates
+  eligible:
+    housing: [mortgage]
+    when: on_variable
+  probability: 1 if bank_rate - prev_bank_rate <= -0.25 else 0
+  facts:
+    old_rate: prev_bank_rate
+    new_rate: bank_rate
+    variable_pct: svr_rate
+    saving_monthly: round(mortgage_balance * (prev_bank_rate - bank_rate) / 1200)
+    overpay_annual: saving_monthly * 12
+  choices:
+    - id: enjoy
+      aliases: [keep]
+      label: Enjoy the lower payment
+      emoji: "😌"
+      hint: "£{saving_monthly:,.0f} a month extra to spend"
+      default: true
+      text: "You enjoy the lower payment."
+      good: false
+      effects: { happiness: 3 }
+    - id: overpay
+      label: Keep paying the old amount
+      emoji: "🏦"
+      hint: "Clear £{overpay_annual:,.0f} more debt this year"
+      text: "You keep paying the old amount and clear £{overpay_annual:,.0f} extra."
+      good: true
+      effects: { cash: -overpay_annual, mortgage_balance: -overpay_annual }
+
+- id: home.first_home
+  area: home
+  emoji: "🔑"
+  title: A flat you can afford
+  text: "A home near you is for sale at £{price:,.0f}. You have the {deposit_pct:.0f}% deposit of £{deposit:,.0f}. A 2-year fix is {rate:.2f}%, so you would pay about £{payment:,.0f} a month."
+  concept_id: interest-rates
+  eligible:
+    age: [21, 50]
+    housing: [rent]
+    when: employed and liquid >= house_price * 0.8 * 0.1 + 2000
+  probability: 0.3
+  facts:
+    price: round(house_price * 0.8)
+    deposit_pct: 10
+    deposit: round(price * deposit_pct / 100)
+    loan: price - deposit
+    rate: mortgage_2y_fix
+    payment: round(loan * (rate / 1200) / (1 - (1 + rate / 1200) ** -300))
+    fees: round(1800 * price_level)
+    rent_now: rent
+    term: 25
+    fix: 2
+  choices:
+    - id: keep_renting
+      label: Keep renting
+      emoji: "🏢"
+      hint: Keep your savings
+      default: true
+      text: "You keep renting for now."
+      good: false
+      effects: { happiness: -1 }
+    - id: buy
+      label: Buy it
+      emoji: "🏡"
+      hint: "-£{deposit:,.0f} deposit, £{payment:,.0f} a month"
+      text: "You bought your first home for £{price:,.0f}."
+      good: true
+      effects:
+        cash: -deposit - fees
+        property_value: price
+        mortgage_balance: loan
+        rent: -rent_now
+        set_housing: mortgage
+        set_mortgage_rate: rate
+        set_mortgage_fix_years: fix
+        set_mortgage_years_left: term
+        happiness: 8
+
+- id: home.landlord_sells
+  area: home
+  tags: [emergency_fund]
+  emoji: "🪧"
+  title: Your landlord is selling up
+  text: "You have two months to leave. Moving costs about £{moving_cost:,.0f}. Similar places cost £{new_rent_rise:,.0f} a month more after this year's {rent_change_pct:.1f}% rise."
+  concept_id: emergency-fund
+  eligible:
+    housing: [rent]
+    when: rent > 0
+  probability: 0.06
+  facts:
+    rent_change_pct: rent_change
+    moving_cost: round(max(rent * 1.5, 700 * price_level))
+    new_rent_rise: round(rent * max(rent_change, 0) / 100)
+    further_saving: round(rent * 0.12)
+  choices:
+    - id: nearby
+      label: Find a place nearby
+      emoji: "📍"
+      hint: "-£{moving_cost:,.0f}, rent +£{new_rent_rise:,.0f} a month"
+      default: true
+      text: "You moved round the corner for £{moving_cost:,.0f}."
+      good: false
+      effects: { cash: -moving_cost, rent: new_rent_rise, happiness: -3 }
+    - id: further
+      label: Move further out
+      emoji: "🚌"
+      hint: "-£{moving_cost:,.0f}, rent -£{further_saving:,.0f} a month"
+      text: "You moved further out and pay £{further_saving:,.0f} a month less."
+      good: true
+      effects: { cash: -moving_cost, rent: -further_saving, happiness: -5 }

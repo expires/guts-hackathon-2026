@@ -1,0 +1,112 @@
+# The INDEX
+
+The INDEX scores how well a player manages money compared with an "autopilot" twin. A score of 100 means "as good as autopilot, with no missed payments and no falls in wealth".
+
+- Code: `services/api/lifeline_sim/index.py`
+- Weights: `services/api/lifeline_sim/config/index.toml` (the only place the weights live)
+- Tests: `services/api/tests/unit/sim/test_index.py`
+
+## Terms
+
+| Term | Meaning |
+|---|---|
+| Autopilot twin | Same character, same seed, same macro data. Takes the default choice at every event. Takes no tab actions. |
+| NetWorth(t) | cash + savings + investments + crypto + pension + home value − mortgage − card debt − student loan, at time t. |
+| NetWorth(0) | Net worth at the start of the life. Player and twin share it. |
+| AnnualIncome(0) | Gross annual income at the start of the life (`CharacterSpec.annual_income`). |
+| missedPayments | Months in which the player could not cover required costs from cash and savings. Counted at each AGE (max 12 per year). |
+| maxDrawdownFraction | Largest fall from a running peak in net worth, as a fraction. Range 0 to 1. |
+
+## Formula
+
+BUILD_SPEC form (player penalties only):
+
+```
+Index(t) = 100 × (1 + 0.1 × (R_player − R_autopilot)) − 2 × missed_p − 20 × dd_p
+```
+
+Form used in code (ADR 0013, penalties relative to the twin):
+
+```
+R(t)     = (NetWorth(t) − NetWorth(0)) / max(AnnualIncome(0), min_income0)
+
+Index(t) = base × (1 + r_weight × (R_player(t) − R_autopilot(t)))
+           − missed_payment_penalty × (missed_p − missed_a)
+           − drawdown_penalty × (dd_p − dd_a)
+
+Index(t) = max(Index(t), floor)
+```
+
+`missed_a` and `dd_a` are the twin's missed payments and largest drawdown.
+
+Reason: with player-only penalties, a player who copies the twin scores below 100 whenever the shared life has a missed payment or a fall in wealth. In checks, 0 of 25 all-default lives were penalty-free. The relative form gives exactly 100 for a copy of the twin, for every seed. When the twin has no missed payments and no drawdown, both forms give the same value.
+
+Weights from `index.toml`:
+
+| Key | Value |
+|---|---|
+| `base` | 100 |
+| `r_weight` | 0.1 |
+| `missed_payment_penalty` | 2 |
+| `drawdown_penalty` | 20 |
+| `floor` | 0 |
+| `min_income0` | 10,000 |
+
+`min_income0` stops a division by zero (or by a very small income) for students and other lives with little starting pay.
+
+## Drawdown
+
+The sim tracks the player's net worth after every AGE and after every choice.
+
+```
+peak      = highest net worth so far (starts at NetWorth(0))
+drawdown  = (peak − NetWorth) / max(peak, AnnualIncome(0) with the min_income0 floor)
+maxDrawdownFraction = largest drawdown so far, clamped to [0, 1]
+```
+
+The denominator uses income when the peak is small or negative. A person in debt is measured against their pay. A wealthy person is measured against their wealth.
+
+## When the Index updates
+
+1. AGE: the year passes for the player and the twin. While the player has open events, the twin is compared before it answers any of this year's events. Ageing moves both lives with the same data, so the Index does not jump before the player answers.
+2. Each choice: the twin answers (with its default) the events whose ids the player has answered this year. The Index updates.
+3. When the player has no open events, the twin has answered all of its events for the year. A player who took every default then has R_player = R_autopilot and the same penalties, so the Index is exactly 100.
+
+The Index can still move at AGE when the player's choices made the two lives different. For example, a player who holds more shares than the twin gains or loses more in a market year. That movement is real.
+
+## Worked example
+
+Amira, a nurse in Leeds. AnnualIncome(0) = £24,800. NetWorth(0) = −£10,500.
+
+Some years later:
+
+- Player net worth: £14,300
+- Twin net worth: £9,340
+- Missed payments: 1 (twin: 0)
+- Largest fall: from a peak of £20,000 to £18,760, so drawdown = 1,240 / max(20,000, 24,800) = 0.05 (twin: 0)
+
+Step 1. R values.
+
+```
+R_player    = (14,300 − (−10,500)) / 24,800 = 24,800 / 24,800 = 1.00
+R_autopilot = ( 9,340 − (−10,500)) / 24,800 = 19,840 / 24,800 = 0.80
+```
+
+Step 2. Index.
+
+```
+Index = 100 × (1 + 0.1 × (1.00 − 0.80)) − 2 × 1 − 20 × 0.05
+      = 100 × 1.02 − 2 − 1
+      = 99.0
+```
+
+The twin has no penalties, so both forms give the same value. Amira beat her twin by 0.2 years of starting pay (+2 points). The missed payment (−2) and the fall in wealth (−1) cancel that out.
+
+## Properties (tested)
+
+- Fairness: a player who takes every default scores exactly 100 at the end of every year, for any seed and character (Hypothesis test).
+- Beating the twin on missed payments or drawdown raises the Index above 100.
+- Monotone: the Index never falls when R_player rises.
+- The Index never rises when missed payments or drawdown rise.
+- Floor: the Index is never below 0.
+- No upper cap. A player far ahead of the twin can score well above 100.
