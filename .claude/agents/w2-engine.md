@@ -38,3 +38,6 @@ Items 1-4 plus `random_character`. `decide` and `evaluate` may be minimal but mu
 ## Tier 1 addition, TOP PRIORITY: Next Move engine (ADR 0018)
 - `lifeline_engine/next_move.py`: `next_move(snapshot, macro, today) -> NextMoveResponse` (models in lifeline_contracts/next_move.py). Candidates only when data supports them. For each: impact_per_year, worst_case_per_year (worst matched period), confidence (share of twin x period pairs that beat doing nothing), plain confidence_label, exactly 3 evidence points with facts, sources with status, options, deadline/days_left, testable + test_period + concept_id. Rank: impact + 0.5*min(0, worst) scaled by confidence; ties by nearer deadline. Top 1 + up to 2 runners-up. Backtest for the mortgage move over past deal-end dates vs "always fix 2 years".
 - `option_policy(move, option_id) -> dict[str, str]` maps a move option to a sim policy (template id or tag -> choice id) for Test it.
+
+## Tier 2 addition (ADR 0032, 0033)
+- cash_flow_projection(snapshot, months, what_if) with job_loss, rate_rise, one_off_cost, cancel; facts table of official UK rule numbers with gov.uk URL and as-of date; tool wrappers returning {result, facts, sources}; decision_sources and decision_source_count on NextMoveResponse (decision inputs actually read).

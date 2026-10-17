@@ -40,3 +40,7 @@ Do NOT edit `apps/ios/project.yml`, `apps/ios/Lifeline/Networking/openapi.yaml` 
 
 ## Tier 1 addition, TOP PRIORITY: Next Move card (ADR 0018)
 - First element on the Money tab: action, £ impact per year, confidence label, deadline ("Your deal ends in 165 days"), source chips. Buttons: Test it (opens W7's comparison screen), Why? (lesson for concept_id + the 3 evidence points), Do this (POST /v1/plan, show in plan). Other Money widgets link back to the card when related.
+
+## Tier 2 addition (ADR 0031): chat screen
+- Ask Penny sheet in the design system: user bubbles right, Penny left with PennyView (mood = confidence), tapback reaction badge (6 reactions, placeholder SVGs until reaction-*.svg arrive), threads with "N Replies", tappable highlighted numbers (source + updated X ago), collapsed "See sources" card, suggested chips, thinking state "Running your numbers…" (no spinner), presentation mode applies.
+- Note from W3 (Tier 2): the yearly AGE history entry can now have a non-null event_id (`hl-<year>-1`, health input). Treat history entries with decision_id null as year entries.

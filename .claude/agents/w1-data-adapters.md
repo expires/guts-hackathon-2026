@@ -49,3 +49,6 @@ All remaining sources in spec section 2.
 - MacroKeys SAVINGS_RATE, CARD_RATE (BoE quoted household rates), ENERGY_TARIFF (Ofgem cap / Octopus products API).
 - FinanceSnapshot `mortgage` and `energy` details in fixtures. The demo persona for device `demo-presenter-01` is a homeowner in Leeds: £180,000 balance, fixed deal ending 2027-03-31 (165 days after 2026-10-17), with subscriptions including one price rise.
 - Key-needing adapters with keys now likely present in .env (read only from env, never print): Companies House (basic auth: key as username, blank password), EPC (bearer token, get-energy-performance-data service), DWP Stat-Xplore (`APIKey` header), TrueLayer sandbox (OB_CLIENT_ID/OB_CLIENT_SECRET, OB_AUTH_URL, OB_API_URL; Tier 2 OAuth). Missing key still = labelled mock.
+
+## Tier 2 addition (ADR 0030): Guardian and BoE MPC dates
+- Guardian Open Platform adapter (GUARDIAN_API_KEY from env; never print): search by topic and date range; store headline, standfirst (max 1 sentence), section, date, URL only (no body text). BoE MPC rate-decision dates from the Bank's public page. Both in /v1/sources with live/cached/unavailable. Context only.

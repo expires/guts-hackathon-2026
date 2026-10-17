@@ -18,3 +18,6 @@ You are W5 (explain). Read `/CLAUDE.md` and `BUILD_SPEC.md` section 3.
 
 ## Done criteria
 - Tests with a fake LLM client: valid text accepted; invented number rejected; timeout -> template; exception -> template; no key -> template; cache hit avoids a second call. `ruff` clean.
+
+## Tier 2 addition (ADR 0031, 0034): Ask Penny
+- Tool-use loop (Opus, max 5 tool calls, timeout 2 x LLM_TIMEOUT_SECONDS), versioned system prompt per ADR 0031, reactions, bubbles, highlights, grouped sources, verifier over tool facts + facts table (one rewrite, then template summary), untrusted text fenced (ADR 0034). Golden tests (>= 20 questions).

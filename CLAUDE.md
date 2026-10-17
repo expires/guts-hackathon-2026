@@ -5,7 +5,7 @@ The product name lives in one constant: `services/api/lifeline_contracts/brand.p
 
 ## Hard rules
 
-1. NO GIT WRITES. Never run `git commit`, `add`, `push`, `merge`, `branch`, `checkout`, `worktree`, `stash`, `reset`. Only `git status` and `git diff`.
+1. GIT (ADR 0041). Workers and verifiers: no git writes, only `git status` and `git diff`. BOSS only: `git add` and `git commit` on `main`, one commit per accepted milestone or meaningful fix, Conventional Commits style, message from `docs/COMMITS.md`, `make secrets-scan` before every commit. Never `push`, never force, never rewrite history (no amend, rebase, reset). The user pushes.
 2. Edit only the paths you own (see table). Shared files are BOSS-only: `contracts/openapi.yaml`, `CLAUDE.md`, `Makefile`, `docker-compose.yml`, `.env.example`, `.gitignore`, `services/api/pyproject.toml`, `services/api/lifeline_contracts/`, `apps/ios/project.yml`. If you need a change there, put the request in your final report.
 3. Secrets: read keys only from environment (`.env`). Never print, log, or copy key values. Never read `.env` contents into output. A missing key means the adapter serves labelled mock data with `status="mock"`.
 4. Never ask the user questions. Decide, and write the decision in your final report so BOSS can add an ADR.
@@ -64,3 +64,16 @@ The product name lives in one constant: `services/api/lifeline_contracts/brand.p
 - W6 and W7 may edit `Features/**/Views/**` and `DesignSystem/**` until BOSS records the end of ADR 0026. Afterwards those paths return to the user.
 - Phone builds: `make ios-device` (Mock configuration, MockClient, no backend). Simulator builds go through `tools/with-ios-lock.sh` (Makefile does this). Never run two xcodebuilds on `apps/ios/.build/DerivedData` at once.
 - Design source: `lifeline-design/HANDOFF.md` and `lifeline-design/screens/*.dc.html` (reference only; rebuild natively in SwiftUI, no web views).
+
+## Parallel iOS features (ADR 0037, supersedes iOS ownership rows above while active)
+
+| Owner | Paths |
+|---|---|
+| BOSS (and its shared-files helper) | `apps/ios/Lifeline/App/**` (root navigation), `Networking/{LifelineClient,LiveClient}.swift`, `Preview/MockClient.swift`, `Preview/Recorded/**`, `apps/ios/project.yml`, any NEW file in `DesignSystem/` |
+| W6 | `Features/{Onboarding,Account}/**`, plus its existing features (Home, Life, CharacterSelect, Money, Job, Assets, People, Concepts, Sources, Evaluation, Playground, Common, Debug) |
+| W7 | `Features/{Penny,TestIt,Decision,Bank,Store,Lesson,Rewind,Summary,You}/**` |
+| W9 | `Features/{Rooms,Play}/**` |
+
+- Workers never edit shared files. Ask BOSS (SendMessage to "main") with the exact Swift signature or change needed; code against a closure or protocol until it lands.
+- Existing DesignSystem files may be edited only by BOSS. Workers may add view-local helpers inside their own feature folder.
+- All xcodebuild via make targets (shared lock). Each worker uses its own simulator: "W6 iPhone", "W7 iPhone", "W9 iPhone".

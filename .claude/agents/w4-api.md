@@ -42,3 +42,6 @@ health, sources, characters, auth/demo, lives (create, get, age, choices, summar
 
 ## Tier 1 addition, TOP PRIORITY: Next Move endpoints (ADR 0018)
 - GET /v1/next-move (from DataHub.finance_snapshot + macro + lifeline_engine.next_move), POST /v1/next-move/test (look up move by id from the latest next-move for this subject, 404 if unknown; per option: W2 option_policy -> W3 play_scenario with the same seed; store each life for this subject; build OptionOutcome), GET/POST /v1/plan (per subject).
+
+## Tier 2 addition (ADR 0030, 0031)
+- /v1/chat, /v1/chat/threads(/{id}) with per-user storage (deleted with the account), per-user chat rate limit; /v1/news, /v1/rate-decisions; proactive message job (max 1/day) for deal ending in 30 days, price rise, budget over.

@@ -51,6 +51,10 @@ tokens/
 # Live adapter caches and any exports from Monzo / Trading212 stay on the device.
 data/cache/
 data/private/
+# Any depth (the line above only matches at the repo root): user bank tokens and history
+**/data/private/
+**/data/cache/
+**/credentials.json
 data/live/
 *.ofx
 *.qif

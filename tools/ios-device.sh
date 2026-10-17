@@ -14,6 +14,7 @@ if [[ -z "$team" ]]; then
 fi
 bundle=$(sed -nE 's/^LIFELINE_BUNDLE_ID *= *([A-Za-z0-9.-]+) *$/\1/p' "$LOCAL" || true)
 bundle=${bundle:-com.lifeline.app}
+[[ "${CONFIG:-Mock}" == "Dev" ]] && bundle="$bundle.dev"
 
 json=$(mktemp); xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1 || true
 udid=$(python3 - "$json" <<'PY'
@@ -36,12 +37,13 @@ mkdir -p "$IOS/.build"; until mkdir "$IOS/.build/build.lock" 2>/dev/null; do sle
 trap 'rmdir "$IOS/.build/build.lock" 2>/dev/null || true' EXIT
 cp "$ROOT/contracts/openapi.yaml" "$IOS/Lifeline/Networking/openapi.yaml"
 (cd "$IOS" && xcodegen generate --quiet)
-(cd "$IOS" && xcodebuild -project Lifeline.xcodeproj -scheme Lifeline -configuration Mock \
+(cd "$IOS" && xcodebuild -project Lifeline.xcodeproj -scheme Lifeline -configuration "${CONFIG:-Mock}" \
   -destination "id=$udid" -derivedDataPath "$DD" -allowProvisioningUpdates \
+  LIFELINE_CHECKPOINT="${CHECKPOINT:-}" LIFELINE_BUILD_TIME="$(date '+%Y-%m-%d %H:%M')" LIFELINE_FEATURES="${FEATURES:-}" \
   -skipPackagePluginValidation -skipMacroValidation build 2>&1 | tail -5)
 rmdir "$IOS/.build/build.lock" 2>/dev/null || true; trap - EXIT
 
-app="$DD/Build/Products/Mock-iphoneos/Lifeline.app"
+app="$DD/Build/Products/${CONFIG:-Mock}-iphoneos/Lifeline.app"
 [[ -d "$app" ]] || { echo "BUILD: $app not found" >&2; exit 4; }
 xcrun devicectl device install app --device "$udid" "$app" | tail -2
 echo "INSTALLED: $bundle on $udid"

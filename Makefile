@@ -60,7 +60,7 @@ ios-playground: ios-gen ## Build the Playground scheme (Mock config) for the sim
 ios-record-mock: ## Record real API responses for the iOS Mock config (stack must be up)
 	cd $(API) && uv run python ../../tools/record_mock.py
 
-ios-device: ## Build Mock config for the connected iPhone, install, launch (needs Config/Local.xcconfig team)
+ios-device: ## (CONFIG=Mock|Demo|Dev CHECKPOINT=n FEATURES=..) Build and install on the iPhone for the connected iPhone, install, launch (needs Config/Local.xcconfig team)
 	tools/ios-device.sh
 
 demo-seed: ## Load demo lives and rooms into the running stack

@@ -31,3 +31,6 @@ Use W6's `APIClient` and design system; do not edit W6 files. Request hooks (e.g
 
 ## Tier 1 addition, TOP PRIORITY: Test it comparison (ADR 0018)
 - Comparison screen for POST /v1/next-move/test: side-by-side options (net worth path chart per option, total cost, missed payments, worst year, Index), recommended option highlighted, summary and evidence sentence, source chips, "Open in Life" per option (life_id). ViewModel + draft View per ADR 0016.
+
+## Tier 2 addition (ADR 0030, 0031): entry points and news
+- Entry points opening the chat sheet with context: "Not sure? Ask Penny" on Life events (runs a quick replay of both options), "Ask Penny" on the Next Move card (prefilled "Why this move?"), "Ask Penny a follow-up" in Why?, Penny icon in the Money header. Life feed shows real headlines for the year with a "Guardian" tag.
