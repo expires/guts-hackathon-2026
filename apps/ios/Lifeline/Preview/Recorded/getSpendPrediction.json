@@ -6,15 +6,15 @@
     "label": "Sample data"
   },
   "date": "2026-10-17",
-  "predicted": 12.04,
-  "low": 0.65,
-  "high": 85.47,
+  "predicted": 11.99,
+  "low": 0.64,
+  "high": 85.12,
   "baseline": 6.55,
   "reasons": [
     {
       "feature": "weekday",
       "label": "It is Saturday",
-      "effect": 6.19
+      "effect": 6.17
     },
     {
       "feature": "payday",
@@ -29,7 +29,7 @@
   ],
   "weather": {
     "summary": "Mild and dry",
-    "temp_max_c": 12.5,
+    "temp_max_c": 12.0,
     "rain_mm": 0.0,
     "status": "live"
   },

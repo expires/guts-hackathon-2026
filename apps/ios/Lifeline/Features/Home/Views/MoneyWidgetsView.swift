@@ -81,6 +81,10 @@ private struct NetWorthCard: View {
             if let change = overview.netWorthChangeText {
                 Text(change).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
+            if !overview.netWorthParts.isEmpty {
+                CalculationList(title: "How we worked it out", parts: overview.netWorthParts, total: overview.netWorth, totalLabel: "Net worth")
+                    .accessibilityIdentifier("money.netWorthCalculation")
+            }
         }
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.vertical, 14)
@@ -102,6 +106,12 @@ private struct AccountsCard: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             Text("In your account").font(.llLabel).foregroundStyle(Theme.Palette.muted)
             Text(Money.format(overview.balance)).font(.llHero)
+            if !overview.balanceParts.isEmpty {
+                CalculationList(title: "How we worked it out", parts: overview.balanceParts, total: overview.balance, totalLabel: "In your account")
+                    .padding(Theme.Spacing.l)
+                    .inkSurface(.cardAlt)
+                    .accessibilityIdentifier("money.balanceCalculation")
+            }
             RowGroup(title: "Accounts") {
                 ForEach(overview.accounts) { account in
                     ListRow(
@@ -114,6 +124,35 @@ private struct AccountsCard: View {
                 }
             }
             Text(overview.asOfText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+        }
+    }
+}
+
+/// The sum behind a shown total: one row per part, a rule, then the total. Entered data only.
+private struct CalculationList: View {
+    let title: String
+    let parts: [MoneyWidgetsViewState.Part]
+    let total: Double
+    let totalLabel: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(title).font(.llLabelBold).foregroundStyle(Theme.Palette.muted)
+            ForEach(parts) { part in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(part.label).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: Theme.Spacing.s)
+                    Text(Money.format(part.amount)).font(.llLabelBold).monospacedDigit()
+                }
+                .accessibilityElement(children: .combine)
+            }
+            RuleDivider()
+            HStack(alignment: .firstTextBaseline) {
+                Text(totalLabel).font(.llBodyBold)
+                Spacer(minLength: Theme.Spacing.s)
+                Text(Money.format(total)).font(.llBodyBold).monospacedDigit()
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 }

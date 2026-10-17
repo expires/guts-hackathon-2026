@@ -20,6 +20,8 @@ enum LifeSheet: String, Identifiable {
 /// attached with `.safeAreaInset`, so `LifeView` needs no edit. Owns the event sheet and the lesson.
 struct LifeShellScreen: View {
     let session: GameSession
+    /// Back to Play (Life opened from the Play tab). Nil hides the back button.
+    var onExit: (@MainActor () -> Void)? = nil
     @State private var sheet: LifeSheet?
     /// The open event shows full screen (handoff Life-Event) after the player taps it on the feed.
     @State private var showsEvent = false
@@ -28,7 +30,7 @@ struct LifeShellScreen: View {
 
     var body: some View {
         NavigationStack {
-            LifeScreen(session: session) { route in
+            LifeScreen(session: session, onExit: onExit) { route in
                 if route == .event {
                     showsEvent = true
                 } else {
@@ -45,8 +47,11 @@ struct LifeShellScreen: View {
         .llCover(item: $sheet.only(\.isFullScreen)) { sheet in
             content(for: sheet)
         }
-        .llSheet(item: $sheet.only { !$0.isFullScreen }) { sheet in
-            content(for: sheet)
+        // Each presenter sits on its own view, so the full-screen covers never share one host.
+        .background {
+            Color.clear.llSheet(item: $sheet.only { !$0.isFullScreen }) { sheet in
+                content(for: sheet)
+            }
         }
         .fullScreenCover(isPresented: Binding(
             get: { session.pendingLesson != nil && !showsEvent && sheet == nil },

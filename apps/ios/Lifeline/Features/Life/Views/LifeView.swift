@@ -31,7 +31,7 @@ struct LifeView: View {
                     links
                 }
                 .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.vertical, Theme.Spacing.l)
+                .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
                 .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
             }
             bottomBar
@@ -50,6 +50,9 @@ struct LifeView: View {
 
     private var header: some View {
         HStack(spacing: Theme.Spacing.m) {
+            if let onExit = actions.onExit {
+                HeaderSquareButton(kind: .back, identifier: "life.back", action: onExit)
+            }
             LLIconImage(LLIcon.face(emoji: state.header.emoji), size: 40)
                 .frame(width: 48, height: 48)
                 .inkSurface(HandCut((18, 22, 17, 21), (21, 17, 22, 18)), fill: Theme.Palette.family)
@@ -96,7 +99,7 @@ struct LifeView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(current.title)
-                        .font(.llTitle)
+                        .font(.llScreenTitle)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityIdentifier("life.year")
                     Spacer()

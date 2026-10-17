@@ -46,10 +46,18 @@ struct NextMoveCardState: Equatable, Sendable {
         var hasLesson: Bool
         /// True after "Do this".
         var isInPlan: Bool
+        /// "What you give up: <summary>" (ADR 0042). Nil hides the line.
+        var tradeOffText: String? = nil
+        /// Every trade-off point, for Why?.
+        var tradeOffPoints: [String] = []
+        /// True when the gain is months of cover, not £ a year.
+        var isMonthsOfCover = false
+        /// Months of cover without entered costs: the card shows the caption only.
+        var isGainMissing = false
     }
 
     var phase: LoadPhase
-    /// "What is my next money move?"
+    /// "Where should my money go this month?"
     var question: String
     var top: Move?
     var runnersUp: [Move]
@@ -62,6 +70,8 @@ struct NextMoveCardState: Equatable, Sendable {
     var planMessage: String?
     /// Move to show in focus after a widget link. Nil means the top move.
     var focusedMoveID: String?
+    /// "Based on 12 sources" (decision sources only, ADR 0032). Nil hides it.
+    var sourceCountText: String? = nil
 
     /// The move the card shows: the focused runner-up, or the top move.
     var displayedMove: Move? {
@@ -75,6 +85,8 @@ struct NextMoveActions {
     var onTestIt: @MainActor (String) -> Void = { _ in }
     /// Opens the lesson for the move's concept plus its 3 evidence points.
     var onWhy: @MainActor (String) -> Void = { _ in }
+    /// "Based on N sources": opens Why? at the sources.
+    var onSources: @MainActor (String) -> Void = { _ in }
     /// Adds the move to the plan (`POST /v1/plan`).
     var onDoThis: @MainActor (String) -> Void = { _ in }
     /// Shows a runner-up in the card. Nil goes back to the top move.

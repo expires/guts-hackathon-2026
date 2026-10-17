@@ -42,6 +42,17 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var monthLabels: [String]
         /// "As of 17 Oct 2026".
         var asOfText: String
+        /// How the balance was worked out, from entered data only (bug 2, ADR 0053).
+        var balanceParts: [Part] = []
+        /// How the net worth was worked out.
+        var netWorthParts: [Part] = []
+    }
+
+    /// One line of a shown total: "Current account you entered  £1,186".
+    struct Part: Equatable, Sendable, Identifiable {
+        var id: Int
+        var label: String
+        var amount: Double
     }
 
     struct Category: Equatable, Sendable, Identifiable {

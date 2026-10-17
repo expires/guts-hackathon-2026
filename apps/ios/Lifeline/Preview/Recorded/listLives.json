@@ -1,6 +1,90 @@
 {
   "lives": [
     {
+      "id": "lf_27612e320d6bac32",
+      "name": "Priya Shah",
+      "emoji": "🙂",
+      "mode": "self",
+      "year": 2026,
+      "age": 34,
+      "alive": true,
+      "index": 100.0,
+      "net_worth": 68992.42,
+      "ribbons": 0
+    },
+    {
+      "id": "lf_08aeaa8904ea1c1d",
+      "name": "Priya Shah",
+      "emoji": "🙂",
+      "mode": "self",
+      "year": 2023,
+      "age": 37,
+      "alive": true,
+      "index": 99.99,
+      "net_worth": 137838.71,
+      "ribbons": 1
+    },
+    {
+      "id": "lf_3640d21a258647c6",
+      "name": "Priya Shah",
+      "emoji": "🙂",
+      "mode": "self",
+      "year": 2023,
+      "age": 37,
+      "alive": true,
+      "index": 100.0,
+      "net_worth": 137866.35,
+      "ribbons": 1
+    },
+    {
+      "id": "lf_e747f3b1b8f82c77",
+      "name": "Priya Shah",
+      "emoji": "🙂",
+      "mode": "self",
+      "year": 2023,
+      "age": 37,
+      "alive": true,
+      "index": 98.62,
+      "net_worth": 133299.52,
+      "ribbons": 1
+    },
+    {
+      "id": "lf_bd317da39aa2fc97",
+      "name": "Priya Shah",
+      "emoji": "🙂",
+      "mode": "self",
+      "year": 2023,
+      "age": 37,
+      "alive": true,
+      "index": 97.97,
+      "net_worth": 131168.25,
+      "ribbons": 1
+    },
+    {
+      "id": "lf_6ebd88a90cc302ce",
+      "name": "Tom",
+      "emoji": "👨🏻‍💼",
+      "mode": "preset",
+      "year": 2007,
+      "age": 28,
+      "alive": true,
+      "index": 100.0,
+      "net_worth": 317644.57,
+      "ribbons": 1
+    },
+    {
+      "id": "lf_8bbfe3204e66d2d4",
+      "name": "Amira",
+      "emoji": "👩🏽‍⚕️",
+      "mode": "preset",
+      "year": 2007,
+      "age": 25,
+      "alive": true,
+      "index": 100.0,
+      "net_worth": -5643.43,
+      "ribbons": 0
+    },
+    {
       "id": "lf_596b715eb7f8950d",
       "name": "Priya Shah",
       "emoji": "🙂",

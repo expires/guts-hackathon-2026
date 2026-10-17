@@ -3,6 +3,7 @@ import SwiftUI
 /// Glue: owns `RewindViewModel`. Shows the picker, then the result.
 struct RewindScreen: View {
     @State private var model: RewindViewModel
+    @Environment(\.llPresentationMode) private var presentation
     private let onClose: @MainActor () -> Void
     private let onBuyPass: @MainActor () -> Void
 
@@ -21,9 +22,9 @@ struct RewindScreen: View {
     var body: some View {
         Group {
             if let result = model.result {
-                RewindResultView(state: result, onContinue: onClose)
+                RewindResultView(state: result.presented(presentation), onContinue: onClose)
             } else {
-                RewindPickerView(state: model.pickerState, actions: model.actions)
+                RewindPickerView(state: model.pickerState.presented(presentation), actions: model.actions)
             }
         }
         .onAppear {

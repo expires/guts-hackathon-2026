@@ -159,7 +159,7 @@ async def test_chips_only_with_a_question() -> None:
     payload["suggestions"] = ["Yes", "Yes, add it", "No, skip it"]
     q.text = json.dumps(payload)
     r2, _ = await ask("Spend?", FakeChatLLM(call("finance_summary"), q))
-    assert r2.suggestions == ["Yes, add it", "No, skip it"]
+    assert r2.suggestions == ["Add it", "Skip it"]  # chips name the action
 
 
 # ---------- links and chips that work for this user ----------
@@ -268,3 +268,39 @@ def test_generic_tracker_fund_advice_is_not_a_pick() -> None:
     assert gives_pick("Pick the Vanguard FTSE Global All Cap fund.")
     assert gives_pick("Buy Tesla shares now.")
     assert gives_pick("You could buy NVDA.")
+
+
+# ---------- V4 advisories: whole percentages, action chips ----------
+
+
+def test_whole_percentages_have_no_trailing_zero() -> None:
+    from lifeline_explain.chat import clean_bubble, tidy_numbers
+
+    assert clean_bubble("The bonus is 25.0% and the rate is 4.5%.") == "The bonus is 25% and the rate is 4.5%."
+    assert tidy_numbers("Repay 9.00 per cent above the threshold") == "Repay 9 per cent above the threshold"
+    assert tidy_numbers("Version 1.0 costs £10.0") == "Version 1.0 costs £10.0"  # only percentages change
+
+
+async def test_percentage_fact_is_sent_and_highlighted_without_trailing_zero() -> None:
+    from lifeline_explain.chat_tools import FunctionTool, FunctionToolSet, ToolOutput
+    from tests.unit.explain.test_chat import BANK, NoArgs, f
+
+    def rule(_: NoArgs) -> ToolOutput:
+        return ToolOutput(result={}, facts=[f("rule.lisa_bonus_rate", 25.0, "percent", "LISA bonus 25.0%", BANK)],
+                          sources=[BANK])  # fmt: skip
+
+    ts = FunctionToolSet([FunctionTool("facts_table", "Rules", NoArgs, rule)])
+    llm = FakeChatLLM(call("facts_table"), final("The government adds a 25.0% bonus."))
+    r, _ = await ask("What is a Lifetime ISA?", llm, tools=ts)
+    sent = json.loads(llm.requests[1]["messages"][-1]["content"][0]["content"])["facts"][0]
+    assert sent["value"] == 25 and "25.0" not in sent["label"]
+    assert r.bubbles[0].text == "The government adds a 25% bonus."
+    h = r.highlights[0]
+    assert r.bubbles[0].text[h.start : h.start + h.length] == "25%"
+
+
+def test_chips_name_the_action() -> None:
+    from lifeline_explain.chat import clean_suggestions
+
+    assert clean_suggestions(["Yes, show me how", "No, I'm fine for now"]) == ["Show me how", "I'm fine for now"]
+    assert clean_suggestions(["Yes", "No"]) == []

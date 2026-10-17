@@ -16,6 +16,15 @@ enum APIError: Error, Equatable, Sendable {
     case decoding
 
     /// Plain English text for an alert.
+    /// 409 from the finance endpoints when the server has no money data for this device yet (live data mode).
+    static let noFinanceDataCode = "no_finance_data"
+
+    /// True for 409 `no_finance_data`: the user must connect their money (onboarding) first.
+    var isNoFinanceData: Bool {
+        if case let .server(_, code, _, _) = self { return code == Self.noFinanceDataCode }
+        return false
+    }
+
     var userMessage: String {
         switch self {
         case let .server(_, code, message, _):
@@ -26,6 +35,8 @@ enum APIError: Error, Equatable, Sendable {
                 return "The game cannot start a life with these details. The character must be at least 16 in the start year. Check the details and try again."
             case "validation_error":
                 return "Some details are not valid. Check them and try again."
+            case APIError.noFinanceDataCode:
+                return "Open Life and tap Play yourself to add your job, pay and savings. Then your money shows here."
             default:
                 return message.isEmpty ? "Something went wrong. Try again." : message
             }

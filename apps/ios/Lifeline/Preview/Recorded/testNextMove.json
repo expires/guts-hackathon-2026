@@ -28,7 +28,7 @@
       "option_id": "tracker",
       "label": "Take a tracker",
       "is_recommended": true,
-      "life_id": "lf_e66e4a57c4f9bcaf",
+      "life_id": "lf_e747f3b1b8f82c77",
       "net_worth_path": [
         {
           "date": "2020-12-31",
@@ -58,7 +58,7 @@
       "option_id": "fix_5y",
       "label": "Fix for 5 years",
       "is_recommended": false,
-      "life_id": "lf_a98fd18b2dcf20d4",
+      "life_id": "lf_08aeaa8904ea1c1d",
       "net_worth_path": [
         {
           "date": "2020-12-31",
@@ -88,7 +88,7 @@
       "option_id": "fix_2y",
       "label": "Fix for 2 years",
       "is_recommended": false,
-      "life_id": "lf_fbe1eecfea483f31",
+      "life_id": "lf_3640d21a258647c6",
       "net_worth_path": [
         {
           "date": "2020-12-31",
@@ -118,7 +118,7 @@
       "option_id": "keep",
       "label": "Do nothing",
       "is_recommended": false,
-      "life_id": "lf_8d9f21d2bdea5ab1",
+      "life_id": "lf_bd317da39aa2fc97",
       "net_worth_path": [
         {
           "date": "2020-12-31",

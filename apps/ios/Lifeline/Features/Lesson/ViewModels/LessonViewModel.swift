@@ -58,7 +58,7 @@ final class LessonViewModel {
         context: LessonContext? = nil,
         canRewind: Bool = false
     ) -> LessonViewState {
-        let chart = StateMapping.chart(lesson.chart)
+        let chart = periodChart(StateMapping.chart(lesson.chart), year: context?.year)
         let first = chart.points.first
         let last = chart.points.last
         let hasRange = chart.points.count >= 2
@@ -85,6 +85,21 @@ final class LessonViewModel {
             canRewind: canRewind && (context?.hasDecision ?? false),
             isSampleData: context?.isSampleData ?? false
         )
+    }
+
+    /// Years a lesson chart covers, ending at the lesson's year (server rule: last 10 years).
+    static let chartYears = 10
+
+    /// Keeps only the chart points inside the lesson's own period (`year - 9 ... year`), so a 2011 lesson
+    /// never shows a 2006-2008 chart. No points in that period: an empty chart (the view hides it).
+    /// No year (opened from Concepts): the chart as sent.
+    static func periodChart(_ chart: ChartState, year: Int?) -> ChartState {
+        guard let year, chart.kind == .line else { return chart }
+        let range = Double(year - chartYears + 1)...Double(year)
+        var copy = chart
+        copy.points = chart.points.filter { range.contains($0.x) }
+        if copy.points.isEmpty { copy.source = nil }
+        return copy
     }
 
     /// Value with its unit: "%" gives "4.1%", a "£" label gives "£1,150", anything else a plain number.

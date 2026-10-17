@@ -89,7 +89,7 @@ enum Theme {
         switch status {
         case .live: Palette.money
         case .cached: Palette.home
-        case .mock: Palette.other
+        case .mock, .unavailable: Palette.other
         }
     }
 
@@ -97,7 +97,7 @@ enum Theme {
         switch status {
         case .live: .statusLive
         case .cached: .statusCached
-        case .mock: .statusMock
+        case .mock, .unavailable: .statusMock
         }
     }
 

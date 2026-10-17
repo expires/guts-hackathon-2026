@@ -7,10 +7,15 @@ struct ErrorStateView: View {
 
     var body: some View {
         VStack(spacing: Theme.Spacing.m) {
-            LLIconImage(.crash)
-                .font(.llHero)
-                .foregroundStyle(Theme.Palette.home)
-                .accessibilityHidden(true)
+            if state.isUnavailable {
+                Chip(text: "Unavailable", fill: Theme.Palette.other)
+                    .accessibilityIdentifier("error.unavailable")
+            } else {
+                LLIconImage(.crash)
+                    .font(.llHero)
+                    .foregroundStyle(Theme.Palette.home)
+                    .accessibilityHidden(true)
+            }
             Text(state.title).font(.llBodyBold)
             Text(state.message)
                 .font(.llBody)
@@ -42,6 +47,14 @@ struct ErrorStateView: View {
 
 #Preview("Offline · AX3") {
     ErrorStateView(state: Fixtures.networkError).previewLargeType()
+}
+
+#Preview("No money data · light") {
+    ErrorStateView(state: .from(.server(status: 409, code: APIError.noFinanceDataCode, message: "Connect your money first.", source: "api")))
+}
+
+#Preview("No money data · dark") {
+    ErrorStateView(state: .from(.server(status: 409, code: APIError.noFinanceDataCode, message: "Connect your money first.", source: "api"))).previewDark()
 }
 
 #Preview("Start age · light") {

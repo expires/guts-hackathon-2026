@@ -24,13 +24,13 @@ final class CharacterFormViewModel {
     init(mode: CharacterFormMode, initial: CharacterSpec? = nil) {
         self.mode = mode
         self.fields = CharacterFormFields(
-            name: initial?.name ?? (mode == .playYourself ? "Me" : ""),
+            name: initial?.name ?? "",
             emoji: initial?.emoji ?? "🙂",
             birthYear: initial?.birthYear ?? 1995,
             occupation: initial?.occupation ?? "",
             regionID: initial?.region ?? UKRegion.london.rawValue,
             town: initial?.town ?? "",
-            income: initial?.annualIncome ?? 30_000,
+            income: initial?.annualIncome ?? (mode == .playYourself ? 0 : 30_000),
             savings: initial?.savings ?? 0,
             debt: initial?.debt ?? 0,
             housing: HousingOption(rawValue: initial?.housing?.rawValue ?? "rent") ?? .rent
@@ -48,7 +48,8 @@ final class CharacterFormViewModel {
                 ? Self.godModeJobs.map { .init(id: $0.id, emoji: $0.emoji, label: $0.id.capitalized) }
                 : [],
             canContinue: Self.isValid(fields),
-            showsBankConnect: mode == .playYourself,
+            // Bank connections are cut (ADR 0046): no "Fill in from my bank".
+            showsBankConnect: false,
             bankStatusText: bankStatusText,
             footer: "Your answers stay on our server for this game only. No bank details are needed."
         )
@@ -66,7 +67,40 @@ final class CharacterFormViewModel {
         )
     }
 
+    /// True after the user changed a field. A late profile prefill then leaves the fields alone.
+    private var isEdited = false
+
+    /// "Play yourself" starts from your money profile (`GET /v1/finance/profile`): name, birth year, job,
+    /// region, town, pay, savings, debt and home. Only before the user edits anything.
+    /// From the whole money profile: the character, with the birth year from the entered age
+    /// (the profile's `age` is what the user typed or what the statement implies).
+    func prefill(profile: FinanceProfile, now: Date = Date()) {
+        var spec = profile.character
+        spec.birthYear = Calendar(identifier: .gregorian).component(.year, from: now) - profile.profile.age
+        if spec.annualIncome <= 0, profile.profile.annualIncome > 0 {
+            spec.annualIncome = profile.profile.annualIncome
+        }
+        prefill(spec)
+    }
+
+    func prefill(_ spec: CharacterSpec) {
+        guard mode == .playYourself, !isEdited else { return }
+        fields = CharacterFormFields(
+            name: spec.name,
+            emoji: spec.emoji ?? fields.emoji,
+            birthYear: min(Self.birthYearRange.upperBound, max(Self.birthYearRange.lowerBound, spec.birthYear)),
+            occupation: spec.occupation,
+            regionID: spec.region,
+            town: spec.town,
+            income: spec.annualIncome,
+            savings: spec.savings ?? fields.savings,
+            debt: spec.debt ?? fields.debt,
+            housing: spec.housing.flatMap { HousingOption(rawValue: $0.rawValue) } ?? fields.housing
+        )
+    }
+
     func update(_ new: CharacterFormFields) {
+        isEdited = true
         var clamped = new
         clamped.birthYear = min(Self.birthYearRange.upperBound, max(Self.birthYearRange.lowerBound, new.birthYear))
         clamped.income = max(0, new.income)

@@ -1850,7 +1850,7 @@ def next_move_paths() -> dict[str, Any]:
         "/v1/next-move": {
             "get": op(
                 "getNextMove",
-                "What is my next money move? One top move, up to 2 runners-up, with evidence",
+                "Where should my money go this month? One top move, up to 2 runners-up, with evidence",
                 "next-move",
                 {**ok("NextMoveResponse", "NextMove"), **errs("401", "429", "503")},
             )

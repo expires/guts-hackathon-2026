@@ -3,6 +3,7 @@ import SwiftUI
 /// Glue: owns `BankConnectViewModel` and feeds `BankConnectView`. Opens the consent URL in live mode.
 struct BankConnectScreen: View {
     @State private var model: BankConnectViewModel
+    @Environment(\.llPresentationMode) private var presentation
     @Environment(\.openURL) private var openURL
     private let onUseProfile: @MainActor (DecisionProfile, DataStatus) -> Void
     private let onClose: @MainActor () -> Void
@@ -18,7 +19,7 @@ struct BankConnectScreen: View {
     }
 
     var body: some View {
-        BankConnectView(state: model.state, actions: model.actions)
+        BankConnectView(state: model.state.presented(presentation), actions: model.actions)
             .onAppear {
                 model.onUseProfile = onUseProfile
                 model.onClose = onClose

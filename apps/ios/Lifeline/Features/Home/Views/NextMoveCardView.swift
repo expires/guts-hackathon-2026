@@ -65,7 +65,25 @@ struct NextMoveCardView: View {
                 .accessibilityIdentifier("nextMove.headline")
         }
         impactRow(move)
+        if let tradeOff = move.tradeOffText {
+            Text(tradeOff)
+                .font(.llLabel)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("nextMove.tradeOff")
+        }
         buttons(move)
+        if let sources = state.sourceCountText {
+            Button { actions.onSources(move.id) } label: {
+                HStack(spacing: Theme.Spacing.xs) {
+                    LLIconImage(.statusLive, size: 24)
+                    Text(sources)
+                }
+            }
+            .buttonStyle(.text)
+            .font(.llLabelBold)
+            .accessibilityHint("Shows the sources in Why?")
+            .accessibilityIdentifier("nextMove.sources")
+        }
         if let message = state.planMessage {
             Button(message, action: actions.onOpenPlan)
                 .buttonStyle(.text)
@@ -78,31 +96,41 @@ struct NextMoveCardView: View {
     private func impactRow(_ move: NextMoveCardState.Move) -> some View {
         HStack(alignment: .center, spacing: Theme.Spacing.l) {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(move.impactAmountText)
-                    .font(.llHero)
-                    .contentTransition(.numericText(value: move.impactPerYear))
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                Text(move.impactCaption).font(.llLabel)
+                if move.isGainMissing {
+                    // No costs entered: ask for them instead of a number.
+                    Text(move.impactCaption)
+                        .font(.llBodyBold)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(move.impactAmountText)
+                        .font(move.isMonthsOfCover ? .llTitle : .llHero)
+                        .contentTransition(.numericText(value: move.impactPerYear))
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                    Text(move.impactCaption).font(.llLabel)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("nextMove.impact")
-            Rectangle().fill(Theme.Palette.ink).frame(width: Theme.outline).clipShape(.capsule)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(move.confidenceWord).font(.llBodyBold)
-                ConfidenceMeter(filled: move.confidenceFilled)
-                Text(move.confidenceLabel).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+            if !move.confidenceWord.isEmpty {
+                Rectangle().fill(Theme.Palette.ink).frame(width: Theme.outline).clipShape(.capsule)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(move.confidenceWord).font(.llBodyBold)
+                    ConfidenceMeter(filled: move.confidenceFilled)
+                    Text(move.confidenceLabel).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("nextMove.confidence")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("nextMove.confidence")
         }
         .padding(.vertical, Theme.Spacing.m)
         .overlay(alignment: .top) { Rectangle().fill(Theme.Palette.ink).frame(height: Theme.outline) }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.Palette.ink).frame(height: Theme.outline) }
     }
 
+    /// One row when every label fits at its full width, else stacked (large Dynamic Type never cuts "Test it").
     private func buttons(_ move: NextMoveCardState.Move) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: Theme.Spacing.s) { buttonRow(move) }
@@ -116,14 +144,14 @@ struct NextMoveCardView: View {
             Button { actions.onTestIt(move.id) } label: {
                 HStack(spacing: Theme.Spacing.s) {
                     LLIconImage(.test, size: 24)
-                    Text("Test it").lineLimit(1)
+                    Text("Test it").lineLimit(1).fixedSize()
                 }
             }
             .buttonStyle(.main)
             .accessibilityHint("Plays each option through a past period")
             .accessibilityIdentifier("nextMove.testIt")
         }
-        Button { actions.onWhy(move.id) } label: { Text("Why?").lineLimit(1) }
+        Button { actions.onWhy(move.id) } label: { Text("Why?").lineLimit(1).fixedSize() }
             .buttonStyle(.second)
             .accessibilityHint("Shows the evidence and the lesson")
             .accessibilityIdentifier("nextMove.why")
@@ -131,7 +159,7 @@ struct NextMoveCardView: View {
             HStack(spacing: Theme.Spacing.xs) {
                 if state.addingMoveID == move.id { ProgressView() }
                 if move.isInPlan { LLIconImage(.check, size: 24) }
-                Text(move.isInPlan ? "In plan" : "Do this").lineLimit(1)
+                Text(move.isInPlan ? "In plan" : "Do this").lineLimit(1).fixedSize()
             }
         }
         .buttonStyle(SecondButtonStyle(shape: .buttonThird))

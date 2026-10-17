@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Lifeline</string>
+	<string>$(LIFELINE_DISPLAY_NAME)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -33,13 +33,21 @@
 	<string>1</string>
 	<key>LifelineAPIBaseURL</key>
 	<string>$(LIFELINE_API_BASE_URL)</string>
+	<key>LifelineBuildTime</key>
+	<string>$(LIFELINE_BUILD_TIME)</string>
+	<key>LifelineCheckpoint</key>
+	<string>$(LIFELINE_CHECKPOINT)</string>
 	<key>LifelineClient</key>
 	<string>$(LIFELINE_CLIENT)</string>
+	<key>LifelineFeatures</key>
+	<string>$(LIFELINE_FEATURES)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan a room QR code to join a Same Life room.</string>
 	<key>UIDesignRequiresCompatibility</key>
 	<true/>
 	<key>UILaunchScreen</key>

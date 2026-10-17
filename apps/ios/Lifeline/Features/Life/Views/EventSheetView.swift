@@ -28,12 +28,22 @@ struct EventSheetView: View {
                     ForEach(Array(state.choices.enumerated()), id: \.element.id) { offset, choice in
                         choiceCard(choice, shape: cardShapes[offset % cardShapes.count])
                     }
+                    if let onAskPenny = actions.onAskPenny {
+                        Button(action: onAskPenny) {
+                            HStack(spacing: Theme.Spacing.s) {
+                                PennyView(mood: .thinking, size: 28)
+                                Text("Not sure? Ask Penny")
+                            }
+                        }
+                        .buttonStyle(.text)
+                        .accessibilityIdentifier("event.askPenny")
+                    }
                     if !state.sources.isEmpty {
                         SourcesFooter(sources: state.sources)
                     }
                 }
                 .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.vertical, Theme.Spacing.xl)
+                .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
             }
         }
         .paperBackground()
@@ -58,9 +68,18 @@ struct EventSheetView: View {
     }
 
     private func choiceCard(_ choice: EventSheetViewState.Choice, shape: HandCut) -> some View {
-        Button { actions.onChoose(choice.id) } label: {
+        let isChosen = state.chosenID == choice.id
+        let isOther = state.chosenID != nil && !isChosen
+        return Button { actions.onChoose(choice.id) } label: {
             HStack(spacing: Theme.Spacing.m) {
                 VStack(alignment: .leading, spacing: 2) {
+                    if isChosen {
+                        HStack(spacing: Theme.Spacing.xs) {
+                            LLIconImage(.check, size: 24)
+                            Text("Chosen").font(.llLabelBold)
+                        }
+                        .accessibilityHidden(true)
+                    }
                     Text(choice.label).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
                     if let hint = choice.hint {
                         Text(hint).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
@@ -82,16 +101,19 @@ struct EventSheetView: View {
             .contentShape(shape)
             .background {
                 ZStack {
-                    shape.fill(Theme.Palette.ink).offset(x: 5, y: 6)
-                    shape.fill(Theme.Palette.surface)
+                    if !isOther { shape.fill(Theme.Palette.ink).offset(x: isChosen ? 2 : 5, y: isChosen ? 3 : 6) }
+                    shape.fill(isChosen ? Theme.Palette.money : Theme.Palette.surface)
                     shape.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline)
                 }
             }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(Theme.Palette.ink)
-        .disabled(state.isSubmitting)
-        .accessibilityLabel([choice.label, choice.hint, choice.amountText.map { "\($0) a month" }].compactMap { $0 }.joined(separator: ". "))
+        // Ink text in every state: no system grey. The other choices dim but stay readable.
+        .foregroundStyle(isChosen ? Theme.Palette.onArea : Theme.Palette.ink)
+        .opacity(isOther ? 0.55 : 1)
+        .allowsHitTesting(!state.isSubmitting)
+        .accessibilityLabel([isChosen ? "Chosen" : nil, choice.label, choice.hint, choice.amountText.map { "\($0) a month" }].compactMap { $0 }.joined(separator: ". "))
+        .accessibilityAddTraits(isChosen ? .isSelected : [])
         .accessibilityIdentifier("event.choice.\(choice.id)")
     }
 
@@ -119,6 +141,14 @@ struct EventSheetView: View {
 
 #Preview("Rent rise · AX3") {
     EventSheetView(state: Fixtures.Event.rentRise).previewLargeType()
+}
+
+#Preview("Chosen · light") {
+    EventSheetView(state: Fixtures.Event.chosen)
+}
+
+#Preview("Chosen · dark") {
+    EventSheetView(state: Fixtures.Event.chosen).previewDark()
 }
 
 #Preview("Crisis · light") {

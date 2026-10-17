@@ -82,6 +82,8 @@ struct LifeActions {
     var onOpenEvent: @MainActor () -> Void = {}
     /// Opens a Life action menu.
     var onOpenMenu: @MainActor (LifeMenuViewState.Menu) -> Void = { _ in }
+    /// Back to Play when Life is opened from the Play tab. Nil hides the button.
+    var onExit: (@MainActor () -> Void)?
 
     static var noop: Self { .init() }
 }

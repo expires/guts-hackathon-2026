@@ -13,6 +13,7 @@ import SwiftUI
 /// ```
 struct TestItScreen: View {
     @State private var model: TestItViewModel
+    @Environment(\.llPresentationMode) private var presentation
     private let onOpenLife: @MainActor (String) -> Void
     private let onClose: @MainActor () -> Void
     private let onDoThis: (@MainActor (String) -> Void)?
@@ -45,7 +46,9 @@ struct TestItScreen: View {
                 model.onOpenLife = onOpenLife
                 model.onClose = onClose
                 model.onDoThis = onDoThis
+                model.presentation = presentation
             }
+            .onChange(of: presentation) { _, value in model.presentation = value }
             .task { await model.load() }
     }
 }

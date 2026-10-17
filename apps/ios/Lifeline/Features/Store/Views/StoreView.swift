@@ -1,7 +1,7 @@
 // Rebuilt for ADR 0026 (You-Paywall.dc.html) by W7.
 import SwiftUI
 
-/// Lifeline Plus paywall. Demo only: every price is a "Demo payment" and no real money is taken.
+/// Penny Plus paywall. Demo only: every price is a "Demo payment" and no real money is taken.
 struct StoreView: View {
     let state: StoreViewState
     var actions: StoreActions = .noop
@@ -16,7 +16,7 @@ struct StoreView: View {
                 HStack(spacing: Theme.Spacing.l) {
                     LLIconImage(.lock, size: 64)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Lifeline Plus").llEyebrow()
+                        Text("\(Brand.productName) Plus").llEyebrow()
                         Text("Play every life").font(.llTitle).accessibilityAddTraits(.isHeader)
                     }
                 }
@@ -101,10 +101,11 @@ struct StoreView: View {
                     }
                 }
             }
-            .foregroundStyle(Theme.Palette.ink)
+            // Selected: opaque area fill with `onArea` text, so it reads in light and dark (V4 fix).
+            .foregroundStyle(isOn ? Theme.Palette.onArea : Theme.Palette.ink)
             .padding(Theme.Spacing.m)
             .frame(minHeight: Theme.minTarget)
-            .inkSurface(shape, fill: isOn ? Theme.Palette.home.opacity(0.35) : Theme.Palette.surface, hero: isOn)
+            .inkSurface(shape, fill: isOn ? Theme.Palette.home : Theme.Palette.surface, hero: isOn)
             .contentShape(shape)
         }
         .buttonStyle(.plain)

@@ -7,7 +7,7 @@ struct HistoryFeedView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Text("Your story")
-                .font(.llTitle)
+                .font(.llScreenTitle)
                 .accessibilityAddTraits(.isHeader)
             if history.isEmpty {
                 Text("Nothing yet. Tap AGE to live your first year.")

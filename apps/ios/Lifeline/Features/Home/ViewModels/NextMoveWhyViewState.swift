@@ -57,6 +57,12 @@ struct NextMoveWhyViewState: Equatable, Sendable {
     var ratesSourceText: String?
     /// Mortgage moves also link to the full Real-life Decision screen (W7).
     var hasDecisionDetail: Bool = false
+    /// Opening lines (ADR 0050): one sentence per key source, then one combining sentence. Empty hides them.
+    var sourceSentences: [String] = []
+    /// "What you give up" summary (ADR 0042). Nil hides the section.
+    var tradeOffSummary: String? = nil
+    /// Every trade-off point, shown like the evidence.
+    var tradeOff: [Evidence] = []
 }
 
 struct NextMoveWhyActions {
@@ -66,6 +72,8 @@ struct NextMoveWhyActions {
     var onOpenDecision: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
+    /// "Ask Penny a follow-up". Nil hides the button.
+    var onAskPenny: (@MainActor () -> Void)?
 
     static var noop: Self { .init() }
 }

@@ -1,4 +1,4 @@
-"""Next Move: the product's one question, "What is my next money move?" (ADR 0018). BOSS-owned.
+"""Next Move: the product's one question, "Where should my money go this month?" (ADR 0046; was ADR 0018). BOSS-owned.
 
 Flow: FinanceSnapshot (W1) + MacroTable (W1) -> lifeline_engine.next_move (W2: candidates, £/year impact,
 worst-case risk, twins + similar past periods, confidence) -> GET /v1/next-move (W4)
@@ -112,7 +112,8 @@ class NextMoveBacktest(_M):
 
 class NextMoveResponse(_M):
     meta: FinanceMeta
-    question: Literal["What is my next money move?"] = "What is my next money move?"
+    # DIRECTION_V2 section 1 (ADR 0046).
+    question: Literal["Where should my money go this month?"] = "Where should my money go this month?"
     top: Move
     runners_up: list[Move] = Field(max_length=2)
     backtest: NextMoveBacktest | None = None

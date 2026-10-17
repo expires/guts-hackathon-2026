@@ -28,7 +28,7 @@ final class GuessSpendViewModel {
     var state: GuessSpendViewState {
         var state = Self.makeState(
             prediction: prediction, guesses: guesses, phase: phase, today: today,
-            moveLink: MoneyWidgetsViewModel.moveLink(for: .guess, moves: moves)
+            moveLink: MoneyWidgetsViewModel.topMoveLink(moves: moves)
         )
         state.isSubmitting = isSubmitting
         state.errorMessage = errorMessage
@@ -44,6 +44,15 @@ final class GuessSpendViewModel {
             onShowMove: { [weak self] in self?.onShowMove($0) },
             onRetry: { [weak self] in Task { await self?.load(date: nil) } }
         )
+    }
+
+    /// Uses today's prediction from `GET /v1/finance/home`. The history loads with the full screen.
+    func apply(prediction: SpendPrediction?) {
+        guard let prediction else { return }
+        today = prediction.date
+        self.prediction = prediction
+        phase = .ready
+        errorMessage = nil
     }
 
     /// Loads one day (nil = today) and the guess history.
@@ -103,7 +112,8 @@ final class GuessSpendViewModel {
         let history = (guesses?.items ?? []).map(pastDay)
         let streak = guesses?.streak ?? 0
         let best = guesses?.bestStreak ?? 0
-        let streakText = (streak == 1 ? "1 day in a row" : "\(streak) days in a row") + " with 70 points or more. Best: \(best)."
+        // No guess history from the API: no streak line (never show an invented 0).
+        let streakText = guesses == nil ? "" : (streak == 1 ? "1 day in a row" : "\(streak) days in a row") + " with 70 points or more. Best: \(best)."
         guard let prediction else {
             return GuessSpendViewState(
                 phase: phase, initialGuess: initialGuess(guesses), dayChip: "Streak \(streak)", date: today ?? "", dateText: "Today", isToday: true, stage: .guessing, reveal: nil,

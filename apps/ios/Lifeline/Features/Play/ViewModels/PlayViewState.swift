@@ -40,8 +40,10 @@ struct PlayViewState: Equatable, Sendable {
     var isSampleData: Bool
     /// Disables start buttons while a life is starting.
     var isBusy: Bool
-    /// Same Life lobby for the "Rooms" segment (W7, fixture data while rooms are Tier 2). Nil hides it.
-    var room: RoomLobbyViewState? = nil
+    /// Same Life entry for the "Rooms" segment (W9). Nil hides the segment.
+    var rooms: RoomEntryViewState? = nil
+    /// Circles segment (W9). Nil hides it.
+    var circles: CirclesViewState? = nil
 }
 
 struct PlayActions {
@@ -49,12 +51,19 @@ struct PlayActions {
     var onPlay: @MainActor () -> Void = {}
     var onOpenLife: @MainActor (String) -> Void = { _ in }
     var onStartChallenge: @MainActor (String) -> Void = { _ in }
-    /// Same Life rooms (W7).
+    /// "Play solo": pushes the Life entry.
+    var onPlaySolo: @MainActor () -> Void = {}
+    /// "Play with friends": opens the room flow.
+    var onPlayWithFriends: @MainActor () -> Void = {}
+    /// "Join a game": opens the scanner.
+    var onJoin: @MainActor () -> Void = {}
+    /// Same Life rooms: reopens the room cover.
     var onOpenRooms: @MainActor () -> Void = {}
     var onOpenConcepts: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
-    /// Lobby buttons for the "Rooms" segment.
-    var room: RoomLobbyActions = .noop
+    /// Create and join buttons for the "Rooms" segment.
+    var rooms: RoomEntryActions = .noop
+    var circles: CirclesActions = .noop
 
     static var noop: Self { .init() }
 }

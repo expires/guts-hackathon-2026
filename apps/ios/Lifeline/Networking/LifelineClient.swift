@@ -18,6 +18,12 @@ typealias Outcome = Components.Schemas.Outcome
 typealias Lesson = Components.Schemas.Lesson
 typealias Concept = Components.Schemas.Concept
 typealias Challenge = Components.Schemas.Challenge
+typealias StudentPath = Components.Schemas.StudentPath
+typealias HabitScore = Components.Schemas.HabitScore
+typealias SampleStatement = Components.Schemas.SampleStatement
+typealias GameOptions = Components.Schemas.GameOptions
+typealias PlayCircle = Components.Schemas.Circle
+typealias CircleMember = Components.Schemas.CircleMember
 typealias SourceRef = Components.Schemas.SourceRef
 typealias SourceStatus = Components.Schemas.SourceStatus
 typealias YearLog = Components.Schemas.YearLog
@@ -35,6 +41,7 @@ typealias LifeListItem = Components.Schemas.LifeListItem
 // Money tab (ADR 0016, 0017)
 typealias FinanceMeta = Components.Schemas.FinanceMeta
 typealias FinanceOverview = Components.Schemas.FinanceOverview
+typealias FinanceHome = Components.Schemas.FinanceHome
 typealias SpendingResponse = Components.Schemas.SpendingResponse
 typealias SubscriptionsResponse = Components.Schemas.SubscriptionsResponse
 typealias BillsResponse = Components.Schemas.BillsResponse
@@ -55,12 +62,46 @@ typealias TestMoveResult = Components.Schemas.TestMoveResult
 typealias OptionOutcome = Components.Schemas.OptionOutcome
 typealias PlanItem = Components.Schemas.PlanItem
 typealias PlanResponse = Components.Schemas.PlanResponse
+// Account and onboarding (ADR 0029, 0037)
+typealias Me = Components.Schemas.Me
+typealias ImportResult = Components.Schemas.ImportResult
+typealias ImportStage = Components.Schemas.ImportStage
+typealias ManualFinanceInput = Components.Schemas.ManualFinanceInput
+typealias RegularCost = Components.Schemas.RegularCost
+typealias ReversePostcode = Components.Schemas.ReversePostcode
+typealias HealthSignal = Components.Schemas.HealthSignal
+typealias HealthSignalStored = Components.Schemas.HealthSignalStored
+typealias LogPaymentRequest = Components.Schemas.LogPaymentRequest
+typealias LoggedPayment = Components.Schemas.LoggedPayment
+// Ask Penny (ADR 0031)
+typealias ChatRequest = Components.Schemas.ChatRequest
+typealias ChatResponse = Components.Schemas.ChatResponse
+typealias ChatStreamEvent = Components.Schemas.ChatStreamEvent
+typealias ChatThread = Components.Schemas.ChatThread
+typealias ChatThreadsResponse = Components.Schemas.ChatThreadsResponse
+typealias ChatThreadSummary = Components.Schemas.ChatThreadSummary
+typealias ChatContext = Components.Schemas.ChatContext
+typealias ChatBubble = Components.Schemas.ChatBubble
+typealias ChatMessage = Components.Schemas.ChatMessage
+typealias NewsResponse = Components.Schemas.NewsResponse
+typealias NewsItem = Components.Schemas.NewsItem
+typealias RateDecisions = Components.Schemas.RateDecisions
+// Rooms WebSocket (x-websocket on /v1/rooms/{code})
+typealias WsClientMessage = Components.Schemas.WsClientMessage
+typealias WsServerMessage = Components.Schemas.WsServerMessage
+typealias RoomPlayer = Components.Schemas.Player
 
 /// Every backend operation the app uses now or later. See ADR 0011.
 /// `LiveClient` calls the backend. `MockClient` returns contract examples with no network.
 protocol LifelineClient: Sendable {
     /// Short name for the debug menu: "live" or "mock".
     var kind: ClientKind { get }
+
+    /// Drops cached GET responses (about 20 s per path in `LiveClient`). Call it before a pull to refresh.
+    func clearResponseCache() async
+
+    /// Disk cache for `load(_:onUpdate:)` (ADR 0060). `LiveClient` has one; `MockClient` returns nil.
+    var diskCache: DiskCache? { get }
 
     // Lives
     func listCharacters(seed: Int?) async throws -> CharactersResponse
@@ -86,6 +127,8 @@ protocol LifelineClient: Sendable {
 
     // Money tab (ADR 0016, 0017). `month` is YYYY-MM, `date` is YYYY-MM-DD; nil means "now".
     func financeOverview() async throws -> FinanceOverview
+    /// `GET /v1/finance/home`: everything Money home needs in one request. `hasData == false` is a normal state.
+    func financeHome() async throws -> FinanceHome
     func financeSpending(month: String?) async throws -> SpendingResponse
     func subscriptions() async throws -> SubscriptionsResponse
     func bills() async throws -> BillsResponse
@@ -107,14 +150,71 @@ protocol LifelineClient: Sendable {
 
     // Rooms
     func createRoom(_ request: CreateRoomRequest) async throws -> Room
+    // Play with friends and Circles (ADR 0059)
+    func listPaths() async throws -> [StudentPath]
+    func listCircles() async throws -> [PlayCircle]
+    func createCircle(name: String) async throws -> PlayCircle
+    func joinCircle(code: String) async throws -> PlayCircle
+    func leaveCircle(id: String) async throws
     func getRoom(code: String) async throws -> Room
+    /// Opens `WS /v1/rooms/{code}?token=<jwt>`. The caller sends `join` first (with `player_id` to resume).
+    /// The socket never reconnects by itself. Its `messages` stream finishes when it closes or fails.
+    func roomSocket(code: String) async throws -> RoomSocket
+
+    // Account (ADR 0029)
+    func getMe() async throws -> Me
+    /// `DELETE /v1/me`. Live: also clears the stored token.
+    func deleteAccount() async throws
+    /// `POST /v1/me/reset` (demo reset).
+    func resetDemo() async throws -> Me
+    /// `POST /v1/auth/logout`. Live: also clears the stored token. The next call signs in as the demo device.
+    func signOut() async throws
+    /// `POST /v1/auth/apple`. Live: stores the JWT (Keychain) and uses it instead of the demo token.
+    func signInWithApple(identityToken: String) async throws
+
+    // Onboarding inputs (ADR 0029)
+    /// Multipart upload. `provider`: monzo, revolut, pdf or unknown; nil lets the server detect it.
+    func importStatement(file: Data, fileName: String, provider: String?) async throws -> ImportResult
+    /// `GET /v1/samples`: built-in sample student statements (ADR 0047).
+    func listSamples() async throws -> [SampleStatement]
+    /// `POST /v1/samples/{id}/import`: the data is labelled Sample data.
+    func importSample(id: String) async throws -> ImportResult
+    /// `GET /v1/habits`: habit score, ratios 0-100, no amounts (ADR 0052).
+    func habits() async throws -> HabitScore
+    func setManualFinance(_ input: ManualFinanceInput) async throws -> FinanceProfile
+    func logPayment(_ request: LogPaymentRequest) async throws -> LoggedPayment
+    func reversePostcode(lat: Double, lon: Double) async throws -> ReversePostcode
+    func setHealthSignal(_ signal: HealthSignal) async throws -> HealthSignalStored
+
+    // Ask Penny (ADR 0031)
+    func askPenny(_ request: ChatRequest) async throws -> ChatResponse
+    /// `POST /v1/chat/stream` (SSE). One element per `data:` line. The stream ends after `done`.
+    /// It throws `APIError` on a transport or HTTP failure. Falling back to `askPenny` is the caller's job.
+    func askPennyStream(_ request: ChatRequest) -> AsyncThrowingStream<ChatStreamEvent, any Error>
+    func listChatThreads() async throws -> ChatThreadsResponse
+    func getChatThread(id: String) async throws -> ChatThread
+    /// `from` and `to` are YYYY-MM-DD. `topic`: economy, housing, rates, jobs, energy, markets, or nil for all.
+    func listNews(from: String, to: String, topic: String?) async throws -> NewsResponse
+    func getRateDecisions() async throws -> RateDecisions
 
     // Bank
-    func bankAuthLink() async throws -> BankAuthLink
+    /// `provider`: monzo (default, live) or truelayer (disabled: 409 source_disabled).
+    func bankAuthLink(provider: String) async throws -> BankAuthLink
     func bankSummary(session: String) async throws -> BankSummary
 
     // Store (demo only)
     func verifyPurchase(product: PurchaseProduct) async throws -> PurchaseVerifyResponse
+}
+
+extension LifelineClient {
+    func clearResponseCache() async {}
+
+    var diskCache: DiskCache? { nil }
+
+    /// Monzo consent link (the contract default provider).
+    func bankAuthLink() async throws -> BankAuthLink {
+        try await bankAuthLink(provider: "monzo")
+    }
 }
 
 enum ClientKind: String, Sendable {

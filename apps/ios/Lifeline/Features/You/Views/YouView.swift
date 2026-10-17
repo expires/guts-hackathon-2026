@@ -21,6 +21,7 @@ struct YouView: View {
                 if !state.personalFacts.isEmpty { facts }
                 bankAndData
                 settings
+                judgeMode
                 if !state.credits.isEmpty {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         ForEach(state.credits, id: \.self) {
@@ -38,6 +39,7 @@ struct YouView: View {
             .padding(.top, Theme.Spacing.s)
             .padding(.bottom, Theme.Spacing.xxl)
         }
+        .refreshable { await actions.onRefresh() }
         .paperBackground()
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -45,6 +47,7 @@ struct YouView: View {
     @ViewBuilder
     private var header: some View {
         if let profile = state.profile {
+            Button(action: actions.onOpenAccount) {
             HStack(spacing: Theme.Spacing.m) {
                 LLIconImage(LLIcon.face(emoji: profile.emoji), size: 48)
                     .frame(width: 56, height: 56)
@@ -55,17 +58,30 @@ struct YouView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if state.isSampleData { DemoDataBadge() }
+                if let badge = state.dataBadgeText {
+                    Text(badge)
+                        .font(.llLabelBold)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .inkSurface(.badge, lineWidth: Theme.chipOutline)
+                        .accessibilityIdentifier("you.dataBadge")
+                }
+                Chevron()
             }
+            .foregroundStyle(Theme.Palette.ink)
+            .frame(minHeight: Theme.minTarget)
+            .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens your account: sign out, reset or delete")
             .accessibilityIdentifier("you.profile")
         }
     }
 
     private var scores: some View {
         HStack(spacing: Theme.Spacing.s) {
-            score(icon: .trophy, value: state.bestIndexText, label: "Best INDEX")
-            score(icon: .ribbon, value: state.ribbonsText, label: "Ribbons")
-            score(icon: .lesson, value: state.conceptsText, label: "Concepts")
+            // Best INDEX and Ribbons belong to the old game (V2 feature map): only concepts stay.
+            score(icon: .lesson, value: state.conceptsText, label: "Concepts learned")
         }
     }
 
@@ -95,25 +111,9 @@ struct YouView: View {
 
     private var bankAndData: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BlockTitle(text: "Bank and data")
+            BlockTitle(text: "Your money and data")
             VStack(spacing: 0) {
-                HStack(spacing: Theme.Spacing.m) {
-                    LLIconImage(.bank, size: 32)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(state.bankName).font(.llBodyBold)
-                        Text(state.bankDetail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Button(action: actions.onConnectBank) { Text("Change").font(.llLabelBold).lineLimit(1) }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, Theme.Spacing.m)
-                        .frame(minHeight: Theme.minTarget)
-                        .inkSurface(.badge, lineWidth: Theme.chipOutline)
-                        .accessibilityLabel("Change bank connection")
-                        .accessibilityIdentifier("you.bank")
-                }
-                .padding(.horizontal, Theme.Spacing.l)
-                .padding(.vertical, Theme.Spacing.m)
+                connectMoneyRow
                 ForEach(state.dataRows) { row in
                     RuleDivider()
                     HStack(spacing: Theme.Spacing.s) {
@@ -137,20 +137,83 @@ struct YouView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             BlockTitle(text: "Settings")
             VStack(spacing: 0) {
-                row(icon: .lock, title: "Lifeline Plus", id: "you.store", action: actions.onOpenStore)
+                row(icon: .why, title: "Ask Penny", id: "you.askPenny", action: actions.onAskPenny)
                 RuleDivider()
+                row(icon: .lesson, title: "How \(Brand.productName) uses AI", id: "you.aiDisclosure", action: actions.onOpenAIDisclosure)
+                RuleDivider()
+                // Store hidden under V2 until everything else is green (BOSS).
                 row(icon: .check, title: "Your plan", id: "you.plan", action: actions.onOpenPlan)
                 RuleDivider()
-                row(icon: .test, title: "How good is the advice?", id: "you.evaluation", action: actions.onOpenEvaluation)
-                RuleDivider()
+                if state.showsEvaluation {
+                    row(icon: .test, title: "How good is the advice?", id: "you.evaluation", action: actions.onOpenEvaluation)
+                    RuleDivider()
+                }
                 row(icon: .investment, title: "How good is the spend guess?", id: "you.spendAccuracy", action: actions.onOpenSpendAccuracy)
                 if state.showsDebugMenu {
                     RuleDivider()
                     row(icon: .statusCached, title: "Debug menu", id: "you.debug", action: actions.onOpenDebug)
                 }
+                RuleDivider()
+                versionRow
             }
             .inkSurface(.card)
         }
+    }
+
+    /// Judge mode (DIRECTION_V2 section 4): "New player" and "Reset demo".
+    private var judgeMode: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            BlockTitle(text: "Judge mode")
+            VStack(spacing: 0) {
+                row(icon: .faceBaby, title: "New player", id: "you.newPlayer", action: actions.onNewPlayer)
+                RuleDivider()
+                row(icon: .rewind, title: "Reset demo", id: "you.resetDemo", action: actions.onResetDemo)
+            }
+            .inkSurface(.cardAlt)
+        }
+    }
+
+    /// "Connect your money": always visible. Shows how the money data got in.
+    private var connectMoneyRow: some View {
+        Button(action: actions.onConnectMoney) {
+            HStack(spacing: Theme.Spacing.m) {
+                LLIconImage(.savings, size: 32)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Connect your money").font(.llBodyBold)
+                    Text(state.connectMoneyText ?? "Checking…").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Chevron()
+            }
+            .foregroundStyle(Theme.Palette.ink)
+            .padding(.horizontal, Theme.Spacing.l)
+            .padding(.vertical, Theme.Spacing.m)
+            .frame(minHeight: 52)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("you.connectMoney")
+    }
+
+    /// "Version": app name, version and checkpoint, build time, features. Not a button.
+    private var versionRow: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+            LLIconImage(.age, size: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Version").font(.llBody)
+                Text(state.buildInfo.title).font(.llLabelBold)
+                ForEach(state.buildInfo.detailLines, id: \.self) { line in
+                    Text(line).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.vertical, Theme.Spacing.m)
+        .frame(minHeight: 52)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("you.version")
     }
 
     private func row(icon: LLIcon, title: String, id: String, action: @escaping () -> Void) -> some View {

@@ -9,7 +9,7 @@ Direction: `DIRECTION_V2.md` (ADRs 0046-0061). Feature freeze 09:30, coding clos
 | 1 Bugs 1-9, chat fixes | Built. Backend verified (V1 PASS, V2 fixes re-checked, V6 fixes in). iOS: V4 re-check running. |
 | 2 Four tabs, compact, Penny tab | Built. V4 re-check running. |
 | 3 Student onboarding, samples, judge mode | Built. V4 re-check running. |
-| 4 Student moves, verified facts, habit score | Built. All 70 facts verified against official sources (URL + checked date). |
+| 4 Student moves, verified facts, habit score | Built. All 69 official amounts (55 facts + 14 sim tables) verified against official sources (URL + checked date). |
 | 5 Play: lobby, Quiz, Same Decision, Quick Life, Circles | Built. V1 PASS. V6 re-check running (2 low findings fixed). |
 | ADR 0060 instant screens, Penny tools | Built. Tab switch ~0.5 s; Penny first bubble 1.4-2.6 s. |
 | 6 Life student paths, challenges | Built (paths, student challenges, old presets removed). |
@@ -33,6 +33,9 @@ Direction: `DIRECTION_V2.md` (ADRs 0046-0061). Feature freeze 09:30, coding clos
 - An old app "Lifeline" (`com.lifeline.app`, not ours) is also on the phone.
 
 ## Needs Akshat (do these when back; nothing waits on them)
+
+- [ ] README Team table: 3 rows still say "TBC".
+- [ ] Final demo script (DEMO.md waits for it).
 
 
 - [ ] Bank tokens: on `merge/yaffy`, Monzo and Trading212 tokens are plain files under `CREDENTIALS_DIR`. BOSS moves them to encrypted Postgres during the merge (README "Security" stays unticked until then).

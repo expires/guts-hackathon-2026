@@ -15,6 +15,11 @@ struct CharacterFormScreen: View {
 
     var body: some View {
         CharacterFormView(state: model.state, actions: model.actions)
+            .task {
+                // Prefill "Play yourself" from the money profile. No profile: the fields stay empty.
+                guard model.mode == .playYourself, let profile = try? await session.client.financeProfile() else { return }
+                model.prefill(profile: profile)
+            }
             .onAppear {
                 model.onContinue = onContinue
                 model.onConnectBank = { showBank = true }

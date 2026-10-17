@@ -41,6 +41,17 @@ struct YouViewState: Equatable, Sendable {
     var dataRows: [DataRow] = []
     /// Credits sentence plus font licences, from `Resources/Credits.json`.
     var credits: [String] = []
+    /// "Connect your money" row: "Connected: your bank", "Statement imported", "Not connected".
+    /// Calm text on an error ("Couldn't load. Pull to refresh."). Nil while loading.
+    var connectMoneyText: String? = nil
+    /// Presentation mode switch (stored in `@AppStorage("llPresentationMode")` by the glue).
+    var isPresentationMode = false
+    /// "Sample data" (sample statement), "Mock data" (canned data) or nil (the user's own data).
+    var dataBadgeText: String? = nil
+    /// "How good is the advice?" shows only when the backtest has at least one case (n > 0).
+    var showsEvaluation = false
+    /// "Version" row: checkpoint, build time and features from Info.plist.
+    var buildInfo = YouBuildInfo(appName: Brand.productName, version: "1.0", checkpoint: nil, builtText: nil, features: [])
 
     struct DataRow: Equatable, Sendable, Identifiable {
         var id: String
@@ -71,6 +82,22 @@ struct CreditsFile: Decodable, Equatable, Sendable {
 }
 
 struct YouActions {
+    /// "Connect your money" (router `openConnectMoney()`).
+    var onConnectMoney: @MainActor () -> Void = {}
+    /// Profile row: opens Account (sign out, reset, delete).
+    var onOpenAccount: @MainActor () -> Void = {}
+    /// "Ask Penny" row.
+    var onAskPenny: @MainActor () -> Void = {}
+    /// Judge mode (DIRECTION_V2 section 4): a fresh demo account, then onboarding.
+    var onNewPlayer: @MainActor () -> Void = {}
+    /// Judge mode: clears demo accounts and lobby state, then onboarding.
+    var onResetDemo: @MainActor () -> Void = {}
+    /// "How Penny uses AI" (ADR 0043).
+    var onOpenAIDisclosure: @MainActor () -> Void = {}
+    /// Presentation mode switch.
+    var onSetPresentationMode: @MainActor (Bool) -> Void = { _ in }
+    /// Pull to refresh.
+    var onRefresh: @MainActor () async -> Void = {}
     /// Bank connection (W7).
     var onConnectBank: @MainActor () -> Void = {}
     var onOpenPlan: @MainActor () -> Void = {}

@@ -43,19 +43,23 @@ final class PlayViewModel {
         )
     }
 
+    /// Challenges and concepts come from the disk cache first (ADR 0060), so Play shows content at once.
+    /// Lives (your own, changing data) come from the network.
     func load() async {
-        phase = .loading(.init(message: Self.loadingMessage))
+        if challenges.isEmpty && lives.isEmpty { phase = .loading(.init(message: Self.loadingMessage)) }
         let client = session.client
+        Task { [weak self] in
+            try? await client.load(CachedOps.concepts) { concepts in self?.conceptsTotal = concepts.count }
+        }
+        try? await client.load(CachedOps.challenges) { [weak self] challenges in
+            self?.challenges = challenges
+            self?.phase = .ready
+        }
         do {
-            async let lives = client.listLives()
-            async let challenges = client.listChallenges()
-            async let concepts = client.listConcepts()
-            self.lives = try await lives.lives
-            self.challenges = (try? await challenges) ?? []
-            conceptsTotal = (try? await concepts)?.count ?? 0
+            lives = try await client.listLives().lives
             phase = .ready
         } catch {
-            phase = .failed(.from(APIError.map(error)))
+            if challenges.isEmpty { phase = .failed(.from(APIError.map(error))) }
         }
     }
 

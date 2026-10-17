@@ -17,7 +17,7 @@ struct SheetContainer<Content: View>: View {
                 HeaderSquareButton(kind: .close, identifier: closeIdentifier, action: onClose)
             }
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.l)
+            .padding(.top, Theme.Spacing.s)
             .padding(.bottom, Theme.Spacing.m)
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.l) { content }

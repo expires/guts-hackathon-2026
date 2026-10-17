@@ -10,14 +10,37 @@ struct MoneyHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 header
-                NextMoveCardView(state: state.nextMove, actions: actions.nextMove)
-                    .padding(.top, 18)
-                tiles.padding(.top, Theme.Spacing.xs)
-                GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess)
-                comingUp
+                switch state.content {
+                case let .loading(loading):
+                    LoadingStateView(state: loading)
+                case let .connect(prompt):
+                    ConnectMoneyCard(prompt: prompt, onConnect: actions.onConnectMoney)
+                        .padding(.top, Theme.Spacing.s)
+                case let .failed(error):
+                    ErrorStateView(state: error, onRetry: { Task { await actions.onRefresh() } })
+                case .ready:
+                    NextMoveCardView(state: state.nextMove, actions: actions.nextMove)
+                        .padding(.top, 18)
+                    if let moveID = state.nextMove.displayedMove?.id {
+                        Button { actions.onAskPenny(moveID) } label: {
+                            HStack(spacing: Theme.Spacing.s) {
+                                PennyView(mood: .thinking, size: 28)
+                                Text("Ask Penny about this move")
+                            }
+                        }
+                        .buttonStyle(.text)
+                        .accessibilityIdentifier("money.askPennyMove")
+                    }
+                    if let budget = state.weeklyBudget {
+                        WeeklyBudgetBlock(budget: budget) { actions.nextMove.onFocus(budget.moveID) }
+                    }
+                    tiles.padding(.top, Theme.Spacing.xs)
+                    GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess)
+                    comingUp
+                }
             }
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.xl)
+            .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
         }
         .refreshable { await actions.onRefresh() }
         .paperBackground()
@@ -28,35 +51,40 @@ struct MoneyHomeView: View {
         HStack(spacing: Theme.Spacing.m) {
             LLIconImage(LLIcon.face(emoji: state.header.faceEmoji), size: 40)
             Text(state.header.greeting)
-                .font(.llTitle)
+                .font(.llScreenTitle)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("money.greeting")
-            if state.isSampleData { DemoDataBadge() }
+            if state.isSampleData { DataBadge() }
+            if state.showsMoney {
+                Button { actions.onAskPenny(nil) } label: {
+                    PennyView(mood: .smiling, size: 32)
+                        .frame(width: Theme.minTarget, height: Theme.minTarget)
+                        .inkSurface(HandCut((14, 18, 13, 17)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Ask Penny")
+                .accessibilityIdentifier("money.askPenny")
+            }
         }
-        .frame(minHeight: 40)
+        .frame(minHeight: 44)
     }
 
     private var tiles: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.m) {
-            if let overview = state.widgets.overview.value {
+            if let tiles = state.tiles {
                 Button { actions.onOpenDetail(.accounts) } label: {
-                    Tile(shape: .card, title: "In your account", value: overview.balance, caption: state.paydayText)
+                    Tile(shape: .card, title: "In your account", value: tiles.balance, caption: state.paydayText)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("money.balance")
                 Button { actions.onOpenDetail(.netWorth) } label: {
-                    Tile(shape: .cardAlt, title: "Net worth", value: overview.netWorth, caption: overview.netWorthChangeText, sparkline: overview.netWorthSeries)
+                    Tile(shape: .cardAlt, title: "Net worth", value: tiles.netWorth)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("money.netWorth")
-            } else {
-                switch state.widgets.overview.phase {
-                case let .failed(error): ErrorStateView(state: error, onRetry: actions.widgets.onRetry)
-                default: LoadingStateView(state: .standard)
-                }
             }
         }
     }
@@ -64,25 +92,22 @@ struct MoneyHomeView: View {
     /// "Coming up": at most 3 bills, then "See all" for the full money details.
     private var comingUp: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Coming up").font(.llBodyBold).padding(.bottom, Theme.Spacing.xs)
-            if let bills = state.widgets.bills.value {
-                let shown = Array(bills.items.prefix(3))
-                if shown.isEmpty {
-                    Text("No bills in the next 30 days.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+            Text("Coming up").font(.llSection).padding(.bottom, Theme.Spacing.xs)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("money.comingUp")
+            if state.comingUp.isEmpty {
+                Text("No bills in the next 30 days.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+            }
+            ForEach(state.comingUp) { bill in
+                HStack(spacing: Theme.Spacing.m) {
+                    Text(bill.shortDateText).font(.llLabel).foregroundStyle(Theme.Palette.muted).frame(width: 48, alignment: .leading)
+                    Text(bill.name).font(.llBody).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    if let chip = bill.priceRiseChip { Chip(text: chip, fill: Theme.Palette.health) }
+                    Text(Money.format(bill.amount)).font(.llBodyBold)
                 }
-                ForEach(shown) { bill in
-                    HStack(spacing: Theme.Spacing.m) {
-                        Text(bill.shortDateText).font(.llLabel).foregroundStyle(Theme.Palette.muted).frame(width: 48, alignment: .leading)
-                        Text(bill.name).font(.llBody).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                        if let chip = bill.priceRiseChip { Chip(text: chip, fill: Theme.Palette.health) }
-                        Text(Money.format(bill.amount)).font(.llBodyBold)
-                    }
-                    .frame(minHeight: 40)
-                    .accessibilityElement(children: .combine)
-                    RuleDivider()
-                }
-            } else if case let .failed(error) = state.widgets.bills.phase {
-                ErrorStateView(state: error, onRetry: actions.widgets.onRetry)
+                .frame(minHeight: 40)
+                .accessibilityElement(children: .combine)
+                RuleDivider()
             }
             Button { actions.onOpenDetail(.all) } label: {
                 HStack {
@@ -96,7 +121,6 @@ struct MoneyHomeView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("money.seeAll")
         }
-        .accessibilityIdentifier("money.comingUp")
     }
 }
 
@@ -165,10 +189,12 @@ private struct GuessTeaserCard: View {
         HStack(spacing: Theme.Spacing.m) {
             PennyView(mood: .neutral, size: 48)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Guess my spend").font(.llBodyBold)
+                Text("Guess my spend").font(.llSection)
                 Text(state.stage == .guessing ? "How much will you spend today?" : (state.reveal?.comparisonText ?? ""))
                     .font(.llLabel)
-                Text(state.streakText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                if !state.streakText.isEmpty {
+                    Text(state.streakText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button(state.stage == .guessing ? "Play" : "See", action: onOpen)
@@ -180,6 +206,59 @@ private struct GuessTeaserCard: View {
         .inkSurface(.cardAlt)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("guess.card")
+    }
+}
+
+/// "Until 2 November: spend up to £82 a week" under the Next Move card. Tapping shows that move in the card.
+private struct WeeklyBudgetBlock: View {
+    let budget: MoneyHomeViewState.WeeklyBudget
+    let onShow: () -> Void
+
+    var body: some View {
+        Button(action: onShow) {
+            HStack(spacing: Theme.Spacing.m) {
+                LLIconImage(.budget, size: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(budget.text).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
+                    if let detail = budget.detail {
+                        Text(detail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.Palette.ink)
+            .padding(Theme.Spacing.m)
+            .frame(maxWidth: .infinity, minHeight: Theme.minTarget, alignment: .leading)
+            .inkSurface(.card, fill: Theme.Palette.money.opacity(0.25))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("money.weeklyBudget")
+    }
+}
+
+/// The one empty state when there is no money data: the prompt and "Connect your money".
+private struct ConnectMoneyCard: View {
+    let prompt: String
+    let onConnect: @MainActor () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            Text(prompt)
+                .font(.llTitle)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("money.connectPrompt")
+            PrimaryButton(title: "Connect your money") { onConnect() }
+                .accessibilityIdentifier("money.connect")
+        }
+        .padding(Theme.Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(Theme.Palette.ink)
+        .inkSurface(.hero, hero: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("money.connectCard")
     }
 }
 
@@ -199,6 +278,18 @@ private struct GuessTeaserCard: View {
 
 #Preview("Revealed · light") {
     MoneyHomeView(state: Fixtures.MoneyHome.revealed).previewInNavigation()
+}
+
+#Preview("No data · light") {
+    MoneyHomeView(state: Fixtures.MoneyHome.noData).previewInNavigation()
+}
+
+#Preview("No data · dark") {
+    MoneyHomeView(state: Fixtures.MoneyHome.noData).previewInNavigation().previewDark()
+}
+
+#Preview("No data · AX3") {
+    MoneyHomeView(state: Fixtures.MoneyHome.noData).previewInNavigation().previewLargeType()
 }
 
 #Preview("Loading · light") {

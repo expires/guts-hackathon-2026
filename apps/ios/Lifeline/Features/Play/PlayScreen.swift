@@ -2,61 +2,100 @@ import SwiftUI
 
 /// Full-screen routes from the Play tab (no system sheets, ADR 0026 UI fix pass).
 enum PlaySheet: String, Identifiable {
-    case room, concepts
+    case concepts
+    case solo
     var id: String { rawValue }
 }
 
-/// Glue for the Play tab (ADR 0016). Rooms run on W7's fixture room (Tier 2 on the backend).
+/// Glue for the Play tab (ADR 0052): Play solo, Play with friends, Join, challenges, collection.
 struct PlayScreen: View {
     let session: GameSession
-    /// Shows the Life tab.
+    /// Kept for RootScreen. Play solo now opens inside the Play tab.
     let onShowLife: @MainActor () -> Void
     @State private var model: PlayViewModel
-    @State private var rooms: RoomLobbyViewModel
     @State private var sheet: PlaySheet?
+    @Bindable private var rooms: RoomFlowViewModel
+    @State private var circles: CirclesViewModel
+    @Environment(\.appSelectedTab) private var selectedTab
 
-    init(session: GameSession, onShowLife: @escaping @MainActor () -> Void) {
+    init(session: GameSession, onShowLife: @escaping @MainActor () -> Void = {}) {
         self.session = session
         self.onShowLife = onShowLife
         _model = State(initialValue: PlayViewModel(session: session))
-        let rooms = RoomLobbyViewModel(client: session.client)
-        rooms.loadDemo(RoomsFixtures.demo)
-        _rooms = State(initialValue: rooms)
+        let rooms = RoomFlowViewModel.shared(for: session)
+        self.rooms = rooms
+        _circles = State(initialValue: CirclesViewModel(service: rooms.play, isSampleData: session.client.kind == .mock))
     }
 
     private var state: PlayViewState {
         var state = model.state
-        state.room = rooms.state
+        state.rooms = rooms.entryState
+        state.circles = circles.state
         return state
     }
 
     private var actions: PlayActions {
         var actions = model.actions
-        actions.room = rooms.actions
+        actions.rooms = rooms.entryActions
+        actions.circles = circles.actions
+        actions.onPlaySolo = { sheet = .solo }
+        actions.onPlayWithFriends = { Task { await rooms.openLobby() } }
+        actions.onJoin = { rooms.openScanner() }
         return actions
     }
+
+    /// True for every tab except Play.
+    static func closesCovers(for tab: AppTab) -> Bool { tab != .play }
 
     var body: some View {
         PlayView(state: state, actions: actions)
             .onAppear {
                 model.onRoute = { route in
                     switch route {
-                    case .life: onShowLife()
-                    case .rooms: sheet = .room
+                    case .life: sheet = .solo
+                    case .rooms: rooms.isPresented = true
                     case .concepts: sheet = .concepts
                     }
                 }
-                rooms.onStart = { _ in sheet = .room }
+                // "Open in the Life tab" from a live room: close the room cover, then show the life.
+                rooms.onOpenLife = {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450))
+                        sheet = .solo
+                    }
+                }
+            }
+            // A life opened elsewhere (Money tab "Open in Life") shows here, unless it is the room life.
+            .onChange(of: session.life?.id) { _, id in
+                guard let id, id != rooms.myLifeID, rooms.session.room?.status != .playing, !rooms.isPresented else { return }
+                sheet = .solo
+            }
+            // V4 F4-1: a switch to another tab (for example "Ask Penny") closes the Play covers.
+            // The running life stays in the session, so Play solo resumes it.
+            .onChange(of: selectedTab) { _, tab in
+                guard Self.closesCovers(for: tab) else { return }
+                sheet = nil
+                rooms.hideCovers()
             }
             .task { await model.load() }
+            .task { await circles.load() }
             .refreshable { await model.load() }
+            .roomObservers(rooms)
             .llCover(item: $sheet) { sheet in
-                let close: @MainActor () -> Void = { self.sheet = nil }
                 switch sheet {
-                case .room: RoomFlowScreen(demo: RoomsFixtures.demo, onClose: close)
                 case .concepts:
-                    ConceptCollectionScreen(client: session.client, unlockedIDs: session.life?.conceptsUnlocked ?? [], onClose: close)
+                    ConceptCollectionScreen(client: session.client, unlockedIDs: session.life?.conceptsUnlocked ?? []) { self.sheet = nil }
+                case .solo:
+                    PlaySoloScreen(session: session) { self.sheet = nil }
                 }
+            }
+            .background {
+                Color.clear.llCover(isPresented: $rooms.isPresented) {
+                    RoomFlowScreen(model: rooms) { rooms.isPresented = false }
+                }
+            }
+            .background {
+                Color.clear.roomScanner(model: rooms)
             }
     }
 }

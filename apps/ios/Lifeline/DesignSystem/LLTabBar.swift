@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Tab bar from the handoff: surface, 3 pt ink top rule, 4 equal columns, 28 pt icons
-/// (white fill inactive, colour fill active), 13 pt labels (bold when active).
+/// Tab bar from the handoff, compact (ADR 0048): surface, ink top rule, 4 equal columns, 22 pt icons
+/// (white fill inactive, colour fill active), 11 pt labels (bold when active), 44 pt targets.
 struct LLTabBar: View {
     struct Item: Identifiable, Equatable {
         var id: String
@@ -18,15 +18,15 @@ struct LLTabBar: View {
             ForEach(items) { item in
                 let isActive = item.id == selection
                 Button { onSelect(item.id) } label: {
-                    VStack(spacing: Theme.Spacing.xs) {
-                        LLIconImage(item.icon, size: 28, active: isActive)
+                    VStack(spacing: 2) {
+                        LLIconImage(item.icon, size: 22, active: isActive)
                         Text(item.title)
-                            .font(isActive ? .llLabelBold : .llLabel)
+                            .font(.custom(isActive ? LLFont.bodyBold : LLFont.body, size: 11, relativeTo: .caption2))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
                     .foregroundStyle(Theme.Palette.ink)
-                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -35,7 +35,7 @@ struct LLTabBar: View {
                 .accessibilityIdentifier("tab.\(item.id)")
             }
         }
-        .padding(.top, Theme.Spacing.s)
+        .padding(.top, Theme.Spacing.xs)
         .background {
             Theme.Palette.surface
                 .ignoresSafeArea(edges: .bottom)
@@ -48,14 +48,14 @@ struct LLTabBar: View {
 
 #Preview("Tab bar · light") {
     VStack { Spacer(); LLTabBar(items: [
-        .init(id: "money", title: "Money", icon: .tabMoney), .init(id: "life", title: "Life", icon: .tabLife),
+        .init(id: "money", title: "Money", icon: .tabMoney), .init(id: "penny", title: "Penny", icon: .pennySmiling),
         .init(id: "play", title: "Play", icon: .tabPlay), .init(id: "you", title: "You", icon: .tabYou),
     ], selection: "money") { _ in } }.paperBackground()
 }
 
 #Preview("Tab bar · dark") {
     VStack { Spacer(); LLTabBar(items: [
-        .init(id: "money", title: "Money", icon: .tabMoney), .init(id: "life", title: "Life", icon: .tabLife),
+        .init(id: "money", title: "Money", icon: .tabMoney), .init(id: "penny", title: "Penny", icon: .pennySmiling),
         .init(id: "play", title: "Play", icon: .tabPlay), .init(id: "you", title: "You", icon: .tabYou),
-    ], selection: "life") { _ in } }.paperBackground().previewDark()
+    ], selection: "penny") { _ in } }.paperBackground().previewDark()
 }

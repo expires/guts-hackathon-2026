@@ -76,11 +76,11 @@ struct CharacterFormView: View {
                 RowGroupTitle(text: "Money")
                 LLMoneyField(title: "Pay before tax, per year", value: field(\.income), identifier: "form.income")
                 LLMoneyField(title: "Savings", value: field(\.savings), identifier: "form.savings")
-                LLMoneyField(title: "Debts, not counting a mortgage", value: field(\.debt), identifier: "form.debt")
+                LLMoneyField(title: "Debts (card, overdraft, Klarna)", value: field(\.debt), identifier: "form.debt")
                 Text(state.footer).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.xl)
+            .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button("Choose a start year", action: actions.onContinue)

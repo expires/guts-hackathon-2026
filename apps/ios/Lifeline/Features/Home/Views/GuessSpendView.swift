@@ -75,8 +75,11 @@ struct GuessSpendView: View {
             }
         }
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Label(state.streakText, icon: .streak).font(.llLabel)
-            Text("\(state.pointsTotal) points so far").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+            // Both lines come from the guess history; without it, neither shows.
+            if !state.streakText.isEmpty {
+                Label(state.streakText, icon: .streak).font(.llLabel)
+                Text("\(state.pointsTotal) points so far").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+            }
         }
         if !state.isToday {
             Button("Back to today", action: actions.onBackToToday)
@@ -112,9 +115,7 @@ struct GuessSpendView: View {
                 .accessibilityIdentifier("guess.accuracy")
         }
         if let link = state.moveLink {
-            Button(link.text) { actions.onShowMove(link.moveID) }
-                .buttonStyle(.text)
-                .font(.llLabelBold)
+            NextMoveLinkRow(text: link.text) { actions.onShowMove(link.moveID) }
         }
     }
 

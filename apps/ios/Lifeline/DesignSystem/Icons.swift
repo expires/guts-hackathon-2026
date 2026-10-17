@@ -52,6 +52,7 @@ enum LLIcon: String, CaseIterable, Sendable {
     case trophy = "trophy"
     case streak = "streak"
     case lock = "lock"
+    case scan = "scan"
     case demoPay = "demo-pay"
     case statusLive = "status-live"
     case statusCached = "status-cached"

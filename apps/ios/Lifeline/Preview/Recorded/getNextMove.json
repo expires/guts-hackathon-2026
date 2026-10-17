@@ -139,7 +139,42 @@
       "end": 2023,
       "label": "2021-2023 rate shock (stress test)"
     },
-    "concept_id": "interest-rates"
+    "concept_id": "interest-rates",
+    "gain_kind": "gbp_per_year",
+    "trade_off": {
+      "summary": "Your payment goes up if Bank Rate goes up",
+      "points": [
+        {
+          "text": "Your rate moves with Bank Rate. A rise of 1 point adds about £103 a month.",
+          "facts": {
+            "rise_points": 1.0,
+            "extra_monthly": 103.0
+          }
+        },
+        {
+          "text": "In the 2021-2023 rate shock, Bank Rate went from 0.25% to 5.25%.",
+          "facts": {
+            "bank_from": 0.25,
+            "bank_to": 5.25,
+            "stress_start": 2021.0,
+            "stress_end": 2023.0
+          }
+        },
+        {
+          "text": "Some trackers charge 1% to 5% of what you owe if you leave early.",
+          "facts": {
+            "erc_low_pct": 1.0,
+            "erc_high_pct": 5.0
+          },
+          "source": {
+            "source": "typical",
+            "series_id": "mortgage_erc_pct",
+            "status": "cached",
+            "note": "MoneyHelper, early repayment charges: usually 1% to 5% of the amount you owe"
+          }
+        }
+      ]
+    }
   },
   "runners_up": [
     {
@@ -214,7 +249,27 @@
         "end": 2009,
         "label": "2007-2009, the past period most like today"
       },
-      "concept_id": "budgeting"
+      "concept_id": "budgeting",
+      "gain_kind": "gbp_per_year",
+      "trade_off": {
+        "summary": "£165 a month less to spend on groceries",
+        "points": [
+          {
+            "text": "You spend £165 a month less on groceries, back to £402.",
+            "facts": {
+              "excess": 165.0,
+              "average": 402.0
+            }
+          },
+          {
+            "text": "You spent more than that in 2 of the last 6 months.",
+            "facts": {
+              "over": 2.0,
+              "history": 6.0
+            }
+          }
+        ]
+      }
     },
     {
       "id": "switch_energy",
@@ -309,7 +364,40 @@
         "end": 2023,
         "label": "2021-2023 energy price shock (stress test)"
       },
-      "concept_id": "inflation"
+      "concept_id": "inflation",
+      "gain_kind": "gbp_per_year",
+      "trade_off": {
+        "summary": "A fee if you leave early, and no saving if prices fall",
+        "points": [
+          {
+            "text": "Leaving a fixed deal early usually costs £25 to £75 per fuel. There is no fee in the last 49 days of the deal.",
+            "facts": {
+              "fee_low": 25.0,
+              "fee_high": 75.0,
+              "free_days": 49.0
+            },
+            "source": {
+              "source": "typical",
+              "series_id": "energy_exit_fee_gbp",
+              "status": "cached",
+              "note": "Ofgem, fixed tariffs: exit fees are usually £25 to £75 per fuel (supplier tariff sheets)"
+            }
+          },
+          {
+            "text": "If prices fall, you still pay about £142 a month until the fix ends.",
+            "facts": {
+              "monthly": 142.0
+            }
+          },
+          {
+            "text": "Prices fell in 1 of 5 similar past years.",
+            "facts": {
+              "fell": 1.0,
+              "periods": 5.0
+            }
+          }
+        ]
+      }
     }
   ],
   "backtest": {
@@ -319,5 +407,45 @@
     "baseline": "Always fix for 2 years (best constant rule: always take a tracker, 71.4%)",
     "baseline_hit_rate": 0.1429
   },
-  "generated_at": "2026-10-17T15:13:36Z"
+  "decision_sources": [
+    {
+      "source": "bank:fixtures",
+      "series_id": "homeowner-leeds",
+      "status": "mock",
+      "note": "Your bank data"
+    },
+    {
+      "source": "boe",
+      "series_id": "IUMBEDR,IUMBV34,IUMBV42,IUMBV48,IUMTLMV",
+      "status": "live",
+      "note": "Bank of England"
+    },
+    {
+      "source": "landregistry",
+      "series_id": "ukhpi-annual-change,ukhpi-average-price",
+      "status": "live",
+      "note": "HM Land Registry"
+    },
+    {
+      "source": "nomis",
+      "series_id": "NM_17_5,NM_2072_1,NM_30_1",
+      "status": "mock",
+      "note": "Nomis"
+    },
+    {
+      "source": "octopus",
+      "series_id": "dual-fuel-typical-bill",
+      "status": "live",
+      "note": "Octopus Energy"
+    },
+    {
+      "source": "ons",
+      "series_id": "D7G7,D7GT",
+      "status": "live",
+      "note": "ONS"
+    }
+  ],
+  "decision_source_count": 6,
+  "context_lines": [],
+  "generated_at": "2026-10-17T18:41:04Z"
 }

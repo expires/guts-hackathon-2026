@@ -33,6 +33,8 @@ extension Font {
     /// 40, Bricolage 800. Hero numbers and age.
     static var llHero: Font { LLFont.registerAll(); return .custom(LLFont.display, size: 40, relativeTo: .largeTitle) }
     /// 24, Bricolage 800. Titles and year headers.
+    /// Compact screen title (ADR 0048): 22 pt display, scales with Dynamic Type.
+    static var llScreenHeader: Font { LLFont.registerAll(); return .custom(LLFont.display, size: 22, relativeTo: .title2) }
     static var llTitle: Font { LLFont.registerAll(); return .custom(LLFont.display, size: 24, relativeTo: .title2) }
     /// 17, Atkinson 400. Body.
     static var llBody: Font { LLFont.registerAll(); return .custom(LLFont.body, size: 17, relativeTo: .body) }

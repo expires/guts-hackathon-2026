@@ -43,7 +43,7 @@ struct StartYearPickerView: View {
                     .accessibilityIdentifier("startYear.summary")
             }
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.xl)
+            .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PrimaryButton(title: "Start life", isBusy: state.isStarting, action: actions.onStart)

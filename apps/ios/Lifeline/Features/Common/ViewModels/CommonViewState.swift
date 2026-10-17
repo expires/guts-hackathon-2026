@@ -8,6 +8,8 @@ enum DataStatus: String, Equatable, Sendable, Hashable, CaseIterable {
     case live
     case cached
     case mock
+    /// The source cannot serve data right now (live mode, no data yet).
+    case unavailable
 
     /// Plain English label for chips.
     var label: String {
@@ -15,6 +17,7 @@ enum DataStatus: String, Equatable, Sendable, Hashable, CaseIterable {
         case .live: "live"
         case .cached: "saved copy"
         case .mock: "sample"
+        case .unavailable: "unavailable"
         }
     }
 }
@@ -49,13 +52,23 @@ struct ErrorViewState: Equatable, Sendable {
     var title: String
     var message: String
     var canRetry: Bool
+    /// The data is not there yet (409 `no_finance_data`). The view shows an "Unavailable" chip
+    /// and points to onboarding instead of a crash icon.
+    var isUnavailable = false
 
     static func from(_ error: APIError) -> ErrorViewState {
+        // Rate limiting: the client already retried quietly. Calm text, no button; pull to refresh.
+        if case let .server(status, _, _, _) = error, status == 429 {
+            return ErrorViewState(title: "Couldn't load", message: "Pull to refresh.", canRetry: false)
+        }
+        if error.isNoFinanceData {
+            return ErrorViewState(title: "Connect your money first", message: error.userMessage, canRetry: true, isUnavailable: true)
+        }
         switch error {
         case .network:
-            ErrorViewState(title: "You are offline", message: error.userMessage, canRetry: true)
+            return ErrorViewState(title: "You are offline", message: error.userMessage, canRetry: true)
         default:
-            ErrorViewState(title: "Something went wrong", message: error.userMessage, canRetry: true)
+            return ErrorViewState(title: "Something went wrong", message: error.userMessage, canRetry: true)
         }
     }
 }

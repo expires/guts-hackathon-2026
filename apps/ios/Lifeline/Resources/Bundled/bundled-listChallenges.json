@@ -1,0 +1,52 @@
+[
+  {
+    "id": "last-the-term",
+    "title": "Make your money last the term",
+    "emoji": "🗓️",
+    "description": "Keep enough money to reach the day your next money arrives.",
+    "character_id": "you",
+    "start_year": 2026,
+    "goal": {
+      "type": "money_lasts_until_next_income"
+    },
+    "scope": "you"
+  },
+  {
+    "id": "safety-fund-1m",
+    "title": "1 month safety fund",
+    "emoji": "🛟",
+    "description": "Save one month of your regular costs.",
+    "character_id": "you",
+    "start_year": 2026,
+    "goal": {
+      "type": "safety_fund_months",
+      "months": 1.0
+    },
+    "scope": "you"
+  },
+  {
+    "id": "clear-klarna",
+    "title": "Clear Klarna",
+    "emoji": "🧾",
+    "description": "Pay off every buy now, pay later plan.",
+    "character_id": "you",
+    "start_year": 2026,
+    "goal": {
+      "type": "clear_bnpl"
+    },
+    "scope": "you"
+  },
+  {
+    "id": "lisa-by-25",
+    "title": "Lifetime ISA by 25",
+    "emoji": "🏠",
+    "description": "Open a Lifetime ISA before you turn 25 and get the 25% bonus.",
+    "character_id": "you",
+    "start_year": 2026,
+    "goal": {
+      "type": "lifetime_isa_by_age",
+      "age": 25.0
+    },
+    "scope": "you"
+  }
+]

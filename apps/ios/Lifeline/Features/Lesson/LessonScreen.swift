@@ -3,6 +3,7 @@ import SwiftUI
 /// Glue: owns `LessonViewModel` and feeds `LessonView`.
 struct LessonScreen: View {
     @State private var model: LessonViewModel
+    @Environment(\.llPresentationMode) private var presentation
     private let onClose: @MainActor () -> Void
     private let onRewind: (@MainActor () -> Void)?
 
@@ -25,7 +26,7 @@ struct LessonScreen: View {
     }
 
     var body: some View {
-        LessonView(state: model.state, actions: model.actions)
+        LessonView(state: model.state.presented(presentation), actions: model.actions)
             .onAppear {
                 model.onClose = onClose
                 model.onRewind = onRewind

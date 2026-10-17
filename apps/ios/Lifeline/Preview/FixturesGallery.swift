@@ -10,6 +10,27 @@ extension Fixtures {
                 .init(id: "app", title: "Run the app", entries: [
                     .init(id: "app.flow", title: "Full app on sample data", detail: "MockClient, no backend"),
                 ]),
+                .init(id: "onboarding", title: "Onboarding and account (W6)", entries:
+                    [
+                        .init(id: "onboarding.flow", title: "Onboarding", detail: "Full flow on MockClient"),
+                        .init(id: "account.flow", title: "Account", detail: "Live screen on MockClient"),
+                    ]
+                    + OnboardingFixtures.all.map { .init(id: "onboarding." + $0.id, title: "Onboarding", detail: $0.title) }
+                    + AccountFixtures.all.map { .init(id: "account." + $0.id, title: "Account", detail: $0.title) }
+                ),
+                .init(id: "penny", title: "Ask Penny (W7)", entries:
+                    [.init(id: "penny.live", title: "Ask Penny", detail: "Scripted stream")]
+                    + PennyFixtures.all.map { .init(id: $0.id, title: "Ask Penny", detail: $0.title) }
+                ),
+                .init(id: "w9rooms", title: "Same Life (W9)", entries:
+                    RoomsPlayground.entries.map { .init(id: $0.id, title: $0.title, detail: $0.detail) }
+                ),
+                .init(id: "moneyHome", title: "Money home", entries: [
+                    .init(id: "money.ready", title: "Money home", detail: "With data"),
+                    .init(id: "money.noData", title: "Money home", detail: "No data: connect your money"),
+                    .init(id: "money.rateLimited", title: "Money home", detail: "Rate limited: pull to refresh"),
+                    .init(id: "money.offline", title: "Money home", detail: "Offline"),
+                ]),
                 .init(id: "select", title: "Choose a life", entries: [
                     .init(id: "select.ready", title: "Character select", detail: "Presets, Random, locked God Mode"),
                     .init(id: "select.godOwned", title: "Character select", detail: "God Mode owned"),

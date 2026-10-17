@@ -1,57 +1,100 @@
-// Rebuilt for ADR 0026 (Play-Lobby.dc.html) by W7.
+// Rebuilt for ADR 0026 by W7. Solo and friends entry by W9 (ADR 0048 compact, ADR 0052).
 import SwiftUI
 
-/// Play tab: Same Life rooms, challenges, and your collection (lives, ribbons, concepts).
+/// Play tab: "Play solo", "Play with friends", Join, then challenges and your collection.
 struct PlayView: View {
     enum Segment: String, CaseIterable, Identifiable {
-        case rooms = "Rooms"
         case challenges = "Challenges"
+        case circles = "Circles"
         case collection = "Collection"
         var id: String { rawValue }
     }
 
     let state: PlayViewState
     var actions: PlayActions = .noop
-    /// UI-only selection. The Rooms segment opens first when a room exists.
-    @State private var segment: Segment?
-
-    private var selected: Segment { segment ?? (state.room == nil ? .challenges : .rooms) }
+    /// UI-only selection.
+    @State private var segment: Segment = .challenges
+    @Environment(\.llPresentationMode) private var presentation
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 HStack {
-                    Text("Play").font(.llTitle).accessibilityAddTraits(.isHeader)
+                    Text("Play").font(.llBodyBold).accessibilityAddTraits(.isHeader)
                     Spacer()
-                    if state.isSampleData || state.room?.isSampleData == true { DemoDataBadge() }
+                    if state.isSampleData || state.rooms?.isSampleData == true { DemoDataBadge() }
                 }
-                SegmentBar(segments: Segment.allCases.filter { $0 != .rooms || state.room != nil }, selected: selected) { segment = $0 }
-                switch selected {
-                case .rooms:
-                    if let room = state.room {
-                        RoomLobbyContent(state: room, actions: actions.room)
-                            .accessibilityIdentifier("play.rooms")
+                if let active = state.rooms?.activeRoom {
+                    activeRoom(active)
+                }
+                PlayChoiceCard(
+                    icon: .tabLife, title: "Play solo",
+                    detail: "Live a life from 18. Make the money choices. See where they lead.",
+                    fill: Theme.Palette.money, shape: .hero, hero: true, identifier: "play.solo",
+                    action: actions.onPlaySolo
+                )
+                PlayChoiceCard(
+                    icon: .family, title: "Play with friends",
+                    detail: "Open a lobby. Friends join with a QR code or a short code.",
+                    fill: Theme.Palette.family, shape: .cardAlt, identifier: "play.friends",
+                    action: actions.onPlayWithFriends
+                )
+                Button(action: actions.onJoin) {
+                    HStack(spacing: 10) {
+                        LLIconImage(.scan, size: 24)
+                        Text("Join a game").lineLimit(1)
                     }
+                }
+                .buttonStyle(.second)
+                .accessibilityHint("Opens the camera to scan a room code. You can type the code instead.")
+                .accessibilityIdentifier("play.join")
+                SegmentBar(segments: Segment.allCases.filter { $0 != .circles || state.circles != nil }, selected: segment) { segment = $0 }
+                    .padding(.top, Theme.Spacing.s)
+                switch segment {
                 case .challenges:
                     phaseContent { challenges }
+                case .circles:
+                    if let circles = state.circles {
+                        CirclesContent(state: circles, actions: actions.circles)
+                    }
                 case .collection:
                     phaseContent { collection }
                 }
             }
             .foregroundStyle(Theme.Palette.ink)
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.top, Theme.Spacing.s)
-            .padding(.bottom, Theme.Spacing.xxl)
+            .padding(.top, Theme.Spacing.xs)
+            .padding(.bottom, Theme.Spacing.xl)
         }
         .paperBackground()
         .toolbar(.hidden, for: .navigationBar)
     }
 
+    private func activeRoom(_ active: RoomEntryViewState.ActiveRoom) -> some View {
+        Button(action: actions.rooms.onOpenActiveRoom) {
+            HStack(spacing: Theme.Spacing.m) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Back to room \(active.code)").font(.llBodyBold)
+                    Text(active.detail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Chevron()
+            }
+            .padding(.horizontal, Theme.Spacing.l)
+            .frame(minHeight: Theme.buttonHeight)
+            .inkSurface(.badge, fill: Theme.Palette.surface)
+            .foregroundStyle(Theme.Palette.ink)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back to room \(active.code). \(active.detail)")
+        .accessibilityIdentifier("play.activeRoom")
+    }
+
     @ViewBuilder
     private func phaseContent(@ViewBuilder _ content: () -> some View) -> some View {
         switch state.phase {
-        case let .loading(loading):
-            LoadingStateView(state: loading)
+        case .loading:
+            SkeletonList(rows: 3)
         case let .failed(error):
             ErrorStateView(state: error, onRetry: actions.onRetry)
         case .ready:
@@ -61,13 +104,13 @@ struct PlayView: View {
 
     private var challenges: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Button(action: actions.onPlay) {
-                Text(state.continueText ?? "Start a new life").lineLimit(1).minimumScaleFactor(0.7)
+            if let continueText = state.continueText {
+                Button(action: actions.onPlay) {
+                    Text(continueText).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .buttonStyle(.second)
+                .accessibilityIdentifier("play.continue")
             }
-            .buttonStyle(.main)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .accessibilityIdentifier("play.start")
             if state.challenges.isEmpty {
                 Text("No challenges right now.").font(.llBody).foregroundStyle(Theme.Palette.muted)
             } else {
@@ -130,7 +173,7 @@ struct PlayView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 VStack(alignment: .trailing, spacing: 0) {
                                     Text("\(Int(life.index.rounded()))").font(.llBodyBold)
-                                    Text(Money.compact(life.netWorth)).font(.llLabel)
+                                    LLAmount(life.netWorth, style: .compact).font(.llLabel)
                                 }
                                 Chevron()
                             }
@@ -141,7 +184,7 @@ struct PlayView: View {
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(life.name), \(life.detail), INDEX \(Int(life.index.rounded())), \(Money.spoken(life.netWorth))")
+                        .accessibilityLabel("\(life.name), \(life.detail), INDEX \(Int(life.index.rounded())), \(RoomAmount.spoken(life.netWorth, presentation: presentation))")
                         .accessibilityIdentifier("play.life.\(life.id)")
                     }
                 }
@@ -193,11 +236,50 @@ struct SegmentBar<Segment: Identifiable & RawRepresentable & Hashable>: View whe
     }
 }
 
+/// Big Play tab choice: icon on a colour tile, title and one line. Whole card is the button.
+struct PlayChoiceCard: View {
+    let icon: LLIcon
+    let title: String
+    let detail: String
+    var fill: Color = Theme.Palette.surface
+    var shape: HandCut = .card
+    var hero = false
+    var identifier = ""
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Theme.Spacing.l) {
+                LLIconImage(icon, size: 40)
+                    .frame(width: 64, height: 64)
+                    .inkSurface(.badge, fill: fill)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.llTitle).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(detail).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Chevron()
+            }
+            .padding(Theme.Spacing.l)
+            .frame(minHeight: 96)
+            .inkSurface(shape, hero: hero)
+            .foregroundStyle(Theme.Palette.ink)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
 // MARK: - Previews (one per fixture: light, dark, AX3 Dynamic Type)
 
 #Preview("Rooms · light") { PlayView(state: PlayFixturesW7.withRoom).previewInNavigation() }
 #Preview("Rooms · dark") { PlayView(state: PlayFixturesW7.withRoom).previewInNavigation().previewDark() }
 #Preview("Rooms · AX3") { PlayView(state: PlayFixturesW7.withRoom).previewInNavigation().previewLargeType() }
+#Preview("Rooms entry · light") { PlayView(state: PlayFixturesW7.withEntry).previewInNavigation() }
+#Preview("Rooms entry · dark") { PlayView(state: PlayFixturesW7.withEntry).previewInNavigation().previewDark() }
 #Preview("Ready · light") { PlayView(state: Fixtures.Play.ready).previewInNavigation() }
 #Preview("Ready · dark") { PlayView(state: Fixtures.Play.ready).previewInNavigation().previewDark() }
 #Preview("Ready · AX3") { PlayView(state: Fixtures.Play.ready).previewInNavigation().previewLargeType() }

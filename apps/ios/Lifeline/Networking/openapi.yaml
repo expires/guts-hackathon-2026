@@ -12,6 +12,7 @@ security:
 tags:
 - name: meta
 - name: auth
+- name: account
 - name: next-move
 - name: lives
 - name: learn
@@ -145,6 +146,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
       parameters:
       - name: seed
         in: query
@@ -184,6 +187,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
       requestBody:
@@ -505,6 +510,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
       requestBody:
@@ -534,6 +541,8 @@ paths:
                   $ref: '#/components/examples/Evaluation'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/rooms:
     post:
       operationId: createRoom
@@ -640,8 +649,21 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '501':
           $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: provider
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - monzo
+          - truelayer
+          default: monzo
+        description: Bank OAuth provider. Monzo is live; TrueLayer is disabled (409 source_disabled).
   /v1/bank/callback:
     get:
       operationId: bankCallback
@@ -709,6 +731,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '501':
           $ref: '#/components/responses/NotImplemented'
       parameters:
@@ -740,6 +764,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/finance/spending:
     get:
       operationId: getFinanceSpending
@@ -762,6 +788,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
       parameters:
       - &id002
         name: month
@@ -793,6 +821,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/finance/bills:
     get:
       operationId: listBills
@@ -815,6 +845,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/finance/budgets:
     get:
       operationId: listBudgets
@@ -837,6 +869,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
       parameters:
       - *id002
     put:
@@ -862,6 +896,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
       requestBody:
@@ -895,6 +931,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
     post:
       operationId: createGoal
       summary: Create a savings goal
@@ -918,6 +956,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
       requestBody:
@@ -929,6 +969,32 @@ paths:
             examples:
               CreateGoal:
                 $ref: '#/components/examples/CreateGoal'
+  /v1/finance/home:
+    get:
+      operationId: getFinanceHome
+      summary: Everything Money home needs in one request; has_data=false is a normal state, not an error
+      tags:
+      - finance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceHome'
+              examples:
+                FinanceHomeEmpty:
+                  $ref: '#/components/examples/FinanceHomeEmpty'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
   /v1/finance/prediction:
     get:
       operationId: getSpendPrediction
@@ -951,6 +1017,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
       parameters:
       - name: date
         in: query
@@ -981,6 +1049,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
     post:
       operationId: makeGuess
       summary: Guess today's spend before seeing the prediction (one guess per day)
@@ -1039,6 +1109,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/finance/profile:
     get:
       operationId: getFinanceProfile
@@ -1061,10 +1133,12 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/next-move:
     get:
       operationId: getNextMove
-      summary: What is my next money move? One top move, up to 2 runners-up, with evidence
+      summary: Where should my money go this month? One top move, up to 2 runners-up, with evidence
       tags:
       - next-move
       responses:
@@ -1083,6 +1157,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/next-move/test:
     post:
       operationId: testNextMove
@@ -1169,6 +1245,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
       requestBody:
@@ -1180,6 +1258,742 @@ paths:
             examples:
               AddPlanItem:
                 $ref: '#/components/examples/AddPlanItem'
+  /v1/me:
+    get:
+      operationId: getMe
+      summary: The signed-in account
+      tags:
+      - account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+              examples:
+                Me:
+                  $ref: '#/components/examples/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    delete:
+      operationId: deleteAccount
+      summary: Delete the account and every stored record
+      tags:
+      - account
+      responses:
+        '204': &id003
+          description: Done. No body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/me/reset:
+    post:
+      operationId: resetDemo
+      summary: 'Demo reset: clear this user''s lives, plan, guesses and finance data'
+      tags:
+      - account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+              examples:
+                Me:
+                  $ref: '#/components/examples/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/auth/logout:
+    post:
+      operationId: signOut
+      summary: Revoke the current token
+      tags:
+      - auth
+      responses:
+        '204': *id003
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/paths:
+    get:
+      operationId: listPaths
+      summary: Student start paths for Play solo and Quick Life (ADR 0052)
+      tags:
+      - lives
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PathsResponse'
+              examples:
+                Paths:
+                  $ref: '#/components/examples/Paths'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/circles:
+    get:
+      operationId: listCircles
+      summary: 'My Circles: habit ratios only, never amounts (ADR 0052)'
+      tags:
+      - circles
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CirclesResponse'
+              examples:
+                Circles:
+                  $ref: '#/components/examples/Circles'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    post:
+      operationId: createCircle
+      summary: Create a Circle
+      tags:
+      - circles
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+              examples:
+                Circle:
+                  $ref: '#/components/examples/Circle'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCircleRequest'
+            examples:
+              CreateCircle:
+                $ref: '#/components/examples/CreateCircle'
+  /v1/circles/join:
+    post:
+      operationId: joinCircle
+      summary: Join a Circle by code
+      tags:
+      - circles
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+              examples:
+                Circle:
+                  $ref: '#/components/examples/Circle'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinCircleRequest'
+            examples:
+              JoinCircle:
+                $ref: '#/components/examples/JoinCircle'
+  /v1/circles/{circle_id}/leave:
+    post:
+      operationId: leaveCircle
+      summary: Leave a Circle
+      tags:
+      - circles
+      responses:
+        '204': *id003
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: circle_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+  /v1/samples:
+    get:
+      operationId: listSamples
+      summary: Built-in sample student statements (ADR 0047)
+      tags:
+      - account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamplesResponse'
+              examples:
+                Samples:
+                  $ref: '#/components/examples/Samples'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/samples/{sample_id}/import:
+    post:
+      operationId: importSample
+      summary: Import a sample statement into this account; data is labelled Sample data
+      tags:
+      - account
+      responses:
+        '201':
+          description: Imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+              examples:
+                ImportResult:
+                  $ref: '#/components/examples/ImportResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: sample_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+  /v1/habits:
+    get:
+      operationId: getHabits
+      summary: 'This user''s habit score: ratios 0-100, no amounts (ADR 0052)'
+      tags:
+      - finance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HabitScore'
+              examples:
+                HabitScore:
+                  $ref: '#/components/examples/HabitScore'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/finance/statements:
+    post:
+      operationId: importStatement
+      summary: Upload a bank statement (Monzo or Revolut CSV first, then PDF)
+      tags:
+      - finance
+      responses:
+        '201':
+          description: Imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+              examples:
+                ImportResult:
+                  $ref: '#/components/examples/ImportResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV or PDF, max 5 MB
+                provider:
+                  type: string
+                  enum:
+                  - monzo
+                  - revolut
+                  - pdf
+                  - unknown
+  /v1/finance/manual:
+    put:
+      operationId: setManualFinance
+      summary: Enter your numbers instead of connecting a bank
+      tags:
+      - finance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceProfile'
+              examples:
+                FinanceProfile:
+                  $ref: '#/components/examples/FinanceProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualFinanceInput'
+            examples:
+              ManualFinance:
+                $ref: '#/components/examples/ManualFinance'
+  /v1/finance/transactions:
+    post:
+      operationId: logPayment
+      summary: Log one payment (App Intent for a Shortcuts Wallet-tap automation)
+      tags:
+      - finance
+      responses:
+        '201':
+          description: Logged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoggedPayment'
+              examples:
+                LoggedPayment:
+                  $ref: '#/components/examples/LoggedPayment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogPaymentRequest'
+            examples:
+              LogPayment:
+                $ref: '#/components/examples/LogPayment'
+  /v1/postcodes/reverse:
+    get:
+      operationId: reversePostcode
+      summary: Postcode, region and town for a location (fills the postcode)
+      tags:
+      - account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReversePostcode'
+              examples:
+                ReversePostcode:
+                  $ref: '#/components/examples/ReversePostcode'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+          minimum: 49.0
+          maximum: 61.5
+      - name: lon
+        in: query
+        required: true
+        schema:
+          type: number
+          minimum: -8.7
+          maximum: 2.0
+  /v1/me/health:
+    put:
+      operationId: setHealthSignal
+      summary: HealthKit steps and sleep for the Life Health stat
+      tags:
+      - account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthSignalStored'
+              examples:
+                HealthSignalStored:
+                  $ref: '#/components/examples/HealthSignalStored'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthSignal'
+            examples:
+              HealthSignal:
+                $ref: '#/components/examples/HealthSignal'
+  /v1/chat:
+    post:
+      operationId: askPenny
+      summary: 'Ask Penny: answers only through engine tools; every number verified'
+      tags:
+      - chat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+              examples:
+                ChatAnswer:
+                  $ref: '#/components/examples/ChatAnswer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              ChatAsk:
+                $ref: '#/components/examples/ChatAsk'
+  /v1/chat/stream:
+    post:
+      operationId: askPennyStream
+      summary: 'Ask Penny, streamed as Server-Sent Events: reaction (<=1 s), real tool steps, verified bubbles, done'
+      tags:
+      - chat
+      responses:
+        '200':
+          description: text/event-stream; each `data:` line is one ChatStreamEvent (JSON)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                x-event-schema:
+                  $ref: '#/components/schemas/ChatStreamEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              ChatAsk:
+                $ref: '#/components/examples/ChatAsk'
+  /v1/chat/threads:
+    get:
+      operationId: listChatThreads
+      summary: The caller's chat threads
+      tags:
+      - chat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatThreadsResponse'
+              examples:
+                ChatThreads:
+                  $ref: '#/components/examples/ChatThreads'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/chat/threads/{id}:
+    get:
+      operationId: getChatThread
+      summary: One thread with its messages and answer groups
+      tags:
+      - chat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatThread'
+              examples:
+                ChatThread:
+                  $ref: '#/components/examples/ChatThread'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_.:-]{1,64}$
+  /v1/news:
+    get:
+      operationId: listNews
+      summary: Guardian headlines and links for a date range (context only)
+      tags:
+      - chat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsResponse'
+              examples:
+                News:
+                  $ref: '#/components/examples/News'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: topic
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - rates
+          - mortgages
+          - housing
+          - inflation
+          - energy
+          - jobs
+          - markets
+          - economy
+  /v1/rate-decisions:
+    get:
+      operationId: getRateDecisions
+      summary: Bank of England rate-decision dates (context only)
+      tags:
+      - chat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateDecisions'
+              examples:
+                RateDecisions:
+                  $ref: '#/components/examples/RateDecisions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
   /v1/purchases/verify:
     post:
       operationId: verifyPurchase
@@ -1346,6 +2160,20 @@ components:
       - score
       - success_rate
       type: object
+    AmountPart:
+      additionalProperties: false
+      description: One line of a shown total, so Why? can show the calculation (ADR 0053, bug 2).
+      properties:
+        label:
+          description: e.g. 'Current account you entered'
+          maxLength: 80
+          type: string
+        amount:
+          type: number
+      required:
+      - label
+      - amount
+      type: object
     AppleSignInRequest:
       additionalProperties: false
       properties:
@@ -1469,6 +2297,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
       required:
       - url
@@ -1484,6 +2313,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
         provider:
           type: string
@@ -1553,6 +2383,18 @@ components:
       - meta
       - total_next_30_days
       - items
+      type: object
+    BubbleEvent:
+      additionalProperties: false
+      properties:
+        bubble:
+          $ref: '#/components/schemas/ChatBubble'
+        highlights:
+          items:
+            $ref: '#/components/schemas/Highlight'
+          type: array
+      required:
+      - bubble
       type: object
     Budget:
       additionalProperties: false
@@ -1729,6 +2571,13 @@ components:
             - type: number
             - type: string
           type: object
+        scope:
+          default: life
+          description: '''you'' = scored on the user''s own data (ratios, no £); ''life'' = a game life'
+          enum:
+          - you
+          - life
+          type: string
       required:
       - id
       - title
@@ -1738,12 +2587,38 @@ components:
       - start_year
       - goal
       type: object
+    ChallengeProgress:
+      additionalProperties: false
+      properties:
+        challenge_id:
+          type: string
+        life_id:
+          description: Set for life challenges; None for scope 'you'
+          type: string
+        status:
+          enum:
+          - in_progress
+          - won
+          - lost
+          type: string
+        detail:
+          maxLength: 200
+          type: string
+      required:
+      - challenge_id
+      - status
+      type: object
     ChallengesResponse:
       additionalProperties: false
       properties:
         challenges:
           items:
             $ref: '#/components/schemas/Challenge'
+          type: array
+        progress:
+          description: Caller's progress, when signed in
+          items:
+            $ref: '#/components/schemas/ChallengeProgress'
           type: array
       required:
       - challenges
@@ -1889,6 +2764,344 @@ components:
       - x
       - y
       type: object
+    ChatBubble:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        kind:
+          enum:
+          - answer
+          - caveat
+          - question
+          - general_knowledge
+          type: string
+        text:
+          maxLength: 600
+          type: string
+      required:
+      - id
+      - kind
+      - text
+      type: object
+    ChatContext:
+      additionalProperties: false
+      properties:
+        next_move_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        life_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        event_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        screen:
+          enum:
+          - money
+          - next_move
+          - why
+          - life_event
+          - life
+          - other
+          type: string
+      type: object
+    ChatFact:
+      additionalProperties: false
+      description: A number Penny may say. From a tool result or the official facts table.
+      properties:
+        id:
+          type: string
+        value:
+          type: number
+        unit:
+          enum:
+          - gbp
+          - gbp_per_month
+          - gbp_per_year
+          - percent
+          - months
+          - years
+          - count
+          - date_year
+          type: string
+        label:
+          maxLength: 120
+          type: string
+        source_id:
+          type: string
+      required:
+      - id
+      - value
+      - unit
+      - label
+      type: object
+    ChatMessage:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        role:
+          enum:
+          - user
+          - penny
+          type: string
+        created_at:
+          type: string
+        text:
+          description: User message text
+          type: string
+        reply_to:
+          type: string
+        response:
+          description: Penny's answer group
+          $ref: '#/components/schemas/ChatResponse'
+        replies:
+          default: 0
+          description: N Replies under a user bubble
+          minimum: 0
+          type: integer
+      required:
+      - id
+      - role
+      - created_at
+      type: object
+    ChatRequest:
+      additionalProperties: false
+      properties:
+        message:
+          maxLength: 2000
+          minLength: 1
+          type: string
+        thread_id:
+          description: Omit to start a new thread
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        reply_to:
+          description: Message id this question replies to
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        context:
+          $ref: '#/components/schemas/ChatContext'
+      required:
+      - message
+      type: object
+    ChatResponse:
+      additionalProperties: false
+      properties:
+        thread_id:
+          type: string
+        message_id:
+          type: string
+        reply_to:
+          description: The user's message id this answer group attaches to
+          type: string
+        reaction:
+          enum:
+          - eyes
+          - brain
+          - thumbs
+          - tick
+          - question
+          - shrug
+          type: string
+        mode:
+          default: checked
+          enum:
+          - checked
+          - general
+          type: string
+        bubbles:
+          description: 'Voice: usually one bubble, two at most'
+          items:
+            $ref: '#/components/schemas/ChatBubble'
+          maxItems: 2
+          minItems: 1
+          type: array
+        highlights:
+          items:
+            $ref: '#/components/schemas/Highlight'
+          type: array
+        facts:
+          items:
+            $ref: '#/components/schemas/ChatFact'
+          type: array
+        sources:
+          items:
+            $ref: '#/components/schemas/ChatSource'
+          type: array
+        follow_up_question:
+          maxLength: 300
+          type: string
+        suggestions:
+          description: Follow-up chips, e.g. 'Next move', 'Summary'. Never a lone 'Yes'.
+          items:
+            type: string
+          maxItems: 2
+          type: array
+        confidence:
+          maximum: 1
+          minimum: 0
+          type: number
+        tool_calls:
+          items:
+            $ref: '#/components/schemas/ToolCall'
+          maxItems: 5
+          type: array
+        verified:
+          description: True when every number passed the verifier; False means template summary
+          type: boolean
+        summary_available:
+          default: false
+          type: boolean
+        links:
+          description: In-app destinations, e.g. the out-of-scope reply links to the Next Move
+          items:
+            enum:
+            - next_move
+            - test_it
+            - why
+            - plan
+            type: string
+          maxItems: 3
+          type: array
+        disclaimer:
+          const: Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions.
+          default: Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions.
+          type: string
+      required:
+      - thread_id
+      - message_id
+      - reply_to
+      - reaction
+      - bubbles
+      - confidence
+      - verified
+      type: object
+    ChatSource:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        group:
+          enum:
+          - your_data
+          - live_sources
+          - general_knowledge
+          type: string
+        label:
+          maxLength: 120
+          type: string
+        ref:
+          $ref: '#/components/schemas/SourceRef'
+        url:
+          maxLength: 500
+          type: string
+        updated_at:
+          type: string
+      required:
+      - id
+      - group
+      - label
+      type: object
+    ChatStreamEvent:
+      additionalProperties: false
+      description: 'One Server-Sent Event from POST /v1/chat/stream. Order: reaction, tool_step*, verifying?, bubble+, done.'
+      properties:
+        type:
+          enum:
+          - reaction
+          - tool_step
+          - verifying
+          - bubble
+          - done
+          - error
+          - keepalive
+          type: string
+        seq:
+          minimum: 0
+          type: integer
+        elapsed_ms:
+          minimum: 0
+          type: integer
+        reaction:
+          enum:
+          - eyes
+          - brain
+          - thumbs
+          - tick
+          - question
+          - shrug
+          type: string
+        step:
+          $ref: '#/components/schemas/ToolStep'
+        bubble:
+          $ref: '#/components/schemas/BubbleEvent'
+        response:
+          description: Full verified response on 'done'
+          $ref: '#/components/schemas/ChatResponse'
+        error_code:
+          type: string
+      required:
+      - type
+      - seq
+      - elapsed_ms
+      type: object
+    ChatThread:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        messages:
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+          type: array
+      required:
+      - id
+      - title
+      - messages
+      type: object
+    ChatThreadSummary:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          maxLength: 120
+          type: string
+        updated_at:
+          type: string
+        message_count:
+          minimum: 0
+          type: integer
+      required:
+      - id
+      - title
+      - updated_at
+      - message_count
+      type: object
+    ChatThreadsResponse:
+      additionalProperties: false
+      properties:
+        threads:
+          items:
+            $ref: '#/components/schemas/ChatThreadSummary'
+          type: array
+      required:
+      - threads
+      type: object
     Choice:
       additionalProperties: false
       properties:
@@ -1938,6 +3151,75 @@ components:
       - life
       - outcome
       type: object
+    Circle:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        name:
+          maxLength: 40
+          type: string
+        code:
+          pattern: ^[A-Z0-9]{6}$
+          type: string
+        members:
+          items:
+            $ref: '#/components/schemas/CircleMember'
+          maxItems: 30
+          type: array
+        recap:
+          description: Penny's weekly recap, ratios only
+          maxLength: 400
+          type: string
+        recap_week:
+          description: ISO week, e.g. 2026-W42
+          type: string
+      required:
+      - id
+      - name
+      - code
+      - members
+      type: object
+    CircleMember:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          maxLength: 24
+          type: string
+        habits:
+          $ref: '#/components/schemas/HabitScore'
+        improvement:
+          description: Overall points vs own baseline
+          maximum: 100
+          minimum: -100
+          type: integer
+        rank:
+          description: Rank by improvement, not by score or income
+          minimum: 1
+          type: integer
+        is_you:
+          default: false
+          type: boolean
+      required:
+      - id
+      - name
+      - habits
+      type: object
+    CirclesResponse:
+      additionalProperties: false
+      properties:
+        circles:
+          items:
+            $ref: '#/components/schemas/Circle'
+          type: array
+      required:
+      - circles
+      type: object
     Concept:
       additionalProperties: false
       properties:
@@ -1982,6 +3264,16 @@ components:
           type: array
       required:
       - concepts
+      type: object
+    CreateCircleRequest:
+      additionalProperties: false
+      properties:
+        name:
+          maxLength: 40
+          minLength: 1
+          type: string
+      required:
+      - name
       type: object
     CreateGoalRequest:
       additionalProperties: false
@@ -2041,14 +3333,28 @@ components:
         room_code:
           pattern: ^[A-Z0-9]{6}$
           type: string
+        path_id:
+          description: Student start path (ADR 0052)
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        quick:
+          default: false
+          description: 'Quick Life: ages 18 to 25, 2 or 3 events with choices'
+          type: boolean
       required:
       - mode
       - start_year
       type: object
     CreateRoomRequest:
       additionalProperties: false
+      description: 'Lobby first (ADR 0052): an empty body opens a lobby; the host picks the game later.
+
+        Names come from the account; host_name is only a fallback.'
       properties:
         mode:
+          description: 'Omit: 2 players = duel, more = group at start'
           enum:
           - duel
           - group
@@ -2067,11 +3373,38 @@ components:
           maximum: 2026
           minimum: 1990
           type: integer
+      type: object
+    DebtItem:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        kind:
+          enum:
+          - card
+          - overdraft
+          - bnpl
+          - loan
+          type: string
+        balance:
+          maximum: 10000000
+          minimum: 0
+          type: number
+        rate_pct:
+          maximum: 100
+          minimum: 0
+          type: number
+        free_limit:
+          description: Interest-free overdraft limit
+          minimum: 0
+          type: number
+        due_date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
       required:
-      - mode
-      - host_name
-      - preset_id
-      - start_year
+      - id
+      - kind
+      - balance
       type: object
     Decision:
       additionalProperties: false
@@ -2110,6 +3443,40 @@ components:
       - sources
       - disclaimer
       - generated_at
+      type: object
+    DecisionOption:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        label:
+          maxLength: 80
+          type: string
+      required:
+      - id
+      - label
+      type: object
+    DecisionOutcome:
+      additionalProperties: false
+      properties:
+        option_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        game_money_change:
+          description: Simulated game money, never the player's real money
+          type: number
+        note:
+          maxLength: 160
+          type: string
+      required:
+      - option_id
+      - game_money_change
+      - note
       type: object
     DecisionProfile:
       additionalProperties: false
@@ -2173,6 +3540,44 @@ components:
       - savings
       - housing
       type: object
+    DecisionPrompt:
+      additionalProperties: false
+      description: One student money decision in one piece of history, the same for everyone.
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        year:
+          maximum: 2026
+          minimum: 1990
+          type: integer
+        context:
+          description: What was happening that year, from real data
+          maxLength: 240
+          type: string
+        text:
+          maxLength: 200
+          type: string
+        options:
+          items:
+            $ref: '#/components/schemas/DecisionOption'
+          maxItems: 4
+          minItems: 2
+          type: array
+        answer_ms:
+          default: 20000
+          maximum: 60000
+          minimum: 5000
+          type: integer
+      required:
+      - id
+      - year
+      - context
+      - text
+      - options
+      type: object
     DecisionRequest:
       additionalProperties: false
       properties:
@@ -2186,6 +3591,36 @@ components:
           type: string
       required:
       - profile
+      type: object
+    DecisionReveal:
+      additionalProperties: false
+      properties:
+        prompt_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        choices:
+          items:
+            $ref: '#/components/schemas/PlayerChoice'
+          type: array
+        outcomes:
+          items:
+            $ref: '#/components/schemas/DecisionOutcome'
+          type: array
+        penny_line:
+          maxLength: 200
+          type: string
+        ranking:
+          items:
+            $ref: '#/components/schemas/PlayerScore'
+          type: array
+      required:
+      - prompt_id
+      - choices
+      - outcomes
+      - penny_line
+      - ranking
       type: object
     Deltas:
       additionalProperties: false
@@ -2373,6 +3808,40 @@ components:
       required:
       - text
       type: object
+    FinanceHome:
+      additionalProperties: false
+      description: Everything Money home needs in ONE request. No data is a normal state (has_data=false), not an error.
+      properties:
+        has_data:
+          type: boolean
+        meta:
+          $ref: '#/components/schemas/FinanceMeta'
+        balance:
+          description: '''In your account'' tile'
+          type: number
+        net_worth:
+          description: '''Net worth'' tile'
+          type: number
+        next_move:
+          description: Compact card uses top only
+          $ref: '#/components/schemas/NextMoveResponse'
+        prediction:
+          description: Guess my spend
+          $ref: '#/components/schemas/SpendPrediction'
+        coming_up:
+          items:
+            $ref: '#/components/schemas/Bill'
+          maxItems: 3
+          type: array
+        coming_up_more:
+          default: false
+          type: boolean
+        connect_prompt:
+          description: 'Shown when has_data is false: ''Connect your money to see your next move'''
+          type: string
+      required:
+      - has_data
+      type: object
     FinanceMeta:
       additionalProperties: false
       properties:
@@ -2381,6 +3850,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
         source:
           type: string
@@ -2404,6 +3874,16 @@ components:
           type: number
         net_worth:
           type: number
+        balance_parts:
+          description: Entered data only
+          items:
+            $ref: '#/components/schemas/AmountPart'
+          type: array
+        net_worth_parts:
+          description: Entered data only
+          items:
+            $ref: '#/components/schemas/AmountPart'
+          type: array
         accounts:
           items:
             $ref: '#/components/schemas/Account'
@@ -2438,6 +3918,9 @@ components:
           items:
             $ref: '#/components/schemas/PersonalFact'
           type: array
+        is_student:
+          description: As entered at onboarding (ADR 0049)
+          type: boolean
       required:
       - meta
       - profile
@@ -2490,6 +3973,41 @@ components:
       - annual_income
       - monthly_costs
       - net_worth
+      type: object
+    GameOptions:
+      additionalProperties: false
+      description: Options on the host's one small sheet.
+      properties:
+        path_id:
+          description: Same Life / Quick Life student path
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        quick:
+          default: true
+          description: Same Life as a Quick Life round
+          type: boolean
+        start_year:
+          description: Same Life / Same Decision history year
+          maximum: 2026
+          minimum: 1990
+          type: integer
+        questions:
+          default: 8
+          description: Money Quiz length
+          maximum: 15
+          minimum: 3
+          type: integer
+        topic:
+          default: mixed
+          enum:
+          - mixed
+          - student_finance
+          - saving
+          - debt
+          - tax
+          type: string
       type: object
     GoalsResponse:
       additionalProperties: false
@@ -2588,6 +4106,47 @@ components:
       - best_streak
       - items
       type: object
+    HabitComponents:
+      additionalProperties: false
+      description: Ratios of the user's own amounts, 0-100. No amounts, so they may be shared (ADR 0052 privacy rule).
+      properties:
+        savings_rate:
+          maximum: 100
+          minimum: 0
+          type: integer
+        months_of_cover:
+          maximum: 100
+          minimum: 0
+          type: integer
+        spend_stability:
+          maximum: 100
+          minimum: 0
+          type: integer
+        discretionary_share:
+          maximum: 100
+          minimum: 0
+          type: integer
+        subscription_creep:
+          maximum: 100
+          minimum: 0
+          type: integer
+        debt_pressure:
+          maximum: 100
+          minimum: 0
+          type: integer
+      type: object
+    HabitScore:
+      additionalProperties: false
+      properties:
+        components:
+          $ref: '#/components/schemas/HabitComponents'
+        overall:
+          maximum: 100
+          minimum: 0
+          type: integer
+      required:
+      - components
+      type: object
     Health:
       additionalProperties: false
       properties:
@@ -2610,12 +4169,199 @@ components:
             - skipped
             type: string
           type: object
+        warming:
+          default: false
+          description: True while the macro table and engine context build after start
+          type: boolean
       required:
       - status
       - version
       - product
       - time
       - checks
+      type: object
+    HealthSignal:
+      additionalProperties: false
+      description: From HealthKit on the device. Feeds the Life tab Health stat (ADR 0029).
+      properties:
+        steps_per_day:
+          maximum: 100000
+          minimum: 0
+          type: number
+        sleep_hours:
+          maximum: 24
+          minimum: 0
+          type: number
+        measured_days:
+          maximum: 366
+          minimum: 1
+          type: integer
+        source:
+          const: healthkit
+          default: healthkit
+          type: string
+      required:
+      - steps_per_day
+      - sleep_hours
+      - measured_days
+      type: object
+    HealthSignalStored:
+      additionalProperties: false
+      properties:
+        steps_per_day:
+          type: number
+        sleep_hours:
+          type: number
+        measured_days:
+          type: integer
+        health_effect:
+          description: Points added to the Life Health stat at the next AGE
+          maximum: 10
+          minimum: -10
+          type: integer
+        updated_at:
+          type: string
+      required:
+      - steps_per_day
+      - sleep_hours
+      - measured_days
+      - health_effect
+      - updated_at
+      type: object
+    Highlight:
+      additionalProperties: false
+      description: A tappable number inside a bubble.
+      properties:
+        bubble_id:
+          type: string
+        start:
+          minimum: 0
+          type: integer
+        length:
+          minimum: 1
+          type: integer
+        fact_id:
+          type: string
+        source_id:
+          type: string
+      required:
+      - bubble_id
+      - start
+      - length
+      - fact_id
+      type: object
+    ImportResult:
+      additionalProperties: false
+      description: Returned by POST /v1/finance/statements (multipart file). The client animates `stages`.
+      properties:
+        import_id:
+          type: string
+        status:
+          enum:
+          - done
+          - partial
+          - failed
+          type: string
+        provider:
+          enum:
+          - monzo
+          - revolut
+          - pdf
+          - unknown
+          type: string
+        transactions:
+          minimum: 0
+          type: integer
+        first_date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        last_date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        months_covered:
+          minimum: 0
+          type: number
+        warnings:
+          items:
+            type: string
+          maxItems: 20
+          type: array
+        stages:
+          items:
+            $ref: '#/components/schemas/ImportStage'
+          type: array
+      required:
+      - import_id
+      - status
+      - provider
+      - transactions
+      - months_covered
+      - stages
+      type: object
+    ImportStage:
+      additionalProperties: false
+      properties:
+        name:
+          enum:
+          - read
+          - categorise
+          - find_bills
+          - build_profile
+          - next_move
+          type: string
+        label:
+          type: string
+        done:
+          type: boolean
+      required:
+      - name
+      - label
+      - done
+      type: object
+    IncomeSource:
+      additionalProperties: false
+      description: One way money arrives (ADR 0049). `dates` holds known payment dates, e.g. 3 loan instalments.
+      properties:
+        id:
+          type: string
+        kind:
+          enum:
+          - maintenance_loan
+          - scholarship
+          - bursary
+          - grant
+          - family
+          - part_time_job
+          - salary
+          - other
+          type: string
+        amount:
+          description: GBP per payment
+          maximum: 1000000
+          minimum: 0
+          type: number
+        schedule:
+          enum:
+          - weekly
+          - monthly
+          - termly
+          - yearly
+          - one_off
+          type: string
+        next_date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        dates:
+          items:
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            type: string
+          maxItems: 60
+          type: array
+      required:
+      - id
+      - kind
+      - amount
+      - schedule
       type: object
     IndexState:
       additionalProperties: false
@@ -2663,6 +4409,15 @@ components:
       required:
       - title
       - annual_income
+      type: object
+    JoinCircleRequest:
+      additionalProperties: false
+      properties:
+        code:
+          pattern: ^[A-Z0-9]{6}$
+          type: string
+      required:
+      - code
       type: object
     KeyMoment:
       additionalProperties: false
@@ -2867,6 +4622,9 @@ components:
           type: array
         concepts_unlocked:
           type: integer
+        habit_score:
+          description: 'Quick Life: from the game ledger (ADR 0059)'
+          $ref: '#/components/schemas/HabitScore'
         timeline:
           items:
             $ref: '#/components/schemas/YearLog'
@@ -2893,6 +4651,201 @@ components:
           type: array
       required:
       - lives
+      type: object
+    LogPaymentRequest:
+      additionalProperties: false
+      description: App Intent "Log a payment" (Shortcuts Wallet-tap automation).
+      properties:
+        amount:
+          exclusiveMinimum: 0
+          maximum: 100000
+          type: number
+        merchant:
+          maxLength: 80
+          minLength: 1
+          type: string
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+      required:
+      - amount
+      - merchant
+      type: object
+    LoggedPayment:
+      additionalProperties: false
+      properties:
+        transaction:
+          $ref: '#/components/schemas/Transaction'
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+      required:
+      - transaction
+      - category
+      type: object
+    ManualFinanceInput:
+      additionalProperties: false
+      properties:
+        postcode:
+          maxLength: 8
+          minLength: 5
+          pattern: ^[A-Za-z0-9 ]+$
+          type: string
+        housing:
+          enum:
+          - rent
+          - own
+          - mortgage
+          - parents
+          type: string
+        monthly_rent:
+          maximum: 100000
+          minimum: 0
+          type: number
+        mortgage_balance:
+          maximum: 10000000
+          minimum: 0
+          type: number
+        mortgage_rate_pct:
+          maximum: 30
+          minimum: 0
+          type: number
+        mortgage_years_left:
+          maximum: 40
+          minimum: 0
+          type: integer
+        deal_end:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        property_value:
+          maximum: 100000000
+          minimum: 0
+          type: number
+        monthly_take_home:
+          maximum: 1000000
+          minimum: 0
+          type: number
+        regular_costs:
+          items:
+            $ref: '#/components/schemas/RegularCost'
+          maxItems: 30
+          type: array
+        savings:
+          default: 0
+          maximum: 100000000
+          minimum: 0
+          type: number
+        birth_year:
+          maximum: 2010
+          minimum: 1920
+          type: integer
+        is_student:
+          type: boolean
+        age:
+          maximum: 100
+          minimum: 16
+          type: integer
+        income_sources:
+          items:
+            $ref: '#/components/schemas/IncomeSource'
+          maxItems: 20
+          type: array
+        student_loan_plan:
+          enum:
+          - plan_1
+          - plan_2
+          - plan_4
+          - plan_5
+          - postgraduate
+          - none
+          type: string
+        debts:
+          items:
+            $ref: '#/components/schemas/DebtItem'
+          maxItems: 20
+          type: array
+      required:
+      - postcode
+      - housing
+      - monthly_take_home
+      type: object
+    Me:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+        auth_provider:
+          enum:
+          - apple
+          - demo
+          type: string
+        created_at:
+          type: string
+        has_finance_data:
+          type: boolean
+        finance_inputs:
+          items:
+            enum:
+            - statement
+            - manual
+            - bank
+            - app_intent
+            - sample
+            type: string
+          type: array
+        bank_name:
+          description: Connected bank, e.g. 'Monzo'
+          maxLength: 40
+          type: string
+      required:
+      - id
+      - auth_provider
+      - created_at
+      - has_finance_data
+      - finance_inputs
       type: object
     ModelInfo:
       additionalProperties: false
@@ -2939,6 +4892,10 @@ components:
           - pay_off_debt
           - build_emergency_fund
           - cut_budget
+          - spread_investments
+          - weekly_budget
+          - lifetime_isa
+          - keep_cash
           type: string
         action:
           description: The move in a few words, e.g. 'Fix for 5 years'
@@ -2956,6 +4913,17 @@ components:
           maximum: 1
           minimum: 0
           type: number
+        sample_size:
+          description: Matched cases behind the confidence (ADR 0053)
+          minimum: 0
+          type: integer
+        confidence_level:
+          description: '''high'' only with a sufficient, relevant sample'
+          enum:
+          - low
+          - medium
+          - high
+          type: string
         confidence_label:
           description: e.g. '7 in 10 twins in similar past periods did better'
           type: string
@@ -2987,6 +4955,33 @@ components:
         concept_id:
           description: Lesson for the 'Why?' button
           type: string
+        gain_kind:
+          default: gbp_per_year
+          description: Gain as £ a year (impact_per_year) or months of cover (cover_months)
+          enum:
+          - gbp_per_year
+          - months_of_cover
+          - weeks_of_cover
+          type: string
+        cover_weeks:
+          description: Weeks until the next money arrives
+          minimum: 0
+          type: number
+        shortfall:
+          description: GBP missing before the next money arrives (weeks_of_cover moves)
+          minimum: 0
+          type: number
+        safe_weekly_spend:
+          description: GBP a week that lasts until then
+          minimum: 0
+          type: number
+        cover_months:
+          description: Months of costs covered after the move
+          minimum: 0
+          type: number
+        trade_off:
+          description: What you give up. Always set by the engine (ADR 0042)
+          $ref: '#/components/schemas/TradeOff'
       required:
       - id
       - kind
@@ -3015,6 +5010,58 @@ components:
       required:
       - id
       - label
+      type: object
+    NewsItem:
+      additionalProperties: false
+      description: Headline and link only. Never article body text (copyright).
+      properties:
+        id:
+          type: string
+        headline:
+          maxLength: 300
+          type: string
+        standfirst:
+          description: At most one sentence
+          maxLength: 300
+          type: string
+        section:
+          maxLength: 60
+          type: string
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        url:
+          maxLength: 500
+          type: string
+        source:
+          const: guardian
+          default: guardian
+          type: string
+      required:
+      - id
+      - headline
+      - section
+      - date
+      - url
+      type: object
+    NewsResponse:
+      additionalProperties: false
+      properties:
+        status:
+          enum:
+          - live
+          - cached
+          - mock
+          - unavailable
+          type: string
+        items:
+          items:
+            $ref: '#/components/schemas/NewsItem'
+          maxItems: 50
+          type: array
+      required:
+      - status
+      - items
       type: object
     NextMoveBacktest:
       additionalProperties: false
@@ -3047,8 +5094,8 @@ components:
         meta:
           $ref: '#/components/schemas/FinanceMeta'
         question:
-          const: What is my next money move?
-          default: What is my next money move?
+          const: Where should my money go this month?
+          default: Where should my money go this month?
           type: string
         top:
           $ref: '#/components/schemas/Move'
@@ -3059,6 +5106,23 @@ components:
           type: array
         backtest:
           $ref: '#/components/schemas/NextMoveBacktest'
+        decision_sources:
+          description: Decision inputs only (user data, BoE, ONS, Nomis, Land Registry, Companies House, Octopus, FX, CoinGecko)
+            with status. Game-only and context sources (news, rate dates) are not counted (ADR 0032).
+          items:
+            $ref: '#/components/schemas/SourceRef'
+          type: array
+        decision_source_count:
+          default: 0
+          description: '''Based on N sources'''
+          minimum: 0
+          type: integer
+        context_lines:
+          description: Context only, never a decision input (e.g. next MPC date)
+          items:
+            type: string
+          maxItems: 3
+          type: array
         generated_at:
           type: string
       required:
@@ -3095,6 +5159,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
       required:
       - series_id
@@ -3179,6 +5244,16 @@ components:
       - deltas
       - good
       type: object
+    PathsResponse:
+      additionalProperties: false
+      properties:
+        paths:
+          items:
+            $ref: '#/components/schemas/StudentPath'
+          type: array
+      required:
+      - paths
+      type: object
     PersonalFact:
       additionalProperties: false
       description: A real-number sentence that a lesson can show. Every number comes from `facts`.
@@ -3217,6 +5292,10 @@ components:
           - pay_off_debt
           - build_emergency_fund
           - cut_budget
+          - spread_investments
+          - weekly_budget
+          - lifetime_isa
+          - keep_cash
           type: string
         action:
           type: string
@@ -3260,6 +5339,12 @@ components:
           type: string
         is_host:
           type: boolean
+        ready:
+          default: false
+          type: boolean
+        connected:
+          default: true
+          type: boolean
         life_id:
           type: string
         age:
@@ -3277,6 +5362,44 @@ components:
       - id
       - name
       - is_host
+      type: object
+    PlayerChoice:
+      additionalProperties: false
+      properties:
+        player_id:
+          type: string
+        name:
+          type: string
+        option_id:
+          description: None when the player did not answer in time
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+      required:
+      - player_id
+      - name
+      type: object
+    PlayerScore:
+      additionalProperties: false
+      properties:
+        player_id:
+          type: string
+        name:
+          type: string
+        score:
+          minimum: 0
+          type: integer
+        rank:
+          minimum: 1
+          type: integer
+        last_correct:
+          type: boolean
+      required:
+      - player_id
+      - name
+      - score
+      - rank
       type: object
     Point:
       additionalProperties: false
@@ -3402,6 +5525,125 @@ components:
       - options
       - answer_index
       type: object
+    QuizChoice:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        text:
+          maxLength: 120
+          type: string
+      required:
+      - id
+      - text
+      type: object
+    QuizQuestion:
+      additionalProperties: false
+      description: From lessons and the facts table only; each carries its official source (ADR 0058).
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        index:
+          minimum: 0
+          type: integer
+        total:
+          minimum: 1
+          type: integer
+        text:
+          maxLength: 240
+          type: string
+        choices:
+          items:
+            $ref: '#/components/schemas/QuizChoice'
+          maxItems: 4
+          minItems: 2
+          type: array
+        answer_ms:
+          default: 15000
+          maximum: 30000
+          minimum: 5000
+          type: integer
+        source_label:
+          description: e.g. 'gov.uk · Student loan repayment'
+          maxLength: 120
+          type: string
+        source_url:
+          maxLength: 500
+          type: string
+      required:
+      - id
+      - index
+      - total
+      - text
+      - choices
+      - source_label
+      type: object
+    QuizReveal:
+      additionalProperties: false
+      properties:
+        question_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        correct_choice_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        explanation:
+          description: Penny's one line
+          maxLength: 200
+          type: string
+        source_label:
+          maxLength: 120
+          type: string
+        source_url:
+          maxLength: 500
+          type: string
+        ranking:
+          items:
+            $ref: '#/components/schemas/PlayerScore'
+          type: array
+      required:
+      - question_id
+      - correct_choice_id
+      - explanation
+      - source_label
+      - ranking
+      type: object
+    RateDecisions:
+      additionalProperties: false
+      properties:
+        status:
+          enum:
+          - live
+          - cached
+          - mock
+          - unavailable
+          type: string
+        next_decision:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        dates:
+          items:
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            type: string
+          maxItems: 24
+          type: array
+        source:
+          $ref: '#/components/schemas/SourceRef'
+      required:
+      - status
+      - dates
+      - source
+      type: object
     Reason:
       additionalProperties: false
       description: 'One feature-group contribution in GBP: predicted minus the prediction with that group at its training
@@ -3420,6 +5662,44 @@ components:
       - feature
       - label
       - effect
+      type: object
+    RegularCost:
+      additionalProperties: false
+      properties:
+        name:
+          maxLength: 40
+          minLength: 1
+          type: string
+        monthly_amount:
+          maximum: 100000
+          minimum: 0
+          type: number
+        category:
+          default: bills
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+      required:
+      - name
+      - monthly_amount
       type: object
     Relationship:
       additionalProperties: false
@@ -3449,6 +5729,31 @@ components:
       - name
       - emoji
       - closeness
+      type: object
+    ReversePostcode:
+      additionalProperties: false
+      properties:
+        postcode:
+          type: string
+        region:
+          maxLength: 40
+          minLength: 2
+          pattern: ^[a-z-]+$
+          type: string
+        town:
+          type: string
+        status:
+          enum:
+          - live
+          - cached
+          - mock
+          - unavailable
+          type: string
+      required:
+      - postcode
+      - region
+      - town
+      - status
       type: object
     RewindRequest:
       additionalProperties: false
@@ -3521,6 +5826,15 @@ components:
           type: string
         start_year:
           type: integer
+        game:
+          description: Picked by the host in the lobby
+          enum:
+          - quiz
+          - same_decision
+          - same_life
+          type: string
+        options:
+          $ref: '#/components/schemas/GameOptions'
         max_players:
           maximum: 8
           minimum: 2
@@ -3543,13 +5857,66 @@ components:
       - code
       - mode
       - seed
-      - preset_id
-      - start_year
       - max_players
       - players
       - join_url
       - qr_png_base64
       - status
+      type: object
+    SampleStatement:
+      additionalProperties: false
+      description: A built-in synthetic student statement. Imported data is always labelled "Sample data".
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        title:
+          description: e.g. 'Scholarship student'
+          maxLength: 40
+          type: string
+        description:
+          maxLength: 160
+          type: string
+        funding:
+          items:
+            enum:
+            - maintenance_loan
+            - scholarship
+            - bursary
+            - grant
+            - family
+            - part_time_job
+            - salary
+            - other
+            type: string
+          maxItems: 8
+          type: array
+        months:
+          maximum: 12
+          minimum: 1
+          type: integer
+        team:
+          default: false
+          description: Team phone profile, hidden from the judge picker
+          type: boolean
+      required:
+      - id
+      - title
+      - description
+      - funding
+      - months
+      type: object
+    SamplesResponse:
+      additionalProperties: false
+      properties:
+        samples:
+          items:
+            $ref: '#/components/schemas/SampleStatement'
+          type: array
+      required:
+      - samples
       type: object
     SavingsGoal:
       additionalProperties: false
@@ -3594,6 +5961,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
         note:
           type: string
@@ -3614,6 +5982,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
         fetched_at:
           format: date-time
@@ -3752,6 +6121,35 @@ components:
       - health
       - smarts
       - money
+      type: object
+    StudentPath:
+      additionalProperties: false
+      description: 'A Play solo or Quick Life start: university, apprenticeship, job at 18, gap year, master''s.'
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        title:
+          maxLength: 40
+          type: string
+        description:
+          maxLength: 160
+          type: string
+        start_age:
+          maximum: 30
+          minimum: 16
+          type: integer
+        quick:
+          description: Offered in Quick Life (ages 18 to 25 in 5 to 6 taps)
+          type: boolean
+      required:
+      - id
+      - title
+      - description
+      - start_age
+      - quick
       type: object
     Subscription:
       additionalProperties: false
@@ -3915,6 +6313,105 @@ components:
       - token_type
       - expires_in
       type: object
+    ToolCall:
+      additionalProperties: false
+      properties:
+        name:
+          enum:
+          - next_move
+          - test_move
+          - finance_summary
+          - spend_prediction
+          - cash_flow_projection
+          - life_replay
+          - event_choices
+          - news_search
+          - rate_decision_dates
+          - facts_table
+          - boe_rates
+          - web_search
+          - user_balance
+          - habit_score
+          - inflation
+          - fx_convert
+          type: string
+        ok:
+          type: boolean
+        duration_ms:
+          minimum: 0
+          type: integer
+      required:
+      - name
+      - ok
+      - duration_ms
+      type: object
+    ToolStep:
+      additionalProperties: false
+      description: One REAL tool call in progress. Never invented.
+      properties:
+        tool:
+          type: string
+        label:
+          description: e.g. 'Checking Bank of England…', 'Replaying 2022…'
+          maxLength: 80
+          type: string
+      required:
+      - tool
+      - label
+      type: object
+    TradeOff:
+      additionalProperties: false
+      description: What the user gives up with this move. Engine-defined per move kind (ADR 0042), never LLM-written.
+      properties:
+        summary:
+          description: 'One line for the card, e.g. ''Less flexibility: a fee if you leave early'''
+          maxLength: 90
+          type: string
+        points:
+          description: Full trade-off for Why?. Every number in a point appears in its facts.
+          items:
+            $ref: '#/components/schemas/EvidencePoint'
+          maxItems: 4
+          minItems: 1
+          type: array
+      required:
+      - summary
+      - points
+      type: object
+    Transaction:
+      additionalProperties: false
+      description: One bank transaction. amount < 0 is money out.
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        amount:
+          type: number
+        currency:
+          const: GBP
+          default: GBP
+          type: string
+        description:
+          maxLength: 200
+          type: string
+        merchant:
+          maxLength: 80
+          type: string
+        provider_category:
+          description: Bank's own label, if any
+          maxLength: 60
+          type: string
+      required:
+      - id
+      - account_id
+      - date
+      - amount
+      - description
+      type: object
     UpdateBudgetsRequest:
       additionalProperties: false
       properties:
@@ -3941,6 +6438,7 @@ components:
           - live
           - cached
           - mock
+          - unavailable
           type: string
       required:
       - summary
@@ -3954,10 +6452,18 @@ components:
         type:
           enum:
           - join
+          - ready
           - progress
           - finish
           - start
+          - leave
           - ping
+          - pick_game
+          - answer
+          type: string
+        player_id:
+          description: Resume token after a reconnect
+          maxLength: 64
           type: string
         name:
           maxLength: 24
@@ -3972,6 +6478,24 @@ components:
           type: number
         index:
           type: number
+        game:
+          description: pick_game (host only)
+          enum:
+          - quiz
+          - same_decision
+          - same_life
+          type: string
+        options:
+          description: pick_game (host only)
+          $ref: '#/components/schemas/GameOptions'
+        question_id:
+          description: 'answer: quiz question or decision prompt'
+          maxLength: 64
+          type: string
+        choice_id:
+          description: answer
+          maxLength: 64
+          type: string
       required:
       - type
       type: object
@@ -3986,13 +6510,35 @@ components:
           - finished
           - error
           - pong
+          - welcome
+          - game_picked
+          - question
+          - quiz_reveal
+          - decision
+          - decision_reveal
+          - ranking
           type: string
+        you:
+          description: 'Sent with ''welcome'': your player id for reconnects'
+          $ref: '#/components/schemas/Player'
         room:
           $ref: '#/components/schemas/Room'
         player:
           $ref: '#/components/schemas/Player'
         error:
           $ref: '#/components/schemas/ErrorBody'
+        question:
+          $ref: '#/components/schemas/QuizQuestion'
+        quiz_reveal:
+          $ref: '#/components/schemas/QuizReveal'
+        decision:
+          $ref: '#/components/schemas/DecisionPrompt'
+        decision_reveal:
+          $ref: '#/components/schemas/DecisionReveal'
+        ranking:
+          items:
+            $ref: '#/components/schemas/PlayerScore'
+          type: array
       required:
       - type
       type: object
@@ -4064,7 +6610,7 @@ components:
             NotFound:
               $ref: '#/components/examples/ErrorNotFound'
     Conflict:
-      description: State conflict
+      description: State conflict, no finance data (no_finance_data) or no real data (data_unavailable)
       content:
         application/json:
           schema:
@@ -4127,6 +6673,7 @@ components:
         checks:
           postgres: ok
           redis: ok
+        warming: false
     Sources:
       value:
         sources:
@@ -4203,6 +6750,7 @@ components:
         start_year: 2006
         preset_id: nurse-leeds
         seed: 424242
+        quick: false
     CreateLifeSelf:
       value:
         mode: self
@@ -4222,6 +6770,7 @@ components:
           property_value: 0.0
           mortgage_balance: 0.0
           blurb: NHS nurse renting in Leeds.
+        quick: false
     Life:
       value:
         id: lf_8f3a2c
@@ -5175,6 +7724,8 @@ components:
           goal:
             type: own_home_by_age
             age: 30.0
+          scope: life
+        progress: []
     DecisionRequest:
       value:
         profile:
@@ -5243,6 +7794,8 @@ components:
         host_name: Ash
         preset_id: nurse-leeds
         start_year: 2021
+    CreateLobby:
+      value: {}
     Room:
       value:
         code: K7Q2ZP
@@ -5255,6 +7808,8 @@ components:
         - id: p1
           name: Ash
           is_host: true
+          ready: false
+          connected: true
           finished: false
         join_url: lifeline://join/K7Q2ZP
         qr_png_base64: iVBORw0KGgo=
@@ -5312,6 +7867,8 @@ components:
           label: Sample data
         balance: 8040.22
         net_worth: 7627.72
+        balance_parts: []
+        net_worth_parts: []
         accounts:
         - id: acc_cur
           name: Everyday
@@ -5625,7 +8182,7 @@ components:
           source: fixtures
           as_of: '2026-10-17'
           label: Sample data
-        question: What is my next money move?
+        question: Where should my money go this month?
         top:
           id: mv_fix_mortgage
           kind: fix_mortgage
@@ -5684,6 +8241,22 @@ components:
             end: 2023
             label: 2021-2023 rate shock
           concept_id: fixed-vs-variable
+          gain_kind: gbp_per_year
+          trade_off:
+            summary: 'Less flexibility: a fee if you leave the deal early'
+            points:
+            - text: Leaving a 5-year fix early usually costs 1% to 5% of the balance.
+              facts:
+                erc_min_pct: 1.0
+                erc_max_pct: 5.0
+            - text: If rates fall, you keep paying 4.21% until 2031.
+              facts:
+                fix_5y_pct: 4.21
+                fixed_until_year: 2031.0
+              source:
+                source: boe
+                series_id: IUMBV42
+                status: live
         runners_up:
         - id: mv_cancel_subs
           kind: cancel_subscription
@@ -5715,12 +8288,22 @@ components:
             is_recommended: false
           testable: false
           concept_id: subscriptions
+          gain_kind: gbp_per_year
+          trade_off:
+            summary: You lose access to both services
+            points:
+            - text: Restarting later costs £22 a month again.
+              facts:
+                monthly: 22.0
         backtest:
           method: Walk-forward over past deal-end dates, 1995-2023
           n: 58
           hit_rate: 0.69
           baseline: Always fix for 2 years
           baseline_hit_rate: 0.41
+        decision_sources: []
+        decision_source_count: 0
+        context_lines: []
         generated_at: '2026-10-17T12:00:00Z'
     TestMove:
       value:
@@ -5793,6 +8376,12 @@ components:
         - source: boe
           series_id: IUMBEDR
           status: live
+    FinanceHomeEmpty:
+      value:
+        has_data: false
+        coming_up: []
+        coming_up_more: false
+        connect_prompt: Connect your money to see your next move
     AddPlanItem:
       value:
         move_id: mv_fix_mortgage
@@ -5816,6 +8405,350 @@ components:
           added_at: '2026-10-17T12:00:00Z'
           status: todo
         total_impact_per_year: 1240.0
+    Samples:
+      value:
+        samples:
+        - id: scholarship
+          title: Scholarship student
+          description: Scholarship and bursary, about £420 a month, no debt
+          funding:
+          - scholarship
+          - bursary
+          months: 3
+          team: false
+        - id: working
+          title: Working student
+          description: Maintenance loan and part-time pay, uses an overdraft
+          funding:
+          - maintenance_loan
+          - part_time_job
+          months: 3
+          team: false
+    HabitScore:
+      value:
+        components:
+          savings_rate: 72
+          months_of_cover: 40
+          spend_stability: 81
+          discretionary_share: 63
+          subscription_creep: 90
+          debt_pressure: 100
+        overall: 74
+    Me:
+      value:
+        id: usr_8f3a2c
+        display_name: Priya
+        auth_provider: apple
+        created_at: '2026-10-17T12:00:00Z'
+        has_finance_data: true
+        finance_inputs:
+        - statement
+    ImportResult:
+      value:
+        import_id: imp_1
+        status: done
+        provider: monzo
+        transactions: 412
+        first_date: '2026-04-01'
+        last_date: '2026-10-16'
+        months_covered: 6.5
+        warnings: []
+        stages:
+        - name: read
+          label: Reading your statement
+          done: true
+        - name: categorise
+          label: Sorting your spending
+          done: true
+        - name: find_bills
+          label: Finding bills and subscriptions
+          done: true
+        - name: build_profile
+          label: Building your profile
+          done: true
+        - name: next_move
+          label: Finding your next move
+          done: true
+    ManualFinance:
+      value:
+        postcode: LS6 1AN
+        housing: mortgage
+        mortgage_balance: 180000.0
+        mortgage_rate_pct: 4.42
+        mortgage_years_left: 25
+        deal_end: '2027-03-31'
+        property_value: 240000.0
+        monthly_take_home: 2314.18
+        regular_costs:
+        - name: Council tax
+          monthly_amount: 191.0
+          category: bills
+        savings: 6850.0
+        income_sources: []
+        debts: []
+    ReversePostcode:
+      value:
+        postcode: LS6 1AN
+        region: yorkshire-and-the-humber
+        town: Leeds
+        status: live
+    HealthSignal:
+      value:
+        steps_per_day: 8200.0
+        sleep_hours: 7.1
+        measured_days: 30
+        source: healthkit
+    HealthSignalStored:
+      value:
+        steps_per_day: 8200.0
+        sleep_hours: 7.1
+        measured_days: 30
+        health_effect: 2
+        updated_at: '2026-10-17T12:00:00Z'
+    LogPayment:
+      value:
+        amount: 4.2
+        merchant: Pret A Manger
+    LoggedPayment:
+      value:
+        transaction:
+          id: tx_logged_1
+          account_id: acc_manual
+          date: '2026-10-17'
+          amount: -4.2
+          currency: GBP
+          description: Pret A Manger
+          merchant: Pret A Manger
+        category: eating_out
+    News:
+      value:
+        status: live
+        items:
+        - id: n_1
+          headline: Lehman Brothers files for bankruptcy
+          section: Business
+          date: '2008-09-15'
+          url: https://www.theguardian.com/business/2008/sep/15/lehmanbrothers.creditcrunch
+          source: guardian
+    RateDecisions:
+      value:
+        status: live
+        next_decision: '2026-11-05'
+        dates:
+        - '2026-11-05'
+        - '2026-12-17'
+        source:
+          source: boe-mpc
+          series_id: mpc-dates
+          status: live
+    ChatAsk:
+      value:
+        message: What if I lose my job?
+        context:
+          next_move_id: mv_fix_mortgage
+          screen: money
+    ChatAnswer:
+      value:
+        thread_id: th_1
+        message_id: msg_2
+        reply_to: msg_1
+        reaction: brain
+        mode: checked
+        bubbles:
+        - id: b1
+          kind: answer
+          text: Yes, up to £35 this week. That still leaves enough for rent on Friday.
+        highlights:
+        - bubble_id: b1
+          start: 11
+          length: 3
+          fact_id: f_week
+          source_id: s_you
+        facts:
+        - id: f_week
+          value: 35.0
+          unit: gbp
+          label: Left to spend this week
+          source_id: s_you
+        sources:
+        - id: s_you
+          group: your_data
+          label: Your statement
+          ref:
+            source: bank
+            series_id: your-accounts
+            status: live
+          updated_at: '2026-10-17T12:00:00Z'
+        - id: s_boe
+          group: live_sources
+          label: Bank of England · savings rates · live
+          ref:
+            source: boe
+            series_id: IUMBEDR
+            status: live
+          updated_at: '2026-10-17T12:00:00Z'
+        suggestions:
+        - Next move
+        - Summary
+        confidence: 0.8
+        tool_calls:
+        - name: cash_flow_projection
+          ok: true
+          duration_ms: 120
+        verified: true
+        summary_available: false
+        links: []
+        disclaimer: Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions.
+    ChatThreads:
+      value:
+        threads:
+        - id: th_1
+          title: What if I lose my job?
+          updated_at: '2026-10-17T12:00:00Z'
+          message_count: 2
+    ChatThread:
+      value:
+        id: th_1
+        title: What if I lose my job?
+        messages:
+        - id: msg_1
+          role: user
+          created_at: '2026-10-17T12:00:00Z'
+          text: What if I lose my job?
+          replies: 1
+        - id: msg_2
+          role: penny
+          created_at: '2026-10-17T12:00:00Z'
+          reply_to: msg_1
+          response:
+            thread_id: th_1
+            message_id: msg_2
+            reply_to: msg_1
+            reaction: brain
+            mode: checked
+            bubbles:
+            - id: b1
+              kind: answer
+              text: Yes, up to £35 this week. That still leaves enough for rent on Friday.
+            highlights:
+            - bubble_id: b1
+              start: 11
+              length: 3
+              fact_id: f_week
+              source_id: s_you
+            facts:
+            - id: f_week
+              value: 35.0
+              unit: gbp
+              label: Left to spend this week
+              source_id: s_you
+            sources:
+            - id: s_you
+              group: your_data
+              label: Your statement
+              ref:
+                source: bank
+                series_id: your-accounts
+                status: live
+              updated_at: '2026-10-17T12:00:00Z'
+            - id: s_boe
+              group: live_sources
+              label: Bank of England · savings rates · live
+              ref:
+                source: boe
+                series_id: IUMBEDR
+                status: live
+              updated_at: '2026-10-17T12:00:00Z'
+            suggestions:
+            - Next move
+            - Summary
+            confidence: 0.8
+            tool_calls:
+            - name: cash_flow_projection
+              ok: true
+              duration_ms: 120
+            verified: true
+            summary_available: false
+            links: []
+            disclaimer: Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big
+              decisions.
+          replies: 0
+    Paths:
+      value:
+        paths:
+        - id: uni
+          title: University
+          description: 3-year degree with a maintenance loan
+          start_age: 18
+          quick: true
+        - id: apprentice
+          title: Apprenticeship
+          description: Earn while you learn
+          start_age: 18
+          quick: true
+    Circles:
+      value:
+        circles:
+        - id: c_flat
+          name: Flat 4B
+          code: Q7K2PZ
+          members:
+          - id: u1
+            name: Sam
+            habits:
+              components:
+                savings_rate: 70
+                months_of_cover: 45
+                spend_stability: 80
+                discretionary_share: 60
+                subscription_creep: 90
+                debt_pressure: 100
+              overall: 74
+            improvement: 9
+            rank: 1
+            is_you: true
+          - id: u2
+            name: Jo
+            habits:
+              components:
+                savings_rate: 70
+                months_of_cover: 45
+                spend_stability: 80
+                discretionary_share: 60
+                subscription_creep: 90
+                debt_pressure: 100
+              overall: 74
+            improvement: 4
+            rank: 2
+            is_you: false
+          recap: Sam saved a bigger share of money this week. Jo cut one subscription.
+          recap_week: 2026-W42
+    Circle:
+      value:
+        id: c_flat
+        name: Flat 4B
+        code: Q7K2PZ
+        members:
+        - id: u1
+          name: Sam
+          habits:
+            components:
+              savings_rate: 70
+              months_of_cover: 45
+              spend_stability: 80
+              discretionary_share: 60
+              subscription_creep: 90
+              debt_pressure: 100
+            overall: 74
+          improvement: 0
+          rank: 1
+          is_you: true
+    CreateCircle:
+      value:
+        name: Flat 4B
+    JoinCircle:
+      value:
+        code: Q7K2PZ
     ErrorNotFound:
       value:
         error:
@@ -5834,6 +8767,12 @@ components:
           code: pending_events
           message: Answer the open events before you age.
           source: sim
+    ErrorNoFinanceData:
+      value:
+        error:
+          code: no_finance_data
+          message: Connect your money first.
+          source: api
     ErrorRateLimited:
       value:
         error:

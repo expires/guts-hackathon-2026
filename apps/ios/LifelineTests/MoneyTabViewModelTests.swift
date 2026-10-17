@@ -13,14 +13,16 @@ struct MoneyTabViewModelTests {
         await model.load()
         let state = model.state
         #expect(state.phase == .ready)
-        #expect(state.question == "What is my next money move?")
+        #expect(state.question == "Where should my money go this month?")
         let top = try #require(state.top)
         #expect(top.action == "Fix for 5 years")
         #expect(top.headline == "Your deal ends in 165 days")
         #expect(top.impactPerYear == 1240)
         #expect(top.impactText == "£1,240 a year better off")
         #expect(top.worstCaseText == "Worst past period: £310 a year worse off")
-        #expect(top.confidenceLabel == "7 in 10 twins in similar past periods did better")
+        // The contract example has no confidence_level, so the card shows no confidence (V4 F2-3).
+        #expect(top.confidenceWord.isEmpty)
+        #expect(top.confidenceLabel.isEmpty)
         #expect(top.deadlineText == "Decide by 31 Mar 2027 (165 days left)")
         #expect(top.sources.count == 3)
         #expect(top.sources.allSatisfy { $0.status == .live })
@@ -151,6 +153,8 @@ struct MoneyTabViewModelTests {
     @Test func widgetsLoadContractExamplesWithMoveLinks() async throws {
         let home = MoneyHomeViewModel(client: MockClient())
         await home.load()
+        // Money home itself uses GET /v1/finance/home only; the detail screens load the widgets.
+        await home.widgets.load()
         let widgets = home.state.widgets
         #expect(widgets.isSampleData)
         let overview = try #require(widgets.overview.value)
@@ -180,6 +184,51 @@ struct MoneyTabViewModelTests {
         await home.load()
         home.actions.widgets.onShowMove("mv_cancel_subs")
         #expect(home.state.nextMove.displayedMove?.id == "mv_cancel_subs")
+    }
+
+    // MARK: Money home from GET /v1/finance/home (one request)
+
+    @Test func homeWithDataShowsTilesAndAtMostThreeBills() async throws {
+        let client = MockClient()
+        let home = MoneyHomeViewModel(client: client)
+        await home.load()
+        let expected = try await client.financeHome()
+        let state = home.state
+        #expect(state.content == .ready)
+        #expect(state.showsMoney)
+        #expect(state.tiles?.balance == expected.balance)
+        #expect(state.tiles?.netWorth == expected.netWorth)
+        #expect(state.comingUp.count <= 3)
+        #expect(state.nextMove.displayedMove?.id == expected.nextMove?.top.id)
+    }
+
+    @Test func homeWithoutDataShowsOneConnectCard() async throws {
+        let client = MockClient()
+        _ = try await client.resetDemo()
+        let home = MoneyHomeViewModel(client: client)
+        var connected = false
+        home.onConnectMoney = { connected = true }
+        await home.load()
+        let state = home.state
+        guard case let .connect(prompt) = state.content else {
+            Issue.record("Expected the connect card, got \(state.content)")
+            return
+        }
+        #expect(!prompt.isEmpty)
+        #expect(!state.showsMoney)
+        #expect(state.tiles == nil)
+        #expect(state.comingUp.isEmpty)
+        home.actions.onConnectMoney()
+        #expect(connected)
+        #expect(home.needsReload)
+    }
+
+    @Test func rateLimitIsCalmWithoutTryAgain() {
+        let state = ErrorViewState.from(.server(status: 429, code: "rate_limited", message: "Slow down", source: "api"))
+        #expect(state.title == "Couldn't load")
+        #expect(state.message == "Pull to refresh.")
+        #expect(!state.canRetry)
+        #expect(ErrorViewState.from(.network).canRetry)
     }
 
     @Test func failedWidgetDoesNotBlockOthers() {
@@ -302,8 +351,9 @@ struct MoneyTabViewModelTests {
         let model = YouViewModel(client: MockClient())
         await model.load()
         let profile = try #require(model.state.profile)
-        #expect(profile.detail == "Analyst in Leeds, age 34")
-        #expect(profile.housingText == "Renting, £850 a month")
+        // Bug 7 (ADR 0053): the profile line matches onboarding (age, working or student, housing).
+        #expect(profile.detail == "Age 34 · Working · Renting")
+        #expect(profile.housingText == "Renting")
         #expect(model.state.personalFacts == ["You spend £47 a month on 6 subscriptions."])
         #expect(model.state.bankText == "Not connected. The Money tab shows sample data.")
         var route: YouViewModel.Route?
@@ -332,7 +382,8 @@ struct MoneyTabViewModelTests {
 
     @Test func appOpensOnMoneyTab() {
         #expect(AppTab.launch == .money)
-        #expect(AppTab.allCases.map(\.title) == ["Money", "Life", "Play", "You"])
+        // ADR 0048: four tabs; Life lives inside Play as "Play solo".
+        #expect(AppTab.allCases.map(\.title) == ["Money", "Penny", "Play", "You"])
     }
 
     @Test func galleryCatalogHasUniqueIDsAndNewScreens() {

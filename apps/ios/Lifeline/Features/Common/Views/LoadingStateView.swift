@@ -5,17 +5,13 @@ struct LoadingStateView: View {
     let state: LoadingViewState
 
     var body: some View {
-        VStack(spacing: Theme.Spacing.m) {
-            ProgressView()
-                .controlSize(.large)
-            Text(state.message)
-                .font(.llBody)
-                .foregroundStyle(Theme.Palette.muted)
-        }
-        .padding(Theme.Spacing.xl)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("loading.state")
+        // Skeleton rows in the shape of a list, never a spinner (ADR 0060). VoiceOver reads the message.
+        SkeletonList(rows: 4, showsCard: true)
+            .padding(Theme.Spacing.margin)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(state.message)
+            .accessibilityIdentifier("loading.state")
     }
 }
 

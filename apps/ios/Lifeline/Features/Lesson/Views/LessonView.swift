@@ -40,7 +40,9 @@ struct LessonView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("lesson.hero")
                 }
-                LessonChart(chart: state.chart)
+                if !state.chart.points.isEmpty {
+                    LessonChart(chart: state.chart)
+                }
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     if let change = state.changeSentence {
                         Text(change).font(.llBodyBold)

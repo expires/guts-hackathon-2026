@@ -62,8 +62,9 @@ struct DesignRebuildStep5Tests {
         #expect(state.bestIndexText == best)
         #expect(state.conceptsText == "3/40")
         #expect(state.dataRows.count == ContractExamples.sources.count)
-        #expect(state.personaLine.hasPrefix("Demo persona · "))
-        #expect(state.credits.first?.hasSuffix("Made in 30 hours at GUTS Hackathon 2026.") == true)
+        // Bug 7 (ADR 0053): the profile line uses onboarding's words: age, student or working, housing.
+        #expect(state.personaLine.hasPrefix("Age "))
+        #expect(state.credits.first?.hasSuffix("Made in 24 hours at GUTS Hackathon 2026.") == true)
         #expect(state.credits.last == "Atkinson Hyperlegible by Braille Institute of America, Inc.. SIL Open Font License 1.1.")
     }
 

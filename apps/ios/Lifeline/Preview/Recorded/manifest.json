@@ -1,7 +1,7 @@
 {
   "base": "http://localhost:8000",
   "device_id": "demo-presenter-03",
-  "recorded_at": "2026-10-17T15:13:08Z",
+  "recorded_at": "2026-10-17T18:41:03Z",
   "files": {
     "listSources": {
       "status": 200

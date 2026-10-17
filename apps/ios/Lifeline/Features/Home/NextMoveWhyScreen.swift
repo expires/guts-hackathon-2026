@@ -6,6 +6,7 @@ struct NextMoveWhyScreen: View {
     let client: any LifelineClient
     @State private var model: NextMoveWhyViewModel
     @State private var showsDecision = false
+    @Environment(\.appRoutes) private var routes
     private let onTestIt: @MainActor (String) -> Void
     private let onClose: @MainActor () -> Void
 
@@ -13,6 +14,7 @@ struct NextMoveWhyScreen: View {
         client: any LifelineClient,
         move: Move,
         isSampleData: Bool,
+        scrollToSources: Bool = false,
         onTestIt: @escaping @MainActor (String) -> Void,
         onClose: @escaping @MainActor () -> Void
     ) {
@@ -20,10 +22,29 @@ struct NextMoveWhyScreen: View {
         _model = State(initialValue: NextMoveWhyViewModel(client: client, move: move, isSampleData: isSampleData))
         self.onTestIt = onTestIt
         self.onClose = onClose
+        self.scrollToSources = scrollToSources
+    }
+
+    private let scrollToSources: Bool
+
+    /// The model's actions plus "Ask Penny a follow-up": close Why first, then open Penny from the root.
+    private var whyActions: NextMoveWhyActions {
+        var actions = model.actions
+        let routes = self.routes
+        let moveID = model.move.id
+        let close = onClose
+        actions.onAskPenny = {
+            close()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(450))
+                routes.askPenny(PennyRoute(screen: .why, nextMoveID: moveID))
+            }
+        }
+        return actions
     }
 
     var body: some View {
-        NextMoveWhyView(state: model.state, actions: model.actions, onTestIt: model.move.testable ? { onTestIt(model.move.id) } : nil)
+        NextMoveWhyView(state: model.state, actions: whyActions, scrollToSources: scrollToSources, onTestIt: model.move.testable ? { onTestIt(model.move.id) } : nil)
             .onAppear {
                 model.onClose = onClose
                 model.onOpenDecision = { showsDecision = true }

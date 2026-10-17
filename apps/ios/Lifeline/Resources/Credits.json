@@ -30,5 +30,5 @@
       "source": "Google Fonts (github.com/google/fonts, ofl/atkinsonhyperlegible). Modified: the zero glyph is a scaled 'O' (no slash); family renamed 'Atkinson Hyperlegible LL'."
     }
   ],
-  "icons": "Lifeline icon set and Penny, from the Lifeline design handoff (lifeline-design/screens/Icon.dc.html)."
+  "icons": "Penny icon set and Penny character, from the design handoff (lifeline-design/screens/Icon.dc.html)."
 }

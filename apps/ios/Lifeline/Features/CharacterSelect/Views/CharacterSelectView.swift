@@ -8,7 +8,10 @@ struct CharacterSelectView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                ScreenHeader(title: "Choose a life") {
+                ScreenHeader(
+                    title: "Choose a life",
+                    leading: actions.onClose.map { close in HeaderSquareButton(kind: .back, identifier: "characterSelect.back", action: close) }
+                ) {
                     if state.usesSampleData { DemoDataBadge() }
                 }
                 Text(state.intro).font(.llBody).foregroundStyle(Theme.Palette.muted)
@@ -43,7 +46,7 @@ struct CharacterSelectView: View {
                     .accessibilityIdentifier("app.version")
             }
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.xl)
+            .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
         }
         .paperBackground()
         .toolbar(.hidden, for: .navigationBar)

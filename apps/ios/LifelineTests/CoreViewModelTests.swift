@@ -136,7 +136,10 @@ struct CoreViewModelTests {
     @Test func characterFormValidatesAndBuildsChoice() {
         let model = CharacterFormViewModel(mode: .playYourself)
         #expect(!model.state.canContinue)
+        // No profile in this test: "Play yourself" starts empty (V4 k), so the test types the name.
+        #expect(model.state.fields.name.isEmpty)
         var fields = model.state.fields
+        fields.name = "Sam"
         fields.occupation = "nurse"
         fields.town = "Leeds"
         fields.income = -5

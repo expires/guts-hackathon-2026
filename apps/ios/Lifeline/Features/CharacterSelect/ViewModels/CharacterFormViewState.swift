@@ -15,10 +15,10 @@ enum HousingOption: String, Equatable, Sendable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .parents: "With parents"
+        case .parents: "With family"
         case .rent: "Renting"
         case .own: "Own outright"
-        case .mortgage: "Paying a mortgage"
+        case .mortgage: "Mortgage"
         }
     }
 }

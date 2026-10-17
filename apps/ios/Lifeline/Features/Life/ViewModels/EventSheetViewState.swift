@@ -31,12 +31,16 @@ struct EventSheetViewState: Equatable, Sendable {
     var areaLabel: String = "Life"
     /// "2021 · Age 29".
     var dateText: String = ""
+    /// The choice the player tapped, while it is sent. It shows "Chosen" with a tick; the others dim.
+    var chosenID: String? = nil
 }
 
 struct EventSheetActions {
     var onChoose: @MainActor (String) -> Void = { _ in }
     /// Closes the full-screen event without choosing (it stays open on the feed).
     var onClose: @MainActor () -> Void = {}
+    /// "Not sure? Ask Penny". Nil hides the button.
+    var onAskPenny: (@MainActor () -> Void)?
 
     static var noop: Self { .init() }
 }

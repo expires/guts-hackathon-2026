@@ -26,7 +26,7 @@ struct CharacterSelectViewState: Equatable, Sendable {
     /// Order: Play yourself, presets, Random, God Mode.
     var cards: [Card]
     var usesSampleData: Bool
-    /// For example "Lifeline 1.0 (1)". Long-press opens the debug menu in Debug builds.
+    /// For example "Penny 1.0 (1)". Long-press opens the debug menu in Debug builds.
     var versionText: String
 }
 
@@ -37,6 +37,8 @@ struct CharacterSelectActions {
     var onOpenStore: @MainActor () -> Void = {}
     var onOpenSources: @MainActor () -> Void = {}
     var onVersionLongPress: @MainActor () -> Void = {}
+    /// Back to Play when Life is opened from the Play tab. Nil hides the button.
+    var onClose: (@MainActor () -> Void)?
 
     static var noop: Self { .init() }
 }

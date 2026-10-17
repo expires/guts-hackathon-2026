@@ -5,18 +5,23 @@ struct MoneyDetailsView: View {
     let state: MoneyWidgetsViewState
     let detail: MoneyDetail
     var actions: MoneyWidgetsActions = .noop
+    /// "Your next move: ..." back to the hub. Nil hides it.
+    var nextMoveLink: MoveLinkState?
     var onBack: () -> Void = {}
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 ScreenHeader(title: detail.title, leading: HeaderSquareButton(kind: .back, identifier: "moneyDetail.back", action: onBack)) {
-                    if state.isSampleData { DemoDataBadge() }
+                    if state.isSampleData { DataBadge() }
+                }
+                if let link = nextMoveLink {
+                    NextMoveLinkRow(text: link.text, action: onBack)
                 }
                 MoneyWidgetsView(state: state, actions: actions, detail: detail)
             }
             .padding(.horizontal, Theme.Spacing.margin)
-            .padding(.vertical, Theme.Spacing.xl)
+            .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
         }
         .paperBackground()
         .toolbar(.hidden, for: .navigationBar)

@@ -427,7 +427,7 @@ extension PreviewJSON {
   "as_of": "2026-10-17",
   "label": "Sample data"
  },
- "question": "What is my next money move?",
+ "question": "Where should my money go this month?",
  "top": {
   "id": "mv_fix_mortgage",
   "kind": "fix_mortgage",

@@ -488,7 +488,7 @@ struct ScreenHeader<Trailing: View>: View {
             if let leading { leading }
             if let icon { LLIconImage(icon, size: 32) }
             Text(title)
-                .font(.llTitle)
+                .font(.llScreenHeader)
                 .foregroundStyle(Theme.Palette.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)

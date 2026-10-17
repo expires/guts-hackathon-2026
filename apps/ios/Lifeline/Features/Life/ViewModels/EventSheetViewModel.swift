@@ -7,20 +7,30 @@ import Observation
 final class EventSheetViewModel {
     private let session: GameSession
     @ObservationIgnored var onClose: @MainActor () -> Void = {}
+    /// The tapped choice (bug 8, ADR 0053): it reads as "Chosen" while the game answers.
+    private(set) var chosenID: String?
 
     init(session: GameSession) {
         self.session = session
     }
 
     var state: EventSheetViewState? {
-        session.activeEvent.map { Self.makeState(event: $0, isSubmitting: session.isBusy) }
+        session.activeEvent.map { event in
+            var state = Self.makeState(event: event, isSubmitting: session.isBusy)
+            state.chosenID = session.isBusy ? chosenID : nil
+            return state
+        }
     }
 
     var actions: EventSheetActions {
         EventSheetActions(
             onChoose: { [weak self] choiceID in
-                guard let self, let event = session.activeEvent else { return }
-                Task { await self.session.choose(choiceID: choiceID, eventID: event.id) }
+                guard let self, let event = session.activeEvent, !session.isBusy else { return }
+                chosenID = choiceID
+                Task {
+                    await self.session.choose(choiceID: choiceID, eventID: event.id)
+                    self.chosenID = nil
+                }
             },
             onClose: { [weak self] in self?.onClose() }
         )

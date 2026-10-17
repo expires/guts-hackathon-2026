@@ -7,18 +7,40 @@ struct LiveClient: LifelineClient {
     let kind = ClientKind.live
     let baseURL: URL
     private let client: Client
+    private let tokens: DemoTokenProvider
+    private let session: URLSession
+    private let cache: ResponseCache
+    let diskCache: DiskCache?
 
-    init(baseURL: URL, deviceID: String = DeviceIdentity.current(), session: URLSession = .shared) {
+    init(
+        baseURL: URL,
+        deviceID: String = DeviceIdentity.current(),
+        session: URLSession = .shared,
+        tokenStore: TokenStore = .standard,
+        diskCache: DiskCache? = .standard
+    ) {
         self.baseURL = baseURL
+        self.diskCache = diskCache
+        self.session = session
         let transport = URLSessionTransport(configuration: .init(session: session))
         let errors = ErrorMappingMiddleware()
-        let authClient = Client(serverURL: baseURL, transport: transport, middlewares: [errors])
-        let tokens = DemoTokenProvider(client: authClient, deviceID: deviceID)
+        let configuration = Configuration(dateTranscoder: FlexibleISO8601Transcoder())
+        let authClient = Client(serverURL: baseURL, configuration: configuration, transport: transport, middlewares: [errors])
+        let tokens = DemoTokenProvider(client: authClient, deviceID: deviceID, store: tokenStore)
+        self.tokens = tokens
+        let cache = ResponseCache()
+        self.cache = cache
+        // Outermost first: GET cache and de-duplication, error mapping, quiet 429 retry, auth (401 retry).
         self.client = Client(
             serverURL: baseURL,
+            configuration: configuration,
             transport: transport,
-            middlewares: [errors, AuthMiddleware(tokens: tokens)]
+            middlewares: [ResponseCacheMiddleware(cache: cache), errors, RateLimitRetryMiddleware(), AuthMiddleware(tokens: tokens)]
         )
+    }
+
+    func clearResponseCache() async {
+        await cache.clear()
     }
 
     /// Reads `LifelineAPIBaseURL` from Info.plist. Falls back to the contract server URL.
@@ -80,6 +102,10 @@ struct LiveClient: LifelineClient {
 
     func financeOverview() async throws -> FinanceOverview {
         try await call { try await client.getFinanceOverview().ok.body.json }
+    }
+
+    func financeHome() async throws -> FinanceHome {
+        try await call { try await client.getFinanceHome().ok.body.json }
     }
 
     func financeSpending(month: String?) async throws -> SpendingResponse {
@@ -184,14 +210,174 @@ struct LiveClient: LifelineClient {
         try await call { try await client.createRoom(body: .json(request)).created.body.json }
     }
 
+    func listSamples() async throws -> [SampleStatement] {
+        try await call { try await client.listSamples().ok.body.json.samples }
+    }
+
+    func importSample(id: String) async throws -> ImportResult {
+        try await call { try await client.importSample(path: .init(sampleId: id)).created.body.json }
+    }
+
+    func habits() async throws -> HabitScore {
+        try await call { try await client.getHabits().ok.body.json }
+    }
+
+    func listPaths() async throws -> [StudentPath] {
+        try await call { try await client.listPaths().ok.body.json.paths }
+    }
+
+    func listCircles() async throws -> [PlayCircle] {
+        try await call { try await client.listCircles().ok.body.json.circles }
+    }
+
+    func createCircle(name: String) async throws -> PlayCircle {
+        try await call { try await client.createCircle(body: .json(.init(name: name))).created.body.json }
+    }
+
+    func joinCircle(code: String) async throws -> PlayCircle {
+        try await call { try await client.joinCircle(body: .json(.init(code: code))).ok.body.json }
+    }
+
+    func leaveCircle(id: String) async throws {
+        _ = try await call { try await client.leaveCircle(path: .init(circleId: id)).noContent }
+    }
+
     func getRoom(code: String) async throws -> Room {
         try await call { try await client.getRoom(path: .init(code: code)).ok.body.json }
     }
 
+    func roomSocket(code: String) async throws -> RoomSocket {
+        let token = try await call { try await tokens.token() }
+        guard let url = RoomSocket.url(baseURL: baseURL, code: code, token: token) else {
+            throw APIError.unexpected(status: 0)
+        }
+        return RoomSocket.live(url: url, session: session)
+    }
+
+    // MARK: Account
+
+    func getMe() async throws -> Me {
+        try await call { try await client.getMe().ok.body.json }
+    }
+
+    func deleteAccount() async throws {
+        _ = try await call { try await client.deleteAccount().noContent }
+        await tokens.clear()
+        await forgetUserData()
+    }
+
+    func resetDemo() async throws -> Me {
+        let me = try await call { try await client.resetDemo().ok.body.json }
+        await forgetUserData()
+        return me
+    }
+
+    /// Sign-out, reset, delete: drop the memory and disk caches of the user's data.
+    private func forgetUserData() async {
+        await cache.clear()
+        await diskCache?.clearUser()
+    }
+
+    func signOut() async throws {
+        // The local token goes even when the server call fails.
+        do {
+            _ = try await call { try await client.signOut().noContent }
+        } catch {
+            await tokens.clear()
+            await forgetUserData()
+            throw error
+        }
+        await tokens.clear()
+        await forgetUserData()
+    }
+
+    func signInWithApple(identityToken: String) async throws {
+        let token = try await call {
+            try await client.signInWithApple(body: .json(.init(identityToken: identityToken))).ok.body.json.accessToken
+        }
+        await tokens.useAppleToken(token)
+    }
+
+    // MARK: Onboarding inputs
+
+    func importStatement(file: Data, fileName: String, provider: String?) async throws -> ImportResult {
+        try await call {
+            var parts: [Operations.ImportStatement.Input.Body.MultipartFormPayload] = [
+                .file(.init(payload: .init(body: HTTPBody(file)), filename: fileName)),
+            ]
+            if let provider {
+                parts.append(.provider(.init(payload: .init(body: HTTPBody(provider)))))
+            }
+            return try await client.importStatement(body: .multipartForm(.init(parts))).created.body.json
+        }
+    }
+
+    func setManualFinance(_ input: ManualFinanceInput) async throws -> FinanceProfile {
+        try await call { try await client.setManualFinance(body: .json(input)).ok.body.json }
+    }
+
+    func logPayment(_ request: LogPaymentRequest) async throws -> LoggedPayment {
+        try await call { try await client.logPayment(body: .json(request)).created.body.json }
+    }
+
+    func reversePostcode(lat: Double, lon: Double) async throws -> ReversePostcode {
+        try await call { try await client.reversePostcode(query: .init(lat: lat, lon: lon)).ok.body.json }
+    }
+
+    func setHealthSignal(_ signal: HealthSignal) async throws -> HealthSignalStored {
+        try await call { try await client.setHealthSignal(body: .json(signal)).ok.body.json }
+    }
+
+    // MARK: Ask Penny
+
+    func askPenny(_ request: ChatRequest) async throws -> ChatResponse {
+        try await call { try await client.askPenny(body: .json(request)).ok.body.json }
+    }
+
+    func askPennyStream(_ request: ChatRequest) -> AsyncThrowingStream<ChatStreamEvent, any Error> {
+        let client = self.client
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let body = try await client.askPennyStream(body: .json(request)).ok.body.textEventStream
+                    for try await event in ChatStream.events(from: body) {
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: APIError.map(error))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    func listChatThreads() async throws -> ChatThreadsResponse {
+        try await call { try await client.listChatThreads().ok.body.json }
+    }
+
+    func getChatThread(id: String) async throws -> ChatThread {
+        try await call { try await client.getChatThread(path: .init(id: id)).ok.body.json }
+    }
+
+    func listNews(from: String, to: String, topic: String?) async throws -> NewsResponse {
+        try await call {
+            try await client.listNews(
+                query: .init(from: from, to: to, topic: topic.flatMap { .init(rawValue: $0) })
+            ).ok.body.json
+        }
+    }
+
+    func getRateDecisions() async throws -> RateDecisions {
+        try await call { try await client.getRateDecisions().ok.body.json }
+    }
+
     // MARK: Bank
 
-    func bankAuthLink() async throws -> BankAuthLink {
-        try await call { try await client.getBankAuthLink().ok.body.json }
+    func bankAuthLink(provider: String) async throws -> BankAuthLink {
+        try await call {
+            try await client.getBankAuthLink(query: .init(provider: .init(rawValue: provider))).ok.body.json
+        }
     }
 
     func bankSummary(session: String) async throws -> BankSummary {
@@ -217,19 +403,27 @@ struct LiveClient: LifelineClient {
     }
 }
 
-/// Gets a JWT from `POST /v1/auth/demo` and caches it in memory.
+/// Supplies the session JWT.
+/// - After Sign in with Apple: the Apple session token from the Keychain.
+/// - Otherwise: a demo token from `POST /v1/auth/demo`, cached in memory.
+/// A rejected Apple token (401) is dropped, and the app falls back to demo sign-in.
 actor DemoTokenProvider: TokenProviding {
     private let client: Client
     private let deviceID: String
+    private let store: TokenStore
     private var cached: String?
+    private var appleToken: String?
     private var inFlight: Task<String, any Error>?
 
-    init(client: Client, deviceID: String) {
+    init(client: Client, deviceID: String, store: TokenStore = .standard) {
         self.client = client
         self.deviceID = deviceID
+        self.store = store
+        self.appleToken = store.read()
     }
 
     func token() async throws -> String {
+        if let appleToken { return appleToken }
         if let cached { return cached }
         if let inFlight { return try await inFlight.value }
         let client = self.client
@@ -245,7 +439,25 @@ actor DemoTokenProvider: TokenProviding {
     }
 
     func invalidate() {
+        if appleToken != nil {
+            appleToken = nil
+            store.delete()
+        }
         cached = nil
+    }
+
+    /// Stores the Apple session token and uses it for every later call.
+    func useAppleToken(_ token: String) {
+        appleToken = token
+        store.write(token)
+        cached = nil
+    }
+
+    /// Sign-out and account deletion: forget every token.
+    func clear() {
+        appleToken = nil
+        cached = nil
+        store.delete()
     }
 }
 

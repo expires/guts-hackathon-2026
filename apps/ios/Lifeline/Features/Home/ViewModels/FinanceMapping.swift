@@ -4,7 +4,14 @@ import Foundation
 enum FinanceMapping {
     /// True when the response is labelled sample data (`meta.data_status == mock`).
     static func isSample(_ meta: FinanceMeta) -> Bool {
-        meta.dataStatus == .mock
+        badgeText(meta) != nil
+    }
+
+    /// "Sample data" for a sample statement (`meta.source == "sample"` or the label says so),
+    /// "Mock data" for canned data, nil for the user's real data.
+    static func badgeText(_ meta: FinanceMeta) -> String? {
+        if meta.source == "sample" || meta.label == "Sample data" { return "Sample data" }
+        return meta.dataStatus == .mock ? "Mock data" : nil
     }
 
     /// Parses "YYYY-MM-DD" in UTC.

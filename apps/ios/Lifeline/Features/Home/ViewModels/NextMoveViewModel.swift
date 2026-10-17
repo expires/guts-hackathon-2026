@@ -19,6 +19,8 @@ final class NextMoveViewModel {
     /// Routes. The glue sets them.
     @ObservationIgnored var onTestIt: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored var onWhy: @MainActor (Move) -> Void = { _ in }
+    /// Why? scrolled to the sources ("Based on N sources").
+    @ObservationIgnored var onWhySources: @MainActor (Move) -> Void = { _ in }
     @ObservationIgnored var onOpenPlan: @MainActor () -> Void = {}
 
     init(client: any LifelineClient) {
@@ -42,6 +44,10 @@ final class NextMoveViewModel {
             onWhy: { [weak self] id in
                 guard let self, let move = move(id) else { return }
                 onWhy(move)
+            },
+            onSources: { [weak self] id in
+                guard let self, let move = move(id) else { return }
+                onWhySources(move)
             },
             onDoThis: { [weak self] id in Task { await self?.addToPlan(moveID: id) } },
             onFocus: { [weak self] id in self?.focus(id) },
@@ -69,6 +75,32 @@ final class NextMoveViewModel {
         focusedMoveID = id
     }
 
+    /// Uses the move from `GET /v1/finance/home` (no extra request for the card). The plan loads quietly.
+    func apply(_ response: NextMoveResponse?) async {
+        show(response)
+        await loadPlan()
+    }
+
+    /// Shows a move at once (cached or fresh home). No network.
+    func show(_ response: NextMoveResponse?) {
+        self.response = response
+        phase = .ready
+        if let plan = cachedPlan { applyPlan(plan) }
+    }
+
+    private var cachedPlan: PlanResponse?
+
+    private func applyPlan(_ plan: PlanResponse) {
+        cachedPlan = plan
+        plannedMoveIDs = Set(plan.items.map(\.moveId))
+        planTotal = plan.items.isEmpty ? nil : Self.yearlyPlanTotal(plan, moves: moves)
+    }
+
+    /// The plan marks ("In plan"), cached first then fresh (ADR 0060). Failures are quiet.
+    func loadPlan() async {
+        try? await client.load(CachedOps.plan) { [weak self] plan in self?.applyPlan(plan) }
+    }
+
     func load() async {
         phase = .loading(.init(message: Self.loadingMessage))
         do {
@@ -81,7 +113,7 @@ final class NextMoveViewModel {
         // The plan marks moves that are already chosen. A plan error does not block the card.
         if let plan = try? await client.plan() {
             plannedMoveIDs = Set(plan.items.map(\.moveId))
-            planTotal = plan.items.isEmpty ? nil : plan.totalImpactPerYear
+            planTotal = plan.items.isEmpty ? nil : Self.yearlyPlanTotal(plan, moves: moves)
         }
     }
 
@@ -94,9 +126,10 @@ final class NextMoveViewModel {
             let item = try await client.addPlanItem(moveID: moveID)
             plannedMoveIDs.insert(item.moveId)
             if let plan = try? await client.plan() {
-                planTotal = plan.totalImpactPerYear
+                planTotal = Self.yearlyPlanTotal(plan, moves: moves)
             } else {
-                planTotal = (planTotal ?? 0) + item.impactPerYear
+                let yearly = move(item.moveId).map(Self.isYearly) ?? true
+                planTotal = (planTotal ?? 0) + (yearly ? item.impactPerYear : 0)
             }
         } catch {
             planError = APIError.map(error).userMessage
@@ -113,28 +146,30 @@ final class NextMoveViewModel {
     ) -> NextMoveCardState {
         guard let response else {
             return NextMoveCardState(
-                phase: phase, question: "What is my next money move?", top: nil, runnersUp: [],
+                phase: phase, question: "Where should my money go this month?", top: nil, runnersUp: [],
                 backtestText: nil, isSampleData: false, addingMoveID: nil, planMessage: nil, focusedMoveID: nil
             )
         }
+        let sourceCount = response.decisionSourceCount ?? 0
         let planMessage = planTotal.map { total in
             "Added to your plan. Your plan is worth \(Money.format(total)) a year."
         }
         return NextMoveCardState(
             phase: phase,
-            question: response.question?.rawValue ?? "What is my next money move?",
+            question: response.question?.rawValue ?? "Where should my money go this month?",
             top: move(response.top, isInPlan: plannedMoveIDs.contains(response.top.id)),
             runnersUp: response.runnersUp.map { move($0, isInPlan: plannedMoveIDs.contains($0.id)) },
             backtestText: response.backtest.map(backtestText),
             isSampleData: FinanceMapping.isSample(response.meta),
             addingMoveID: nil,
             planMessage: plannedMoveIDs.isEmpty ? nil : planMessage,
-            focusedMoveID: nil
+            focusedMoveID: nil,
+            sourceCountText: sourceCount > 0 ? (sourceCount == 1 ? "Based on 1 source" : "Based on \(sourceCount) sources") : nil
         )
     }
 
     static func move(_ move: Move, isInPlan: Bool) -> NextMoveCardState.Move {
-        NextMoveCardState.Move(
+        var state = NextMoveCardState.Move(
             id: move.id,
             kind: move.kind.rawValue,
             action: move.action,
@@ -156,6 +191,107 @@ final class NextMoveViewModel {
             hasLesson: move.conceptId != nil,
             isInPlan: isInPlan
         )
+        if let summary = move.tradeOff?.summary, !summary.isEmpty {
+            state.tradeOffText = "What you give up: " + summary
+        }
+        state.tradeOffPoints = move.tradeOff?.points.map(\.text) ?? []
+        if move.gainKind == .weeksOfCover {
+            // Weekly budget (F-R-1): never a £ a year figure.
+            state.isMonthsOfCover = true
+            state.worstCaseText = ""
+            if let shortfall = move.shortfall, shortfall.rounded() > 0 {
+                let before = move.deadline.map { "short before " + longDayText($0) } ?? "short before your next money"
+                state.impactAmountText = Money.format(shortfall.rounded())
+                state.impactCaption = before
+                state.impactText = "\(state.impactAmountText) \(before)"
+            } else if let weekly = move.safeWeeklySpend {
+                let weeks = move.coverWeeks.map(weeksText)
+                state.impactAmountText = Money.format(weekly.rounded())
+                state.impactCaption = ["Spend up to this a week", weeks.map { "\($0) until your next money" }]
+                    .compactMap { $0 }.joined(separator: ". ")
+                state.impactText = "Spend up to \(state.impactAmountText) a week"
+                    + (weeks.map { ". \($0) until your next money" } ?? "")
+            } else {
+                state.impactAmountText = ""
+                state.impactCaption = missingCostsText
+                state.impactText = missingCostsText
+                state.isGainMissing = true
+            }
+        } else if move.gainKind == .monthsOfCover {
+            state.worstCaseText = ""
+            state.isMonthsOfCover = true
+            if let months = move.coverMonths {
+                let amount = monthsText(months)
+                state.impactAmountText = amount
+                state.impactCaption = "of cover"
+                state.impactText = amount + " of cover"
+            } else {
+                // No monthly costs entered: never invent a number (bug 5, ADR 0053).
+                state.impactAmountText = ""
+                state.impactCaption = missingCostsText
+                state.impactText = missingCostsText
+                state.isGainMissing = true
+            }
+        }
+        // Confidence from the engine's level and sample size (bug 4): "High · sample 240".
+        if let level = move.confidenceLevel {
+            let word: String = switch level {
+            case .high: "High"
+            case .medium: "Medium"
+            case .low: "Low"
+            }
+            state.confidenceFilled = switch level {
+            case .high: 3
+            case .medium: 2
+            case .low: 1
+            }
+            state.confidenceWord = move.sampleSize.map { "\(word) · sample \($0)" } ?? "\(word) confidence"
+        } else {
+            // No engine level (fallback move): show no confidence at all (F2-3).
+            state.confidenceWord = ""
+            state.confidenceFilled = 0
+            state.confidenceLabel = ""
+        }
+        return state
+    }
+
+    static let missingCostsText = "Add your monthly costs to see this"
+
+    /// True when the move's gain is £ a year. Weekly budget and cover moves are not (F-R-1).
+    static func isYearly(_ move: Move) -> Bool {
+        move.gainKind == nil || move.gainKind == .gbpPerYear
+    }
+
+    /// The plan total in £ a year: only items whose move gains £ a year (a weekly budget is not a yearly gain).
+    static func yearlyPlanTotal(_ plan: PlanResponse, moves: [Move]) -> Double {
+        plan.items.reduce(0) { total, item in
+            if let move = moves.first(where: { $0.id == item.moveId }) {
+                return isYearly(move) ? total + item.impactPerYear : total
+            }
+            return PlanViewModel.isYearlyKind(item.kind.rawValue) ? total + item.impactPerYear : total
+        }
+    }
+
+    /// "3 weeks", "1 week", "2.5 weeks".
+    static func weeksText(_ weeks: Double) -> String {
+        let rounded = (weeks * 10).rounded() / 10
+        let number = rounded.formatted(.number.precision(.fractionLength(0...1)).locale(Money.locale))
+        return rounded == 1 ? "1 week" : "\(number) weeks"
+    }
+
+    /// "2 November".
+    static func longDayText(_ raw: String) -> String {
+        guard let date = FinanceMapping.date(raw) else { return raw }
+        var format = Date.FormatStyle(date: .omitted, time: .omitted).locale(Money.locale).day().month(.wide)
+        format.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return date.formatted(format)
+    }
+
+    /// "4 months", "1 month", "4.5 months".
+    static func monthsText(_ months: Double) -> String {
+        let rounded = (months * 10).rounded() / 10
+        let number = rounded.formatted(.number.precision(.fractionLength(0...1)).locale(Money.locale))
+        return rounded == 1 ? "1 month" : "\(number) months"
     }
 
     /// High at 0.75 or more, medium at 0.5 or more, otherwise low.

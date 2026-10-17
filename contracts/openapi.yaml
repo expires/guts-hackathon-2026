@@ -1138,7 +1138,7 @@ paths:
   /v1/next-move:
     get:
       operationId: getNextMove
-      summary: What is my next money move? One top move, up to 2 runners-up, with evidence
+      summary: Where should my money go this month? One top move, up to 2 runners-up, with evidence
       tags:
       - next-move
       responses:
@@ -5094,8 +5094,8 @@ components:
         meta:
           $ref: '#/components/schemas/FinanceMeta'
         question:
-          const: What is my next money move?
-          default: What is my next money move?
+          const: Where should my money go this month?
+          default: Where should my money go this month?
           type: string
         top:
           $ref: '#/components/schemas/Move'
@@ -8182,7 +8182,7 @@ components:
           source: fixtures
           as_of: '2026-10-17'
           label: Sample data
-        question: What is my next money move?
+        question: Where should my money go this month?
         top:
           id: mv_fix_mortgage
           kind: fix_mortgage

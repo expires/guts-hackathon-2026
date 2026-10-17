@@ -499,7 +499,7 @@ async def test_next_move_flow(client: httpx.AsyncClient, auth: dict[str, str]) -
     validate("GET", "/v1/next-move", r.status_code, r.json())
     assert r.status_code == 200
     nm = r.json()
-    assert nm["question"] == "What is my next money move?"
+    assert nm["question"] == "Where should my money go this month?"
     top = nm["top"]
     assert len(top["evidence"]) == 3 and len(nm["runners_up"]) <= 2
     assert all(s["status"] in ("live", "cached", "mock") for s in top["sources"])

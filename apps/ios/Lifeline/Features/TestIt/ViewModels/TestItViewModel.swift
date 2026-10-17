@@ -21,6 +21,8 @@ final class TestItViewModel {
     /// Increments on every load. A late response from an older load is dropped.
     private var generation = 0
 
+    /// Presentation mode: amounts rounded, names generic. The glue sets it from `llPresentationMode`.
+    var presentation = false
     @ObservationIgnored var onOpenLife: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored var onClose: @MainActor () -> Void = {}
     /// Set by the glue when "Do this" can add the move to the plan. Nil hides the button.
@@ -33,7 +35,7 @@ final class TestItViewModel {
     }
 
     var state: TestItViewState {
-        Self.makeState(result: result, phase: phase, canDoThis: onDoThis != nil)
+        Self.makeState(result: result, phase: phase, canDoThis: onDoThis != nil, presentation: presentation)
     }
 
     var actions: TestItActions {
@@ -76,7 +78,8 @@ final class TestItViewModel {
     static func makeState(
         result: Components.Schemas.TestMoveResult?,
         phase: LoadPhase,
-        canDoThis: Bool = false
+        canDoThis: Bool = false,
+        presentation: Bool = false
     ) -> TestItViewState {
         guard let result else {
             return TestItViewState(
@@ -87,7 +90,7 @@ final class TestItViewModel {
         }
         let birthYear = result.character.birthYear
         let options = result.outcomes.map {
-            option(for: $0, among: result.outcomes, birthYear: birthYear, period: result.period)
+            option(for: $0, among: result.outcomes, birthYear: birthYear, period: result.period, presentation: presentation)
         }
         let sources = result.sources.map(StateMapping.sourceChip)
         let values = options.flatMap { $0.path.map(\.netWorth) }
@@ -99,15 +102,15 @@ final class TestItViewModel {
             periodSentence: periodSentence(start: result.period.start, end: result.period.end),
             options: options,
             recommendedID: options.first(where: \.isRecommended)?.id,
-            summary: result.summary,
-            evidenceSentence: result.evidenceSentence,
+            summary: PresentationFormat.text(result.summary, presentation),
+            evidenceSentence: PresentationFormat.text(result.evidenceSentence, presentation),
             sources: sources,
             isSampleData: sources.contains { $0.status == .mock },
             chartMin: low,
             chartMax: high,
-            intro: intro(name: result.character.name, optionCount: options.count),
+            intro: intro(name: PresentationFormat.name(result.character.name, presentation), optionCount: options.count),
             faceEmoji: result.character.emoji,
-            hero: hero(options: options, summary: result.summary),
+            hero: hero(options: options, summary: PresentationFormat.text(result.summary, presentation), presentation: presentation),
             canDoThis: canDoThis
         )
     }
@@ -122,14 +125,14 @@ final class TestItViewModel {
 
     /// Hero: total paid by the recommended option against the cheapest other option (the same pair as
     /// the API `summary`). The sentence under the amount is the API `summary`, verbatim.
-    static func hero(options: [TestItViewState.Option], summary: String) -> TestItViewState.Hero? {
+    static func hero(options: [TestItViewState.Option], summary: String, presentation: Bool = false) -> TestItViewState.Hero? {
         guard options.count > 1, let best = options.first(where: \.isRecommended),
               let other = options.filter({ $0.id != best.id }).min(by: { $0.totalCost < $1.totalCost }) else { return nil }
         let difference = (best.totalCost - other.totalCost).rounded()
         guard abs(difference) >= 1 else { return nil }
         return .init(
             amount: abs(difference),
-            amountText: Money.format(abs(difference)),
+            amountText: PresentationFormat.money(abs(difference), presentation),
             caption: "\(difference > 0 ? "more" : "less") paid than \"\(other.label)\"",
             text: summary
         )
@@ -141,15 +144,16 @@ final class TestItViewModel {
     }
 
     /// Story rows: one per path year after the first. Age comes from the character's birth year.
-    static func yearRows(path: [TestItViewState.PathPoint], birthYear: Int?) -> [TestItViewState.YearRow] {
-        path.enumerated().map { offset, point in
+    static func yearRows(path: [TestItViewState.PathPoint], birthYear: Int?, presentation: Bool = false) -> [TestItViewState.YearRow] {
+        let money = { (value: Double) in PresentationFormat.money(value, presentation) }
+        return path.enumerated().map { offset, point -> TestItViewState.YearRow in
             let title = birthYear.map { "\(point.year) · Age \(point.year - $0)" } ?? "\(point.year)"
             if offset == 0 {
-                return .init(id: point.id, title: title, text: "I start with \(Money.format(point.netWorth)).", change: nil, isDown: false)
+                return .init(id: point.id, title: title, text: "I start with \(money(point.netWorth)).", change: nil, isDown: false)
             }
             let change = (point.netWorth - path[offset - 1].netWorth).rounded()
-            let changeText: String? = change == 0 ? nil : (change > 0 ? "Up " : "Down ") + Money.format(abs(change))
-            return .init(id: point.id, title: title, text: "I have \(Money.format(point.netWorth)).", change: changeText, isDown: change < 0)
+            let changeText: String? = change == 0 ? nil : (change > 0 ? "Up " : "Down ") + money(abs(change))
+            return .init(id: point.id, title: title, text: "I have \(money(point.netWorth)).", change: changeText, isDown: change < 0)
         }
     }
 
@@ -163,16 +167,17 @@ final class TestItViewModel {
         for outcome: Components.Schemas.OptionOutcome,
         among all: [Components.Schemas.OptionOutcome],
         birthYear: Int? = nil,
-        period: Components.Schemas.TestPeriod? = nil
+        period: Components.Schemas.TestPeriod? = nil,
+        presentation: Bool = false
     ) -> TestItViewState.Option {
         let path = outcome.netWorthPath.compactMap(pathPoint)
         let others = all.filter { $0.optionId != outcome.optionId }.map(\.endNetWorth)
         let gap = others.max().map { outcome.endNetWorth - $0 }
-        let facts = facts(for: outcome)
+        let facts = facts(for: outcome, presentation: presentation)
         var spoken = [outcome.label]
         if outcome.isRecommended { spoken.append("Recommended") }
         spoken.append(contentsOf: facts)
-        if let gap { spoken.append(gapSentence(gap)) }
+        if let gap { spoken.append(gapSentence(gap, presentation: presentation)) }
         return TestItViewState.Option(
             id: outcome.optionId,
             label: outcome.label,
@@ -189,18 +194,18 @@ final class TestItViewModel {
             index: outcome.index,
             facts: facts,
             accessibilitySummary: spoken.joined(separator: ". "),
-            yearRows: yearRows(path: path, birthYear: birthYear),
+            yearRows: yearRows(path: path, birthYear: birthYear, presentation: presentation),
             costLabel: period.map { "Paid " + periodSpan(start: $0.start, end: $0.end) } ?? "Paid",
             indexLabel: "Index \(indexText(outcome.index))"
         )
     }
 
-    static func facts(for outcome: Components.Schemas.OptionOutcome) -> [String] {
+    static func facts(for outcome: Components.Schemas.OptionOutcome, presentation: Bool = false) -> [String] {
         [
-            "Ended with \(Money.format(outcome.endNetWorth))",
-            "Paid \(Money.format(outcome.totalCost))",
+            "Ended with \(PresentationFormat.money(outcome.endNetWorth, presentation))",
+            "Paid \(PresentationFormat.money(outcome.totalCost, presentation))",
             missedPaymentsText(outcome.missedPayments),
-            "Worst year \(outcome.worstYear): \(Money.signed(outcome.worstYearChange))",
+            "Worst year \(outcome.worstYear): \(PresentationFormat.money(outcome.worstYearChange, presentation, style: .signed))",
             "Index \(indexText(outcome.index))",
         ]
     }
@@ -213,11 +218,11 @@ final class TestItViewModel {
         }
     }
 
-    static func gapSentence(_ gap: Double) -> String {
+    static func gapSentence(_ gap: Double, presentation: Bool = false) -> String {
         switch gap.rounded() {
         case 0: "Same as the other option"
-        case let value where value > 0: "\(Money.format(value)) ahead of the next best"
-        case let value: "\(Money.format(-value)) behind the best"
+        case let value where value > 0: "\(PresentationFormat.money(value, presentation)) ahead of the next best"
+        case let value: "\(PresentationFormat.money(-value, presentation)) behind the best"
         }
     }
 

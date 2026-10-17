@@ -36,21 +36,40 @@ final class MoneyWidgetsViewModel {
         )
     }
 
+    private var hasLoaded = false
+
+    /// Detail screens load on first open. Money home itself uses `GET /v1/finance/home` only.
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        hasLoaded = true
+        await load()
+    }
+
     func load() async {
-        overview = nil; spending = nil; subscriptions = nil; bills = nil; budgets = nil; goals = nil
+        hasLoaded = true
+        // Cached values show at once; skeletons only for parts with no value yet (ADR 0060).
         let client = self.client
-        async let overview = Self.result { try await client.financeOverview() }
-        async let spending = Self.result { try await client.financeSpending(month: nil) }
-        async let subscriptions = Self.result { try await client.subscriptions() }
-        async let bills = Self.result { try await client.bills() }
+        async let overview: Void = cachedLoad(CachedOps.financeOverview) { [weak self] in self?.overview = $0 }
+        async let spending: Void = cachedLoad(CachedOps.spending()) { [weak self] in self?.spending = $0 }
+        async let subscriptions: Void = cachedLoad(CachedOps.subscriptions) { [weak self] in self?.subscriptions = $0 }
+        async let bills: Void = cachedLoad(CachedOps.bills) { [weak self] in self?.bills = $0 }
         async let budgets = Self.result { try await client.budgets(month: nil) }
         async let goals = Self.result { try await client.goals() }
-        self.overview = await overview
-        self.spending = await spending
-        self.subscriptions = await subscriptions
-        self.bills = await bills
+        _ = await (overview, spending, subscriptions, bills)
         self.budgets = await budgets
         self.goals = await goals
+    }
+
+    /// `client.load` into a `Result` slot: success with each value; failure only when nothing could be shown.
+    private func cachedLoad<T>(
+        _ op: CachedOp<T>,
+        set: @escaping @MainActor @Sendable (Result<T, APIError>) -> Void
+    ) async {
+        do {
+            try await client.load(op) { value in set(.success(value)) }
+        } catch {
+            set(.failure(APIError.map(error)))
+        }
     }
 
     private nonisolated static func result<T: Sendable>(_ body: @Sendable () async throws -> T) async -> Result<T, APIError> {
@@ -76,11 +95,17 @@ final class MoneyWidgetsViewModel {
         }
     }
 
+    /// The engine's top move (first in `moves`): "Your next move: Take a tracker". Never a stored text.
+    static func topMoveLink(moves: [Move]) -> MoveLinkState? {
+        moves.first.map { .init(moveID: $0.id, text: "Your next move: \($0.action)") }
+    }
+
     static func moveLink(for widget: Widget, moves: [Move]) -> MoveLinkState? {
         for kind in widget.moveKinds {
             if let move = moves.first(where: { $0.kind.rawValue == kind }) {
                 let impact = move.impactPerYear.rounded()
-                let suffix = impact > 0 ? " (\(Money.format(impact)) a year)" : ""
+                // Weekly budget and cover moves have no £ a year gain (F-R-1).
+                let suffix = impact > 0 && NextMoveViewModel.isYearly(move) ? " (\(Money.format(impact)) a year)" : ""
                 return MoveLinkState(moveID: move.id, text: "Your next move: \(move.action)\(suffix)")
             }
         }
@@ -140,7 +165,7 @@ final class MoneyWidgetsViewModel {
             name: StateMapping.sourceName(response.meta.source),
             status: StateMapping.status(response.meta.dataStatus.rawValue)
         )
-        return .init(
+        var overview = MoneyWidgetsViewState.Overview(
             balance: response.balance,
             netWorth: response.netWorth,
             balanceChart: ChartState(
@@ -159,6 +184,9 @@ final class MoneyWidgetsViewModel {
             monthLabels: response.netWorthHistory.map { FinanceMapping.shortMonthText($0.date) },
             asOfText: "As of " + FinanceMapping.dayText(response.meta.asOf)
         )
+        overview.balanceParts = (response.balanceParts ?? []).enumerated().map { .init(id: $0, label: $1.label, amount: $1.amount) }
+        overview.netWorthParts = (response.netWorthParts ?? []).enumerated().map { .init(id: $0, label: $1.label, amount: $1.amount) }
+        return overview
     }
 
     /// "Up £648 since Aug", "Down £120 since Aug".
@@ -262,27 +290,26 @@ final class MoneyWidgetsViewModel {
     }
 
     static func bills(_ response: BillsResponse) -> MoneyWidgetsViewState.Bills {
-        .init(
-            totalNext30Days: response.totalNext30Days,
-            items: response.items.map { bill in
-                let status: MoneyWidgetsViewState.Bill.Status = switch bill.status {
-                case .upcoming: .upcoming
-                case .dueSoon: .dueSoon
-                case .paid: .paid
-                case .overdue: .overdue
-                }
-                let statusText = switch status {
-                case .upcoming: "Upcoming"
-                case .dueSoon: "Due soon"
-                case .paid: "Paid"
-                case .overdue: "Overdue"
-                }
-                return .init(
-                    id: bill.id, emoji: bill.emoji, name: bill.name, amount: bill.amount,
-                    dueText: "Due " + FinanceMapping.dayText(bill.dueDate), status: status, statusText: statusText,
-                    shortDateText: FinanceMapping.shortDateText(bill.dueDate), priceRiseChip: nil
-                )
-            }
+        .init(totalNext30Days: response.totalNext30Days, items: response.items.map(bill))
+    }
+
+    static func bill(_ bill: Components.Schemas.Bill) -> MoneyWidgetsViewState.Bill {
+        let status: MoneyWidgetsViewState.Bill.Status = switch bill.status {
+        case .upcoming: .upcoming
+        case .dueSoon: .dueSoon
+        case .paid: .paid
+        case .overdue: .overdue
+        }
+        let statusText = switch status {
+        case .upcoming: "Upcoming"
+        case .dueSoon: "Due soon"
+        case .paid: "Paid"
+        case .overdue: "Overdue"
+        }
+        return .init(
+            id: bill.id, emoji: bill.emoji, name: bill.name, amount: bill.amount,
+            dueText: "Due " + FinanceMapping.dayText(bill.dueDate), status: status, statusText: statusText,
+            shortDateText: FinanceMapping.shortDateText(bill.dueDate), priceRiseChip: nil
         )
     }
 

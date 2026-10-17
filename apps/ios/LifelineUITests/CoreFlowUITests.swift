@@ -13,10 +13,13 @@ final class CoreFlowUITests: XCTestCase {
         app.launchArguments = ["-uiTestingMock"]
         app.launch()
 
-        // The app opens on Money (ADR 0016). The game is in the Life tab.
-        let lifeTab = app.buttons["tab.life"]
-        XCTAssertTrue(lifeTab.waitForExistence(timeout: 10))
-        lifeTab.tap()
+        // The app opens on Money. The game is "Play solo" inside the Play tab (ADR 0048).
+        let playTab = app.buttons["tab.play"]
+        XCTAssertTrue(playTab.waitForExistence(timeout: 10))
+        playTab.tap()
+        let solo = app.buttons["play.solo"]
+        XCTAssertTrue(solo.waitForExistence(timeout: 10))
+        solo.tap()
 
         // "Play yourself" is the first card.
         let playYourself = app.buttons["character.self"]
@@ -37,6 +40,11 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["life.age"].waitForExistence(timeout: 2))
         XCTAssertEqual(app.staticTexts["life.age"].label, "Age 18")
         ageButton.tap()
+
+        // The new event shows as a row on the feed. Tapping it opens the event full screen.
+        let pendingEvent = app.descendants(matching: .any)["life.pendingEvent"]
+        XCTAssertTrue(pendingEvent.waitForExistence(timeout: 5))
+        pendingEvent.tap()
 
         let choice = app.buttons["event.choice.move"]
         XCTAssertTrue(choice.waitForExistence(timeout: 5))
@@ -67,9 +75,8 @@ final class CoreFlowUITests: XCTestCase {
         let action = app.staticTexts["nextMove.action"]
         XCTAssertTrue(action.waitForExistence(timeout: 10))
         // The expected move comes from the recorded engine output, never from a hard-coded decision.
-        XCTAssertEqual(action.label, Self.recordedTopAction())
-        XCTAssertTrue(app.staticTexts["nextMove.headline"].exists)
-        XCTAssertTrue(app.staticTexts["nextMove.deadline"].exists || app.descendants(matching: .any)["nextMove.deadline"].exists)
+        XCTAssertEqual(action.label, Self.recordedTop("action"))
+        XCTAssertEqual(app.staticTexts["nextMove.headline"].label, Self.recordedTop("headline"))
 
         // Guess my spend hides the prediction until the guess (ADR 0017).
         XCTAssertFalse(app.staticTexts["guess.predicted"].exists)
@@ -82,8 +89,10 @@ final class CoreFlowUITests: XCTestCase {
 
         // Test it opens the W7 comparison.
         app.buttons["nextMove.testIt"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["testit.summary"].waitForExistence(timeout: 10))
-        app.buttons["testit.close"].tap()
+        // `testit.hero` wraps the summary and overrides its identifier, so wait for the screen's own close button.
+        let testItClose = app.buttons["testit.close"]
+        XCTAssertTrue(testItClose.waitForExistence(timeout: 10))
+        testItClose.tap()
 
         // Why? shows the 3 evidence points.
         let why = app.buttons["nextMove.why"]
@@ -93,9 +102,9 @@ final class CoreFlowUITests: XCTestCase {
         app.buttons["why.close"].tap()
     }
 
-    /// `top.action` from `Lifeline/Preview/Recorded/getNextMove.json` (the file the app's mock client serves).
+    /// A `top` field from `Lifeline/Preview/Recorded/getNextMove.json` (the file the app's mock client serves).
     /// The simulator test runner can read the source tree on the host Mac.
-    static func recordedTopAction(file: StaticString = #filePath) -> String {
+    static func recordedTop(_ key: String, file: StaticString = #filePath) -> String {
         let url = URL(fileURLWithPath: "\(file)")
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -103,11 +112,11 @@ final class CoreFlowUITests: XCTestCase {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let top = json["top"] as? [String: Any],
-              let action = top["action"] as? String else {
-            XCTFail("Cannot read top.action from \(url.path)")
+              let value = top[key] as? String else {
+            XCTFail("Cannot read top.\(key) from \(url.path)")
             return ""
         }
-        return action
+        return value
     }
 
     @MainActor

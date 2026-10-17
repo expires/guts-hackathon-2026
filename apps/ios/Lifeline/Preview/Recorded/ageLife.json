@@ -1,0 +1,241 @@
+{
+  "events": [
+    {
+      "id": "ev-2007-1",
+      "template_id": "employer.insolvency",
+      "area": "employer",
+      "year": 2007,
+      "age": 25,
+      "emoji": "🏚️",
+      "title": "Your employer goes bust",
+      "text": "The doors are locked and your company has gone into administration, leaving you out of work at 25 while unemployment sits at 5.4%. The government scheme will pay up to £1,466 of what you are owed, but the rest is up to you.",
+      "text_source": "llm",
+      "choices": [
+        {
+          "id": "claim",
+          "label": "Claim and job hunt",
+          "emoji": "📝",
+          "hint": "+£1,466, then 5 months to find work",
+          "is_default": true
+        },
+        {
+          "id": "gig",
+          "label": "Take gig work right away",
+          "emoji": "🛵",
+          "hint": "Some pay now, long hours",
+          "is_default": false
+        }
+      ],
+      "facts": {
+        "unemployment_pct": 5.4,
+        "statutory": 1466.0,
+        "months_out": 5.0,
+        "lost_pay": 8560.0,
+        "lower_pay": -2033.0,
+        "gig_pay": 4280.0
+      },
+      "sources": [
+        {
+          "source": "nomis",
+          "series_id": "NM_17_5",
+          "status": "live"
+        }
+      ],
+      "concept_id": "job-security"
+    },
+    {
+      "id": "ev-2007-2",
+      "template_id": "bills.fuel_jump",
+      "area": "bills",
+      "year": 2007,
+      "age": 25,
+      "emoji": "⛽",
+      "title": "Fuel prices jump",
+      "text": "Filling up the tank now costs 16% more than it did last year, and you feel it every time you pull into the forecourt. Driving is taking an extra £14 out of your pocket each month.",
+      "text_source": "llm",
+      "choices": [
+        {
+          "id": "pay",
+          "label": "Keep driving",
+          "emoji": "🚗",
+          "hint": "-£168 this year",
+          "is_default": true
+        },
+        {
+          "id": "bus",
+          "label": "Bus and bike more",
+          "emoji": "🚲",
+          "hint": "-£34 this year",
+          "is_default": false
+        }
+      ],
+      "facts": {
+        "fuel_pct": 16.5,
+        "extra_monthly": 14.0,
+        "extra_annual": 168.0,
+        "bus_annual": 34.0
+      },
+      "sources": [
+        {
+          "source": "ons",
+          "series_id": "D7IO",
+          "status": "live"
+        }
+      ],
+      "concept_id": "budgeting"
+    },
+    {
+      "id": "ev-2007-3",
+      "template_id": "place.contents_insurance",
+      "area": "place",
+      "year": 2007,
+      "age": 25,
+      "emoji": "📦",
+      "title": "Contents insurance",
+      "text": "Burglaries here run at 35.1 per 1,000 homes a year. Contents cover costs £55 a year.",
+      "text_source": "template",
+      "choices": [
+        {
+          "id": "skip",
+          "label": "Go without",
+          "emoji": "🎲",
+          "hint": "Save £55",
+          "is_default": true
+        },
+        {
+          "id": "buy",
+          "label": "Buy cover",
+          "emoji": "☂️",
+          "hint": "-£55",
+          "is_default": false
+        }
+      ],
+      "facts": {
+        "rate": 35.1,
+        "premium": 55.0,
+        "loss": 1835.0,
+        "chance": 0.18
+      },
+      "sources": [
+        {
+          "source": "police",
+          "series_id": "burglary",
+          "status": "mock"
+        }
+      ],
+      "concept_id": "insurance"
+    },
+    {
+      "id": "ev-2007-1",
+      "template_id": "work.bonus",
+      "area": "work",
+      "year": 2007,
+      "age": 28,
+      "emoji": "🎉",
+      "title": "Bonus season",
+      "text": "Bonus season arrives and your payslip lands with £14,901 after tax, a welcome boost in a year when markets returned 5.3%. Now the only question is what you'll do with it.",
+      "text_source": "llm",
+      "choices": [
+        {
+          "id": "save",
+          "label": "Put it in savings",
+          "emoji": "🏦",
+          "hint": "£14,901 to savings",
+          "is_default": true
+        },
+        {
+          "id": "invest",
+          "label": "Invest it in shares",
+          "emoji": "📈",
+          "hint": "Grows with the market, up or down",
+          "is_default": false
+        },
+        {
+          "id": "splurge",
+          "label": "Treat yourself",
+          "emoji": "🛍️",
+          "hint": "Spend £13,411",
+          "is_default": false
+        }
+      ],
+      "facts": {
+        "stock_return_pct": 5.3,
+        "bonus_after_tax": 14901.0,
+        "splurge": 13411.0
+      },
+      "sources": [
+        {
+          "source": "yahoo",
+          "series_id": "^FTAS",
+          "status": "mock"
+        }
+      ],
+      "concept_id": "compound-interest"
+    },
+    {
+      "id": "ev-2007-2",
+      "template_id": "health.glasses",
+      "area": "health",
+      "year": 2007,
+      "age": 28,
+      "emoji": "👓",
+      "title": "You need glasses",
+      "text": "The road signs have gone fuzzy and the optician confirms it: you need glasses. You can pick designer frames for £214, or a budget pair for £37.",
+      "text_source": "llm",
+      "choices": [
+        {
+          "id": "designer",
+          "label": "Designer frames",
+          "emoji": "🕶️",
+          "hint": "-£214",
+          "is_default": true
+        },
+        {
+          "id": "budget",
+          "label": "Budget pair",
+          "emoji": "👓",
+          "hint": "-£37",
+          "is_default": false
+        }
+      ],
+      "facts": {
+        "designer": 214.0,
+        "budget": 37.0
+      },
+      "sources": [],
+      "concept_id": "budgeting"
+    },
+    {
+      "id": "ev-2007-3",
+      "template_id": "bills.tv_licence",
+      "area": "bills",
+      "year": 2007,
+      "age": 28,
+      "emoji": "📺",
+      "title": "TV licence renewal",
+      "text": "Your TV licence renewal lands on the mat, asking for £104. These days, though, you only ever watch streaming apps.",
+      "text_source": "llm",
+      "choices": [
+        {
+          "id": "pay",
+          "label": "Pay it",
+          "emoji": "💷",
+          "hint": "-£104",
+          "is_default": true
+        },
+        {
+          "id": "cancel",
+          "label": "Cancel it",
+          "emoji": "✂️",
+          "hint": "You must not watch live TV",
+          "is_default": false
+        }
+      ],
+      "facts": {
+        "fee": 104.0
+      },
+      "sources": [],
+      "concept_id": "subscriptions"
+    }
+  ]
+}

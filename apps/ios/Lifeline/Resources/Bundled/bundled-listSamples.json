@@ -1,0 +1,45 @@
+[
+  {
+    "id": "scholarship",
+    "title": "Scholarship student",
+    "description": "Scholarship and bursary of about £420 a month. Halls paid by the scholarship. No debt, steady habits.",
+    "funding": [
+      "scholarship",
+      "bursary"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "rich",
+    "title": "Rich student",
+    "description": "About £2,000 a month from parents. Rents a city flat, many subscriptions, Klarna for clothes.",
+    "funding": [
+      "family"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "working",
+    "title": "Working student",
+    "description": "Maintenance loan plus weekly bar shifts with pay that changes. Often in the overdraft.",
+    "funding": [
+      "maintenance_loan",
+      "part_time_job"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "commuter",
+    "title": "Commuter student",
+    "description": "Lives with family and takes the train in with a 16-25 Railcard. Grant plus family help. Saving for a deposit.",
+    "funding": [
+      "grant",
+      "family"
+    ],
+    "months": 3,
+    "team": false
+  }
+]

@@ -3,6 +3,7 @@ import SwiftUI
 /// Glue: owns `RealLifeDecisionViewModel` and feeds `RealLifeDecisionView`.
 struct RealLifeDecisionScreen: View {
     @State private var model: RealLifeDecisionViewModel
+    @Environment(\.llPresentationMode) private var presentation
     private let onClose: @MainActor () -> Void
     private let onTestIt: (@MainActor (String) -> Void)?
 
@@ -40,7 +41,7 @@ struct RealLifeDecisionScreen: View {
     }
 
     var body: some View {
-        RealLifeDecisionView(state: model.state, actions: model.actions)
+        RealLifeDecisionView(state: model.state.presented(presentation), actions: model.actions)
             .onAppear {
                 model.onClose = onClose
                 model.onTestIt = onTestIt

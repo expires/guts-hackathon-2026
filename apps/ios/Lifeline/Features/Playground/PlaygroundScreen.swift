@@ -4,7 +4,7 @@ import SwiftUI
 /// The "Full app" entry runs the real flow on `MockClient`.
 struct PlaygroundScreen: View {
     @State private var model = GalleryViewModel()
-    @State private var appSession = GameSession(client: MockClient())
+    @State private var appSession = GameSession(client: MockClient(data: .recorded))
 
     var body: some View {
         GalleryView(state: model.state) { id in
@@ -17,6 +17,30 @@ struct PlaygroundScreen: View {
     private func destination(_ id: String) -> some View {
         switch id {
         case "app.flow": RootScreen(session: appSession)
+        case "penny.live":
+            PennyScreen(
+                service: PennyFixtures.scripted(events: PennyFixtures.answerEvents, fallback: PennyFixtures.answerResponse, gap: .milliseconds(400)),
+                onClose: {}
+            )
+        case let penny where penny.hasPrefix("penny."):
+            if let entry = PennyFixtures.all.first(where: { $0.id == penny }) {
+                LLSheetFrame { PennyChatView(state: entry.state) }
+            }
+        case let rooms where rooms.hasPrefix("w9rooms."): RoomsPlayground.view(rooms)
+        case "money.ready": MoneyHomeView(state: Fixtures.MoneyHome.ready).previewInNavigation()
+        case "money.noData": MoneyHomeView(state: Fixtures.MoneyHome.noData).previewInNavigation()
+        case "money.rateLimited": MoneyHomeView(state: Fixtures.MoneyHome.rateLimited).previewInNavigation()
+        case "money.offline": MoneyHomeView(state: Fixtures.MoneyHome.offline).previewInNavigation()
+        case "onboarding.flow": OnboardingScreen(client: appSession.client) {}
+        case "account.flow": AccountScreen(client: appSession.client)
+        case let onboarding where onboarding.hasPrefix("onboarding."):
+            if let entry = OnboardingFixtures.all.first(where: { "onboarding." + $0.id == onboarding }) {
+                OnboardingView(state: entry.state)
+            }
+        case let account where account.hasPrefix("account."):
+            if let entry = AccountFixtures.all.first(where: { "account." + $0.id == account }) {
+                AccountView(state: entry.state)
+            }
         case "select.ready": CharacterSelectView(state: Fixtures.CharacterSelect.ready)
         case "select.godOwned": CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned)
         case "select.loading": CharacterSelectView(state: Fixtures.CharacterSelect.loading)

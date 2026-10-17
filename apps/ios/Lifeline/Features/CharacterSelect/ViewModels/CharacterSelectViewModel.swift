@@ -47,10 +47,13 @@ final class CharacterSelectViewModel {
     func load() async {
         if characters == nil { phase = .loading(.init(message: "Loading characters")) }
         do {
-            characters = try await session.client.listCharacters(seed: nil)
-            phase = .ready
+            // Cached first (bundled or last server copy), then fresh (ADR 0060).
+            try await session.client.load(CachedOps.characters) { [weak self] characters in
+                self?.characters = characters
+                self?.phase = .ready
+            }
         } catch {
-            phase = .failed(.from(APIError.map(error)))
+            if characters == nil { phase = .failed(.from(APIError.map(error))) }
         }
     }
 

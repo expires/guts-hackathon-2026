@@ -192,6 +192,13 @@ enum Fixtures {
         @MainActor static var submitting: EventSheetViewState {
             EventSheetViewModel.makeState(event: ContractExamples.event, isSubmitting: true)
         }
+
+        /// The player tapped the first choice and the game is answering.
+        @MainActor static var chosen: EventSheetViewState {
+            var state = submitting
+            state.chosenID = state.choices.first?.id
+            return state
+        }
     }
 
     enum Activities {
@@ -444,7 +451,7 @@ enum Fixtures {
             demoDeviceID: "",
             activeDeviceID: "3F2A9C1E-7B4D-4E8A",
             demoDeviceIDIsValid: true,
-            versionText: "Lifeline 1.0 (1)",
+            versionText: "\(Brand.productName) 1.0 (1)",
             note: "Changes apply on the next launch. Launch arguments -mockClient, -uiTestingMock and -demoDeviceID always win."
         )
 
@@ -455,7 +462,7 @@ enum Fixtures {
             demoDeviceID: "demo-presenter-01",
             activeDeviceID: "demo-presenter-01",
             demoDeviceIDIsValid: true,
-            versionText: "Lifeline 1.0 (1)",
+            versionText: "\(Brand.productName) 1.0 (1)",
             note: "Changes apply on the next launch. Launch arguments -mockClient, -uiTestingMock and -demoDeviceID always win."
         )
     }

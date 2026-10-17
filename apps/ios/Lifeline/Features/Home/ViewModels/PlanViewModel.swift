@@ -37,18 +37,27 @@ final class PlanViewModel {
         }
     }
 
+    /// Move kinds whose gain is not £ a year (weekly budget, months of cover). Used when the move is not loaded.
+    static let nonYearlyKinds: Set<String> = ["weekly_budget", "build_emergency_fund", "keep_cash"]
+
+    static func isYearlyKind(_ kind: String) -> Bool {
+        !nonYearlyKinds.contains(kind)
+    }
+
     static func makeState(plan: PlanResponse?, phase: LoadPhase, isSampleData: Bool) -> PlanViewState {
         let items = (plan?.items ?? []).map { item in
-            PlanViewState.Item(
+            let yearly = isYearlyKind(item.kind.rawValue)
+            return PlanViewState.Item(
                 id: item.id,
                 action: item.action,
-                impactPerYear: item.impactPerYear,
-                impactText: NextMoveViewModel.impactText(item.impactPerYear),
+                impactPerYear: yearly ? item.impactPerYear : 0,
+                impactText: yearly ? NextMoveViewModel.impactText(item.impactPerYear) : "",
                 isDone: item.status == .done,
                 addedText: "Added " + FinanceMapping.dayText(item.addedAt)
             )
         }
-        let total = plan?.totalImpactPerYear ?? 0
+        // Only £ a year gains count in the yearly total (F-R-1).
+        let total = (plan?.items ?? []).filter { isYearlyKind($0.kind.rawValue) }.reduce(0) { $0 + $1.impactPerYear }
         return PlanViewState(
             phase: phase,
             items: items,

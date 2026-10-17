@@ -95,7 +95,7 @@ async def test_general_answer_with_web_search_sources() -> None:
     assert len(r.sources) == 1 and r.sources[0].group == "general_knowledge"
     assert r.sources[0].url == "https://www.bbcgoodfood.com/budget-chilli"
     assert "<" not in r.sources[0].label and r.sources[0].label.endswith("· web")
-    assert r.suggestions == ["Yes, lunch ideas", "No, that is all"]  # answers the question; no lone "Yes"
+    assert r.suggestions == ["Lunch ideas", "That is all"]  # answers the question, names the action
 
 
 async def test_general_answer_never_offers_web_search_as_client_tool() -> None:

@@ -14,7 +14,7 @@ struct PlanView: View {
             case let .failed(error):
                 ErrorStateView(state: error, onRetry: actions.onRetry)
             case .ready:
-                if state.isSampleData { DemoDataBadge() }
+                if state.isSampleData { DataBadge() }
                 if !state.items.isEmpty {
                     RowGroup {
                         ForEach(state.items) { item in

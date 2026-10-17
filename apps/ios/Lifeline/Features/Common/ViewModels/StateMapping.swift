@@ -25,7 +25,14 @@ enum StateMapping {
         case "postcodes": "Postcodes.io"
         case "companies_house", "companieshouse": "Companies House"
         case "bank:fixtures", "fixtures", "bank": "Your bank"
-        default: id.replacingOccurrences(of: "_", with: " ").capitalized
+        case "bank:sample", "sample": "Your statement"
+        case "bank:statement", "statement": "Your statement"
+        case "manual", "bank:manual": "Your numbers"
+        case "govuk", "gov.uk", "gov_uk": "gov.uk"
+        case "guardian": "The Guardian"
+        default:
+            // Never show an internal code such as "bank:xyz": the part before ":" names the kind of source.
+            if id.hasPrefix("bank:") { "Your bank" } else { id.replacingOccurrences(of: "_", with: " ").capitalized }
         }
     }
 

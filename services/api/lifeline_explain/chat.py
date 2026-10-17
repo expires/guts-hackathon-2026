@@ -179,8 +179,16 @@ def is_challenge(message: str) -> bool:
     return bool(_CHALLENGE.search(message))
 
 
+_TRAILING_ZERO_PCT = re.compile(r"(?<![\d.])(\d+)\.0+(?=\s*(%|per ?cent))")
+
+
+def tidy_numbers(text: str) -> str:
+    """'25.0%' -> '25%', '9.00 per cent' -> '9 per cent'. '4.5%' stays (V4 advisory)."""
+    return _TRAILING_ZERO_PCT.sub(r"\1", text)
+
+
 def clean_bubble(text: str) -> str:
-    out = _MD.sub("", text)
+    out = tidy_numbers(_MD.sub("", text))
     out = _EMOJI.sub("", out)
     out = re.sub(r"\s*\u2014\s*", ", ", out).replace("!", ".")
     out = re.sub(r"\s+", " ", out).strip()
@@ -756,7 +764,8 @@ class Penny:
             sid = f.source_id if f.source_id in source_ids else (source_ids[0] if source_ids else None)
             fid = state.add_fact(f, sid, call_no)
             state.fact_tool.setdefault(fid, tool)
-            facts.append({"id": fid, "value": f.value, "unit": f.unit, "label": fence(f.label, tool)})
+            value: float | int = int(f.value) if float(f.value).is_integer() else f.value  # 25, never 25.0
+            facts.append({"id": fid, "value": value, "unit": f.unit, "label": fence(tidy_numbers(f.label), tool)})
         return {
             "result": fence_strings(result, tool),
             "facts": facts,
@@ -985,11 +994,17 @@ def asks_question(bubbles: list[ChatBubble]) -> bool:
     return any(b.kind == "question" or b.text.rstrip().endswith("?") for b in bubbles)
 
 
+_YES_NO_PREFIX = re.compile(r"^(yes|yeah|yep|sure|ok|okay|no|nope|not now)\s*[,:\-\u2013]\s*(please\s*,?\s*)?", re.I)
+
+
 def clean_suggestions(items: list[str]) -> list[str]:
     """At most 2 short chips. Never a lone 'Yes' (ADR 0051). Same house style as bubbles, no numbers."""
     out: list[str] = []
     for raw in items:
         chip = clean_bubble(sanitize_untrusted(str(raw), 80)).rstrip(".")
+        # V4 advisory: chips name the action ("Show me how"), not "Yes, show me how".
+        chip = _YES_NO_PREFIX.sub("", chip).strip()
+        chip = chip[:1].upper() + chip[1:]
         if not chip or len(chip) > 40 or chip.lower().rstrip("?") in _LONE_ANSWERS or extract_numbers(chip):
             continue
         if chip.lower() not in {c.lower() for c in out}:

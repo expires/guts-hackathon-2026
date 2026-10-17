@@ -54,6 +54,11 @@ struct LifeSummaryView: View {
                     .minimumScaleFactor(0.7)
                     .accessibilityIdentifier("summary.newLife")
             }
+            // Every screen links back to the Next Move (ADR 0043).
+            Button("Your next move", action: actions.onNextMove)
+                .buttonStyle(.text)
+                .accessibilityHint("Opens the Money tab with your Next Move")
+                .accessibilityIdentifier("summary.nextMove")
         }
     }
 

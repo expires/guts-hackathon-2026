@@ -6,21 +6,41 @@ import Foundation
 ///
 /// Every number it returns comes from the contract examples or from the example deltas.
 actor MockClient: LifelineClient {
+    /// In-memory Circles for the Mock configuration.
+    private var circles: [PlayCircle] = []
     nonisolated let kind = ClientKind.mock
     private var lives: [String: Life] = [:]
     private var nextLifeNumber = 1
+    /// Per life: template id -> last game year it fired (engine cooldown, `EVENT_COOLDOWN_YEARS`).
+    private var firedEvents: [String: [String: Int]] = [:]
+    /// Per life: position in `MockExamples.eventPool` to try next.
+    private var nextEventSlot: [String: Int] = [:]
     private var nextRoomPlayer = 2
     private var budgetLimits: [String: Double] = [:]
     private var createdGoals: [SavingsGoal] = []
     /// Guesses made in this session, by date (YYYY-MM-DD). One per day (ADR 0017).
     private var guessesByDate: [String: Double] = [:]
     private var planItems: [PlanItem] = []
+    private var chatThreads: [String: ChatThread] = [:]
+    private var nextChatNumber = 1
+    private var me: Me = MockExamples.me
     private let data: MockData
+    /// Gap between streamed chat events. Tests can set it to zero.
+    let streamGap: Duration
 
     /// - Parameter data: `.contract` (default: tests, previews, Playground) or `.recorded` (the app's mock mode).
-    init(data: MockData = .contract) {
+    init(data: MockData = .contract, streamGap: Duration = .milliseconds(400)) {
         self.data = data
+        self.streamGap = streamGap
+        let contract = MockData.contract
+        self.usesRecordedData = data.financeOverview != contract.financeOverview
+            || data.nextMove != contract.nextMove
+            || data.characters != contract.characters
     }
+
+    /// True for `MockData.recorded` (some recorded file differs from the contract). Contract mode never reads
+    /// `Preview/Recorded/*` directly, so tests, previews and the Playground see contract examples only.
+    private let usesRecordedData: Bool
 
     // MARK: Lives
 
@@ -92,7 +112,10 @@ actor MockClient: LifelineClient {
             lives[lifeID] = life
             return AgeResult(life: life, events: [])
         }
-        var event = ContractExamples.event
+        guard var event = nextEvent(lifeID: lifeID, year: life.year) else {
+            lives[lifeID] = life
+            return AgeResult(life: life, events: [])
+        }
         event.id = "ev-\(life.year)-1"
         event.year = life.year
         event.age = life.age
@@ -237,6 +260,25 @@ actor MockClient: LifelineClient {
     // MARK: Money tab
 
     func financeOverview() async throws -> FinanceOverview { data.financeOverview }
+
+    /// No finance data (after reset or delete): the contract `FinanceHomeEmpty` example.
+    /// Recorded mode: `Recorded/getFinanceHome.json` when present. Otherwise built from `data`
+    /// (contract mode: the contract examples for overview, next move, prediction and bills).
+    func financeHome() async throws -> FinanceHome {
+        guard me.hasFinanceData else { return MockExamples.financeHomeEmpty }
+        if usesRecordedData, let recorded = MockExamples.recordedFinanceHome { return recorded }
+        let bills = data.bills.items
+        return FinanceHome(
+            hasData: true,
+            meta: data.financeOverview.meta,
+            balance: data.financeOverview.balance,
+            netWorth: data.financeOverview.netWorth,
+            nextMove: data.nextMove,
+            prediction: try await spendPrediction(date: nil),
+            comingUp: Array(bills.prefix(3)),
+            comingUpMore: bills.count > 3
+        )
+    }
     func financeSpending(month: String?) async throws -> SpendingResponse { data.spending }
     func subscriptions() async throws -> SubscriptionsResponse { data.subscriptions }
     func bills() async throws -> BillsResponse { data.bills }
@@ -378,12 +420,37 @@ actor MockClient: LifelineClient {
 
     func createRoom(_ request: CreateRoomRequest) async throws -> Room {
         var room = ContractExamples.room
-        room.mode = Room.ModePayload(rawValue: request.mode.rawValue) ?? .duel
+        room.mode = request.mode.flatMap { Room.ModePayload(rawValue: $0.rawValue) } ?? .duel
         room.presetId = request.presetId
         room.startYear = request.startYear
-        room.players = [.init(id: "p1", name: request.hostName, isHost: true, finished: false)]
+        room.players = [.init(id: "p1", name: request.hostName ?? "You", isHost: true, finished: false)]
         return room
     }
+
+    func listPaths() async throws -> [StudentPath] {
+        [
+            .init(id: "uni", title: "University", description: "3-year degree with a maintenance loan", startAge: 18, quick: true),
+            .init(id: "apprentice", title: "Apprenticeship", description: "Earn while you learn", startAge: 18, quick: true),
+            .init(id: "job18", title: "Job at 18", description: "Start work straight after school", startAge: 18, quick: true),
+            .init(id: "gap_year", title: "Gap year", description: "Work and travel, then decide", startAge: 18, quick: true),
+            .init(id: "masters", title: "Master's", description: "One more year of study after a degree", startAge: 21, quick: false),
+        ]
+    }
+
+    func listCircles() async throws -> [PlayCircle] { circles }
+
+    func createCircle(name: String) async throws -> PlayCircle {
+        let circle = PlayCircle(id: "c_\(circles.count + 1)", name: name, code: "Q7K2P\(circles.count)", members: [])
+        circles.append(circle)
+        return circle
+    }
+
+    func joinCircle(code: String) async throws -> PlayCircle {
+        if let found = circles.first(where: { $0.code == code }) { return found }
+        throw APIError.server(status: 404, code: "not_found", message: "No Circle with that code.", source: "mock")
+    }
+
+    func leaveCircle(id: String) async throws { circles.removeAll { $0.id == id } }
 
     func getRoom(code: String) async throws -> Room {
         var room = ContractExamples.room
@@ -391,9 +458,165 @@ actor MockClient: LifelineClient {
         return room
     }
 
+    /// Simulated room: the caller is joined with 3 rivals who move one year for every `progress` the caller sends.
+    nonisolated func roomSocket(code: String) async throws -> RoomSocket {
+        MockRoomSimulator.socket(code: code, gap: streamGap)
+    }
+
+    // MARK: Account
+
+    func getMe() async throws -> Me { me }
+
+    func deleteAccount() async throws {
+        me = MockExamples.me
+        me.hasFinanceData = false
+        me.financeInputs = []
+    }
+
+    func resetDemo() async throws -> Me {
+        lives = [:]
+        planItems = []
+        guessesByDate = [:]
+        chatThreads = [:]
+        me.hasFinanceData = false
+        me.financeInputs = []
+        return me
+    }
+
+    func signOut() async throws {}
+
+    func signInWithApple(identityToken: String) async throws {
+        me.authProvider = .apple
+    }
+
+    // MARK: Onboarding inputs
+
+    func importStatement(file: Data, fileName: String, provider: String?) async throws -> ImportResult {
+        guard !file.isEmpty else {
+            throw APIError.server(status: 422, code: "validation_error", message: "The file is empty.", source: "mock")
+        }
+        var result = MockExamples.importResult
+        if let provider, let value = ImportResult.ProviderPayload(rawValue: provider) { result.provider = value }
+        markFinanceInput(.statement)
+        return result
+    }
+
+    func setManualFinance(_ input: ManualFinanceInput) async throws -> FinanceProfile {
+        markFinanceInput(.manual)
+        return data.financeProfile
+    }
+
+    func logPayment(_ request: LogPaymentRequest) async throws -> LoggedPayment {
+        var logged = MockExamples.loggedPayment
+        logged.transaction.amount = -request.amount
+        logged.transaction.merchant = request.merchant
+        logged.transaction.description = request.merchant
+        if let date = request.date { logged.transaction.date = date }
+        if let category = request.category, let value = LoggedPayment.CategoryPayload(rawValue: category.rawValue) {
+            logged.category = value
+        }
+        markFinanceInput(.appIntent)
+        return logged
+    }
+
+    func listSamples() async throws -> [SampleStatement] { MockExamples.samples }
+
+    func importSample(id: String) async throws -> ImportResult {
+        guard MockExamples.samples.contains(where: { $0.id == id }) else {
+            throw APIError.server(status: 404, code: "not_found", message: "That sample does not exist.", source: "mock")
+        }
+        markFinanceInput(.statement)
+        return MockExamples.importResult
+    }
+
+    func habits() async throws -> HabitScore { MockExamples.habits }
+
+    func reversePostcode(lat: Double, lon: Double) async throws -> ReversePostcode { MockExamples.reversePostcode }
+
+    func setHealthSignal(_ signal: HealthSignal) async throws -> HealthSignalStored {
+        var stored = MockExamples.healthSignalStored
+        stored.stepsPerDay = signal.stepsPerDay
+        stored.sleepHours = signal.sleepHours
+        stored.measuredDays = signal.measuredDays
+        return stored
+    }
+
+    // MARK: Ask Penny
+
+    func askPenny(_ request: ChatRequest) async throws -> ChatResponse {
+        let response = MockExamples.chatResponse(for: request, threadID: request.threadId ?? newThreadID(), messageNumber: nextChatNumber)
+        nextChatNumber += 2
+        store(request: request, response: response)
+        return response
+    }
+
+    /// Reaction, 2 tool steps, verifying, one bubble every `streamGap`, then done.
+    nonisolated func askPennyStream(_ request: ChatRequest) -> AsyncThrowingStream<ChatStreamEvent, any Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let response = try await self.askPenny(request)
+                    let gap = self.streamGap
+                    let start = ContinuousClock.now
+                    var seq = 0
+                    func emit(_ event: ChatStreamEvent) {
+                        var event = event
+                        event.seq = seq
+                        let elapsed = ContinuousClock.now - start
+                        event.elapsedMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+                        seq += 1
+                        continuation.yield(event)
+                    }
+                    try await Task.sleep(for: gap / 2)
+                    emit(.init(_type: .reaction, seq: 0, elapsedMs: 0, reaction: .init(rawValue: response.reaction.rawValue)))
+                    for step in MockExamples.toolSteps(for: response) {
+                        try await Task.sleep(for: gap)
+                        emit(.init(_type: .toolStep, seq: 0, elapsedMs: 0, step: step))
+                    }
+                    try await Task.sleep(for: gap)
+                    emit(.init(_type: .verifying, seq: 0, elapsedMs: 0))
+                    for bubble in response.bubbles {
+                        try await Task.sleep(for: gap)
+                        let highlights = response.highlights?.filter { $0.bubbleId == bubble.id }
+                        emit(.init(_type: .bubble, seq: 0, elapsedMs: 0, bubble: .init(bubble: bubble, highlights: highlights)))
+                    }
+                    try await Task.sleep(for: gap / 2)
+                    emit(.init(_type: .done, seq: 0, elapsedMs: 0, response: response))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    func listChatThreads() async throws -> ChatThreadsResponse {
+        guard !chatThreads.isEmpty else { return MockExamples.chatThreads }
+        let mine = chatThreads.values.sorted { $0.id > $1.id }.map { thread in
+            ChatThreadSummary(
+                id: thread.id,
+                title: thread.title,
+                updatedAt: thread.messages.last?.createdAt ?? MockExamples.now,
+                messageCount: thread.messages.count
+            )
+        }
+        return ChatThreadsResponse(threads: mine)
+    }
+
+    func getChatThread(id: String) async throws -> ChatThread {
+        if let thread = chatThreads[id] { return thread }
+        if id == MockExamples.chatThread.id { return MockExamples.chatThread }
+        throw APIError.server(status: 404, code: "not_found", message: "That chat does not exist.", source: "mock")
+    }
+
+    func listNews(from: String, to: String, topic: String?) async throws -> NewsResponse { MockExamples.news }
+
+    func getRateDecisions() async throws -> RateDecisions { MockExamples.rateDecisions }
+
     // MARK: Bank
 
-    func bankAuthLink() async throws -> BankAuthLink { ContractExamples.bankAuthLink }
+    func bankAuthLink(provider: String) async throws -> BankAuthLink { ContractExamples.bankAuthLink }
     func bankSummary(session: String) async throws -> BankSummary { ContractExamples.bankSummary }
 
     // MARK: Store
@@ -410,6 +633,55 @@ actor MockClient: LifelineClient {
     }
 
     // MARK: Helpers
+
+    /// Next event from `MockExamples.eventPool`, in order, skipping any template that fired in the last
+    /// `MockExamples.eventCooldownYears - 1` years (engine rule: not in Y+1 or Y+2). nil: no event this year.
+    private func nextEvent(lifeID: String, year: Int) -> LifeEvent? {
+        let pool = MockExamples.eventPool
+        guard !pool.isEmpty else { return nil }
+        var fired = firedEvents[lifeID] ?? [:]
+        let start = nextEventSlot[lifeID] ?? 0
+        for offset in 0..<pool.count {
+            let slot = (start + offset) % pool.count
+            let candidate = pool[slot]
+            if let last = fired[candidate.templateId], year - last < MockExamples.eventCooldownYears { continue }
+            fired[candidate.templateId] = year
+            firedEvents[lifeID] = fired
+            nextEventSlot[lifeID] = slot + 1
+            return candidate
+        }
+        return nil
+    }
+
+    private func markFinanceInput(_ input: Me.FinanceInputsPayloadPayload) {
+        me.hasFinanceData = true
+        if !me.financeInputs.contains(input) { me.financeInputs.append(input) }
+    }
+
+    private func newThreadID() -> String {
+        "th_mock\(chatThreads.count + 1)"
+    }
+
+    private func store(request: ChatRequest, response: ChatResponse) {
+        var thread = chatThreads[response.threadId]
+            ?? ChatThread(id: response.threadId, title: String(request.message.prefix(120)), messages: [])
+        thread.messages.append(ChatMessage(
+            id: response.replyTo,
+            role: .user,
+            createdAt: MockExamples.now,
+            text: request.message,
+            replyTo: request.replyTo,
+            replies: 1
+        ))
+        thread.messages.append(ChatMessage(
+            id: response.messageId,
+            role: .penny,
+            createdAt: MockExamples.now,
+            replyTo: response.replyTo,
+            response: response
+        ))
+        chatThreads[response.threadId] = thread
+    }
 
     private func stored(_ id: String) throws -> Life {
         guard let life = lives[id] else {
@@ -428,4 +700,268 @@ actor MockClient: LifelineClient {
     }
 
     private func clamp(_ value: Int) -> Int { min(100, max(0, value)) }
+}
+
+/// Contract examples for the account, onboarding and chat operations (`components.examples`).
+enum MockExamples {
+    static let now = "2026-10-17T12:00:00Z"
+
+    /// Engine rule (`lifeline_sim/params.py` EVENT_COOLDOWN_YEARS): a template that fired in year Y
+    /// cannot fire again in Y+1 or Y+2.
+    static let eventCooldownYears = 3
+
+    /// Events for AGE: the contract example first (tests rely on it), then real engine events recorded
+    /// into `Preview/Recorded/ageLife.json`, one per template.
+    static let eventPool: [LifeEvent] = {
+        var pool = [ContractExamples.event]
+        if let url = Bundle.main.url(forResource: "ageLife", withExtension: "json"),
+           let raw = try? Data(contentsOf: url),
+           let recorded = try? ContractExamples.decoder.decode(RecordedEvents.self, from: raw) {
+            for event in recorded.events where !pool.contains(where: { $0.templateId == event.templateId }) {
+                pool.append(event)
+            }
+        }
+        return pool
+    }()
+
+    private struct RecordedEvents: Decodable {
+        let events: [LifeEvent]
+    }
+
+    static let financeHomeEmpty: FinanceHome = ContractExamples.decode(#"""
+    {"has_data": false, "coming_up": [], "coming_up_more": false,
+     "connect_prompt": "Connect your money to see your next move"}
+    """#)
+
+    /// `Preview/Recorded/getFinanceHome.json` from `make ios-record-mock`, if recorded.
+    static let recordedFinanceHome: FinanceHome? = {
+        guard let url = Bundle.main.url(forResource: "getFinanceHome", withExtension: "json"),
+              let raw = try? Data(contentsOf: url) else { return nil }
+        return try? ContractExamples.decoder.decode(FinanceHome.self, from: raw)
+    }()
+
+    static let me: Me = ContractExamples.decode(#"""
+    {"id": "usr_8f3a2c", "display_name": "Priya", "auth_provider": "apple", "created_at": "2026-10-17T12:00:00Z",
+     "has_finance_data": true, "finance_inputs": ["statement"]}
+    """#)
+
+    static let importResult: ImportResult = ContractExamples.decode(#"""
+    {"import_id": "imp_1", "status": "done", "provider": "monzo", "transactions": 412,
+     "first_date": "2026-04-01", "last_date": "2026-10-16", "months_covered": 6.5, "warnings": [],
+     "stages": [
+      {"name": "read", "label": "Reading your statement", "done": true},
+      {"name": "categorise", "label": "Sorting your spending", "done": true},
+      {"name": "find_bills", "label": "Finding bills and subscriptions", "done": true},
+      {"name": "build_profile", "label": "Building your profile", "done": true},
+      {"name": "next_move", "label": "Finding your next move", "done": true}]}
+    """#)
+
+    static let manualFinance: ManualFinanceInput = ContractExamples.decode(#"""
+    {"postcode": "LS6 1AN", "housing": "mortgage", "mortgage_balance": 180000.0, "mortgage_rate_pct": 4.42,
+     "mortgage_years_left": 25, "deal_end": "2027-03-31", "property_value": 240000.0, "monthly_take_home": 2314.18,
+     "regular_costs": [{"name": "Council tax", "monthly_amount": 191.0, "category": "bills"}], "savings": 6850.0}
+    """#)
+
+    static let samples: [SampleStatement] = (ContractExamples.decode(#"""
+    {"samples": [
+     {"id": "scholarship", "title": "Scholarship student",
+      "description": "Scholarship and bursary, about £420 a month, no debt",
+      "funding": ["scholarship", "bursary"], "months": 3, "team": false},
+     {"id": "working", "title": "Working student",
+      "description": "Maintenance loan and part-time pay, uses an overdraft",
+      "funding": ["maintenance_loan", "part_time_job"], "months": 3, "team": false}]}
+    """#) as Components.Schemas.SamplesResponse).samples
+
+    static let habits: HabitScore = ContractExamples.decode(#"""
+    {"components": {"savings_rate": 72, "months_of_cover": 40, "spend_stability": 81,
+     "discretionary_share": 63, "subscription_creep": 90, "debt_pressure": 100}, "overall": 74}
+    """#)
+
+    static let reversePostcode: ReversePostcode = ContractExamples.decode(#"""
+    {"postcode": "LS6 1AN", "region": "yorkshire-and-the-humber", "town": "Leeds", "status": "live"}
+    """#)
+
+    static let healthSignalStored: HealthSignalStored = ContractExamples.decode(#"""
+    {"steps_per_day": 8200.0, "sleep_hours": 7.1, "measured_days": 30, "health_effect": 2,
+     "updated_at": "2026-10-17T12:00:00Z"}
+    """#)
+
+    static let loggedPayment: LoggedPayment = ContractExamples.decode(#"""
+    {"transaction": {"id": "tx_logged_1", "account_id": "acc_manual", "date": "2026-10-17", "amount": -4.2,
+     "currency": "GBP", "description": "Pret A Manger", "merchant": "Pret A Manger"}, "category": "eating_out"}
+    """#)
+
+    static let news: NewsResponse = ContractExamples.decode(#"""
+    {"status": "live", "items": [{"id": "n_1", "headline": "Lehman Brothers files for bankruptcy",
+     "section": "Business", "date": "2008-09-15",
+     "url": "https://www.theguardian.com/business/2008/sep/15/lehmanbrothers.creditcrunch", "source": "guardian"}]}
+    """#)
+
+    static let rateDecisions: RateDecisions = ContractExamples.decode(#"""
+    {"status": "live", "next_decision": "2026-11-05", "dates": ["2026-11-05", "2026-12-17"],
+     "source": {"source": "boe-mpc", "series_id": "mpc-dates", "status": "live"}}
+    """#)
+
+    /// `ChatAnswer` from the contract.
+    static let chatAnswer: ChatResponse = ContractExamples.decode(#"""
+    {"thread_id": "th_1", "message_id": "msg_2", "reply_to": "msg_1", "reaction": "brain",
+     "bubbles": [
+      {"id": "b1", "kind": "answer", "text": "Yes, for about 4 months. Your savings cover your bills and mortgage until April."},
+      {"id": "b2", "kind": "caveat", "text": "This assumes your bills stay the same and you spend nothing extra."},
+      {"id": "b3", "kind": "question", "text": "Do you want me to add a holiday in June?"}],
+     "highlights": [{"bubble_id": "b1", "start": 17, "length": 8, "fact_id": "f_cover", "source_id": "s_you"}],
+     "facts": [{"id": "f_cover", "value": 4.0, "unit": "months", "label": "Months of cover", "source_id": "s_you"}],
+     "sources": [
+      {"id": "s_you", "group": "your_data", "label": "Your accounts",
+       "ref": {"source": "bank", "series_id": "your-accounts", "status": "live"}, "updated_at": "2026-10-17T12:00:00Z"},
+      {"id": "s_boe", "group": "live_sources", "label": "Bank of England · live",
+       "ref": {"source": "boe", "series_id": "IUMBEDR", "status": "live"}, "updated_at": "2026-10-17T12:00:00Z"}],
+     "follow_up_question": "Do you want me to add a holiday in June?", "confidence": 0.8,
+     "tool_calls": [{"name": "cash_flow_projection", "ok": true, "duration_ms": 120}],
+     "verified": true, "summary_available": false, "links": [], "disclaimer": "Not financial advice"}
+    """#)
+
+    /// Out-of-scope reply (ADR 0031): fixed text, reaction `shrug`, link to the Next Move.
+    static let outOfScope: ChatResponse = ContractExamples.decode(#"""
+    {"thread_id": "th_1", "message_id": "msg_2", "reply_to": "msg_1", "reaction": "shrug",
+     "bubbles": [{"id": "b1", "kind": "answer", "text": "I cannot help with that. I can show you your next money move."}],
+     "highlights": [], "facts": [], "sources": [], "confidence": 1.0, "tool_calls": [],
+     "verified": true, "summary_available": false, "links": ["next_move"], "disclaimer": "Not financial advice"}
+    """#)
+
+    static let chatThreads: ChatThreadsResponse = ContractExamples.decode(#"""
+    {"threads": [{"id": "th_1", "title": "What if I lose my job?", "updated_at": "2026-10-17T12:00:00Z", "message_count": 2}]}
+    """#)
+
+    static var chatThread: ChatThread {
+        ChatThread(id: "th_1", title: "What if I lose my job?", messages: [
+            ChatMessage(id: "msg_1", role: .user, createdAt: now, text: "What if I lose my job?", replies: 1),
+            ChatMessage(id: "msg_2", role: .penny, createdAt: now, replyTo: "msg_1", response: chatAnswer),
+        ])
+    }
+
+    static let outOfScopeWords = ["stock", "shares", "bitcoin", "crypto", "lottery", "weather", "football"]
+
+    /// The contract answer, or the out-of-scope reply for an off-topic question, with fresh ids.
+    static func chatResponse(for request: ChatRequest, threadID: String, messageNumber: Int) -> ChatResponse {
+        let lower = request.message.lowercased()
+        var response = outOfScopeWords.contains(where: lower.contains) ? outOfScope : chatAnswer
+        response.threadId = threadID
+        response.replyTo = "msg_mock\(messageNumber)"
+        response.messageId = "msg_mock\(messageNumber + 1)"
+        return response
+    }
+
+    /// Two real-looking steps for a normal answer (account lookup, projection). None for out of scope.
+    static func toolSteps(for response: ChatResponse) -> [Components.Schemas.ToolStep] {
+        guard response.reaction != .shrug else { return [] }
+        return [
+            .init(tool: "finance_summary", label: "Checking your accounts…"),
+            .init(tool: "cash_flow_projection", label: "Projecting your cash…"),
+        ]
+    }
+}
+
+/// Simulated Same Life room for the mock client. 3 rivals follow the caller's progress.
+enum MockRoomSimulator {
+    static let rivals: [(id: String, name: String, factor: Double, indexShift: Double)] = [
+        ("p2", "Sam", 0.82, -4),
+        ("p3", "Jo", 1.12, 6),
+        ("p4", "Kai", 0.95, 1),
+    ]
+
+    static func socket(code: String, gap: Duration) -> RoomSocket {
+        let (stream, continuation) = AsyncStream.makeStream(of: WsServerMessage.self)
+        let state = MockRoomState(code: code)
+        return RoomSocket(
+            messages: stream,
+            send: { message in
+                for reply in await state.handle(message) {
+                    if gap > .zero { try? await Task.sleep(for: gap / 2) }
+                    continuation.yield(reply)
+                }
+                if message._type == .leave { continuation.finish() }
+            },
+            close: { continuation.finish() }
+        )
+    }
+}
+
+private actor MockRoomState {
+    private var room: Room
+    private var you: RoomPlayer?
+
+    init(code: String) {
+        var room = ContractExamples.room
+        room.code = code
+        room.mode = .group
+        room.maxPlayers = 4
+        room.joinUrl = "lifeline://join/\(code)"
+        room.players = MockRoomSimulator.rivals.map {
+            RoomPlayer(id: $0.id, name: $0.name, isHost: false, ready: true, connected: true, finished: false)
+        }
+        self.room = room
+    }
+
+    func handle(_ message: WsClientMessage) -> [WsServerMessage] {
+        switch message._type {
+        case .join:
+            let player = RoomPlayer(
+                id: message.playerId ?? "p1",
+                name: message.name ?? you?.name ?? "You",
+                isHost: true,
+                ready: false,
+                connected: true,
+                lifeId: message.lifeId,
+                finished: false
+            )
+            you = player
+            room.players.removeAll { $0.id == player.id }
+            room.players.insert(player, at: 0)
+            return [.init(_type: .welcome, you: player), .init(_type: .roster, room: room)]
+        case .ready:
+            update { $0.ready = true }
+            return [.init(_type: .roster, room: room)]
+        case .start:
+            room.status = .playing
+            return [.init(_type: .started, room: room)]
+        case .pickGame, .answer:
+            // Quiz and Same Decision run in W9's MockRoomServer; this simple simulator ignores them.
+            return []
+        case .progress:
+            update {
+                $0.age = message.age
+                $0.year = message.year
+                $0.netWorth = message.netWorth
+                $0.index = message.index
+                $0.lifeId = message.lifeId ?? $0.lifeId
+            }
+            return MockRoomSimulator.rivals.compactMap { rival in
+                guard let position = room.players.firstIndex(where: { $0.id == rival.id }) else { return nil }
+                var player = room.players[position]
+                player.age = message.age
+                player.year = message.year
+                player.netWorth = message.netWorth.map { ($0 * rival.factor).rounded() }
+                player.index = message.index.map { min(100, max(0, $0 + rival.indexShift)) }
+                room.players[position] = player
+                return .init(_type: .rival, player: player)
+            }
+        case .finish:
+            update { $0.finished = true }
+            for index in room.players.indices { room.players[index].finished = true }
+            room.status = .finished
+            return [.init(_type: .finished, room: room)]
+        case .leave:
+            return []
+        case .ping:
+            return [.init(_type: .pong)]
+        }
+    }
+
+    private func update(_ change: (inout RoomPlayer) -> Void) {
+        guard var player = you, let position = room.players.firstIndex(where: { $0.id == player.id }) else { return }
+        change(&player)
+        you = player
+        room.players[position] = player
+    }
 }

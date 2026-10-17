@@ -1,5 +1,48 @@
 import Foundation
 
+// View states for Same Life rooms (Play-Lobby, Play-Live, Play-End). Plain values, no networking (ADR 0011).
+
+/// Socket status line on room screens. Nil when the socket is live.
+struct RoomConnectionState: Equatable, Sendable {
+    enum Kind: Equatable, Sendable { case connecting, reconnecting, offline }
+    var kind: Kind
+    /// "Connecting to the room", "Reconnecting (try 2)", "Connection lost".
+    var text: String
+    /// Offline only: shows a "Reconnect" button.
+    var canRetry: Bool
+}
+
+/// Room entry (lobby first, ADR 0059): open a lobby, or join by code or QR.
+struct RoomEntryViewState: Equatable, Sendable {
+    /// A room you are in. The card reopens it.
+    struct ActiveRoom: Equatable, Sendable {
+        var code: String
+        /// "Lobby · 3 players" or "Playing · Money Quiz".
+        var detail: String
+    }
+
+    var joinCode: String
+    var canJoin: Bool
+    var canOpenLobby: Bool
+    /// "Opening your lobby" or "Joining K7Q2ZP". Disables the buttons.
+    var busyText: String?
+    /// Error from the last open or join.
+    var errorText: String?
+    var activeRoom: ActiveRoom?
+    var isSampleData: Bool
+}
+
+struct RoomEntryActions {
+    var onOpenLobby: @MainActor () -> Void = {}
+    var onJoinCodeChange: @MainActor (String) -> Void = { _ in }
+    var onJoin: @MainActor () -> Void = {}
+    var onScan: @MainActor () -> Void = {}
+    var onOpenActiveRoom: @MainActor () -> Void = {}
+
+    static var noop: Self { .init() }
+}
+
+/// Room lobby (Play-Lobby): code, QR, share link, players with ready state, host Start.
 struct RoomLobbyViewState: Equatable, Sendable {
     struct Player: Equatable, Sendable, Identifiable {
         var id: String
@@ -8,9 +51,10 @@ struct RoomLobbyViewState: Equatable, Sendable {
         var isMe: Bool
         /// `LLIcon` raw value of the player's face.
         var face: String = "face-teen"
-        /// "Ready" or "Joining…".
+        /// "Ready", "Not ready", "Joining…" or "Away".
         var statusText: String = "Ready"
         var isReady: Bool = true
+        var isConnected: Bool = true
     }
 
     struct RoomInfo: Equatable, Sendable {
@@ -18,7 +62,7 @@ struct RoomLobbyViewState: Equatable, Sendable {
         var code: String
         var modeLabel: String
         var joinURL: String
-        /// QR code PNG from the backend.
+        /// QR code PNG: from the backend, or drawn from the join link when the backend image does not decode.
         var qrPNG: Data?
         var players: [Player]
         var maxPlayers: Int
@@ -27,23 +71,44 @@ struct RoomLobbyViewState: Equatable, Sendable {
     }
 
     var phase: LoadPhase
-    /// Nil before a room exists: the View shows create and join.
+    /// Nil before a room exists.
     var room: RoomInfo?
     var joinCode: String
     var canJoin: Bool
     var isHost: Bool
     var canStart: Bool
-    /// "Everyone plays the same life" card. Empty without demo data.
+    /// "Everyone plays the same life" card. Empty hides it.
     var lifeFace: String = "face-priya"
-    /// "Priya, 29, nurse, Leeds. Sep 2021 to Sep 2031. Same events. Your own pace."
+    /// "Amira, 29, nurse, Leeds. Starts in 2021. Same events. Your own pace."
     var lifeLine: String = ""
-    /// "10 years · 2 rewinds each · real rates to 2026".
+    /// "Group · up to 6 players · same events for everyone".
     var rulesLine: String = ""
     /// "Players · 4 of 6".
     var playersTitle: String = ""
     /// "Start with 4 players".
     var startTitle: String = "Start"
     var isSampleData: Bool = false
+    /// Socket status. Nil when live.
+    var connection: RoomConnectionState? = nil
+    /// Shows the "I'm ready" button.
+    var canReady: Bool = false
+    var isMeReady: Bool = false
+    /// "Waiting for Ava to start" for players who are not the host.
+    var waitingText: String = ""
+    /// Share sheet text with the link.
+    var shareText: String = ""
+    /// The game the host picked. Nil until then.
+    var game: RoomGameCard? = nil
+    /// Host only: shows "Pick a game" (or "Change game").
+    var canPickGame: Bool = false
+}
+
+/// The picked game in the lobby: "Money Quiz · 8 questions · mixed topics".
+struct RoomGameCard: Equatable, Sendable {
+    var title: String
+    var detail: String
+    /// `LLIcon` raw value.
+    var icon: String
 }
 
 struct RoomLobbyActions {
@@ -52,11 +117,14 @@ struct RoomLobbyActions {
     var onJoin: @MainActor () -> Void = {}
     var onStart: @MainActor () -> Void = {}
     var onLeave: @MainActor () -> Void = {}
+    var onReady: @MainActor () -> Void = {}
+    var onReconnect: @MainActor () -> Void = {}
+    var onPickGame: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }
 
-/// Live room: the shared life with the rival strip on top (Play-Live).
+/// Live room (Play-Live): your life with the rival strip on top.
 struct RoomLiveViewState: Equatable, Sendable {
     struct Stat: Equatable, Sendable, Identifiable {
         var id: String
@@ -66,32 +134,60 @@ struct RoomLiveViewState: Equatable, Sendable {
         var value: Int
     }
 
+    /// The open event of your life. You answer it here or in the Life tab.
+    struct Event: Equatable, Sendable {
+        struct Choice: Equatable, Sendable, Identifiable {
+            var id: String
+            var label: String
+        }
+
+        var id: String
+        var title: String
+        var text: String
+        var choices: [Choice]
+    }
+
     var name: String
     var face: String
     /// "Age 31 · Room LEEDS4".
     var detail: String
     var bank: Double
     var rivals: RivalStripViewState
-    /// "Age · INDEX. Ava: Fixed for 5 years in 2021. Tom: Used a rewind."
+    /// "Age · INDEX. Ava: Fixed for 5 years in 2021."
     var rivalCaption: String
     /// "2023 · Age 31".
     var storyTitle: String
     var storyLines: [String]
-    /// "Lesson: Rate shock".
+    /// "Lesson: Rate shock". Empty hides the lesson row.
     var lessonTitle: String
     var stats: [Stat]
     var isSampleData: Bool
+    var connection: RoomConnectionState? = nil
+    var event: Event? = nil
+    /// "Age up to 32". Nil hides the button (event open, life over, or no life yet).
+    var ageTitle: String? = nil
+    var isBusy: Bool = false
+    /// "Starting your life" while the shared life loads.
+    var waitingText: String? = nil
+    var canFinish: Bool = true
+    /// Shows "Open in Life tab".
+    var canOpenLife: Bool = false
 }
 
 struct RoomLiveActions {
     var onOpenLesson: @MainActor () -> Void = {}
     var onFinish: @MainActor () -> Void = {}
     var onLeave: @MainActor () -> Void = {}
+    var onAge: @MainActor () -> Void = {}
+    /// Event id, choice id.
+    var onChoose: @MainActor (String, String) -> Void = { _, _ in }
+    var onOpenLife: @MainActor () -> Void = {}
+    var onReconnect: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }
 
-/// Live rival strip shown above the Life screen in a room.
+/// Live rival strip: one tile per player.
 struct RivalStripViewState: Equatable, Sendable {
     struct Rival: Equatable, Sendable, Identifiable {
         var id: String
@@ -102,12 +198,13 @@ struct RivalStripViewState: Equatable, Sendable {
         var isMe: Bool
         var finished: Bool
         var face: String = "face-teen"
+        var isConnected: Bool = true
     }
 
     var rivals: [Rival]
 }
 
-/// End of a room: everyone's result, and where the lives split.
+/// End of a room (Play-End): ranking by INDEX, net worth, ribbons, and where the lives split.
 struct RoomResultViewState: Equatable, Sendable {
     struct Row: Equatable, Sendable, Identifiable {
         var id: String
@@ -118,7 +215,12 @@ struct RoomResultViewState: Equatable, Sendable {
         var ribbons: Int
         var isMe: Bool
         var face: String = "face-teen"
+        /// Extra text, for example "Still playing". Finished rows show the net worth instead.
         var note: String = ""
+        /// False while the player still plays. The row then shows "Still playing".
+        var finished: Bool = true
+        /// False when the player's ribbons are not known.
+        var ribbonsKnown: Bool = true
     }
 
     struct Split: Equatable, Sendable, Identifiable {
@@ -138,16 +240,48 @@ struct RoomResultViewState: Equatable, Sendable {
     /// "Ava · INDEX 131".
     var winnerLine: String = ""
     var winnerNote: String = ""
+    /// Winner's net worth. The View formats it, so presentation mode can round it.
+    var winnerNetWorth: Double? = nil
     /// Earned items: `LLIcon` raw value and text.
     var earned: [RoomDemo.Earned] = []
     var shareText: String = ""
     var isSampleData: Bool = false
+    /// "2 players still playing". Empty when everyone finished.
+    var pendingText: String = ""
+    /// Shown instead of splits when other lives are not available.
+    var splitsNote: String = ""
+    /// Quick Life summary card (habit score). Nil for a full Same Life.
+    var quickLife: QuickLifeCardState? = nil
+    var connection: RoomConnectionState? = nil
 }
 
 struct RoomResultActions {
     /// "Rematch".
     var onPlayAgain: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
+
+    static var noop: Self { .init() }
+}
+
+/// QR scanner screen.
+struct RoomScannerViewState: Equatable, Sendable {
+    enum Status: Equatable, Sendable {
+        case asking
+        case scanning
+        /// No camera, no permission, or no usage text in Info.plist.
+        case unavailable(String)
+    }
+
+    var status: Status
+    /// "That QR code is not a Lifeline room." after a bad scan.
+    var hint: String?
+}
+
+struct RoomScannerActions {
+    var onScanned: @MainActor (String) -> Void = { _ in }
+    var onClose: @MainActor () -> Void = {}
+    /// "Type a code instead".
+    var onTypeCode: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }

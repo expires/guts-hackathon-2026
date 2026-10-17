@@ -4,6 +4,7 @@ import SwiftUI
 struct BankConnectView: View {
     let state: BankConnectViewState
     var actions: BankConnectActions = .noop
+    @Environment(\.llPresentationMode) private var presentation
 
     var body: some View {
         ScrollView {
@@ -35,8 +36,8 @@ struct BankConnectView: View {
                                     DemoDataBadge()
                                 }
                                 row("Accounts", "\(summary.accounts)")
-                                row("Pay per year", Money.format(summary.annualIncome))
-                                row("Savings", Money.format(summary.savings))
+                                row("Pay per year", summary.annualIncome.formatted(.llAmount(presentation: presentation)))
+                                row("Savings", summary.savings.formatted(.llAmount(presentation: presentation)))
                                 row("Home", summary.housingLabel)
                                 row("Region", summary.regionLabel)
                             }

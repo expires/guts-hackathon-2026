@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 
-// Minimal ViewModels created by W6 in the ADR 0011 restructure. W7 owns and extends them
-// (WebSocket roster, progress, finish).
+// Legacy room ViewModels (W6, W7). Kept so W6 fixtures, the Playground and W6/W7 tests compile.
+// The W9 room flow uses RoomFlowViewModel, RoomSession and RoomMapping instead.
 
 /// "Same Life" room lobby: create or join, share the code, wait for players.
 @MainActor
@@ -93,10 +93,10 @@ final class RoomLobbyViewModel {
                 isReady: ready
             )
         }
-        let startAge = room.startYear - demo.birthYear
-        let endYear = room.startYear + demo.years
+        let startAge = room.gameStartYear - demo.birthYear
+        let endYear = room.gameStartYear + demo.years
         state.lifeLine = "\(demo.shortName), \(startAge), \(demo.occupation), \(demo.town). "
-            + "Sep \(room.startYear) to Sep \(endYear). Same events. Your own pace."
+            + "Sep \(room.gameStartYear) to Sep \(endYear). Same events. Your own pace."
         state.rulesLine = "\(demo.years) years · \(demo.rewindsEach) rewinds each · real rates to \(demo.realRatesUntil)"
         state.playersTitle = "Players · \(room.players.count) of \(room.maxPlayers)"
         let ready = room.players.filter { $0.lifeId != nil }.count
@@ -125,7 +125,7 @@ final class RoomLobbyViewModel {
                 players: room.players.map { .init(id: $0.id, name: $0.name, isHost: $0.isHost, isMe: $0.name == myName) },
                 maxPlayers: room.maxPlayers,
                 statusLabel: room.status == .lobby ? "Waiting for players" : room.status.rawValue.capitalized,
-                startYear: room.startYear
+                startYear: room.gameStartYear
             )
         }
         return RoomLobbyViewState(
@@ -245,7 +245,7 @@ final class RoomResultViewModel {
             )
         }
         let winner = rows.first
-        let endYear = room.startYear + demo.years
+        let endYear = room.gameStartYear + demo.years
         let winnerLine = winner.map { "\($0.name) · INDEX \(Int($0.index.rounded()))" } ?? ""
         let me = rows.first { $0.isMe }
         let share = [
@@ -256,7 +256,7 @@ final class RoomResultViewModel {
             rows: rows,
             splits: [],
             winnerName: winner?.name ?? "",
-            subtitle: "\(room.code) · Sep \(room.startYear) to Sep \(endYear)",
+            subtitle: "\(room.code) · Sep \(room.gameStartYear) to Sep \(endYear)",
             winnerLine: winnerLine,
             winnerNote: winner?.note ?? "",
             earned: demo.earned,

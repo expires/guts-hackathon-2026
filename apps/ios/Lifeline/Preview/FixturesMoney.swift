@@ -1,43 +1,76 @@
 import Foundation
 
 // Fixtures for the Money, Play and You tabs and the Life menu (ADR 0016, 0017, 0018).
-// Built from the contract examples through the ViewModels' own mapping code.
+// Built from the recorded engine output (`PreviewData`) through the ViewModels' own mapping code.
+/// Data for previews and the Playground: the recorded engine output for the demo persona
+/// (`Preview/Recorded`, real numbers), with contract examples only where no file was recorded.
+enum PreviewData {
+    static var data: MockData { MockData.recorded }
+    static var nextMove: NextMoveResponse { data.nextMove }
+    static var financeOverview: FinanceOverview { data.financeOverview }
+    static var spending: SpendingResponse { data.spending }
+    static var subscriptions: SubscriptionsResponse { data.subscriptions }
+    static var bills: BillsResponse { data.bills }
+    static var budgets: BudgetsResponse { data.budgets }
+    static var goals: GoalsResponse { data.goals }
+    static var financeProfile: FinanceProfile { data.financeProfile }
+    static var spendPrediction: SpendPrediction { data.spendPrediction }
+    static var spendPredictionBeforeGuess: SpendPrediction { data.spendPredictionBeforeGuess }
+    static var guesses: GuessesResponse { data.guesses }
+    static var predictionEvaluation: PredictionEvaluation { data.predictionEvaluation }
+
+    /// A plan with the recorded top move in it (the recorded plan is empty).
+    static var plan: PlanResponse {
+        let move = nextMove.top
+        let item = PlanItem(
+            id: "pl_1",
+            moveId: move.id,
+            kind: PlanItem.KindPayload(rawValue: move.kind.rawValue) ?? .fixMortgage,
+            action: move.action,
+            impactPerYear: move.impactPerYear,
+            addedAt: ContractExamples.planItem.addedAt,
+            status: .todo
+        )
+        return PlanResponse(items: [item], totalImpactPerYear: item.impactPerYear)
+    }
+}
+
 @MainActor
 extension Fixtures {
-    static var allMoves: [Move] { [ContractExamples.nextMove.top] + ContractExamples.nextMove.runnersUp }
+    static var allMoves: [Move] { [PreviewData.nextMove.top] + PreviewData.nextMove.runnersUp }
 
     // MARK: Next Move card
 
     @MainActor
     enum NextMove {
         static var ready: NextMoveCardState {
-            NextMoveViewModel.makeState(response: ContractExamples.nextMove, phase: .ready)
+            NextMoveViewModel.makeState(response: PreviewData.nextMove, phase: .ready)
         }
 
         static var inPlan: NextMoveCardState {
             NextMoveViewModel.makeState(
-                response: ContractExamples.nextMove, phase: .ready,
-                plannedMoveIDs: [ContractExamples.plan.items[0].moveId],
-                planTotal: ContractExamples.plan.totalImpactPerYear
+                response: PreviewData.nextMove, phase: .ready,
+                plannedMoveIDs: [PreviewData.plan.items[0].moveId],
+                planTotal: PreviewData.plan.totalImpactPerYear
             )
         }
 
         static var adding: NextMoveCardState {
             var state = ready
-            state.addingMoveID = ContractExamples.nextMove.top.id
+            state.addingMoveID = PreviewData.nextMove.top.id
             return state
         }
 
         /// A widget link focused the subscriptions runner-up.
         static var focusedRunnerUp: NextMoveCardState {
             var state = ready
-            state.focusedMoveID = ContractExamples.nextMove.runnersUp.first?.id
+            state.focusedMoveID = PreviewData.nextMove.runnersUp.first?.id
             return state
         }
 
         /// Live data, no deadline, not testable.
         static var liveUntestable: NextMoveCardState {
-            var response = ContractExamples.nextMove
+            var response = PreviewData.nextMove
             response.meta.dataStatus = .live
             response.meta.label = nil
             response.top = response.runnersUp[0]
@@ -62,7 +95,7 @@ extension Fixtures {
         /// Mortgage move whose concept has no lesson (state for a concept the API does not know).
         static var noLesson: NextMoveWhyViewState {
             var state = NextMoveWhyViewModel.makeState(
-                move: ContractExamples.nextMove.top, lesson: nil, lessonPhase: .ready, isSampleData: true
+                move: PreviewData.nextMove.top, lesson: nil, lessonPhase: .ready, isSampleData: true
             )
             state.hasDecisionDetail = true
             return state
@@ -70,8 +103,8 @@ extension Fixtures {
 
         /// Mortgage move with the contract "fixed-vs-variable" lesson, rate bars and the decision link.
         static var mortgage: NextMoveWhyViewState {
-            let move = ContractExamples.nextMove.top
-            let lesson = ContractExamples.concepts.first { $0.id == move.conceptId }?.lesson
+            let move = PreviewData.nextMove.top
+            let lesson = PreviewData.data.concepts.first { $0.id == move.conceptId }?.lesson
             var state = NextMoveWhyViewModel.makeState(move: move, lesson: lesson, lessonPhase: .ready, isSampleData: true)
             state.hasDecisionDetail = true
             return state
@@ -79,10 +112,10 @@ extension Fixtures {
 
         /// Subscriptions move with the contract "subscriptions" lesson and its personal sentence.
         static var withLesson: NextMoveWhyViewState {
-            let move = ContractExamples.nextMove.runnersUp[0]
-            var lesson = ContractExamples.concepts.first { $0.id == move.conceptId }?.lesson ?? ContractExamples.lesson
+            let move = PreviewData.nextMove.runnersUp[0]
+            var lesson = PreviewData.data.concepts.first { $0.id == move.conceptId }?.lesson ?? ContractExamples.lesson
             if lesson.personal == nil {
-                lesson.personal = ContractExamples.financeProfile.personalFacts.first { $0.conceptId == move.conceptId }?.text
+                lesson.personal = PreviewData.financeProfile.personalFacts.first { $0.conceptId == move.conceptId }?.text
             }
             return NextMoveWhyViewModel.makeState(
                 move: move, lesson: lesson, lessonPhase: .ready, isSampleData: true
@@ -91,14 +124,14 @@ extension Fixtures {
 
         static var loadingLesson: NextMoveWhyViewState {
             NextMoveWhyViewModel.makeState(
-                move: ContractExamples.nextMove.top, lesson: nil,
+                move: PreviewData.nextMove.top, lesson: nil,
                 lessonPhase: .loading(.init(message: NextMoveWhyViewModel.loadingMessage)), isSampleData: true
             )
         }
 
         static var lessonError: NextMoveWhyViewState {
             NextMoveWhyViewModel.makeState(
-                move: ContractExamples.nextMove.top, lesson: nil, lessonPhase: .failed(Fixtures.networkError), isSampleData: true
+                move: PreviewData.nextMove.top, lesson: nil, lessonPhase: .failed(Fixtures.networkError), isSampleData: true
             )
         }
     }
@@ -108,7 +141,7 @@ extension Fixtures {
     @MainActor
     enum Plan {
         static var oneItem: PlanViewState {
-            PlanViewModel.makeState(plan: ContractExamples.plan, phase: .ready, isSampleData: true)
+            PlanViewModel.makeState(plan: PreviewData.plan, phase: .ready, isSampleData: true)
         }
 
         static var empty: PlanViewState {
@@ -130,12 +163,12 @@ extension Fixtures {
     enum Widgets {
         static var ready: MoneyWidgetsViewState {
             MoneyWidgetsViewModel.makeState(
-                overview: .success(ContractExamples.financeOverview),
-                spending: .success(ContractExamples.spending),
-                subscriptions: .success(ContractExamples.subscriptions),
-                bills: .success(ContractExamples.bills),
-                budgets: .success(ContractExamples.budgets),
-                goals: .success(ContractExamples.goals),
+                overview: .success(PreviewData.financeOverview),
+                spending: .success(PreviewData.spending),
+                subscriptions: .success(PreviewData.subscriptions),
+                bills: .success(PreviewData.bills),
+                budgets: .success(PreviewData.budgets),
+                goals: .success(PreviewData.goals),
                 moves: Fixtures.allMoves
             )
         }
@@ -150,31 +183,31 @@ extension Fixtures {
         static var partialError: MoneyWidgetsViewState {
             MoneyWidgetsViewModel.makeState(
                 overview: .failure(.network),
-                spending: .success(ContractExamples.spending),
-                subscriptions: .success(ContractExamples.subscriptions),
-                bills: .success(ContractExamples.bills),
+                spending: .success(PreviewData.spending),
+                subscriptions: .success(PreviewData.subscriptions),
+                bills: .success(PreviewData.bills),
                 budgets: .failure(.server(status: 501, code: "not_implemented", message: "Not built yet.", source: "api")),
-                goals: .success(ContractExamples.goals),
+                goals: .success(PreviewData.goals),
                 moves: Fixtures.allMoves
             )
         }
 
         /// Empty lists (new account).
         static var empty: MoneyWidgetsViewState {
-            var subscriptions = ContractExamples.subscriptions
+            var subscriptions = PreviewData.subscriptions
             subscriptions.items = []
             subscriptions.count = 0
             subscriptions.monthlyTotal = 0
-            var bills = ContractExamples.bills
+            var bills = PreviewData.bills
             bills.items = []
             bills.totalNext30Days = 0
-            var budgets = ContractExamples.budgets
+            var budgets = PreviewData.budgets
             budgets.items = []
-            var goals = ContractExamples.goals
+            var goals = PreviewData.goals
             goals.items = []
             return MoneyWidgetsViewModel.makeState(
-                overview: .success(ContractExamples.financeOverview),
-                spending: .success(ContractExamples.spending),
+                overview: .success(PreviewData.financeOverview),
+                spending: .success(PreviewData.spending),
                 subscriptions: .success(subscriptions),
                 bills: .success(bills),
                 budgets: .success(budgets),
@@ -188,29 +221,29 @@ extension Fixtures {
 
     @MainActor
     enum Guess {
-        private static var guessesHistory: GuessesResponse { ContractExamples.guesses }
-        private static var today: String { ContractExamples.spendPrediction.date }
+        private static var guessesHistory: GuessesResponse { PreviewData.guesses }
+        private static var today: String { PreviewData.spendPrediction.date }
         private static var link: MoveLinkState? { MoneyWidgetsViewModel.moveLink(for: .guess, moves: Fixtures.allMoves) }
 
         /// No guess yet: no prediction in the state.
         static var beforeGuess: GuessSpendViewState {
             GuessSpendViewModel.makeState(
-                prediction: ContractExamples.spendPredictionBeforeGuess, guesses: guessesHistory, phase: .ready, today: today, moveLink: link
+                prediction: PreviewData.spendPredictionBeforeGuess, guesses: guessesHistory, phase: .ready, today: today, moveLink: link
             )
         }
 
         /// Guess made today (the contract example): prediction, range and reasons shown.
         static var revealed: GuessSpendViewState {
             GuessSpendViewModel.makeState(
-                prediction: ContractExamples.spendPrediction, guesses: guessesHistory, phase: .ready, today: today, moveLink: link
+                prediction: PreviewData.spendPrediction, guesses: guessesHistory, phase: .ready, today: today, moveLink: link
             )
         }
 
         /// A past day with its actual, points and beat-the-model.
         static var pastDay: GuessSpendViewState {
             let past = guessesHistory.items[0]
-            let backtest = ContractExamples.predictionEvaluation.days[0]
-            var prediction = ContractExamples.spendPredictionBeforeGuess
+            let backtest = PreviewData.predictionEvaluation.days[0]
+            var prediction = PreviewData.spendPredictionBeforeGuess
             prediction.date = past.date
             prediction.predicted = past.predicted
             prediction.low = backtest.low
@@ -249,7 +282,7 @@ extension Fixtures {
     @MainActor
     enum SpendAccuracy {
         static var ready: SpendAccuracyViewState {
-            SpendAccuracyViewModel.makeState(evaluation: ContractExamples.predictionEvaluation, phase: .ready)
+            SpendAccuracyViewModel.makeState(evaluation: PreviewData.predictionEvaluation, phase: .ready)
         }
 
         static var loading: SpendAccuracyViewState {
@@ -268,27 +301,59 @@ extension Fixtures {
         /// Header and payday from the contract examples (morning greeting, profile emoji, days to payday).
         static var header: MoneyHomeViewState.Header {
             MoneyHomeViewModel.header(
-                profile: ContractExamples.financeProfile,
-                now: FinanceMapping.date(ContractExamples.spendPrediction.date)!.addingTimeInterval(9 * 3600)
+                profile: PreviewData.financeProfile,
+                now: FinanceMapping.date(PreviewData.spendPrediction.date)!.addingTimeInterval(9 * 3600)
             )
         }
 
-        static var payday: String? { ContractExamples.spendPrediction.daysToPayday.map(MoneyHomeViewModel.paydayText) }
+        static var payday: String? { PreviewData.spendPrediction.daysToPayday.map(MoneyHomeViewModel.paydayText) }
+
+        /// Tiles and Coming up from the recorded data (the same numbers `GET /v1/finance/home` returns).
+        private static func withMoney(_ state: MoneyHomeViewState) -> MoneyHomeViewState {
+            var state = state
+            state.content = .ready
+            state.tiles = .init(balance: PreviewData.financeOverview.balance, netWorth: PreviewData.financeOverview.netWorth)
+            state.comingUp = PreviewData.bills.items.prefix(3).map(MoneyWidgetsViewModel.bill)
+            state.comingUpMore = PreviewData.bills.items.count > 3
+            state.homeIsSampleData = FinanceMapping.isSample(PreviewData.financeOverview.meta)
+            return state
+        }
 
         static var ready: MoneyHomeViewState {
-            .init(header: header, paydayText: payday, nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess)
+            withMoney(.init(header: header, paydayText: payday, nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess))
         }
 
         static var revealed: MoneyHomeViewState {
-            .init(header: header, paydayText: payday, nextMove: NextMove.inPlan, widgets: Widgets.ready, guess: Guess.revealed)
+            withMoney(.init(header: header, paydayText: payday, nextMove: NextMove.inPlan, widgets: Widgets.ready, guess: Guess.revealed))
         }
 
         static var loading: MoneyHomeViewState {
-            .init(nextMove: NextMove.loading, widgets: Widgets.loading, guess: Guess.loading)
+            var state = MoneyHomeViewState(nextMove: NextMove.loading, widgets: Widgets.loading, guess: Guess.loading)
+            state.content = .loading(.standard)
+            return state
         }
 
         static var offline: MoneyHomeViewState {
-            .init(nextMove: NextMove.error, widgets: Widgets.partialError, guess: Guess.error)
+            var state = MoneyHomeViewState(nextMove: NextMove.error, widgets: Widgets.partialError, guess: Guess.error)
+            state.content = .failed(Fixtures.networkError)
+            return state
+        }
+
+        /// `has_data` false: one card, "Connect your money".
+        static var noData: MoneyHomeViewState {
+            var state = MoneyHomeViewState(
+                header: MoneyHomeViewModel.header(profile: nil, now: FinanceMapping.date(PreviewData.spendPrediction.date)!.addingTimeInterval(9 * 3600)),
+                nextMove: NextMove.loading, widgets: Widgets.loading, guess: Guess.loading
+            )
+            state.content = .connect(prompt: MoneyHomeViewModel.connectPrompt)
+            return state
+        }
+
+        /// Rate limited after the client's quiet retry: calm text, pull to refresh.
+        static var rateLimited: MoneyHomeViewState {
+            var state = MoneyHomeViewState(nextMove: NextMove.loading, widgets: Widgets.loading, guess: Guess.loading)
+            state.content = .failed(.from(.server(status: 429, code: "rate_limited", message: "Too many requests", source: "api")))
+            return state
         }
     }
 
@@ -331,11 +396,11 @@ extension Fixtures {
     @MainActor
     enum You {
         static var ready: YouViewState {
-            YouViewModel.makeState(profile: ContractExamples.financeProfile, phase: .ready, clientKind: .mock, isDebugBuild: true)
+            YouViewModel.makeState(profile: PreviewData.financeProfile, phase: .ready, clientKind: .mock, isDebugBuild: true)
         }
 
         static var release: YouViewState {
-            YouViewModel.makeState(profile: ContractExamples.financeProfile, phase: .ready, clientKind: .live, isDebugBuild: false)
+            YouViewModel.makeState(profile: PreviewData.financeProfile, phase: .ready, clientKind: .live, isDebugBuild: false)
         }
 
         static var loading: YouViewState {

@@ -3,7 +3,7 @@ import SwiftUI
 /// Sheets the Money tab can open.
 enum MoneyHomeSheet: Identifiable {
     case testIt(moveID: String)
-    case why(Move, isSampleData: Bool)
+    case why(Move, isSampleData: Bool, atSources: Bool = false)
     case plan
     case accuracy
     case guess
@@ -11,7 +11,7 @@ enum MoneyHomeSheet: Identifiable {
     var id: String {
         switch self {
         case let .testIt(moveID): "testIt.\(moveID)"
-        case let .why(move, _): "why.\(move.id)"
+        case let .why(move, _, atSources): "why.\(move.id).\(atSources)"
         case .plan: "plan"
         case .accuracy: "accuracy"
         case .guess: "guess"
@@ -36,6 +36,9 @@ struct MoneyHomeScreen: View {
     @State private var model: MoneyHomeViewModel
     @State private var sheet: MoneyHomeSheet?
     @State private var detail: MoneyDetail?
+    @Environment(\.appRoutes) private var routes
+    /// Bumped by the root after onboarding, sign-out or account deletion.
+    @Environment(\.appDataVersion) private var dataVersion
 
     init(client: any LifelineClient, onOpenLife: @escaping @MainActor (String) -> Void) {
         self.client = client
@@ -45,27 +48,51 @@ struct MoneyHomeScreen: View {
 
     var body: some View {
         MoneyHomeView(state: model.state, actions: model.actions)
-            .onAppear { wireRoutes() }
+            .onAppear {
+                wireRoutes()
+                Task { await model.reloadIfNeeded() }
+            }
             .task { await model.loadIfNeeded() }
+            .onChange(of: dataVersion) { Task { await model.load() } }
             // Test it and Guess my spend are full screens with their own header. The rest are sheets.
             .llCover(item: $sheet.only(\.isFullScreen)) { sheet in
-                content(for: sheet)
+                content(for: sheet).environment(\.dataBadgeText, model.state.badgeText)
             }
-            .llSheet(item: $sheet.only { !$0.isFullScreen }) { sheet in
-                content(for: sheet)
+            // Each presenter sits on its own view, so the two full-screen covers never share one host.
+            .background {
+                Color.clear.llSheet(item: $sheet.only { !$0.isFullScreen }) { sheet in
+                    content(for: sheet).environment(\.dataBadgeText, model.state.badgeText)
+                }
             }
             .navigationDestination(item: $detail) { detail in
-                MoneyDetailsView(state: model.widgets.state, detail: detail, actions: model.widgets.actions) { self.detail = nil }
+                MoneyDetailsView(
+                    state: model.widgets.state, detail: detail, actions: model.widgets.actions,
+                    nextMoveLink: MoneyWidgetsViewModel.topMoveLink(moves: model.nextMove.moves)
+                ) { self.detail = nil }
+                .environment(\.dataBadgeText, model.state.badgeText)
             }
+            // Last, so the sheets, covers and detail screens above all read the badge text (F2-1).
+            .environment(\.dataBadgeText, model.state.badgeText)
     }
 
     private func wireRoutes() {
         model.nextMove.onTestIt = { present(.testIt(moveID: $0)) }
         model.nextMove.onWhy = { [model] move in present(.why(move, isSampleData: model.nextMove.state.isSampleData)) }
+        model.nextMove.onWhySources = { [model] move in present(.why(move, isSampleData: model.nextMove.state.isSampleData, atSources: true)) }
         model.nextMove.onOpenPlan = { present(.plan) }
         model.guess.onOpenAccuracy = { present(.accuracy) }
         model.onOpenGuess = { present(.guess) }
         model.onOpenDetail = { detail = $0 }
+        // "Your next move" from Guess my spend: close it and show the top move on the hub.
+        model.guess.onShowMove = { [model] _ in
+            sheet = nil
+            model.nextMove.focus(nil)
+        }
+        let routes = self.routes
+        model.onConnectMoney = { routes.openConnectMoney() }
+        model.onAskPenny = { moveID in
+            routes.askPenny(moveID.map { PennyRoute(screen: .nextMove, nextMoveID: $0, question: "Why this move?") } ?? PennyRoute(screen: .money))
+        }
     }
 
     /// Shows `next`. When another sheet is open, closes it first and waits for its exit animation,
@@ -93,8 +120,8 @@ struct MoneyHomeScreen: View {
             }, onClose: close, onDoThis: { id in
                 Task { await model.nextMove.addToPlan(moveID: id) }
             })
-        case let .why(move, isSampleData):
-            NextMoveWhyScreen(client: client, move: move, isSampleData: isSampleData, onTestIt: { id in
+        case let .why(move, isSampleData, atSources):
+            NextMoveWhyScreen(client: client, move: move, isSampleData: isSampleData, scrollToSources: atSources, onTestIt: { id in
                 present(.testIt(moveID: id))
             }, onClose: close)
         case .plan:

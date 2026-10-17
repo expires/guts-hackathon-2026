@@ -81,7 +81,7 @@ final class NextMoveWhyViewModel {
     // MARK: Mapping (pure, used by fixtures and tests)
 
     static func makeState(move: Move, lesson: Lesson?, lessonPhase: LoadPhase, isSampleData: Bool) -> NextMoveWhyViewState {
-        NextMoveWhyViewState(
+        var state = NextMoveWhyViewState(
             action: move.action,
             headline: move.headline,
             confidenceLabel: move.confidenceLabel,
@@ -93,11 +93,18 @@ final class NextMoveWhyViewModel {
             lesson: lesson.map { .init(title: $0.title, sentences: $0.sentences, personal: $0.personal) },
             isSampleData: isSampleData,
             confidence: move.confidence,
-            confidenceChip: String(NextMoveViewModel.confidenceWord(move.confidence).split(separator: " ").first ?? ""),
-            worstCaseText: "Worst past period: " + NextMoveViewModel.impactText(move.worstCasePerYear),
+            // Same level as the card (the engine's confidence_level), so Why? and the card agree.
+            confidenceChip: String(NextMoveViewModel.move(move, isInPlan: false).confidenceWord.split(separator: " ").first ?? ""),
+            worstCaseText: NextMoveViewModel.isYearly(move) ? "Worst past period: " + NextMoveViewModel.impactText(move.worstCasePerYear) : "",
             rates: rates(move),
-            ratesSourceText: sourcesLine(move.sources + move.evidence.compactMap(\.source))
+            ratesSourceText: sourcesLine(move.sources + move.evidence.compactMap(\.source) + (move.tradeOff?.points.compactMap(\.source) ?? []))
         )
+        state.sourceSentences = sourceSentences(move)
+        state.tradeOffSummary = move.tradeOff?.summary
+        state.tradeOff = (move.tradeOff?.points ?? []).enumerated().map { offset, point in
+            .init(id: 100 + offset, text: point.text, source: point.source.map(StateMapping.sourceChip))
+        }
+        return state
     }
 
     /// Rate bars from evidence facts: `rate_<option id>` (for example `rate_5y`, `rate_tracker`) and `<option id>_pct`.
@@ -132,19 +139,52 @@ final class NextMoveWhyViewModel {
         return bars.map { var bar = $0; bar.fraction = top > 0 ? bar.value / top : 0; return bar }
     }
 
+    static let combiningSentence = "Together: the move weighs all of these at once, which is better than any one source alone."
+
+    /// One sentence per key source (the first sentence of its first evidence point), at most 3,
+    /// then the combining sentence. Empty when no evidence point names a source.
+    static func sourceSentences(_ move: Move) -> [String] {
+        var seen: [String] = []
+        var lines: [String] = []
+        for point in move.evidence {
+            guard let ref = point.source else { continue }
+            let name = StateMapping.sourceName(ref.source)
+            guard !seen.contains(name), lines.count < 3 else { continue }
+            seen.append(name)
+            lines.append("\(name): \(firstSentence(point.text))")
+        }
+        guard !lines.isEmpty else { return [] }
+        return lines + [combiningSentence]
+    }
+
+    /// "Your 4.42% fixed rate finishes in 165 days." from a longer text. Keeps decimals like "4.42".
+    static func firstSentence(_ text: String) -> String {
+        if let range = text.range(of: ". ") {
+            return String(text[..<range.lowerBound]) + "."
+        }
+        return text.hasSuffix(".") ? text : text + "."
+    }
+
     /// One line for all sources, grouped by source with the worst status: "Bank of England · live".
     static func sourcesLine(_ refs: [SourceRef]) -> String? {
         var order: [String] = []
         var worst: [String: DataStatus] = [:]
-        let rank: [DataStatus: Int] = [.live: 0, .cached: 1, .mock: 2]
+        let rank: [DataStatus: Int] = [.live: 0, .cached: 1, .mock: 2, .unavailable: 3]
+        var isSample: Set<String> = []
         for ref in refs {
             let name = StateMapping.sourceName(ref.source)
+            if ref.source.contains("sample") || ref.note == "Sample data" { isSample.insert(name) }
             let status = StateMapping.status(ref.status.rawValue)
             if worst[name] == nil { order.append(name) }
             if (rank[status] ?? 0) >= (rank[worst[name] ?? .live] ?? 0) { worst[name] = status }
         }
         guard !order.isEmpty else { return nil }
-        return order.map { "\($0) · \(worst[$0]!.label)" }.joined(separator: ", ")
+        // Human labels: "Your statement · sample data", "gov.uk · saved copy", "Bank of England · live".
+        return order.map { name in
+            let status = worst[name] ?? .mock
+            let label = isSample.contains(name) && status == .mock ? "sample data" : status.label
+            return "\(name) · \(label)"
+        }.joined(separator: ", ")
     }
 
     /// "fix_5y" -> "5-year fix", "fix_2y" -> "2-year fix", "bank_rate" -> "Bank Rate".

@@ -1,6 +1,6 @@
 """Ask Penny (chat), news and rate-decision dates. BOSS-owned. ADR 0030-0034.
 
-Principles: chat and news SERVE the one decision ("What is my next money move?"); they never make it.
+Principles: chat and news SERVE the one decision ("Where should my money go this month?"); they never make it.
 The LLM never produces a number: every number in a bubble maps to a fact (tool result or the facts table).
 Untrusted text (news, user messages, merchant names) is data, never instructions.
 """

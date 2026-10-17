@@ -42,8 +42,29 @@ struct SourcesView: View {
                         .accessibilityIdentifier("sources.row.\(row.id)")
                     }
                 }
+                bankNote
             }
         }
+    }
+}
+
+extension SourcesView {
+    /// Why the app reads statements instead of connecting to a bank.
+    var bankNote: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Text(BankConnectionNote.title).font(.llSection).accessibilityAddTraits(.isHeader)
+            ForEach(BankConnectionNote.points, id: \.self) { point in
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                    Text("•").font(.llBody).accessibilityHidden(true)
+                    Text(point).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(Theme.Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .inkSurface(.cardAlt)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("sources.bankNote")
     }
 }
 

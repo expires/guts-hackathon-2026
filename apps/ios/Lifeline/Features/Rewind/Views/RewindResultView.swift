@@ -54,7 +54,7 @@ struct RewindResultView: View {
             Text(title).font(.llLabelBold).foregroundStyle(isNew ? Theme.Palette.ink : Theme.Palette.muted)
             Text("INDEX \(Int(index.rounded()))").font(.llTitle)
                 .contentTransition(.numericText(value: index))
-            Text(Money.format(netWorth)).font(.llBodyBold)
+            LLAmount(netWorth).font(.llBodyBold)
                 .contentTransition(.numericText(value: netWorth))
         }
         .padding(14)

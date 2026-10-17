@@ -34,7 +34,7 @@ struct GalleryView<Destination: View>: View {
                     }
                 }
                 .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.vertical, Theme.Spacing.xl)
+                .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
             }
             .paperBackground()
             .toolbar(.hidden, for: .navigationBar)

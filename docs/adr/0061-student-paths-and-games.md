@@ -7,7 +7,7 @@ Date: 2026-10-17. Status: accepted. Implements ADR 0052 and 0059 in `lifeline_si
 - Old presets (banker, plumber, retired, nurse) are no longer offered (`offered_presets()`); `presets()` still loads every id so stored lives and rooms replay.
 - Quick Life: ages 18 to 25 in 5 or 6 taps, 2 or 3 events from 14 student templates, picked by seed, path and start year only (choices never change later events), so a room plays the same life. Quick lives cannot die. AGE after the last tap raises "finished" (409).
 - Habit score for path lives is computed from the game ledger with the same 6 ratio names and 0-100 scale as the engine, game money only.
-- Money Quiz: 91 questions (41 from the facts table with official URL and checked date, 50 from lesson quizzes); choice ids a-d after a seeded shuffle.
+- Money Quiz: 59 questions (42 from the facts table, 17 from lessons), all on student money, each with an official URL; choice ids a-d after a seeded shuffle.
 - Same Decision: 14 prompts from 2007 to 2023; context and outcomes from the macro table for that year, in game money.
 - Lives without a path keep their old rules, so stored lives replay unchanged.
 

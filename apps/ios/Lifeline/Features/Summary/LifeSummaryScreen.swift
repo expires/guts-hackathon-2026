@@ -3,6 +3,8 @@ import SwiftUI
 /// Glue: owns `LifeSummaryViewModel` and feeds `LifeSummaryView`.
 struct LifeSummaryScreen: View {
     @State private var model: LifeSummaryViewModel
+    @Environment(\.llPresentationMode) private var presentation
+    @Environment(\.appRoutes) private var routes
     private let onNewLife: @MainActor () -> Void
     private let onClose: @MainActor () -> Void
 
@@ -18,8 +20,17 @@ struct LifeSummaryScreen: View {
         self.onClose = onClose
     }
 
+    private var actions: LifeSummaryActions {
+        var actions = model.actions
+        actions.onNextMove = {
+            onClose()
+            routes.selectTab(.money)
+        }
+        return actions
+    }
+
     var body: some View {
-        LifeSummaryView(state: model.state, actions: model.actions)
+        LifeSummaryView(state: model.state.presented(presentation), actions: actions)
             .onAppear {
                 model.onNewLife = onNewLife
                 model.onClose = onClose

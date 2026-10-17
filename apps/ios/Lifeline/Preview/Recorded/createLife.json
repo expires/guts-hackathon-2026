@@ -1,6 +1,6 @@
 {
-  "id": "lf_596b715eb7f8950d",
-  "seed": 1422782657,
+  "id": "lf_27612e320d6bac32",
+  "seed": 458230165,
   "mode": "self",
   "character": {
     "id": "self-homeowner-leeds",
@@ -25,9 +25,9 @@
   "age": 34,
   "alive": true,
   "stats": {
-    "happiness": 68,
-    "health": 97,
-    "smarts": 49,
+    "happiness": 64,
+    "health": 91,
+    "smarts": 48,
     "money": 89
   },
   "finances": {

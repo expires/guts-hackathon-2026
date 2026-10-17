@@ -189,7 +189,7 @@ private struct OptionCard: View {
             .overlay(alignment: .top) { RuleDivider() }
             VStack(alignment: .leading, spacing: 2) {
                 Text(option.costLabel).font(.llLabel).foregroundStyle(Theme.Palette.muted)
-                Text(Money.format(option.totalCost))
+                LLAmount(option.totalCost)
                     .font(.llTitle)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)

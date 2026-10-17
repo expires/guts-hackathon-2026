@@ -59,6 +59,8 @@ struct LifeSummaryActions {
     var onNewLife: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
+    /// "Your next move": opens the Money tab.
+    var onNextMove: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }
