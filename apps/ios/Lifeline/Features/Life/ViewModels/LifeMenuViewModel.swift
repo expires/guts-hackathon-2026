@@ -24,11 +24,11 @@ final class LifeMenuViewModel {
         }
         return LifeMenuViewState(
             items: [
-                .init(menu: .job, title: "Job", systemImage: "briefcase", count: count(.job)),
-                .init(menu: .assets, title: "Assets", systemImage: "house", count: count(.assets)),
-                .init(menu: .people, title: "People", systemImage: "person.2", count: count(.relationships)),
-                .init(menu: .money, title: "Money", systemImage: "sterlingsign.circle", count: count(.money)),
-                .init(menu: .activities, title: "Activities", systemImage: "figure.walk", count: count(.activities)),
+                .init(menu: .job, title: "Job", icon: .job, count: count(.job)),
+                .init(menu: .assets, title: "Assets", icon: .home, count: count(.assets)),
+                .init(menu: .people, title: "People", icon: .relationships, count: count(.relationships)),
+                .init(menu: .money, title: "Money", icon: .savings, count: count(.money)),
+                .init(menu: .activities, title: "Activities", icon: .activities, count: count(.activities)),
             ],
             isEnabled: life?.alive ?? false
         )

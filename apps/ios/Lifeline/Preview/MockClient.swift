@@ -15,25 +15,29 @@ actor MockClient: LifelineClient {
     /// Guesses made in this session, by date (YYYY-MM-DD). One per day (ADR 0017).
     private var guessesByDate: [String: Double] = [:]
     private var planItems: [PlanItem] = []
+    private let data: MockData
 
-    init() {}
+    /// - Parameter data: `.contract` (default: tests, previews, Playground) or `.recorded` (the app's mock mode).
+    init(data: MockData = .contract) {
+        self.data = data
+    }
 
     // MARK: Lives
 
     func listCharacters(seed: Int?) async throws -> CharactersResponse {
-        ContractExamples.characters
+        data.characters
     }
 
     func createLife(_ request: CreateLifeRequest) async throws -> Life {
         let character: CharacterSpec
         switch request.mode {
         case .preset:
-            guard let found = ContractExamples.characters.presets.first(where: { $0.id == request.presetId }) else {
+            guard let found = data.characters.presets.first(where: { $0.id == request.presetId }) else {
                 throw APIError.server(status: 404, code: "not_found", message: "That character does not exist.", source: "mock")
             }
             character = found
         case .random:
-            character = ContractExamples.characters.random
+            character = data.characters.random
         case ._self, .god:
             guard let provided = request.character else {
                 throw APIError.server(status: 422, code: "validation_error", message: "character: required", source: "mock")
@@ -41,7 +45,7 @@ actor MockClient: LifelineClient {
             character = provided
         }
 
-        var life = ContractExamples.lifeReadyToAge
+        var life = data.life
         life.id = String(format: "lf_mock%02d", nextLifeNumber)
         nextLifeNumber += 1
         life.mode = Life.ModePayload(rawValue: request.mode.rawValue) ?? .preset
@@ -193,8 +197,8 @@ actor MockClient: LifelineClient {
     }
 
     func summary(lifeID: String) async throws -> LifeSummary {
-        guard let life = lives[lifeID] else { return ContractExamples.summary }
-        var summary = ContractExamples.summary
+        guard let life = lives[lifeID] else { return data.summary }
+        var summary = data.summary
         summary.lifeId = life.id
         summary.name = life.character.name
         summary.born = life.character.birthYear
@@ -211,7 +215,7 @@ actor MockClient: LifelineClient {
     }
 
     func listLives() async throws -> LivesResponse {
-        var response = ContractExamples.lives
+        var response = data.lives
         let mine = lives.values.sorted { $0.id < $1.id }.map { life in
             LifeListItem(
                 id: life.id,
@@ -232,13 +236,13 @@ actor MockClient: LifelineClient {
 
     // MARK: Money tab
 
-    func financeOverview() async throws -> FinanceOverview { ContractExamples.financeOverview }
-    func financeSpending(month: String?) async throws -> SpendingResponse { ContractExamples.spending }
-    func subscriptions() async throws -> SubscriptionsResponse { ContractExamples.subscriptions }
-    func bills() async throws -> BillsResponse { ContractExamples.bills }
+    func financeOverview() async throws -> FinanceOverview { data.financeOverview }
+    func financeSpending(month: String?) async throws -> SpendingResponse { data.spending }
+    func subscriptions() async throws -> SubscriptionsResponse { data.subscriptions }
+    func bills() async throws -> BillsResponse { data.bills }
 
     func budgets(month: String?) async throws -> BudgetsResponse {
-        var response = ContractExamples.budgets
+        var response = data.budgets
         response.items = response.items.map { budget in
             guard let limit = budgetLimits[budget.category.rawValue] else { return budget }
             var updated = budget
@@ -256,7 +260,7 @@ actor MockClient: LifelineClient {
     }
 
     func goals() async throws -> GoalsResponse {
-        var response = ContractExamples.goals
+        var response = data.goals
         response.items += createdGoals
         return response
     }
@@ -276,19 +280,19 @@ actor MockClient: LifelineClient {
         return goal
     }
 
-    func financeProfile() async throws -> FinanceProfile { ContractExamples.financeProfile }
+    func financeProfile() async throws -> FinanceProfile { data.financeProfile }
 
     /// Today: the contract example without a guess until the user guesses.
     /// A past day from the guesses example: that day's guess, prediction, range and actual.
     func spendPrediction(date: String?) async throws -> SpendPrediction {
-        let today = ContractExamples.spendPrediction.date
+        let today = data.spendPrediction.date
         let day = date ?? today
-        if day != today, let past = ContractExamples.guesses.items.first(where: { $0.date == day }) {
-            var prediction = ContractExamples.spendPredictionBeforeGuess
+        if day != today, let past = data.guesses.items.first(where: { $0.date == day }) {
+            var prediction = data.spendPredictionBeforeGuess
             prediction.date = day
             prediction.predicted = past.predicted
             prediction.actual = past.actual
-            if let backtest = ContractExamples.predictionEvaluation.days.first(where: { $0.date == day }) {
+            if let backtest = data.predictionEvaluation.days.first(where: { $0.date == day }) {
                 prediction.low = backtest.low
                 prediction.high = backtest.high
                 prediction.baseline = backtest.baseline
@@ -297,15 +301,15 @@ actor MockClient: LifelineClient {
             prediction.guess = .init(amount: past.guess, madeAt: "\(day)T08:00:00Z", points: past.points, beatModel: past.beatModel)
             return prediction
         }
-        var prediction = ContractExamples.spendPredictionBeforeGuess
+        var prediction = data.spendPredictionBeforeGuess
         prediction.date = day
         if let amount = guessesByDate[day] {
-            prediction.guess = .init(amount: amount, madeAt: ContractExamples.spendPrediction.guess?.madeAt ?? "\(day)T08:00:00Z")
+            prediction.guess = .init(amount: amount, madeAt: data.spendPrediction.guess?.madeAt ?? "\(day)T08:00:00Z")
         }
         return prediction
     }
 
-    func guesses() async throws -> GuessesResponse { ContractExamples.guesses }
+    func guesses() async throws -> GuessesResponse { data.guesses }
 
     func makeGuess(date: String, amount: Double) async throws -> SpendPrediction {
         guard guessesByDate[date] == nil else {
@@ -315,17 +319,17 @@ actor MockClient: LifelineClient {
         return try await spendPrediction(date: date)
     }
 
-    func predictionEvaluation() async throws -> PredictionEvaluation { ContractExamples.predictionEvaluation }
+    func predictionEvaluation() async throws -> PredictionEvaluation { data.predictionEvaluation }
 
     // MARK: Next Move
 
-    func nextMove() async throws -> NextMoveResponse { ContractExamples.nextMove }
+    func nextMove() async throws -> NextMoveResponse { data.nextMove }
 
     func testNextMove(moveID: String, optionIDs: [String]?) async throws -> TestMoveResult {
-        guard moveID == ContractExamples.testMoveResult.moveId else {
+        guard moveID == data.testMoveResult.moveId else {
             throw APIError.server(status: 404, code: "not_found", message: "That move cannot be tested.", source: "mock")
         }
-        var result = ContractExamples.testMoveResult
+        var result = data.testMoveResult
         if let optionIDs, !optionIDs.isEmpty {
             let kept = result.outcomes.filter { optionIDs.contains($0.optionId) }
             if !kept.isEmpty { result.outcomes = kept }
@@ -339,7 +343,7 @@ actor MockClient: LifelineClient {
 
     func addPlanItem(moveID: String) async throws -> PlanItem {
         if let existing = planItems.first(where: { $0.moveId == moveID }) { return existing }
-        let response = ContractExamples.nextMove
+        let response = data.nextMove
         guard let move = ([response.top] + response.runnersUp).first(where: { $0.id == moveID }) else {
             throw APIError.server(status: 404, code: "not_found", message: "That move does not exist.", source: "mock")
         }
@@ -358,17 +362,17 @@ actor MockClient: LifelineClient {
 
     // MARK: Learn
 
-    func listConcepts() async throws -> [Concept] { ContractExamples.concepts }
-    func listChallenges() async throws -> [Challenge] { ContractExamples.challenges }
+    func listConcepts() async throws -> [Concept] { data.concepts }
+    func listChallenges() async throws -> [Challenge] { data.challenges }
 
     // MARK: Decision
 
     func createDecision(profile: DecisionProfile, lifeID: String?) async throws -> Decision { ContractExamples.decision }
-    func evaluation() async throws -> Evaluation { ContractExamples.evaluation }
+    func evaluation() async throws -> Evaluation { data.evaluation }
 
     // MARK: Meta
 
-    func listSources() async throws -> [SourceStatus] { ContractExamples.sources }
+    func listSources() async throws -> [SourceStatus] { data.sources }
 
     // MARK: Rooms
 

@@ -142,7 +142,7 @@ struct TestItViewModelTests {
         #expect(TestItViewModel.gapSentence(0.2) == "Same as the other option")
         #expect(TestItViewModel.gapSentence(-500) == "£500 behind the best")
         #expect(TestItViewModel.periodSentence(start: 2008, end: 2008) == "We played your money through 2008.")
-        #expect(TestItFixtures.all.count == 7)
+        #expect(TestItFixtures.all.count == 8)
     }
 }
 

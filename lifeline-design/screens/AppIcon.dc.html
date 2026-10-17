@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lifeline app icon</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1024px; height: 1024px; background: {{bg}}; display: flex; align-items: center; justify-content: center; overflow: hidden">
+  <svg width="1024" height="1024" viewBox="0 0 48 48" fill="none" stroke="#16181D" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Lifeline app icon: Penny the coin, smiling">
+    <circle cx="25.6" cy="25.8" r="15" fill="#16181D" stroke="none"></circle>
+    <path d="M24 9 C33.5 8.6 40.6 15.8 40.3 24.4 C40 33.4 33.2 40.4 23.6 40.1 C14.8 39.8 7.8 33.2 8 24 C8.2 15.4 15 9.3 24 9 Z" fill="#3FB57A"></path>
+    <path d="M24 13.5 C30.5 13.2 35.4 18 35.2 24.2" stroke-width="1.7"></path>
+    <path d="M16.2 22.6 Q19 19 21.8 22.6"></path>
+    <path d="M26.2 22.6 Q29 19 31.8 22.6"></path>
+    <path d="M17.6 28 Q24 35.5 30.4 28 Z" fill="#16181D"></path>
+  </svg>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"bg":{"editor":"color","options":["#A78BFA","#F5F2EA","#FFA94D","#6C8EF5"],"default":"#A78BFA"},"$preview":{"width":1024,"height":1024}}'>
+class Component extends DCLogic {
+  renderVals() { return { bg: this.props.bg || '#A78BFA' }; }
+}
+</script>
+</body>
+</html>

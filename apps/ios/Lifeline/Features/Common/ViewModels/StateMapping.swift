@@ -24,6 +24,7 @@ enum StateMapping {
         case "landregistry": "Land Registry"
         case "postcodes": "Postcodes.io"
         case "companies_house", "companieshouse": "Companies House"
+        case "bank:fixtures", "fixtures", "bank": "Your bank"
         default: id.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }

@@ -141,6 +141,10 @@ final class NextMoveViewModel {
             headline: move.headline,
             impactPerYear: move.impactPerYear,
             impactText: impactText(move.impactPerYear),
+            impactAmountText: Money.format(abs(move.impactPerYear.rounded())),
+            impactCaption: move.impactPerYear.rounded() < 0 ? "a year worse off" : "a year better off",
+            confidenceWord: confidenceWord(move.confidence),
+            confidenceFilled: confidenceFilled(move.confidence),
             worstCaseText: "Worst past period: " + impactText(move.worstCasePerYear),
             confidence: move.confidence,
             confidenceLabel: move.confidenceLabel,
@@ -152,6 +156,15 @@ final class NextMoveViewModel {
             hasLesson: move.conceptId != nil,
             isInPlan: isInPlan
         )
+    }
+
+    /// High at 0.75 or more, medium at 0.5 or more, otherwise low.
+    static func confidenceWord(_ confidence: Double) -> String {
+        confidence >= 0.75 ? "High confidence" : (confidence >= 0.5 ? "Medium confidence" : "Low confidence")
+    }
+
+    static func confidenceFilled(_ confidence: Double) -> Int {
+        confidence >= 0.75 ? 3 : (confidence >= 0.5 ? 2 : 1)
     }
 
     /// "£1,240 a year better off", "£310 a year worse off", "No change".

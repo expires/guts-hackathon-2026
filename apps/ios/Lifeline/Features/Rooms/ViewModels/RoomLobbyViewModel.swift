@@ -16,6 +16,8 @@ final class RoomLobbyViewModel {
     private(set) var isHost = false
     @ObservationIgnored var onLeave: @MainActor () -> Void = {}
     @ObservationIgnored var onStart: @MainActor (Room) -> Void = { _ in }
+    /// Set by `loadDemo`. Rooms are Tier 2 on the backend, so the Play tab shows this fixture.
+    private(set) var demo: RoomDemo?
 
     init(client: any LifelineClient, playerName: String = "You") {
         self.client = client
@@ -23,7 +25,16 @@ final class RoomLobbyViewModel {
     }
 
     var state: RoomLobbyViewState {
-        Self.makeState(room: room, phase: phase, joinCode: joinCode, isHost: isHost, myName: playerName)
+        if let demo { return Self.makeDemoState(demo: demo, phase: phase) }
+        return Self.makeState(room: room, phase: phase, joinCode: joinCode, isHost: isHost, myName: playerName)
+    }
+
+    /// Shows the fixture room (lobby with 4 players).
+    func loadDemo(_ demo: RoomDemo) {
+        self.demo = demo
+        room = demo.lobby
+        isHost = true
+        phase = .ready
     }
 
     var actions: RoomLobbyActions {
@@ -67,6 +78,32 @@ final class RoomLobbyViewModel {
         } catch {
             phase = .failed(.from(APIError.map(error)))
         }
+    }
+
+    /// Lobby state for the fixture room. Every number comes from `RoomDemo`.
+    static func makeDemoState(demo: RoomDemo, phase: LoadPhase) -> RoomLobbyViewState {
+        let room = demo.lobby
+        var state = makeState(room: room, phase: phase, joinCode: "", isHost: true, myName: "You")
+        state.room?.players = room.players.map { player in
+            let ready = player.lifeId != nil
+            return .init(
+                id: player.id, name: player.name, isHost: player.isHost, isMe: player.id == demo.myID,
+                face: demo.faces[player.id] ?? "face-teen",
+                statusText: ready ? "Ready" : "Joining…",
+                isReady: ready
+            )
+        }
+        let startAge = room.startYear - demo.birthYear
+        let endYear = room.startYear + demo.years
+        state.lifeLine = "\(demo.shortName), \(startAge), \(demo.occupation), \(demo.town). "
+            + "Sep \(room.startYear) to Sep \(endYear). Same events. Your own pace."
+        state.rulesLine = "\(demo.years) years · \(demo.rewindsEach) rewinds each · real rates to \(demo.realRatesUntil)"
+        state.playersTitle = "Players · \(room.players.count) of \(room.maxPlayers)"
+        let ready = room.players.filter { $0.lifeId != nil }.count
+        state.startTitle = "Start with \(ready) players"
+        state.canStart = ready >= 2
+        state.isSampleData = true
+        return state
     }
 
     static func modeLabel(_ mode: String) -> String {
@@ -131,6 +168,59 @@ final class RivalStripViewModel {
     }
 }
 
+/// Live room (Play-Live): the shared life plus the rival strip. Fixture data (Tier 2).
+@MainActor
+@Observable
+final class RoomLiveViewModel {
+    let demo: RoomDemo
+    @ObservationIgnored var onOpenLesson: @MainActor () -> Void = {}
+    @ObservationIgnored var onFinish: @MainActor () -> Void = {}
+    @ObservationIgnored var onLeave: @MainActor () -> Void = {}
+
+    init(demo: RoomDemo) {
+        self.demo = demo
+    }
+
+    var state: RoomLiveViewState { Self.makeState(demo: demo) }
+
+    var actions: RoomLiveActions {
+        RoomLiveActions(
+            onOpenLesson: { [weak self] in self?.onOpenLesson() },
+            onFinish: { [weak self] in self?.onFinish() },
+            onLeave: { [weak self] in self?.onLeave() }
+        )
+    }
+
+    static func makeState(demo: RoomDemo) -> RoomLiveViewState {
+        let room = demo.live
+        var rivals = RivalStripViewModel.makeState(players: room.players, myID: demo.myID)
+        rivals.rivals = rivals.rivals.map { rival in
+            var copy = rival
+            copy.face = demo.faces[rival.id] ?? "face-teen"
+            return copy
+        }
+        let notes = room.players.filter { $0.id != demo.myID }.compactMap { player in
+            demo.notes[player.id].map { "\(player.name): \($0)." }
+        }
+        return RoomLiveViewState(
+            name: demo.characterName,
+            face: "face-priya",
+            detail: "Age \(demo.story.age) · Room \(room.code)",
+            bank: demo.story.bank,
+            rivals: rivals,
+            rivalCaption: (["Age · INDEX."] + notes).joined(separator: " "),
+            storyTitle: "\(demo.story.year) · Age \(demo.story.age)",
+            storyLines: demo.story.lines,
+            lessonTitle: "Lesson: \(demo.story.lessonTitle)",
+            stats: [
+                .init(id: "happiness", icon: "happiness", title: "Happiness", value: demo.story.happiness),
+                .init(id: "money", icon: "savings", title: "Money", value: demo.story.money),
+            ],
+            isSampleData: true
+        )
+    }
+}
+
 /// End comparison. Uses fixture data until the room finish message carries per-player results.
 @MainActor
 @Observable
@@ -141,6 +231,38 @@ final class RoomResultViewModel {
 
     init(state: RoomResultViewState) {
         self.state = state
+    }
+
+    /// Results for the fixture room, ranked by INDEX.
+    static func makeState(demo: RoomDemo) -> RoomResultViewState {
+        let room = demo.finished
+        let ranked = room.players.sorted { ($0.index ?? 0) > ($1.index ?? 0) }
+        let rows = ranked.enumerated().map { offset, player in
+            RoomResultViewState.Row(
+                id: player.id, rank: offset + 1, name: player.name, index: player.index ?? 100,
+                netWorth: player.netWorth ?? 0, ribbons: 0, isMe: player.id == demo.myID,
+                face: demo.faces[player.id] ?? "face-teen", note: demo.notes[player.id] ?? ""
+            )
+        }
+        let winner = rows.first
+        let endYear = room.startYear + demo.years
+        let winnerLine = winner.map { "\($0.name) · INDEX \(Int($0.index.rounded()))" } ?? ""
+        let me = rows.first { $0.isMe }
+        let share = [
+            "Same Life room \(room.code): \(winnerLine) won.",
+            me.map { "I came \($0.rank) of \(rows.count) with INDEX \(Int($0.index.rounded()))." },
+        ].compactMap { $0 }.joined(separator: " ")
+        return RoomResultViewState(
+            rows: rows,
+            splits: [],
+            winnerName: winner?.name ?? "",
+            subtitle: "\(room.code) · Sep \(room.startYear) to Sep \(endYear)",
+            winnerLine: winnerLine,
+            winnerNote: winner?.note ?? "",
+            earned: demo.earned,
+            shareText: share,
+            isSampleData: true
+        )
     }
 
     var actions: RoomResultActions {

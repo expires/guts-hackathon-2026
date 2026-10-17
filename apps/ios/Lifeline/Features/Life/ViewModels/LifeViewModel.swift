@@ -12,6 +12,10 @@ final class LifeViewModel {
         case sources
         case summary
         case decision
+        /// The open event, full screen.
+        case event
+        /// A Life action menu.
+        case menu(LifeMenuViewState.Menu)
     }
 
     private let session: GameSession
@@ -43,7 +47,9 @@ final class LifeViewModel {
             onOpenSources: { [weak self] in self?.onRoute(.sources) },
             onOpenSummary: { [weak self] in self?.onRoute(.summary) },
             onOpenDecision: { [weak self] in self?.onRoute(.decision) },
-            onNewLife: { [weak self] in self?.session.newLife() }
+            onNewLife: { [weak self] in self?.session.newLife() },
+            onOpenEvent: { [weak self] in self?.onRoute(.event) },
+            onOpenMenu: { [weak self] in self?.onRoute(.menu($0)) }
         )
     }
 
@@ -73,6 +79,15 @@ final class LifeViewModel {
         } else {
             rewindText = "\(life.rewind.freeLeft) free rewinds left"
         }
+        let pending = life.pendingEvents.first.map { event in
+            LifeViewState.PendingEvent(
+                id: event.id,
+                title: event.title,
+                subtitle: "Choose before you age up",
+                area: area(event.area.rawValue),
+                areaLabel: area(event.area.rawValue).capitalized
+            )
+        }
         return LifeViewState(
             header: .init(
                 emoji: life.character.emoji ?? "🙂",
@@ -84,6 +99,11 @@ final class LifeViewModel {
                 isAlive: life.alive,
                 causeOfDeath: life.causeOfDeath
             ),
+            headerLine: ["Age \(life.age)", life.job?.title ?? life.character.occupation.capitalized, life.character.town].joined(separator: " · "),
+            cash: life.finances.cash,
+            years: yearGroups(life.history),
+            pendingEvent: pending,
+            menu: LifeMenuViewModel.makeState(life: life),
             netWorth: life.finances.netWorth,
             index: life.index.value,
             stats: StateMapping.stats(life.stats),
@@ -101,6 +121,31 @@ final class LifeViewModel {
             showsSummary: !life.alive,
             showsDecision: life.mode == ._self && life.reachedPresent == true
         )
+    }
+
+    /// Event area to one of the 5 colour areas.
+    static func area(_ raw: String) -> String {
+        switch raw {
+        case "work", "employer", "study": "work"
+        case "home", "bills", "place": "home"
+        case "money", "state": "money"
+        case "family": "family"
+        case "health": "health"
+        default: "other"
+        }
+    }
+
+    /// History grouped by year, newest year first; lines keep their order within the year.
+    static func yearGroups(_ log: [YearLog]) -> [LifeViewState.YearGroup] {
+        var groups: [LifeViewState.YearGroup] = []
+        for entry in log {
+            if let index = groups.firstIndex(where: { $0.year == entry.year }) {
+                groups[index].lines.append(entry.text)
+            } else {
+                groups.append(.init(year: entry.year, age: entry.age, title: "\(entry.year) · Age \(entry.age)", lines: [entry.text]))
+            }
+        }
+        return groups.reversed()
     }
 
     static let emptyState = LifeViewState(

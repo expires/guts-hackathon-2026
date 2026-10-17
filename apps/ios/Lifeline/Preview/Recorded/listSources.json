@@ -1,0 +1,246 @@
+{
+  "sources": [
+    {
+      "id": "boe",
+      "name": "Bank of England Database",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:15.369773Z",
+      "ttl_seconds": 21600,
+      "coverage": "UK",
+      "attribution": "Contains Bank of England data. Source: Bank of England Interactive Database.",
+      "licence": "Bank of England terms of use (free reuse with attribution)",
+      "needs_key": false
+    },
+    {
+      "id": "ons",
+      "name": "Office for National Statistics",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:21.939675Z",
+      "ttl_seconds": 43200,
+      "coverage": "UK",
+      "attribution": "Source: Office for National Statistics licensed under the Open Government Licence v3.0.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "nomis",
+      "name": "Nomis (ONS labour market and Census)",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:15.833362Z",
+      "ttl_seconds": 86400,
+      "coverage": "UK; Census tables England and Wales",
+      "attribution": "Source: Nomis, Office for National Statistics. Contains public sector information licensed under the Open Government Licence v3.0.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "landregistry",
+      "name": "HM Land Registry UK House Price Index",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:18.559239Z",
+      "ttl_seconds": 86400,
+      "coverage": "UK",
+      "attribution": "Contains HM Land Registry data. Crown copyright and database right. Licensed under the Open Government Licence v3.0.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "postcodes",
+      "name": "postcodes.io",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:40.748442Z",
+      "ttl_seconds": 2592000,
+      "coverage": "UK",
+      "attribution": "postcodes.io. Contains OS data, Royal Mail data and ONS data. Crown copyright and database right.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "bankholidays",
+      "name": "GOV.UK bank holidays",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:14.356747Z",
+      "ttl_seconds": 86400,
+      "coverage": "UK (England and Wales, Scotland, Northern Ireland)",
+      "attribution": "Contains public sector information licensed under the Open Government Licence v3.0 (GOV.UK).",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "frankfurter",
+      "name": "Frankfurter FX rates",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:14.566689Z",
+      "ttl_seconds": 3600,
+      "coverage": "Global",
+      "attribution": "Exchange rates from Frankfurter, based on European Central Bank reference rates.",
+      "licence": "Free to use (ECB reference rates)",
+      "needs_key": false
+    },
+    {
+      "id": "coingecko",
+      "name": "CoinGecko",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:14.448184Z",
+      "ttl_seconds": 900,
+      "coverage": "Global",
+      "attribution": "Data provided by CoinGecko.",
+      "licence": "CoinGecko API terms (attribution required)",
+      "needs_key": false
+    },
+    {
+      "id": "yahoo",
+      "name": "Yahoo Finance chart endpoint",
+      "status": "mock",
+      "ttl_seconds": 86400,
+      "coverage": "Global",
+      "attribution": "Market data from Yahoo Finance (unofficial endpoint).",
+      "licence": "Yahoo terms of service; personal use",
+      "needs_key": false,
+      "last_error": "yahoo: HTTP 429"
+    },
+    {
+      "id": "fred",
+      "name": "FRED, Federal Reserve Bank of St. Louis",
+      "status": "mock",
+      "ttl_seconds": 86400,
+      "coverage": "UK series (OECD)",
+      "attribution": "Source: OECD via FRED, Federal Reserve Bank of St. Louis.",
+      "licence": "FRED terms of use",
+      "needs_key": false,
+      "last_error": "fred: timeout"
+    },
+    {
+      "id": "octopus",
+      "name": "Octopus Energy products API",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:15.091426Z",
+      "ttl_seconds": 21600,
+      "coverage": "Great Britain",
+      "attribution": "Tariff data from Octopus Energy.",
+      "licence": "Octopus Energy API terms",
+      "needs_key": false
+    },
+    {
+      "id": "carbonintensity",
+      "name": "Carbon Intensity API",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:14.559510Z",
+      "ttl_seconds": 1800,
+      "coverage": "Great Britain",
+      "attribution": "Carbon Intensity API, National Energy System Operator.",
+      "licence": "CC BY 4.0",
+      "needs_key": false
+    },
+    {
+      "id": "openmeteo",
+      "name": "Open-Meteo",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:16.921415Z",
+      "ttl_seconds": 3600,
+      "coverage": "Global",
+      "attribution": "Weather data by Open-Meteo.com.",
+      "licence": "CC BY 4.0",
+      "needs_key": false
+    },
+    {
+      "id": "police",
+      "name": "Police UK data API",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:18.248580Z",
+      "ttl_seconds": 604800,
+      "coverage": "England, Wales and Northern Ireland",
+      "attribution": "Contains public sector information from data.police.uk licensed under the Open Government Licence v3.0.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "environmentagency",
+      "name": "Environment Agency flood monitoring API",
+      "status": "live",
+      "fetched_at": "2026-10-17T15:08:14.356624Z",
+      "ttl_seconds": 900,
+      "coverage": "England",
+      "attribution": "This uses Environment Agency flood and river level data from the real-time data API (Beta).",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": false
+    },
+    {
+      "id": "companieshouse",
+      "name": "Companies House API",
+      "status": "mock",
+      "ttl_seconds": 86400,
+      "coverage": "UK",
+      "attribution": "Contains Companies House data licensed under the Open Government Licence v3.0.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": true,
+      "last_error": "COMPANIES_HOUSE_KEY not set"
+    },
+    {
+      "id": "adzuna",
+      "name": "Adzuna jobs API",
+      "status": "mock",
+      "ttl_seconds": 21600,
+      "coverage": "UK",
+      "attribution": "Jobs data by Adzuna.",
+      "licence": "Adzuna API terms",
+      "needs_key": true,
+      "last_error": "ADZUNA_APP_ID not set"
+    },
+    {
+      "id": "dvla",
+      "name": "DVLA Vehicle Enquiry Service",
+      "status": "mock",
+      "ttl_seconds": 86400,
+      "coverage": "Great Britain",
+      "attribution": "Contains public sector information licensed under the Open Government Licence v3.0 (DVLA).",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": true,
+      "last_error": "DVLA_KEY not set"
+    },
+    {
+      "id": "dvsamot",
+      "name": "DVSA MOT history API",
+      "status": "mock",
+      "ttl_seconds": 86400,
+      "coverage": "Great Britain",
+      "attribution": "Contains public sector information licensed under the Open Government Licence v3.0 (DVSA).",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": true,
+      "last_error": "DVSA_MOT_KEY not set"
+    },
+    {
+      "id": "statxplore",
+      "name": "DWP Stat-Xplore",
+      "status": "mock",
+      "ttl_seconds": 604800,
+      "coverage": "Great Britain",
+      "attribution": "Source: Department for Work and Pensions, Stat-Xplore. Open Government Licence v3.0.",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": true,
+      "last_error": "DWP_STATXPLORE_KEY not set"
+    },
+    {
+      "id": "epc",
+      "name": "Energy Performance of Buildings register",
+      "status": "mock",
+      "ttl_seconds": 604800,
+      "coverage": "England and Wales",
+      "attribution": "Contains EPC data from the Department for Energy Security and Net Zero. Open Government Licence v3.0 (address data has extra terms).",
+      "licence": "Open Government Licence v3.0",
+      "needs_key": true,
+      "last_error": "EPC_KEY not set"
+    },
+    {
+      "id": "openbanking",
+      "name": "Open Banking sandbox (TrueLayer)",
+      "status": "mock",
+      "ttl_seconds": 300,
+      "coverage": "UK",
+      "attribution": "Sandbox account data via TrueLayer. Demo only.",
+      "licence": "TrueLayer sandbox terms",
+      "needs_key": true,
+      "last_error": "OB_CLIENT_ID not set"
+    }
+  ]
+}

@@ -1,0 +1,391 @@
+{
+  "id": "lf_596b715eb7f8950d",
+  "seed": 1422782657,
+  "mode": "self",
+  "character": {
+    "id": "self-homeowner-leeds",
+    "name": "Priya Shah",
+    "emoji": "🙂",
+    "sex": "female",
+    "occupation": "Nurse",
+    "region": "yorkshire-and-the-humber",
+    "town": "Leeds",
+    "postcode": "LS6 1AN",
+    "birth_year": 1992,
+    "annual_income": 33120.0,
+    "savings": 6850.42,
+    "debt": 0.0,
+    "housing": "mortgage",
+    "property_value": 240000.0,
+    "mortgage_balance": 180000.0,
+    "blurb": "Built from sample bank data."
+  },
+  "start_year": 2026,
+  "year": 2026,
+  "age": 34,
+  "alive": true,
+  "stats": {
+    "happiness": 68,
+    "health": 97,
+    "smarts": 49,
+    "money": 89
+  },
+  "finances": {
+    "cash": 2142.0,
+    "savings": 6850.42,
+    "investments": 0.0,
+    "crypto": 0.0,
+    "pension": 0.0,
+    "property_value": 240000.0,
+    "mortgage_balance": 180000.0,
+    "mortgage_rate": 5.13,
+    "mortgage_fixed_until": 2028,
+    "other_debt": 0.0,
+    "student_loan": 0.0,
+    "annual_income": 33120.0,
+    "monthly_costs": 2244.32,
+    "net_worth": 68992.42
+  },
+  "index": {
+    "value": 100.0,
+    "r_player": 0.0,
+    "r_autopilot": 0.0,
+    "missed_payments": 0,
+    "max_drawdown": 0.0
+  },
+  "job": {
+    "title": "Nurse",
+    "annual_income": 33120.0,
+    "years_in_role": 0,
+    "employer_status": "unknown"
+  },
+  "assets": [
+    {
+      "id": "as-home",
+      "kind": "home",
+      "name": "Home",
+      "value": 240000.0
+    },
+    {
+      "id": "as-savings",
+      "kind": "other",
+      "name": "Savings account",
+      "value": 6850.42
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rl-mum",
+      "kind": "parent",
+      "name": "Mum",
+      "emoji": "👩",
+      "closeness": 80
+    },
+    {
+      "id": "rl-dad",
+      "kind": "parent",
+      "name": "Dad",
+      "emoji": "👨",
+      "closeness": 70
+    }
+  ],
+  "pending_events": [],
+  "available_actions": [
+    {
+      "tab": "job",
+      "id": "ask_raise",
+      "label": "Ask for a raise",
+      "emoji": "💷",
+      "hint": "A chance of more pay",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "job",
+      "id": "new_job",
+      "label": "Look for a better job",
+      "emoji": "🔎",
+      "hint": "Odds follow local unemployment",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "job",
+      "id": "find_work",
+      "label": "Find work",
+      "emoji": "📋",
+      "hint": "Odds follow local unemployment",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "job",
+      "id": "quit",
+      "label": "Quit your job",
+      "emoji": "🚪",
+      "hint": "No pay until you find work",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "job",
+      "id": "retire",
+      "label": "Retire early",
+      "emoji": "🏖️",
+      "hint": "Live on your pension pot",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "buy_home",
+      "label": "Buy a home",
+      "emoji": "🏡",
+      "hint": "Deposit, fees and a 2-year fix",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "sell_home",
+      "label": "Sell your home",
+      "emoji": "🪧",
+      "hint": "Fees, then you rent",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "overpay_mortgage",
+      "label": "Overpay the mortgage",
+      "emoji": "🏦",
+      "hint": "Less interest from now on",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "buy_shares",
+      "label": "Buy shares",
+      "emoji": "📈",
+      "hint": "Can rise or fall",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "sell_shares",
+      "label": "Sell shares",
+      "emoji": "📉",
+      "hint": "Move shares to savings",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "buy_crypto",
+      "label": "Buy crypto",
+      "emoji": "🪙",
+      "hint": "Can double or halve",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "sell_crypto",
+      "label": "Sell crypto",
+      "emoji": "💱",
+      "hint": "Move crypto to savings",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "buy_car",
+      "label": "Buy a used car",
+      "emoji": "🚙",
+      "hint": "Upfront cost and running costs",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "assets",
+      "id": "sell_car",
+      "label": "Sell the car",
+      "emoji": "🚲",
+      "hint": "Cash now, lower costs",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "relationships",
+      "id": "date",
+      "label": "Go on dates",
+      "emoji": "💘",
+      "hint": "Meet someone",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "relationships",
+      "id": "propose",
+      "label": "Propose",
+      "emoji": "💍",
+      "hint": "A small wedding",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "relationships",
+      "id": "break_up",
+      "label": "Break up",
+      "emoji": "💔",
+      "hint": "Costs more if married",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "relationships",
+      "id": "try_for_baby",
+      "label": "Try for a baby",
+      "emoji": "👶",
+      "hint": "Costs rise every month",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "relationships",
+      "id": "family_time",
+      "label": "Spend time with family",
+      "emoji": "👨‍👩‍👧",
+      "hint": "Closer ties",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "activities",
+      "id": "gym",
+      "label": "Join a gym",
+      "emoji": "🏋️",
+      "hint": "Health up, small cost",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "activities",
+      "id": "holiday",
+      "label": "Go on holiday",
+      "emoji": "🏝️",
+      "hint": "Happiness up",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "activities",
+      "id": "course",
+      "label": "Take a course",
+      "emoji": "📚",
+      "hint": "Smarts up",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "activities",
+      "id": "doctor",
+      "label": "See a doctor",
+      "emoji": "🩺",
+      "hint": "Free on the NHS",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "activities",
+      "id": "volunteer",
+      "label": "Volunteer",
+      "emoji": "🤝",
+      "hint": "Happiness up",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "activities",
+      "id": "walks",
+      "label": "Walk more",
+      "emoji": "🚶",
+      "hint": "Free exercise",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "money",
+      "id": "save",
+      "label": "Move cash to savings",
+      "emoji": "🐖",
+      "hint": "Earn interest",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "money",
+      "id": "withdraw",
+      "label": "Take money out of savings",
+      "emoji": "💸",
+      "hint": "Cash in hand",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "money",
+      "id": "pay_debt",
+      "label": "Pay off card debt",
+      "emoji": "🧹",
+      "hint": "Stop the interest",
+      "enabled": false,
+      "paid": false
+    },
+    {
+      "tab": "money",
+      "id": "pension_topup",
+      "label": "Top up your pension",
+      "emoji": "👵",
+      "hint": "Tax relief adds 25%",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "money",
+      "id": "cut_spending",
+      "label": "Cut your spending",
+      "emoji": "✂️",
+      "hint": "Spend 5% less each month",
+      "enabled": true,
+      "paid": false
+    },
+    {
+      "tab": "money",
+      "id": "borrow",
+      "label": "Take a loan",
+      "emoji": "🏧",
+      "hint": "Cash now, interest later",
+      "enabled": true,
+      "paid": false
+    }
+  ],
+  "history": [
+    {
+      "year": 2026,
+      "age": 34,
+      "text": "You start life at 34 as a Nurse in Leeds.",
+      "net_worth": 68992.42,
+      "autopilot_net_worth": 68992.42,
+      "index": 100.0
+    }
+  ],
+  "ribbons": [],
+  "concepts_unlocked": [],
+  "rewind": {
+    "free_left": 1,
+    "has_pass": false
+  },
+  "reached_present": true
+}

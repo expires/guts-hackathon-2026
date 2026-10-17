@@ -233,7 +233,7 @@ async def test_move_text_rewords_only_text_fields() -> None:
     fake = FakeLLM(
         {
             "headline": "165 days until your deal runs out",
-            "action": "Lock in for 5 years",
+            "action": "Switch to a tracker",
             "evidence": [
                 "In 2022 rates jumped 3.2 points.",
                 "Seven in ten twins came out ahead by fixing.",
@@ -243,9 +243,9 @@ async def test_move_text_rewords_only_text_fields() -> None:
     )
     out = await make(fake).move_text(move)
     assert out.headline == "165 days until your deal runs out"
-    assert out.action == "Lock in for 5 years"
+    assert out.action == move.action == "Fix for 5 years"  # never reworded: must match the option label
     assert out.evidence[1].text.startswith("Seven in ten")
-    unchanged = {"headline", "action", "evidence"}
+    unchanged = {"headline", "evidence"}
     assert out.model_dump(exclude=unchanged) == move.model_dump(exclude=unchanged)
     assert [e.facts for e in out.evidence] == [e.facts for e in move.evidence]
 

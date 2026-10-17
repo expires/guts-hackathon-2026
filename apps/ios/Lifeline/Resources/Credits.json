@@ -1,0 +1,34 @@
+{
+  "event": "GUTS Hackathon 2026",
+  "fonts": [
+    {
+      "name": "Bricolage Grotesque",
+      "weights": [
+        "800"
+      ],
+      "files": [
+        "BricolageGrotesque-ExtraBold.ttf"
+      ],
+      "authors": "The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage)",
+      "licence": "SIL Open Font License 1.1",
+      "licenceFile": "OFL-BricolageGrotesque.txt",
+      "source": "Google Fonts (github.com/google/fonts, ofl/bricolagegrotesque). Static instance: weight 800, width 100, optical size 36."
+    },
+    {
+      "name": "Atkinson Hyperlegible",
+      "weights": [
+        "400",
+        "700"
+      ],
+      "files": [
+        "AtkinsonHyperlegible-Regular.ttf",
+        "AtkinsonHyperlegible-Bold.ttf"
+      ],
+      "authors": "Braille Institute of America, Inc.",
+      "licence": "SIL Open Font License 1.1",
+      "licenceFile": "OFL-AtkinsonHyperlegible.txt",
+      "source": "Google Fonts (github.com/google/fonts, ofl/atkinsonhyperlegible). Modified: the zero glyph is a scaled 'O' (no slash); family renamed 'Atkinson Hyperlegible LL'."
+    }
+  ],
+  "icons": "Lifeline icon set and Penny, from the Lifeline design handoff (lifeline-design/screens/Icon.dc.html)."
+}

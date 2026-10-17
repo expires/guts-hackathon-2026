@@ -7,11 +7,11 @@ struct HistoryFeedView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Text("Your story")
-                .font(.title3.bold())
+                .font(.llTitle)
                 .accessibilityAddTraits(.isHeader)
             if history.isEmpty {
                 Text("Nothing yet. Tap AGE to live your first year.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Palette.muted)
             } else {
                 LazyVStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     ForEach(Array(history.enumerated().reversed()), id: \.offset) { offset, entry in
@@ -32,16 +32,16 @@ struct HistoryRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.m) {
             VStack(alignment: .leading) {
-                Text(String(entry.year)).font(.subheadline.bold().monospacedDigit())
-                Text("Age \(entry.age)").font(.caption).foregroundStyle(.secondary)
+                Text(String(entry.year)).font(.llBodyBold.monospacedDigit())
+                Text("Age \(entry.age)").font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
             .frame(minWidth: 56, alignment: .leading)
             Text(entry.text)
-                .font(.subheadline)
+                .font(.llBody)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(Money.compact(entry.netWorth))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(entry.netWorth < 0 ? .red : .secondary)
+                .font(.llLabel.monospacedDigit())
+                .foregroundStyle(entry.netWorth < 0 ? Theme.Palette.health : Theme.Palette.muted)
         }
         .padding(.vertical, Theme.Spacing.s)
         .accessibilityElement(children: .ignore)

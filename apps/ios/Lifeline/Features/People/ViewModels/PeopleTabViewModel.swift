@@ -5,6 +5,8 @@ import Observation
 @Observable
 final class PeopleTabViewModel {
     private let session: GameSession
+    /// Closes the menu sheet. An action also closes it, so its result shows on the Life screen.
+    @ObservationIgnored var onClose: @MainActor () -> Void = {}
 
     init(session: GameSession) {
         self.session = session
@@ -19,8 +21,10 @@ final class PeopleTabViewModel {
             onAction: { [weak self] in
                 guard let self else { return }
                 ActionTabSupport.perform(session, tab: .relationships, actionID: $0)
+                onClose()
             },
-            onDismissOutcome: { [weak self] in self?.session.dismissOutcome() }
+            onDismissOutcome: { [weak self] in self?.session.dismissOutcome() },
+            onClose: { [weak self] in self?.onClose() }
         )
     }
 

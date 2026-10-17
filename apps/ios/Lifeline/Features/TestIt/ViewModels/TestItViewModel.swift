@@ -23,6 +23,8 @@ final class TestItViewModel {
 
     @ObservationIgnored var onOpenLife: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored var onClose: @MainActor () -> Void = {}
+    /// Set by the glue when "Do this" can add the move to the plan. Nil hides the button.
+    @ObservationIgnored var onDoThis: (@MainActor (String) -> Void)?
 
     init(moveID: String, optionIDs: [String]? = nil, load: @escaping TestItLoader) {
         self.moveID = moveID
@@ -31,14 +33,18 @@ final class TestItViewModel {
     }
 
     var state: TestItViewState {
-        Self.makeState(result: result, phase: phase)
+        Self.makeState(result: result, phase: phase, canDoThis: onDoThis != nil)
     }
 
     var actions: TestItActions {
         TestItActions(
             onRetry: { [weak self] in Task { await self?.load() } },
             onOpenLife: { [weak self] lifeID in self?.onOpenLife(lifeID) },
-            onClose: { [weak self] in self?.onClose() }
+            onClose: { [weak self] in self?.onClose() },
+            onDoThis: { [weak self] in
+                guard let self else { return }
+                onDoThis?(moveID)
+            }
         )
     }
 
@@ -67,15 +73,22 @@ final class TestItViewModel {
         canRetry: true
     )
 
-    static func makeState(result: Components.Schemas.TestMoveResult?, phase: LoadPhase) -> TestItViewState {
+    static func makeState(
+        result: Components.Schemas.TestMoveResult?,
+        phase: LoadPhase,
+        canDoThis: Bool = false
+    ) -> TestItViewState {
         guard let result else {
             return TestItViewState(
                 phase: phase, title: "Test it", periodLabel: "", periodSentence: "", options: [],
                 recommendedID: nil, summary: "", evidenceSentence: "", sources: [], isSampleData: false,
-                chartMin: 0, chartMax: 1
+                chartMin: 0, chartMax: 1, canDoThis: canDoThis
             )
         }
-        let options = result.outcomes.map { option(for: $0, among: result.outcomes) }
+        let birthYear = result.character.birthYear
+        let options = result.outcomes.map {
+            option(for: $0, among: result.outcomes, birthYear: birthYear, period: result.period)
+        }
         let sources = result.sources.map(StateMapping.sourceChip)
         let values = options.flatMap { $0.path.map(\.netWorth) }
         let (low, high) = chartRange(values)
@@ -91,8 +104,53 @@ final class TestItViewModel {
             sources: sources,
             isSampleData: sources.contains { $0.status == .mock },
             chartMin: low,
-            chartMax: high
+            chartMax: high,
+            intro: intro(name: result.character.name, optionCount: options.count),
+            faceEmoji: result.character.emoji,
+            hero: hero(options: options, summary: result.summary),
+            canDoThis: canDoThis
         )
+    }
+
+    /// "Two of you. Same life. One choice is different." Uses the character name when it is not "You".
+    static func intro(name: String, optionCount: Int) -> String {
+        let count = [2: "Two", 3: "Three", 4: "Four"][optionCount]
+        guard let count else { return "One life. One choice." }
+        let who = name.isEmpty || name == "You" ? "of you" : "\(name)s"
+        return "\(count) \(who). Same life. One choice is different."
+    }
+
+    /// Hero: total paid by the recommended option against the cheapest other option (the same pair as
+    /// the API `summary`). The sentence under the amount is the API `summary`, verbatim.
+    static func hero(options: [TestItViewState.Option], summary: String) -> TestItViewState.Hero? {
+        guard options.count > 1, let best = options.first(where: \.isRecommended),
+              let other = options.filter({ $0.id != best.id }).min(by: { $0.totalCost < $1.totalCost }) else { return nil }
+        let difference = (best.totalCost - other.totalCost).rounded()
+        guard abs(difference) >= 1 else { return nil }
+        return .init(
+            amount: abs(difference),
+            amountText: Money.format(abs(difference)),
+            caption: "\(difference > 0 ? "more" : "less") paid than \"\(other.label)\"",
+            text: summary
+        )
+    }
+
+    /// "from 2021 to 2023" or "in 2008".
+    static func periodSpan(start: Int, end: Int) -> String {
+        start == end ? "in \(start)" : "from \(start) to \(end)"
+    }
+
+    /// Story rows: one per path year after the first. Age comes from the character's birth year.
+    static func yearRows(path: [TestItViewState.PathPoint], birthYear: Int?) -> [TestItViewState.YearRow] {
+        path.enumerated().map { offset, point in
+            let title = birthYear.map { "\(point.year) · Age \(point.year - $0)" } ?? "\(point.year)"
+            if offset == 0 {
+                return .init(id: point.id, title: title, text: "I start with \(Money.format(point.netWorth)).", change: nil, isDown: false)
+            }
+            let change = (point.netWorth - path[offset - 1].netWorth).rounded()
+            let changeText: String? = change == 0 ? nil : (change > 0 ? "Up " : "Down ") + Money.format(abs(change))
+            return .init(id: point.id, title: title, text: "I have \(Money.format(point.netWorth)).", change: changeText, isDown: change < 0)
+        }
     }
 
     static func periodSentence(start: Int, end: Int) -> String {
@@ -103,7 +161,9 @@ final class TestItViewModel {
 
     static func option(
         for outcome: Components.Schemas.OptionOutcome,
-        among all: [Components.Schemas.OptionOutcome]
+        among all: [Components.Schemas.OptionOutcome],
+        birthYear: Int? = nil,
+        period: Components.Schemas.TestPeriod? = nil
     ) -> TestItViewState.Option {
         let path = outcome.netWorthPath.compactMap(pathPoint)
         let others = all.filter { $0.optionId != outcome.optionId }.map(\.endNetWorth)
@@ -128,7 +188,10 @@ final class TestItViewModel {
             worstYearChange: outcome.worstYearChange,
             index: outcome.index,
             facts: facts,
-            accessibilitySummary: spoken.joined(separator: ". ")
+            accessibilitySummary: spoken.joined(separator: ". "),
+            yearRows: yearRows(path: path, birthYear: birthYear),
+            costLabel: period.map { "Paid " + periodSpan(start: $0.start, end: $0.end) } ?? "Paid",
+            indexLabel: "Index \(indexText(outcome.index))"
         )
     }
 

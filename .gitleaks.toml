@@ -7,7 +7,7 @@ description = "local-only and generated paths"
 regexTarget = "line"
 # False positive: code comparing an enum, e.g. `key == MacroKey.MORTGAGE_2Y_FIX`.
 regexes = [
-  '''key == MacroKey\.[A-Z0-9_]+''',
+  '''key ={1,2} MacroKey\.[A-Z0-9_]+''',
 ]
 paths = [
   '''(^|/)\.env$''',

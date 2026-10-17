@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from lifeline_contracts.domain import SourceRef
 from lifeline_contracts.macro import MacroKey, MacroTable, MacroValue
-from lifeline_sim.params import SAVINGS_FLOOR, SAVINGS_SPREAD, VARIABLE_MARGIN
+from lifeline_sim.params import SAVINGS_FLOOR, SAVINGS_SPREAD, TRACKER_MARGIN, VARIABLE_MARGIN
 
 UK = "uk"
 PRICE_BASE_YEAR = 2024
@@ -29,6 +29,7 @@ REGIONAL_KEYS = frozenset(
     }
 )
 PAY_GROWTH = "pay_growth"
+TRACKER_NOW = "tracker_now"  # 2-year tracker rate: BoE IUMBV48 when present, else Bank Rate + TRACKER_MARGIN
 BEST_SAVINGS_RATE = "best_savings_rate"  # top easy-access rate the sim pays: Bank Rate + SAVINGS_SPREAD, floored
 SVR_RATE = (
     "svr_rate"  # variable mortgage rate: Bank Rate + VARIABLE_MARGIN  # percent y/y growth of regional median pay
@@ -109,7 +110,13 @@ class MacroView:
             out[f"prev_{key.value}"] = self.value(key, year - 1, region)
         out[PRICE_LEVEL] = self.price_level(year)
         out[PAY_GROWTH] = self.growth(MacroKey.MEDIAN_PAY, year, region) * 100
-        out[SVR_RATE] = out[MacroKey.BANK_RATE.value] + VARIABLE_MARGIN
+        bank = out[MacroKey.BANK_RATE.value]
+        # Revert-to and tracker rates: BoE quoted series when the table has them (ADR 0020),
+        # else Bank Rate plus a fixed margin.
+        svr = self.get(MacroKey.MORTGAGE_SVR, year, None)
+        out[SVR_RATE] = svr.value if svr is not None else bank + VARIABLE_MARGIN
+        tracker = self.get(MacroKey.MORTGAGE_TRACKER, year, None)
+        out[TRACKER_NOW] = tracker.value if tracker is not None else bank + TRACKER_MARGIN
         out[BEST_SAVINGS_RATE] = max(SAVINGS_FLOOR, out[MacroKey.BANK_RATE.value] + SAVINGS_SPREAD)
         self._env_cache[ck] = out
         return out
@@ -143,4 +150,9 @@ def macro_names() -> dict[str, MacroKey]:
     out[PAY_GROWTH] = MacroKey.MEDIAN_PAY
     out[SVR_RATE] = MacroKey.BANK_RATE
     out[BEST_SAVINGS_RATE] = MacroKey.BANK_RATE
+    out[TRACKER_NOW] = MacroKey.BANK_RATE
     return out
+
+
+# Derived names whose own series, when the table has it, is cited instead of (and as well as) Bank Rate.
+SOFT_SOURCES: dict[str, MacroKey] = {SVR_RATE: MacroKey.MORTGAGE_SVR, TRACKER_NOW: MacroKey.MORTGAGE_TRACKER}

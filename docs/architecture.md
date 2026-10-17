@@ -24,7 +24,7 @@ flowchart TB
 
   subgraph DEC["Decision layer: pure Python, no I/O"]
     SIM["lifeline_sim<br/>life rules, events, stats, Index, rewind"]
-    ENG["lifeline_engine<br/>population, twins, periods, ranking"]
+    ENG["lifeline_engine<br/>twins, periods, Next Move, money insights,<br/>spend prediction, decision"]
     EVAL["lifeline_eval<br/>backtest"]
     EXPL["lifeline_explain<br/>LLM wording + number verifier + templates"]
   end
@@ -33,6 +33,7 @@ flowchart TB
     ADP["One adapter per source<br/>timeouts, retries, circuit breaker, validation"]
     OBS["Observation(series_id, source, date, value,<br/>unit, region, fetched_at, status)"]
     MACRO["Annual MacroTable<br/>(MacroKey, year, region)"]
+    FIN["FinanceSnapshot<br/>fixture personas (Tier 1), TrueLayer (Tier 2)"]
     ADP --> OBS --> MACRO
   end
 
@@ -50,6 +51,7 @@ flowchart TB
   ENG --> EXPL
   EXPL -.-> LLM
   REST -- "MacroTable" --> MACRO
+  REST -- "snapshot" --> FIN
   WS <--> REDIS
   REST <--> PG
   ADP <--> REDIS
@@ -64,6 +66,7 @@ flowchart TB
 ### Experience: `apps/ios`
 
 - SwiftUI app for iOS 26. Uses system `TabView`, glass button styles and `GlassEffectContainer`.
+- Tabs: Money (home, opens first), Life (the game), Play (rooms, challenges, ribbons, concepts), You (profile, bank, settings) (ADR 0016). The Next Move card is the first element on Money.
 - XcodeGen builds the project from `apps/ios/project.yml`.
 - `swift-openapi-generator` builds the network client from `contracts/openapi.yaml`.
 - The app talks only to our backend. It holds no keys.
@@ -84,7 +87,18 @@ flowchart TB
 - `lifeline_engine` and `lifeline_sim` are pure. They do no network, database or clock calls. They take a seeded RNG as an argument.
 - Same `MacroTable` plus same seed gives the same life (ADR 0005).
 - The Index compares the player with an "autopilot" twin (same character, same seed, default choices). The formula is in `docs/index.md`.
-- `lifeline_explain` asks the LLM for wording only. A verifier extracts every number from the LLM text. Each number must match an engine fact, or the deterministic template is used.
+- `lifeline_engine.money` turns a `FinanceSnapshot` into Money tab insights: categories, subscriptions, bills, budgets, goals, the profile and personal facts for lessons (ADR 0016). No LLM.
+- `lifeline_engine.money.predict` predicts today's spend with ridge regression and explains it in £ per feature group (ADR 0017).
+- `lifeline_engine.next_move` ranks money moves (ADR 0018, 0020, 0023). See "Next Move flow" below.
+
+### Explain layer: `lifeline_explain` (ADR 0019)
+
+1. The engine or sim produces a deterministic template text plus `facts` (the numbers behind it).
+2. The LLM (`LLM_MODEL`, default `claude-opus-5-5`, ADR 0007) may reword `Event.text`, `Outcome.text`, and the Next Move `headline`, `action` and evidence text. Numbers, options, sources and `confidence_label` never pass through it.
+3. The verifier extracts every number from the LLM text. Each must match an allowed value: an engine fact, a number in the template text, the year or age, or (for moves) impact, worst case, confidence, `days_left` and test-period years. Match rule: same value at the written precision, or within 0.5%.
+4. Any unmatched number rejects the text. Events and outcomes fall back to the whole template. Moves fall back per field.
+5. One call, no retry, hard timeout (`LLM_TIMEOUT_SECONDS`). Refusal, bad JSON or timeout gives the template.
+6. Results are cached in Redis for 30 days and verified again on every cache hit. `LLM_ENABLED=0` forces templates.
 
 ### Data integration: `lifeline_data`
 
@@ -102,6 +116,37 @@ A source that fails serves `cached` data. A source with no key, or with no cache
 - One error format: `{"error": {"code": "...", "message": "...", "source": "..."}}`.
 - Same Life rooms use a WebSocket per room. Redis pub/sub fans out rival updates across API processes.
 - Bank OAuth: the app opens a backend consent link. The provider redirects to the backend. The backend exchanges the code and redirects to `lifeline://connected?status=ok`. Tokens never reach the device.
+
+## Money tab (ADR 0016, 0017)
+
+1. `lifeline_data.finance` builds a `FinanceSnapshot` (accounts, transactions, mortgage and energy details, holder) for the signed-in subject. Tier 1: one of four labelled fixture personas, chosen by subject (`demo-presenter-01` maps to `homeowner-leeds`). Tier 2: the TrueLayer sandbox.
+2. `lifeline_engine.money` computes the insights. The API serves them under `/v1/finance/*`: overview, spending, subscriptions, bills, budgets, goals, profile, prediction, guesses.
+3. Every response has `meta.data_status` (`live`, `cached` or `mock`). Mock data shows "Sample data".
+4. `/v1/finance/profile` returns a `DecisionProfile` and a `CharacterSpec`. The Next Move, the Real-life Decision and "Play yourself" all use this one profile, so they agree.
+
+## Next Move flow (ADR 0018, 0020, 0022, 0023)
+
+```mermaid
+flowchart LR
+  SNAP["FinanceSnapshot<br/>(Money tab data)"] --> NM
+  MT["MacroTable<br/>(live BoE, ONS, Land Registry, ...)"] --> NM
+  NM["lifeline_engine.next_move<br/>candidates, twins x matched periods<br/>+ stress period, regret choice"] --> CARD
+  CARD["GET /v1/next-move<br/>top move + 2 runners-up,<br/>3 evidence points, sources"] --> EX["lifeline_explain<br/>rewording + verifier"]
+  EX --> APP["Money tab card"]
+  APP -- "Test it" --> TEST["POST /v1/next-move/test<br/>lifeline_sim.play_scenario<br/>one life per option, same seed"]
+  APP -- "Why?" --> WHY["lesson for concept_id<br/>+ personal sentence"]
+  APP -- "Do this" --> PLAN["POST /v1/plan"]
+  TEST --> LIFE["stored lives<br/>(open in Life tab)"]
+```
+
+1. **Inputs.** The finance snapshot's `as_of` is "today" for every engine call, so one snapshot always gives the same answer (ADR 0022). The `MacroTable` holds live and cached source values.
+2. **Candidates.** A move is a candidate only when the data supports it. Example: `fix_mortgage` needs a fixed deal that ends within 12 months.
+3. **Scoring.** For each option, the engine simulates twins (similar synthetic people) through matched past periods and through the standard stress period for that move kind (mortgages and energy 2021-2023; savings 2009-2011; debt and emergency fund 2008-2010). The option with the highest `expected - 0.5 x max regret` wins (ADR 0020). Confidence is the share of (twin, period) pairs where that option was the best of the move's options (ADR 0023).
+4. **Ranking.** Moves are ranked by `impact + 0.5 x min(0, worst case)`, scaled by confidence. Ties prefer the nearer deadline.
+5. **Card.** One top move and up to two runners-up. Each has 3 evidence points whose numbers appear in `facts`. Evidence point 3 states the stress result of the recommended option and of the best alternative.
+6. **Test it.** `lifeline_sim.play_scenario` plays the user's profile through `test_period` once per option. Seed = sha256(subject + move id), so a repeat gives the same lives. The character's birth year shifts so the user is today's age at the period start. The response compares net worth path, total cost, missed payments, worst year and Index per option.
+7. **Do this.** `POST /v1/plan` stores the move in the user's plan (`user_docs` table). Adding the same move twice keeps one item.
+8. **Backtest.** `NextMoveResponse.backtest` reports the hit rate over past deal-end years against "always fix 2 years" and the best constant rule "always take a tracker" (`docs/prediction.md`).
 
 ## Runtime (docker compose)
 

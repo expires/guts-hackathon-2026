@@ -1,0 +1,67 @@
+{
+  "base": "http://localhost:8000",
+  "device_id": "demo-presenter-03",
+  "recorded_at": "2026-10-17T15:13:08Z",
+  "files": {
+    "listSources": {
+      "status": 200
+    },
+    "listCharacters": {
+      "status": 200
+    },
+    "listConcepts": {
+      "status": 200
+    },
+    "getEvaluation": {
+      "status": 200
+    },
+    "getFinanceOverview": {
+      "status": 200
+    },
+    "getFinanceSpending": {
+      "status": 200
+    },
+    "listSubscriptions": {
+      "status": 200
+    },
+    "listBills": {
+      "status": 200
+    },
+    "listBudgets": {
+      "status": 200
+    },
+    "listGoals": {
+      "status": 200
+    },
+    "getFinanceProfile": {
+      "status": 200
+    },
+    "getPredictionEvaluation": {
+      "status": 200
+    },
+    "listGuesses": {
+      "status": 200
+    },
+    "getPlan": {
+      "status": 200
+    },
+    "getSpendPrediction": {
+      "status": 200
+    },
+    "getNextMove": {
+      "status": 200
+    },
+    "testNextMove": {
+      "status": 200
+    },
+    "createLife": {
+      "status": 201
+    },
+    "getLifeSummary": {
+      "status": 200
+    },
+    "listLives": {
+      "status": 200
+    }
+  }
+}

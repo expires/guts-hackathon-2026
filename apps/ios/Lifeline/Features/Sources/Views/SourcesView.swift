@@ -6,50 +6,41 @@ struct SourcesView: View {
     var actions: SourcesActions = .noop
 
     var body: some View {
-        NavigationStack {
-            List {
-                switch state.phase {
-                case let .loading(loading):
-                    LoadingStateView(state: loading)
-                case let .failed(error):
-                    ErrorStateView(state: error, onRetry: actions.onRetry)
-                case .ready:
-                    if state.usesSampleData {
-                        DemoDataBadge()
-                    }
-                    Section {
-                        ForEach(state.rows) { row in
+        SheetContainer(title: "Where our data comes from", closeIdentifier: "sources.close", onClose: actions.onClose) {
+            switch state.phase {
+            case let .loading(loading):
+                LoadingStateView(state: loading)
+            case let .failed(error):
+                ErrorStateView(state: error, onRetry: actions.onRetry)
+            case .ready:
+                if state.usesSampleData { DemoDataBadge() }
+                Text("Live: fetched today. Saved copy: the last good download. Sample: example numbers while the source is not available.")
+                    .font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                RowGroup {
+                    ForEach(state.rows) { row in
+                        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+                            LLIconImage(Theme.icon(for: row.status), size: 32)
                             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                                 HStack {
-                                    Text(row.name).font(.headline)
+                                    Text(row.name).font(.llBodyBold)
                                     Spacer()
-                                    SourceChip(source: .init(id: row.id, name: row.status.label.capitalized, status: row.status))
+                                    Chip(text: row.status.label)
                                 }
-                                Text("Covers \(row.coverage)").font(.subheadline)
+                                Text("Covers \(row.coverage)").font(.llLabel)
                                 if let updated = row.updatedText {
-                                    Text(updated).font(.caption).foregroundStyle(.secondary)
+                                    Text(updated).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                                 }
-                                Text("\(row.attribution). \(row.licence).").font(.caption).foregroundStyle(.secondary)
+                                Text("\(row.attribution). \(row.licence).").font(.llLabel).foregroundStyle(Theme.Palette.muted)
                                 if row.status == .mock {
                                     Text(row.needsKey ? "Sample numbers. This source needs a free key on the server." : "Sample numbers.")
-                                        .font(.caption)
-                                        .foregroundStyle(.orange)
+                                        .font(.llLabelBold)
                                 }
                             }
-                            .padding(.vertical, Theme.Spacing.xs)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("sources.row.\(row.id)")
                         }
-                    } footer: {
-                        Text("Live: fetched today. Saved copy: the last good download. Sample: example numbers while the source is not available.")
+                        .padding(.vertical, Theme.Spacing.m)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("sources.row.\(row.id)")
                     }
-                }
-            }
-            .navigationTitle("Where our data comes from")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: actions.onClose)
                 }
             }
         }

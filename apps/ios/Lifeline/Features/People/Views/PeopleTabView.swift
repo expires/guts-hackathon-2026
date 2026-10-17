@@ -6,38 +6,32 @@ struct PeopleTabView: View {
     var actions: ActionTabActions = .noop
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Theme.Spacing.l) {
-                GlassCard {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                        if state.people.isEmpty {
-                            Text("No one close to you yet.").foregroundStyle(.secondary)
-                        }
-                        ForEach(state.people) { person in
-                            HStack(spacing: Theme.Spacing.m) {
-                                Text(person.emoji).font(.title2).accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(person.name).font(.headline)
-                                    Text(person.relation).font(.caption).foregroundStyle(.secondary)
-                                    ProgressView(value: Double(person.closeness), total: 100)
-                                        .tint(.pink)
-                                }
+        SheetContainer(title: "People", closeIdentifier: "menu.close", onClose: actions.onClose) {
+            RowGroup(title: "People close to me") {
+                if state.people.isEmpty {
+                    ListRow(icon: .relationships, title: "No one close to you yet", showsChevron: false)
+                }
+                ForEach(state.people) { person in
+                    HStack(spacing: Theme.Spacing.m) {
+                        LLIconImage(LLIcon.face(emoji: person.emoji), size: 32)
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            HStack {
+                                Text(person.name).font(.llBodyBold)
+                                Text(person.relation).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                                Spacer()
+                                Text("\(person.closeness)%").font(.llLabelBold)
                             }
-                            .frame(minHeight: Theme.minTarget)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("\(person.name), \(person.relation), closeness \(person.closeness) out of 100")
+                            InkProgressBar(value: Double(person.closeness) / 100, color: Theme.Palette.family, height: 14)
                         }
                     }
+                    .padding(.vertical, Theme.Spacing.m)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(person.name), \(person.relation), closeness \(person.closeness) out of 100")
                 }
-                if let outcome = state.outcome {
-                    OutcomeBanner(outcome: outcome, onDismiss: actions.onDismissOutcome)
-                }
-                SectionTitle(text: "What to do")
-                ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction)
             }
-            .padding(Theme.Spacing.l)
+            RowGroupTitle(text: "What you can do")
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
         }
-        .navigationTitle("People")
     }
 }
 

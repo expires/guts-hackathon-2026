@@ -13,6 +13,7 @@ import logging
 from collections import Counter
 
 from lifeline_data.hub import DataHub
+from lifeline_data.logsafe import quiet_http_loggers
 from lifeline_data.settings import DataSettings
 
 log = logging.getLogger("lifeline_data.worker")
@@ -50,6 +51,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--once", action="store_true", help="refresh one time and exit")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    quiet_http_loggers()
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run(once=args.once))
 

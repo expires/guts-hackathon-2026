@@ -136,6 +136,8 @@ class Template(_S):
     tags: tuple[str, ...] = Field(
         default=(), description="Scenario policy keys (ADR 0018), e.g. 'mortgage_deal_end', 'energy_bill'"
     )
+    repeatable: bool = Field(default=False, description="Exempt from the 3-year cooldown. Needs repeat_reason.")
+    repeat_reason: str | None = None
     priority: int = Field(default=0, description="Higher wins when more than MAX_EVENTS_PER_YEAR fire")
     eligible: Eligibility = Field(default_factory=Eligibility)
     probability: Expr
@@ -156,6 +158,8 @@ class Template(_S):
     def _check(self) -> Template:
         if not self.id.startswith(f"{self.area}."):
             raise ValueError(f"template id {self.id!r} must start with its area")
+        if self.repeatable and not (self.repeat_reason or "").strip():
+            raise ValueError(f"{self.id}: repeatable needs a repeat_reason")
         defaults = [c for c in self.choices if c.default]
         if len(defaults) != 1:
             raise ValueError(f"{self.id}: exactly one default choice required")

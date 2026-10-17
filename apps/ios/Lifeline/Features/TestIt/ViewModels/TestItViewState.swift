@@ -36,6 +36,33 @@ struct TestItViewState: Equatable, Sendable {
         /// Plain English lines for VoiceOver and compact layouts, in display order.
         var facts: [String]
         var accessibilitySummary: String
+        /// One row per path year after the first, for the story column. Derived from `path` and the character's birth year.
+        var yearRows: [YearRow] = []
+        /// "Paid from 2021 to 2023".
+        var costLabel: String = ""
+        /// "Index 104.2".
+        var indexLabel: String = ""
+    }
+
+    /// One year in an option's story column, for example "2022 · Age 30" / "I have £71,200." / "Up £5,200".
+    struct YearRow: Equatable, Sendable, Identifiable {
+        var id: String
+        var title: String
+        var text: String
+        /// Change against the year before, for example "Up £5,200". Nil on the first row.
+        var change: String?
+        var isDown: Bool
+    }
+
+    /// Hero under the cards: recommended option against the cheapest other option, plus the API summary.
+    /// Nil when there is only one option or no recommended option.
+    struct Hero: Equatable, Sendable {
+        var amount: Double
+        var amountText: String
+        /// For example "more paid than \"Fix for 2 years\"".
+        var caption: String
+        /// The API `summary`, verbatim.
+        var text: String
     }
 
     var phase: LoadPhase
@@ -46,7 +73,7 @@ struct TestItViewState: Equatable, Sendable {
     var periodSentence: String
     var options: [Option]
     var recommendedID: String?
-    /// For example "Fixing for 5 years left you £4,180 better off by 2023."
+    /// The API `summary`, verbatim. For example "In the 2021-2023 rate shock (stress test), “Take a tracker” cost £7,280 more than “Fix for 2 years”."
     var summary: String
     /// For example "7 in 10 twins in similar past periods did better."
     var evidenceSentence: String
@@ -56,6 +83,13 @@ struct TestItViewState: Equatable, Sendable {
     /// One y-axis range for every option chart, so the charts compare fairly side by side.
     var chartMin: Double
     var chartMax: Double
+    /// "Two of you. Same life. One choice is different."
+    var intro: String = ""
+    /// Face icon key for the option cards (character emoji from the API).
+    var faceEmoji: String? = nil
+    var hero: Hero? = nil
+    /// True when the glue wired "Do this" (add the move to the plan).
+    var canDoThis: Bool = false
 
     var recommended: Option? { options.first { $0.isRecommended } }
 }
@@ -66,6 +100,8 @@ struct TestItActions {
     /// Called with the option's `lifeID`.
     var onOpenLife: @MainActor (String) -> Void = { _ in }
     var onClose: @MainActor () -> Void = {}
+    /// "Do this": add the move to the plan.
+    var onDoThis: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }

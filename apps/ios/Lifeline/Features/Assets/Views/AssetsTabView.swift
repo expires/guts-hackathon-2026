@@ -6,45 +6,25 @@ struct AssetsTabView: View {
     var actions: ActionTabActions = .noop
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Theme.Spacing.l) {
-                GlassCard {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                        HStack {
-                            Text("Total").font(.headline)
-                            Spacer()
-                            Text(Money.format(state.totalValue))
-                                .font(.headline.monospacedDigit())
-                                .contentTransition(.numericText(value: state.totalValue))
-                        }
-                        if state.items.isEmpty {
-                            Text("You do not own anything yet.").foregroundStyle(.secondary)
-                        }
-                        ForEach(state.items) { item in
-                            HStack {
-                                Text(item.emoji).accessibilityHidden(true)
-                                VStack(alignment: .leading) {
-                                    Text(item.name)
-                                    Text(item.kindLabel).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Text(Money.format(item.value)).monospacedDigit()
-                            }
-                            .frame(minHeight: Theme.minTarget)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("\(item.name), \(item.kindLabel), \(Money.spoken(item.value))")
-                        }
-                    }
+        SheetContainer(title: "Assets", closeIdentifier: "menu.close", onClose: actions.onClose) {
+            RowGroup(title: "Things I own") {
+                if state.items.isEmpty {
+                    ListRow(icon: .home, title: "Nothing yet", subtitle: "Buy something below", showsChevron: false)
                 }
-                if let outcome = state.outcome {
-                    OutcomeBanner(outcome: outcome, onDismiss: actions.onDismissOutcome)
+                ForEach(state.items) { item in
+                    ListRow(icon: LLIcon.from(emoji: item.emoji, fallback: item.kindLabel.lowercased().contains("home") ? .home : .savings), title: item.name, subtitle: item.kindLabel, trailing: Money.format(item.value), showsChevron: false)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(item.name), \(item.kindLabel), \(Money.spoken(item.value))")
                 }
-                SectionTitle(text: "What to do")
-                ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction)
             }
-            .padding(Theme.Spacing.l)
+            HStack {
+                Text("Total").font(.llBodyBold)
+                Spacer()
+                Text(Money.format(state.totalValue)).font(.llTitle).contentTransition(.numericText(value: state.totalValue))
+            }
+            RowGroupTitle(text: "What you can do")
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
         }
-        .navigationTitle("Assets")
     }
 }
 

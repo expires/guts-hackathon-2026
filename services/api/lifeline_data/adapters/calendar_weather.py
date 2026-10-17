@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from typing import Any, ClassVar
 
 from lifeline_contracts.observation import Observation
-from lifeline_data.base import Adapter, PayloadError, parse_number
+from lifeline_data.base import Adapter, PayloadError, parse_number, utcnow
 from lifeline_data.prediction_inputs import BANK_HOLIDAYS_URL, REGION_POINTS, parse_bank_holidays
 
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -53,12 +53,18 @@ class BankHolidaysAdapter(Adapter):
     async def holidays(self) -> dict[str, set[date]]:
         return parse_bank_holidays(await self.get_text(BANK_HOLIDAYS_URL))
 
+    async def fetch_holidays(self) -> dict[str, set[date]]:
+        """`holidays()` through the circuit breaker."""
+        return await self.guarded(self.holidays)
+
     async def fetch(self, series_id: str, region: str | None = None) -> list[Observation]:
         days = (await self.holidays()).get(series_id)
         if not days:
             raise PayloadError(f"bankholidays: unknown division {series_id}")
         r = DIVISION_REGION.get(series_id)
-        return [self.obs(series_id, d, 1.0, "flag", r) for d in sorted(days)]
+        # gov.uk lists about two years ahead; observations stop at one year ahead (validation window).
+        horizon = utcnow().date() + timedelta(days=365)
+        return [self.obs(series_id, d, 1.0, "flag", r) for d in sorted(days) if d <= horizon]
 
 
 class OpenMeteoAdapter(Adapter):
@@ -95,6 +101,10 @@ class OpenMeteoAdapter(Adapter):
         if not out:
             raise PayloadError("openmeteo: no days returned")
         return out
+
+    async def daily_validated(self, region: str | None, start: date, end: date, today: date) -> WeatherDays:
+        """`daily()` through the circuit breaker."""
+        return await self.guarded(lambda: self.daily(region, start, end, today))
 
     async def fetch(self, series_id: str, region: str | None = None) -> list[Observation]:
         """Last 31 days plus 3 forecast days at the region's point."""

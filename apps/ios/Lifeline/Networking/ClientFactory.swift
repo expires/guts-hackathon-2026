@@ -55,7 +55,7 @@ enum ClientFactory {
 
     static func make(_ kind: ClientKind) -> any LifelineClient {
         switch kind {
-        case .mock: MockClient()
+        case .mock: MockClient(data: .recorded)
         case .live: LiveClient(baseURL: LiveClient.configuredBaseURL())
         }
     }

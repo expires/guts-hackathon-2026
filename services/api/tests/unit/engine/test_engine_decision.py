@@ -90,3 +90,31 @@ def test_decide_on_empty_table(empty_macro: MacroTable) -> None:
 
 def test_api_random_character(macro: MacroTable) -> None:
     assert isinstance(api.random_character(42, macro), CharacterSpec)
+
+
+def test_evidence_sentence_caps() -> None:
+    assert evidence_sentence(1.0) == "All twins in similar past periods did better."
+    assert evidence_sentence(0.97) == "More than 9 in 10 twins in similar past periods did better."
+    assert "10 in 10" not in evidence_sentence(0.999)
+
+
+def test_three_year_fix_option(fixture_macro: MacroTable) -> None:
+    from lifeline_engine.decision import fix_3y_rate, options_for
+
+    assert "fix_3y" in options_for("mortgage")
+    r2 = fixture_macro.value("mortgage_2y_fix", 2005)
+    r5 = fixture_macro.value("mortgage_5y_fix", 2005)
+    assert fix_3y_rate(fixture_macro, 2005) == pytest.approx(r2 + (r5 - r2) / 3)
+    path = mortgage_rate_path(fixture_macro, "fix_3y", 2005, horizon=5)
+    assert path[:3] == [fix_3y_rate(fixture_macro, 2005)] * 3
+    assert path[3:] == [fix_3y_rate(fixture_macro, 2008)] * 2
+
+
+def test_debt_option_capped_at_debt(fixture_macro: MacroTable) -> None:
+    from lifeline_engine.decision import outcome
+
+    # £10,000 of savings and £2,000 of debt: only £2,000 earns the debt rate, £8,000 stays in savings.
+    capped = outcome("savings", fixture_macro, "pay_debt", 2000, Scenario(10_000, 0, debt=2_000))
+    save = outcome("savings", fixture_macro, "save", 2000, Scenario(10_000, 0))
+    all_debt = outcome("savings", fixture_macro, "pay_debt", 2000, Scenario(2_000, 0, debt=2_000))
+    assert capped == pytest.approx(0.2 * all_debt + 0.8 * save)

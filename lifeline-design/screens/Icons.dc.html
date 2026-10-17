@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lifeline icon set</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1560px; box-sizing: border-box; padding: 48px; background: #F5F2EA; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; gap: 28px">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1">Lifeline icons</h1>
+      <div style="font-size: 17px; color: #4A4F59">48 × 48 grid · 4px padding · ink outline · flat fills · max 2 palette colours</div>
+    </div>
+    <div style="font-size: 13px; line-height: 1.5; text-align: right; color: #4A4F59">Stroke: 3px at 48, 2.75px at 32, 2.5px at 24.<br>Thinner at small sizes so the weight looks the same.</div>
+  </div>
+
+  <sc-for list="{{sets}}" as="set" hint-placeholder-count="6">
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">{{set.title}}</div>
+      <div style="display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); row-gap: 16px; column-gap: 8px">
+        <sc-for list="{{set.items}}" as="it" hint-placeholder-count="8">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center">
+            <dc-import name="Icon" icon="{{it.id}}" size="{{48}}" active="{{it.active}}" hint-size="48px,48px"></dc-import>
+            <div style="font-size: 13px; line-height: 1.2">{{it.label}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-for>
+
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Size test · 24 / 32 / 48</div>
+    <div style="display: flex; gap: 40px; flex-wrap: wrap">
+      <sc-for list="{{sizeTest}}" as="t" hint-placeholder-count="6">
+        <div style="display: flex; align-items: flex-end; gap: 10px; padding: 12px 14px; background: #FFFFFF; border: 3px solid #16181D; border-radius: 14px 18px 13px 17px">
+          <dc-import name="Icon" icon="{{t}}" size="{{24}}" hint-size="24px,24px"></dc-import>
+          <dc-import name="Icon" icon="{{t}}" size="{{32}}" hint-size="32px,32px"></dc-import>
+          <dc-import name="Icon" icon="{{t}}" size="{{48}}" hint-size="48px,48px"></dc-import>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    function L(pairs) { return pairs.map(function (p) { return { id: p[0], label: p[1], active: !!p[2] }; }); }
+    var sets = [
+      { title: '1 · Tab bar · outline, then filled when active', items: L([['tab-money','Money'],['tab-life','Life'],['tab-play','Play'],['tab-you','You'],['tab-money','Money on',1],['tab-life','Life on',1],['tab-play','Play on',1],['tab-you','You on',1]]) },
+      { title: '2 · Assets and money', items: L([['home','Home'],['car','Car'],['bank','Mortgage / bank'],['card','Credit card'],['savings','Savings'],['pension','Pension'],['cart','Shopping'],['subscriptions','Subscriptions'],['bills','Bills'],['budget','Budget'],['goal','Savings goal'],['investment','Investment'],['debt','Debt']]) },
+      { title: '3 · Life areas and actions', items: L([['job','Job'],['study','Study'],['health','Health'],['family','Family'],['relationships','Relationships'],['activities','Activities'],['travel','Travel'],['pet','Pet'],['happiness','Happiness']]) },
+      { title: '4 · Events', items: L([['rate-rise','Rate rise'],['price-rise','Price rise'],['job-loss','Job loss'],['pay-rise','Pay rise'],['crash','Crash'],['flood','Flood'],['burglary','Burglary'],['baby','Baby'],['wedding','Wedding'],['inheritance','Inheritance'],['boiler','Boiler break'],['mot-fail','MOT fail']]) },
+      { title: '5 · Game UI', items: L([['age','Age'],['rewind','Rewind'],['test','Test it'],['why','Why?'],['check','Do this'],['lesson','Lesson'],['ribbon','Ribbon'],['trophy','Trophy'],['streak','Streak'],['lock','Lock'],['demo-pay','Demo payment'],['status-live','Live data'],['status-cached','Cached data'],['status-mock','Mock data']]) },
+      { title: '6 · Character avatars', items: L([['face-baby','Baby'],['face-girl','Child'],['face-boy','Child'],['face-teen','Teen'],['face-teen-hijab','Teen'],['face-woman-puff','Adult'],['face-man-beard','Adult'],['face-priya','Priya (adult)'],['face-man-glasses','Adult'],['face-blue-hair','Adult'],['face-older-woman','Older adult'],['face-older-man','Older adult']]) }
+    ];
+    return { sets: sets, sizeTest: ['home', 'job', 'rate-rise', 'rewind', 'face-priya', 'tab-money'] };
+  }
+}
+</script>
+</body>
+</html>

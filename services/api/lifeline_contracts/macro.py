@@ -42,6 +42,8 @@ class MacroKey(StrEnum):
     FLOOD_RISK = "flood_risk"  # percent annual chance, regional. Environment Agency
     SAVINGS_RATE = "savings_rate"  # percent, instant-access deposit rate. BoE quoted household rates (ADR 0018)
     CARD_RATE = "card_rate"  # percent, credit card rate. BoE quoted household rates (ADR 0018)
+    MORTGAGE_SVR = "mortgage_svr"  # percent, revert-to (standard variable) rate. BoE IUMTLMV (ADR 0020)
+    MORTGAGE_TRACKER = "mortgage_tracker"  # percent, 2-year variable (tracker) 75% LTV. BoE IUMBV48 (ADR 0020)
     ENERGY_TARIFF = "energy_tariff"  # gbp per year, typical dual-fuel bill. Octopus / price cap (ADR 0018)
 
 

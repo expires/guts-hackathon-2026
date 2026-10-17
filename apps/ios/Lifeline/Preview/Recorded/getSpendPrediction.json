@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "date": "2026-10-17",
+  "predicted": 12.04,
+  "low": 0.65,
+  "high": 85.47,
+  "baseline": 6.55,
+  "reasons": [
+    {
+      "feature": "weekday",
+      "label": "It is Saturday",
+      "effect": 6.19
+    },
+    {
+      "feature": "payday",
+      "label": "Payday is 13 days away",
+      "effect": -1.02
+    },
+    {
+      "feature": "month_end",
+      "label": "It is not the end of the month",
+      "effect": -0.43
+    }
+  ],
+  "weather": {
+    "summary": "Mild and dry",
+    "temp_max_c": 12.5,
+    "rain_mm": 0.0,
+    "status": "live"
+  },
+  "is_bank_holiday": false,
+  "days_to_payday": 13,
+  "model": {
+    "name": "ridge regression on log spend",
+    "trained_on_days": 364,
+    "mae": 17.64,
+    "baseline_mae": 18.57,
+    "interval_coverage": 0.8111
+  }
+}

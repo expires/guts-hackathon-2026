@@ -17,6 +17,7 @@ dependencies = [
     "pyyaml>=6.0",
     "anthropic>=0.40",
     "qrcode>=7.4",
+    "defusedxml>=0.7",
 ]
 
 [dependency-groups]
@@ -33,6 +34,7 @@ dev = [
     "mypy>=1.11",
     "types-pyyaml",
     "types-redis",
+    "types-defusedxml",
     "aiosqlite>=0.20",
 ]
 
@@ -60,7 +62,7 @@ markers = [
     "tier2: Tier 2 feature",
     "live: hits the real network (skipped by default)",
 ]
-addopts = "-q -m 'not live and not tier1 and not tier2'"
+addopts = "-q -m 'not live and not tier2'"
 
 [tool.ruff]
 line-length = 120

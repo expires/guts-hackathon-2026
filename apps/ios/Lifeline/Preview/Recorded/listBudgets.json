@@ -1,0 +1,10 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "month": "2026-10",
+  "items": []
+}

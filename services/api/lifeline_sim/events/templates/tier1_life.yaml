@@ -1,0 +1,1074 @@
+# Tier 1 car, health, family and place events. Schema: lifeline_sim/events/schema.py
+
+- id: car.hybrid_switch
+  area: car
+  emoji: "🔋"
+  title: Swap to a cheaper car to run?
+  text: "Fuel rose {fuel_pct:.0f}% this year. A used hybrid costs £{swap_cost:,.0f} after selling yours, and saves about £{fuel_saving:,.0f} a year."
+  concept_id: car-costs
+  eligible:
+    when: has_car
+  probability: clamp((fuel_price_change - 8) / 40, 0, 0.3)
+  facts:
+    fuel_pct: fuel_price_change
+    swap_cost: round(4000 * price_level)
+    fuel_saving: round(1400 * price_level * 0.35)
+    monthly: round(fuel_saving / 12)
+  choices:
+    - id: keep
+      label: Keep your car
+      emoji: "🚗"
+      hint: No upfront cost
+      default: true
+      text: "You keep your car."
+      good: true
+      effects: { }
+    - id: swap
+      label: Swap to a hybrid
+      emoji: "🔋"
+      hint: "-£{swap_cost:,.0f}, then £{monthly:,.0f} a month less"
+      text: "You swapped. Fuel costs £{monthly:,.0f} a month less."
+      good: false
+      effects: { cash: -swap_cost, living: -monthly, happiness: 2 }
+
+- id: car.speeding_fine
+  area: car
+  emoji: "📸"
+  title: Caught speeding
+  text: "A camera caught you at 36 in a 30 zone. Pay a £{fine:,.0f} fine and take 3 points, or take a course for £{course:,.0f}."
+  concept_id: car-costs
+  eligible:
+    when: has_car
+  probability: 0.04
+  facts:
+    fine: 100
+    course: round(95 * price_level)
+    premium_rise: round(80 * price_level)
+    total: fine + premium_rise
+  choices:
+    - id: fine
+      label: Pay the fine
+      emoji: "💷"
+      hint: "-£{fine:,.0f}, insurance rises £{premium_rise:,.0f}"
+      default: true
+      text: "You paid £{fine:,.0f}. Your insurance rose £{premium_rise:,.0f}."
+      good: false
+      effects: { cash: -total }
+    - id: course
+      label: Take the course
+      emoji: "📚"
+      hint: "-£{course:,.0f}, no points"
+      text: "You took the course for £{course:,.0f}. No points."
+      good: true
+      effects: { cash: -course, smarts: 1 }
+
+- id: car.parking_ticket
+  area: car
+  emoji: "🅿️"
+  title: Parking ticket
+  text: "You got a £{full:,.0f} ticket. It halves to £{early:,.0f} if you pay within 14 days."
+  concept_id: budgeting
+  eligible:
+    when: has_car
+  probability: 0.06
+  facts:
+    full: round(70 * price_level)
+    early: round(full / 2)
+  choices:
+    - id: pay_early
+      label: Pay early
+      emoji: "⏱️"
+      hint: "-£{early:,.0f}"
+      default: true
+      text: "You paid £{early:,.0f}."
+      good: true
+      effects: { cash: -early }
+    - id: appeal
+      label: Appeal it
+      emoji: "⚖️"
+      hint: Could win, or pay £{full:,.0f}
+      branches:
+        - p: 0.35
+          text: "Appeal won. You paid nothing."
+          good: true
+          effects: { smarts: 1 }
+        - text: "Appeal lost. You paid the full £{full:,.0f}."
+          good: false
+          effects: { cash: -full, happiness: -1 }
+
+- id: car.clean_air_zone
+  area: car
+  emoji: "🌫️"
+  title: A clean air zone opens
+  text: "Your old car is not compliant. Driving in costs £{daily:,.0f} a day, about £{annual:,.0f} a year. A scrappage grant pays £{grant:,.0f}."
+  concept_id: depreciation
+  eligible:
+    years: [2019, 2100]
+    when: has_car
+  probability: 0.03
+  facts:
+    daily: round(12.5 * price_level)
+    annual: daily * 60
+    grant: round(2000 * price_level)
+    newer: round(6000 * price_level)
+    flag_off: 0
+  choices:
+    - id: pay
+      label: Pay the charge
+      emoji: "💷"
+      hint: "-£{annual:,.0f} a year"
+      default: true
+      text: "You paid £{annual:,.0f} in charges this year."
+      good: false
+      effects: { cash: -annual }
+    - id: scrap
+      label: Scrap it and go car-free
+      emoji: "🚲"
+      hint: "+£{grant:,.0f} grant"
+      text: "You scrapped the car for a £{grant:,.0f} grant."
+      good: true
+      effects: { cash: grant, set_has_car: flag_off, happiness: -2 }
+    - id: upgrade
+      label: Buy a newer car
+      emoji: "🚙"
+      hint: "-£{newer:,.0f}, +£{grant:,.0f} grant"
+      text: "You bought a compliant car. Net cost £{newer:,.0f} less the grant."
+      good: false
+      effects: { cash: grant - newer, happiness: 2 }
+
+- id: car.finance_offer
+  area: car
+  emoji: "✨"
+  title: A shiny new car on finance
+  text: "A dealer offers a new car for £{monthly:,.0f} a month over 4 years, £{total:,.0f} in total. At the end you do not own it."
+  concept_id: depreciation
+  eligible:
+    age: [20, 75]
+    when: has_car and employed
+  probability: 0.06
+  facts:
+    monthly: round(320 * price_level)
+    total: monthly * 48
+    current_running: round(60 * price_level)
+  choices:
+    - id: keep
+      label: Keep your car
+      emoji: "🚗"
+      hint: No new cost
+      default: true
+      text: "You keep your car."
+      good: true
+      effects: { }
+    - id: finance
+      label: Sign up
+      emoji: "✍️"
+      hint: "£{monthly:,.0f} a month"
+      text: "You drive away in a new car for £{monthly:,.0f} a month."
+      good: false
+      effects: { living: monthly - current_running, happiness: 5 }
+
+- id: car.accident
+  area: car
+  emoji: "💥"
+  title: A bump in a car park
+  text: "The repair costs £{repair:,.0f}. Claiming costs your £{excess:,.0f} excess and raises your premium about £{premium:,.0f}."
+  concept_id: insurance
+  eligible:
+    when: has_car
+  probability: 0.05
+  facts:
+    repair: round(900 * price_level)
+    excess: round(250 * price_level)
+    premium: round(200 * price_level)
+    claim_cost: excess + premium
+  choices:
+    - id: claim
+      label: Claim on insurance
+      emoji: "📄"
+      hint: "-£{claim_cost:,.0f} over the year"
+      default: true
+      text: "You claimed. It cost £{claim_cost:,.0f} with the excess and higher premium."
+      good: false
+      effects: { cash: -claim_cost }
+    - id: pay
+      label: Pay it yourself
+      emoji: "💷"
+      hint: "-£{repair:,.0f}"
+      text: "You paid £{repair:,.0f} and kept your no-claims bonus."
+      good: true
+      effects: { cash: -repair }
+
+- id: car.tyres
+  area: car
+  emoji: "🛞"
+  title: Bald tyres
+  text: "Four new tyres cost £{new_set:,.0f}. Part-worn ones are £{part_worn:,.0f}."
+  concept_id: car-costs
+  eligible:
+    when: has_car
+  probability: 0.08
+  facts:
+    new_set: round(400 * price_level)
+    part_worn: round(160 * price_level)
+    fine: round(2500 * price_level * 0.1) + part_worn
+  choices:
+    - id: new
+      label: Buy new
+      emoji: "🛞"
+      hint: "-£{new_set:,.0f}"
+      default: true
+      text: "New tyres for £{new_set:,.0f}."
+      good: true
+      effects: { cash: -new_set }
+    - id: part_worn
+      label: Buy part-worn
+      emoji: "🎲"
+      hint: "-£{part_worn:,.0f}"
+      branches:
+        - p: 0.8
+          text: "The part-worn tyres were fine."
+          good: true
+          effects: { cash: -part_worn }
+        - text: "One failed a check. Replacing it and a fine cost £{fine:,.0f} in total."
+          good: false
+          effects: { cash: -fine, happiness: -2 }
+
+- id: health.back_pain
+  area: health
+  emoji: "🦴"
+  title: Back pain
+  text: "Private physio costs £{private:,.0f}. The NHS waiting list is {wait_weeks:.0f} weeks."
+  concept_id: health-cost
+  eligible:
+    age: [25, 90]
+  probability: clamp(0.03 + age / 2000, 0.03, 0.08)
+  facts:
+    private: round(300 * price_level)
+    wait_weeks: 16
+  choices:
+    - id: nhs
+      label: Wait for the NHS
+      emoji: "⏳"
+      hint: Free, but slow
+      default: true
+      text: "You waited {wait_weeks:.0f} weeks. It is better now."
+      good: true
+      effects: { health: -2, happiness: -2 }
+    - id: private
+      label: Go private
+      emoji: "🏥"
+      hint: "-£{private:,.0f}"
+      text: "Private physio fixed it for £{private:,.0f}."
+      good: false
+      effects: { cash: -private, health: 2 }
+
+- id: health.glasses
+  area: health
+  emoji: "👓"
+  title: You need glasses
+  text: "Designer frames cost £{designer:,.0f}. A budget pair costs £{budget:,.0f}."
+  concept_id: budgeting
+  eligible:
+    age: [16, 110]
+  probability: 0.05
+  facts:
+    designer: round(350 * price_level)
+    budget: round(60 * price_level)
+  choices:
+    - id: designer
+      label: Designer frames
+      emoji: "🕶️"
+      hint: "-£{designer:,.0f}"
+      default: true
+      text: "You look great. They cost £{designer:,.0f}."
+      good: false
+      effects: { cash: -designer, happiness: 2 }
+    - id: budget
+      label: Budget pair
+      emoji: "👓"
+      hint: "-£{budget:,.0f}"
+      text: "You see just as well for £{budget:,.0f}."
+      good: true
+      effects: { cash: -budget }
+
+- id: health.burnout
+  area: health
+  emoji: "🔥"
+  title: You feel burnt out
+  text: "Work is wearing you down. Two weeks of unpaid leave costs £{unpaid:,.0f}."
+  concept_id: health-cost
+  eligible:
+    age: [20, 66]
+    when: employed and happiness < 50
+  probability: 0.12
+  facts:
+    unpaid: round(net_income / 26)
+  choices:
+    - id: push_on
+      label: Push on
+      emoji: "😩"
+      hint: Your health suffers
+      default: true
+      text: "You push on. Your health suffers."
+      good: false
+      effects: { health: -5, happiness: -3 }
+    - id: rest
+      label: Take unpaid leave
+      emoji: "🏖️"
+      hint: "-£{unpaid:,.0f}"
+      text: "Two weeks off cost £{unpaid:,.0f}. You feel human again."
+      good: true
+      effects: { cash: -unpaid, health: 4, happiness: 8 }
+
+- id: health.smoking
+  area: health
+  emoji: "🚭"
+  title: Quit smoking?
+  text: "Cigarettes cost you about £{annual:,.0f} a year. A quit kit costs £{kit:,.0f}."
+  concept_id: opportunity-cost
+  eligible:
+    age: [18, 80]
+    when: health < 75
+  probability: 0.04
+  facts:
+    annual: round(2600 * price_level)
+    monthly: round(annual / 12)
+    kit: round(120 * price_level)
+  choices:
+    - id: keep
+      label: Not now
+      emoji: "🚬"
+      hint: "-£{annual:,.0f} a year"
+      default: true
+      text: "You keep smoking."
+      good: false
+      effects: { health: -2 }
+    - id: quit
+      label: Quit
+      emoji: "🚭"
+      hint: "Save £{monthly:,.0f} a month"
+      branches:
+        - p: 0.5
+          text: "You quit. You save £{monthly:,.0f} a month and feel better."
+          good: true
+          effects: { cash: -kit, living: -monthly, health: 6 }
+        - text: "You slipped back. The £{kit:,.0f} kit was wasted."
+          good: false
+          effects: { cash: -kit, happiness: -2 }
+
+- id: health.flu
+  area: health
+  emoji: "🤧"
+  title: A bad flu
+  text: "You are ill for a week. You get statutory sick pay only, so you lose about £{lost:,.0f}."
+  concept_id: income-protection
+  eligible:
+    age: [18, 66]
+    when: employed
+  probability: 0.08
+  facts:
+    lost: round(max(net_income / 52 - 118.75 * price_level, 0))
+    worse: round(lost * 2)
+  choices:
+    - id: rest
+      label: Stay home
+      emoji: "🛌"
+      hint: "-£{lost:,.0f}"
+      default: true
+      text: "You rested and lost £{lost:,.0f}."
+      good: true
+      effects: { cash: -lost }
+    - id: work
+      label: Work through it
+      emoji: "😷"
+      hint: You might get worse
+      branches:
+        - p: 0.5
+          text: "You got through it."
+          good: true
+          effects: { health: -2 }
+        - text: "You got worse and lost £{worse:,.0f} in the end."
+          good: false
+          effects: { cash: -worse, health: -5 }
+
+- id: health.prescriptions
+  area: health
+  emoji: "💊"
+  title: Regular prescriptions
+  text: "You need {items:.0f} prescriptions a year at £{per_item:,.2f} each. A prepayment certificate costs £{ppc:,.0f}."
+  concept_id: budgeting
+  eligible:
+    age: [30, 59]
+  probability: 0.05
+  facts:
+    items: 12
+    per_item: round(9.9 * price_level, 2)
+    per_year: round(items * per_item)
+    ppc: round(115 * price_level)
+    saving: per_year - ppc
+  choices:
+    - id: pay_each
+      label: Pay each time
+      emoji: "💷"
+      hint: "-£{per_year:,.0f} a year"
+      default: true
+      text: "You paid £{per_year:,.0f} this year."
+      good: false
+      effects: { cash: -per_year }
+    - id: certificate
+      label: Buy a certificate
+      emoji: "🎫"
+      hint: "-£{ppc:,.0f}"
+      text: "The certificate saved you £{saving:,.0f}."
+      good: true
+      effects: { cash: -ppc, smarts: 1 }
+
+- id: health.therapy
+  area: health
+  emoji: "🧠"
+  title: You feel low
+  text: "Private therapy costs £{private:,.0f} for {sessions:.0f} sessions. NHS talking therapy is free but has a wait."
+  concept_id: health-cost
+  eligible:
+    age: [16, 90]
+    when: happiness < 45
+  probability: 0.15
+  facts:
+    sessions: 8
+    private: round(65 * sessions * price_level)
+  choices:
+    - id: nhs
+      label: Refer yourself to the NHS
+      emoji: "🩺"
+      hint: Free
+      default: true
+      text: "After a wait, NHS therapy helped."
+      good: true
+      effects: { happiness: 6 }
+    - id: private
+      label: Go private
+      emoji: "💬"
+      hint: "-£{private:,.0f}"
+      text: "Private therapy helped quickly. It cost £{private:,.0f}."
+      good: false
+      effects: { cash: -private, happiness: 9 }
+
+- id: health.sports_injury
+  area: health
+  emoji: "🤕"
+  title: A sports injury
+  text: "You tore a ligament. You need {weeks:.0f} weeks off, losing about £{lost:,.0f}."
+  concept_id: income-protection
+  eligible:
+    age: [18, 60]
+    when: employed and health > 60
+  probability: 0.03
+  facts:
+    weeks: 4
+    lost: round(max(net_income / 52 - 118.75 * price_level, 0) * weeks)
+  choices:
+    - id: rest
+      label: Rest and recover
+      emoji: "🛌"
+      hint: "-£{lost:,.0f}"
+      default: true
+      text: "You recovered fully. It cost £{lost:,.0f} in lost pay."
+      good: true
+      effects: { cash: -lost }
+    - id: rush
+      label: Rush back
+      emoji: "🏃"
+      hint: Risk a worse injury
+      text: "You rushed back and hurt it again."
+      good: false
+      effects: { health: -6, happiness: -3 }
+
+- id: health.care_at_home
+  area: health
+  emoji: "🧓"
+  title: You need help at home
+  text: "Care at home costs £{weekly:,.0f} a week, £{annual:,.0f} a year."
+  concept_id: state-pension
+  eligible:
+    age: [78, 110]
+    when: health < 50
+  probability: 0.2
+  facts:
+    weekly: round(250 * price_level)
+    annual: weekly * 52
+    family_cost: round(annual * 0.2)
+  choices:
+    - id: pay
+      label: Pay for care
+      emoji: "🧑‍⚕️"
+      hint: "-£{annual:,.0f} a year"
+      default: true
+      text: "Carers visit daily. It costs £{annual:,.0f} a year."
+      good: true
+      effects: { cash: -annual, health: 4 }
+    - id: family
+      label: Rely on family
+      emoji: "👨‍👩‍👧"
+      hint: Cheaper, but a strain on them
+      text: "Family help out. Costs are £{family_cost:,.0f}."
+      good: false
+      effects: { cash: -family_cost, happiness: -3 }
+
+- id: family.parent_care
+  area: family
+  emoji: "🧓"
+  title: A parent needs care
+  text: "Your parent needs help. Cutting your hours costs £{lost:,.0f} a year. A carer costs £{carer:,.0f} a year."
+  concept_id: household-costs
+  eligible:
+    age: [42, 66]
+    when: employed
+  probability: 0.03
+  facts:
+    lost: round(income * 0.2)
+    neg_lost: -lost
+    carer: round(9000 * price_level)
+    carer_monthly: round(carer / 12)
+  choices:
+    - id: carer
+      label: Pay for a carer
+      emoji: "🧑‍⚕️"
+      hint: "-£{carer:,.0f} a year"
+      default: true
+      text: "A carer visits. It costs £{carer_monthly:,.0f} a month."
+      good: true
+      effects: { living: carer_monthly }
+    - id: cut_hours
+      label: Cut your hours
+      emoji: "⏳"
+      hint: "-£{lost:,.0f} a year of pay"
+      text: "You cut your hours to care. Your pay falls £{lost:,.0f}."
+      good: false
+      effects: { income: neg_lost, happiness: 2, health: -2 }
+
+- id: family.childcare
+  area: family
+  emoji: "🧸"
+  title: Childcare costs
+  text: "Nursery costs £{annual:,.0f} a year. One parent could go part time and lose £{lost:,.0f} of pay."
+  concept_id: childcare
+  eligible:
+    age: [20, 50]
+    when: children > 0 and employed
+  probability: 0.15
+  facts:
+    annual: round(14000 * price_level)
+    monthly: round(annual / 12 * 0.3)
+    lost: round(income * 0.4)
+    neg_lost: -lost
+  choices:
+    - id: nursery
+      label: Use the nursery
+      emoji: "🏫"
+      hint: "-£{monthly:,.0f} a month after free hours"
+      default: true
+      text: "With free hours, nursery costs £{monthly:,.0f} a month."
+      good: true
+      effects: { living: monthly }
+    - id: part_time
+      label: Go part time
+      emoji: "🧸"
+      hint: "-£{lost:,.0f} a year of pay"
+      text: "You went part time. Pay falls £{lost:,.0f}."
+      good: false
+      effects: { income: neg_lost, happiness: 4 }
+
+- id: family.school_trip
+  area: family
+  emoji: "🚌"
+  title: School trip abroad
+  text: "The school trip costs £{cost:,.0f}."
+  concept_id: household-costs
+  eligible:
+    age: [28, 60]
+    when: children > 0
+  probability: 0.08
+  facts:
+    cost: round(650 * price_level)
+  choices:
+    - id: pay
+      label: Pay for it
+      emoji: "💷"
+      hint: "-£{cost:,.0f}"
+      default: true
+      text: "Your child had a great time. It cost £{cost:,.0f}."
+      good: true
+      effects: { cash: -cost, happiness: 2 }
+    - id: skip
+      label: Say no
+      emoji: "🙅"
+      hint: Keep the money
+      text: "You said no. Your child is upset."
+      good: false
+      effects: { happiness: -3 }
+
+- id: family.lend_money
+  area: family
+  emoji: "🤲"
+  title: A relative asks for a loan
+  text: "Your cousin asks to borrow £{amount:,.0f} and promises to pay it back in a year."
+  concept_id: debt
+  eligible:
+    when: liquid > 2000
+  probability: 0.04
+  facts:
+    amount: round(min(liquid * 0.3, 3000 * price_level))
+  choices:
+    - id: decline
+      label: Say no
+      emoji: "🙅"
+      hint: Keep your money
+      default: true
+      text: "You said no. Things are frosty for a while."
+      good: true
+      effects: { happiness: -2 }
+    - id: lend
+      label: Lend it
+      emoji: "🤝"
+      hint: "-£{amount:,.0f}, maybe back"
+      branches:
+        - p: 0.5
+          text: "Your cousin paid you back."
+          good: true
+          effects: { happiness: 2 }
+        - text: "You never saw the £{amount:,.0f} again."
+          good: false
+          effects: { cash: -amount, happiness: -4 }
+
+- id: family.funeral
+  area: family
+  emoji: "🕯️"
+  title: A funeral to pay for
+  text: "A close relative died. A simple funeral costs £{simple:,.0f}. A traditional one costs £{full:,.0f}."
+  concept_id: inheritance
+  eligible:
+    age: [35, 80]
+  probability: 0.02
+  facts:
+    simple: round(2000 * price_level)
+    full: round(4500 * price_level)
+  choices:
+    - id: traditional
+      label: Traditional funeral
+      emoji: "⛪"
+      hint: "-£{full:,.0f}"
+      default: true
+      text: "A fitting send-off. It cost £{full:,.0f}."
+      good: false
+      effects: { cash: -full, happiness: -4 }
+    - id: simple
+      label: Simple service
+      emoji: "🕊️"
+      hint: "-£{simple:,.0f}"
+      text: "A simple, moving service for £{simple:,.0f}."
+      good: true
+      effects: { cash: -simple, happiness: -4 }
+
+- id: family.pet
+  area: family
+  emoji: "🐶"
+  title: Get a dog?
+  text: "A dog costs about £{monthly:,.0f} a month for food, insurance and vets."
+  concept_id: household-costs
+  eligible:
+    age: [18, 75]
+  probability: 0.04
+  facts:
+    monthly: round(110 * price_level)
+    buy: round(800 * price_level)
+  choices:
+    - id: decline
+      label: Not now
+      emoji: "🙅"
+      hint: No new costs
+      default: true
+      text: "You decide against a dog for now."
+      good: true
+      effects: { }
+    - id: dog
+      label: Get a dog
+      emoji: "🐕"
+      hint: "-£{buy:,.0f}, then £{monthly:,.0f} a month"
+      text: "Meet your new best friend. Costs are £{monthly:,.0f} a month."
+      good: false
+      effects: { cash: -buy, living: monthly, happiness: 7, health: 2 }
+
+- id: family.uni_help
+  area: family
+  emoji: "🎓"
+  title: Your child starts university
+  text: "Rent at university costs far more than the maintenance loan. Helping costs £{help:,.0f} a year."
+  concept_id: student-loans
+  eligible:
+    age: [40, 65]
+    when: children > 0
+  probability: 0.04
+  facts:
+    help: round(3000 * price_level)
+    monthly: round(help / 12)
+  choices:
+    - id: help
+      label: Help out
+      emoji: "🤲"
+      hint: "-£{monthly:,.0f} a month"
+      default: true
+      text: "You send £{monthly:,.0f} a month."
+      good: true
+      effects: { living: monthly, happiness: 2 }
+    - id: loan_only
+      label: They use the loan and a job
+      emoji: "💼"
+      hint: No cost to you
+      text: "Your child works part time to cover the gap."
+      good: false
+      effects: { happiness: -2 }
+
+- id: family.bank_of_mum
+  area: family
+  emoji: "🏦"
+  title: Help with a deposit
+  text: "Your child wants to buy a first home. A gift of £{gift:,.0f} would cover the deposit."
+  concept_id: deposit
+  eligible:
+    age: [50, 80]
+    when: children > 0 and liquid > 20000
+  probability: 0.05
+  facts:
+    gift: round(min(liquid * 0.3, house_price * 0.1))
+  choices:
+    - id: keep
+      label: Keep your savings
+      emoji: "🏦"
+      hint: Your money stays safe
+      default: true
+      text: "You keep your savings for later life."
+      good: true
+      effects: { }
+    - id: gift
+      label: Give the deposit
+      emoji: "🎁"
+      hint: "-£{gift:,.0f}"
+      text: "You gave £{gift:,.0f}. Your child has a home."
+      good: false
+      effects: { savings: -gift, happiness: 8 }
+
+- id: family.christmas
+  area: family
+  emoji: "🎄"
+  title: Christmas spending
+  text: "The average family plans to spend £{typical:,.0f} on Christmas. Prices rose {cpi_pct:.1f}% this year."
+  concept_id: budgeting
+  tags: [budget_overspend]
+  eligible:
+    age: [20, 90]
+  probability: 0.12
+  facts:
+    cpi_pct: cpi_inflation
+    typical: round(800 * price_level)
+    budget: round(typical * 0.6)
+    card: round(typical * 1.3)
+  choices:
+    - id: keep
+      label: Spend the usual
+      emoji: "🎁"
+      hint: "-£{typical:,.0f}"
+      default: true
+      text: "You spent £{typical:,.0f}."
+      good: false
+      effects: { cash: -typical, happiness: 3 }
+    - id: cut
+      label: Set a budget
+      emoji: "📝"
+      aliases: [cut_budget]
+      hint: "-£{budget:,.0f}"
+      text: "You set a £{budget:,.0f} budget and stuck to it."
+      good: true
+      effects: { cash: -budget, happiness: 1 }
+    - id: card
+      label: Go big on a card
+      emoji: "💳"
+      hint: "£{card:,.0f} of card debt"
+      text: "You spent £{card:,.0f} on a card."
+      good: false
+      effects: { other_debt: card, happiness: 4 }
+
+- id: family.stag_hen
+  area: family
+  emoji: "🥂"
+  title: A friend's stag or hen weekend
+  text: "A weekend away for a friend's wedding costs £{cost:,.0f}."
+  concept_id: budgeting
+  eligible:
+    age: [22, 45]
+  probability: 0.06
+  facts:
+    cost: round(550 * price_level)
+    gift: round(60 * price_level)
+  choices:
+    - id: go
+      label: Go
+      emoji: "🎉"
+      hint: "-£{cost:,.0f}"
+      default: true
+      text: "Great weekend. It cost £{cost:,.0f}."
+      good: false
+      effects: { cash: -cost, happiness: 4 }
+    - id: skip
+      label: Send a gift instead
+      emoji: "🎁"
+      hint: "-£{gift:,.0f}"
+      text: "You sent a £{gift:,.0f} gift and your apologies."
+      good: true
+      effects: { cash: -gift, happiness: -1 }
+
+- id: place.storm_damage
+  area: place
+  emoji: "🌪️"
+  title: Storm damage
+  text: "A storm damaged your fence and roof tiles. Repairs cost £{repair:,.0f}. Your insurance excess is £{excess:,.0f}."
+  concept_id: insurance
+  eligible:
+    housing: [own, mortgage]
+  probability: clamp(0.03 + flood_risk / 100, 0.03, 0.08)
+  facts:
+    repair: round(1800 * price_level)
+    excess: round(350 * price_level)
+    premium_up: round(90 * price_level)
+    claim_cost: excess + premium_up
+  choices:
+    - id: claim
+      label: Claim
+      emoji: "📄"
+      hint: "-£{claim_cost:,.0f} with a higher premium"
+      default: true
+      text: "You claimed. It cost £{claim_cost:,.0f} in total."
+      good: true
+      effects: { cash: -claim_cost }
+    - id: diy
+      label: Fix it yourself
+      emoji: "🔨"
+      hint: "-£{repair:,.0f}"
+      text: "You paid £{repair:,.0f} to fix it yourself."
+      good: false
+      effects: { cash: -repair, smarts: 1 }
+
+- id: place.subsidence
+  area: place
+  emoji: "🧱"
+  title: Cracks in the walls
+  text: "A survey finds subsidence. Insurance covers it after a £{excess:,.0f} excess, but your home is worth £{value_hit:,.0f} less for now."
+  concept_id: insurance
+  eligible:
+    housing: [own, mortgage]
+  probability: 0.008
+  facts:
+    excess: 1000
+    value_hit: round(property_value * 0.05)
+  choices:
+    - id: claim
+      label: Claim on insurance
+      emoji: "📄"
+      hint: "-£{excess:,.0f}"
+      default: true
+      text: "Insurers fixed it. You paid the £{excess:,.0f} excess."
+      good: true
+      effects: { cash: -excess }
+    - id: ignore
+      label: Leave it for now
+      emoji: "🙈"
+      hint: Value falls £{value_hit:,.0f}
+      text: "You left it. Your home is worth £{value_hit:,.0f} less."
+      good: false
+      effects: { property_value: -value_hit, happiness: -3 }
+
+- id: place.noisy_neighbours
+  area: place
+  emoji: "🔊"
+  title: Noisy neighbours
+  text: "Loud parties every weekend. Moving would cost £{move_cost:,.0f}."
+  concept_id: renting
+  eligible:
+    housing: [rent]
+  probability: 0.04
+  facts:
+    move_cost: round(max(rent * 1.5, 700 * price_level))
+  choices:
+    - id: put_up
+      label: Put up with it
+      emoji: "🎧"
+      hint: Free, but tiring
+      default: true
+      text: "You buy earplugs and put up with it."
+      good: true
+      effects: { happiness: -4, health: -1 }
+    - id: move
+      label: Move out
+      emoji: "📦"
+      hint: "-£{move_cost:,.0f}"
+      text: "You moved for £{move_cost:,.0f}. Peace at last."
+      good: false
+      effects: { cash: -move_cost, happiness: 4 }
+
+- id: place.regeneration
+  area: place
+  emoji: "🏗️"
+  title: Your area is booming
+  text: "A new rail link is coming. Homes near you rose {hpc_pct:.1f}%. Yours is worth £{value:,.0f}."
+  concept_id: regional-pay
+  eligible:
+    housing: [own, mortgage]
+  probability: clamp((house_price_change - 6) / 20, 0, 0.3)
+  facts:
+    hpc_pct: house_price_change
+    value: round(property_value)
+    fees: round(value * 0.03)
+    equity: round(value - mortgage_balance)
+  choices:
+    - id: hold
+      label: Stay put
+      emoji: "🏠"
+      hint: Enjoy the rise on paper
+      default: true
+      text: "You stay. Your equity is now £{equity:,.0f}."
+      good: true
+      effects: { happiness: 2 }
+    - id: remortgage_spend
+      label: Borrow against it for a new kitchen
+      emoji: "🍳"
+      hint: "Adds £{fees:,.0f} to your mortgage"
+      text: "You borrowed £{fees:,.0f} more for a new kitchen."
+      good: false
+      effects: { mortgage_balance: fees, happiness: 4 }
+
+- id: place.bike_theft
+  area: place
+  emoji: "🚲"
+  title: Your bike is stolen
+  text: "Burglary and theft run at {rate:.1f} per 1,000 homes here. A new bike costs £{bike:,.0f}."
+  concept_id: home-security
+  eligible:
+    age: [16, 75]
+    when: not has_car
+  probability: clamp(burglary_rate / 200, 0.01, 0.1)
+  facts:
+    rate: burglary_rate
+    bike: round(450 * price_level)
+    used: round(150 * price_level)
+  choices:
+    - id: new
+      label: Buy a new one
+      emoji: "🚴"
+      hint: "-£{bike:,.0f}"
+      default: true
+      text: "You bought a new bike for £{bike:,.0f}."
+      good: false
+      effects: { cash: -bike }
+    - id: used
+      label: Buy second-hand and a good lock
+      emoji: "🔒"
+      hint: "-£{used:,.0f}"
+      text: "A used bike and a solid lock cost £{used:,.0f}."
+      good: true
+      effects: { cash: -used }
+
+- id: place.card_cloned
+  area: place
+  emoji: "💳"
+  title: Your card was cloned
+  text: "Someone spent £{amount:,.0f} on your card."
+  concept_id: scams
+  eligible:
+    age: [18, 110]
+  probability: 0.03
+  facts:
+    amount: round(400 * price_level)
+  choices:
+    - id: report
+      label: Report it to your bank now
+      emoji: "📞"
+      hint: Banks refund fraud you report
+      default: true
+      text: "You reported it. The bank refunded £{amount:,.0f}."
+      good: true
+      effects: { smarts: 1 }
+    - id: wait
+      label: Deal with it later
+      emoji: "😴"
+      hint: Refunds get harder
+      text: "You waited too long. You lost £{amount:,.0f}."
+      good: false
+      effects: { cash: -amount, happiness: -3 }
+
+- id: place.contents_insurance
+  area: place
+  emoji: "📦"
+  title: Contents insurance
+  text: "Burglaries here run at {rate:.1f} per 1,000 homes a year. Contents cover costs £{premium:,.0f} a year."
+  concept_id: insurance
+  eligible:
+    housing: [rent]
+  probability: 0.06
+  facts:
+    rate: burglary_rate
+    premium: round(90 * price_level)
+    loss: round(3000 * price_level)
+    chance: clamp(burglary_rate / 1000 * 5, 0.01, 0.2)
+  choices:
+    - id: skip
+      label: Go without
+      emoji: "🎲"
+      hint: Save £{premium:,.0f}
+      default: true
+      branches:
+        - p: chance
+          text: "You were burgled with no cover. You lost £{loss:,.0f}."
+          good: false
+          effects: { cash: -loss, happiness: -8 }
+        - text: "Nothing happened this year."
+          good: true
+          effects: { }
+    - id: buy
+      label: Buy cover
+      emoji: "☂️"
+      hint: "-£{premium:,.0f}"
+      text: "You are covered for £{premium:,.0f} a year."
+      good: true
+      effects: { cash: -premium }
+
+- id: place.move_for_work
+  area: place
+  emoji: "🗺️"
+  title: A job in another city
+  text: "A firm in a bigger city offers {raise_pct:.0f}% more pay, £{pay_rise:,.0f} a year. Moving costs £{move_cost:,.0f} and rent there is £{rent_rise:,.0f} a month higher."
+  concept_id: regional-pay
+  eligible:
+    age: [21, 50]
+    housing: [rent]
+    when: employed
+  probability: 0.03
+  facts:
+    raise_pct: 15
+    pay_rise: round(income * raise_pct / 100)
+    move_cost: round(1500 * price_level)
+    rent_rise: round(rent * 0.3)
+  choices:
+    - id: stay
+      label: Stay here
+      emoji: "🏠"
+      hint: Keep your life as it is
+      default: true
+      text: "You stay where you are."
+      good: false
+      effects: { }
+    - id: move
+      label: Move for the job
+      emoji: "🚚"
+      hint: "+£{pay_rise:,.0f} a year, higher rent"
+      text: "You moved. Pay is £{pay_rise:,.0f} higher and rent £{rent_rise:,.0f} a month higher."
+      good: true
+      effects: { cash: -move_cost, income: pay_rise, rent: rent_rise, happiness: -2 }

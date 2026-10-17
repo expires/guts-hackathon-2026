@@ -11,7 +11,8 @@ Method:
    Only start years with HORIZON years of data after them are candidates.
 2. Draw a synthetic population for `as_of_year` and take the K_TWINS nearest twins of the profile.
 3. Run every option for every (twin, period) pair on the real rate path of that period.
-4. Rank options by mean outcome relative to the amount. The headline is the best option.
+4. Rank options by mean outcome relative to the amount, minus 0.5 x the worst regret against the best option
+   in any (twin, period) pair (ADR 0020 amendment). The headline is the best option.
    success_rate = share of (twin, period) pairs where the best option beat the runner-up.
 
 Assumptions (labelled, not from a data source): TRACKER_MARGIN, SAVINGS_GAP, FUND_FEE, DEBT_PREMIUM.
@@ -32,6 +33,7 @@ from lifeline_engine.macro_access import source_ref, value_or
 from lifeline_engine.periods import similar_years, table_years
 from lifeline_engine.population import Person, build_population, sample_people
 from lifeline_engine.twins import TwinIndex, features
+from lifeline_engine.wording import confidence_label
 
 Question = Literal["mortgage", "savings"]
 
@@ -46,12 +48,14 @@ TRACKER_MARGIN = 1.0  # percent over Bank Rate, typical UK tracker
 SAVINGS_GAP = 0.5  # percent below Bank Rate, typical easy-access savings
 FUND_FEE = 0.2  # percent per year, low-cost index fund
 DEBT_PREMIUM = 15.0  # percent over Bank Rate, typical unsecured debt
+REGRET_WEIGHT = 0.5  # ADR 0020 amendment
 
 DISCLAIMER = "Education, not financial advice."
 
 OPTION_TEXT: dict[str, tuple[str, str]] = {
     # id: (headline, short action label)
     "fix_2y": ("Fix for 2 years.", "Fix your mortgage for 2 years"),
+    "fix_3y": ("Fix for 3 years.", "Fix your mortgage for 3 years"),
     "fix_5y": ("Fix for 5 years.", "Fix your mortgage for 5 years"),
     "tracker": ("Take a tracker deal.", "Take a deal that follows the Bank Rate"),
     "save": ("Keep it in savings.", "Keep your money in an easy-access savings account"),
@@ -60,7 +64,7 @@ OPTION_TEXT: dict[str, tuple[str, str]] = {
 }
 
 QUESTION_TEXT: dict[Question, str] = {
-    "mortgage": "Your mortgage deal is ending. Should you fix for 2 years, fix for 5 years, or track the Bank Rate?",
+    "mortgage": "Your mortgage deal is ending. Should you fix for 2, 3 or 5 years, or track the Bank Rate?",
     "savings": "What should you do with your savings over the next 5 years?",
 }
 
@@ -74,14 +78,28 @@ def _rate(macro: MacroTable, key: MacroKey, year: int) -> float:
     return value_or(macro, key, year, None, fallback)
 
 
+def fix_3y_rate(macro: MacroTable, year: int) -> float:
+    """3-year fix rate. No BoE series in the table: linear interpolation between the 2-year and 5-year
+    rates by term (labelled assumption): r2 + (r5 - r2) / 3."""
+    r2 = _rate(macro, MacroKey.MORTGAGE_2Y_FIX, year)
+    r5 = _rate(macro, MacroKey.MORTGAGE_5Y_FIX, year)
+    return r2 + (r5 - r2) / 3
+
+
 def mortgage_rate_path(macro: MacroTable, option: str, start: int, horizon: int = HORIZON) -> list[float]:
     """Annual mortgage rate (percent) for each of `horizon` years from `start`."""
     if option == "fix_2y":
         return [_rate(macro, MacroKey.MORTGAGE_2Y_FIX, start + 2 * (t // 2)) for t in range(horizon)]
+    if option == "fix_3y":
+        return [fix_3y_rate(macro, start + 3 * (t // 3)) for t in range(horizon)]
     if option == "fix_5y":
         return [_rate(macro, MacroKey.MORTGAGE_5Y_FIX, start + 5 * (t // 5)) for t in range(horizon)]
     if option == "tracker":
-        return [_rate(macro, MacroKey.BANK_RATE, start + t) + TRACKER_MARGIN for t in range(horizon)]
+        return [
+            value_or(macro, MacroKey.MORTGAGE_TRACKER, start + t, None, _rate(macro, MacroKey.BANK_RATE, start + t)
+                     + TRACKER_MARGIN)
+            for t in range(horizon)
+        ]
     raise ValueError(f"unknown mortgage option {option}")
 
 
@@ -130,6 +148,7 @@ class Scenario:
 
     amount: float
     years_left: int
+    debt: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -142,7 +161,7 @@ class Ranking:
 
 def options_for(question: Question, profile: DecisionProfile | None = None) -> tuple[str, ...]:
     if question == "mortgage":
-        return ("fix_2y", "fix_5y", "tracker")
+        return ("fix_2y", "fix_3y", "fix_5y", "tracker")
     if profile is not None and profile.other_debt > 0:
         return ("save", "invest", "pay_debt")
     return ("save", "invest")
@@ -155,6 +174,13 @@ def outcome(question: Question, macro: MacroTable, option: str, start: int, s: S
     if question == "mortgage":
         rates = mortgage_rate_path(macro, option, start)
         return -mortgage_interest(s.amount, s.years_left, rates) / s.amount
+    if option == "pay_debt":
+        # Only the debt can be paid off: the rest of the money stays in savings.
+        paid = min(s.amount, s.debt) if s.debt > 0 else s.amount
+        rest = s.amount - paid
+        grown = _grow(paid, savings_growth_path(macro, "pay_debt", start))
+        grown += _grow(rest, savings_growth_path(macro, "save", start))
+        return grown / s.amount - 1.0
     return _grow(s.amount, savings_growth_path(macro, option, start)) / s.amount - 1.0
 
 
@@ -170,12 +196,15 @@ def rank_options(
     if grid.shape[1] == 0:
         return Ranking(tuple(options), dict.fromkeys(options, 0.0), 0.0, dict.fromkeys(options, 0.0))
     means = grid.mean(axis=1)
-    order = sorted(range(len(options)), key=lambda i: (-float(means[i]), i))
+    # ADR 0020 amendment, same rule as the Next Move: score = mean - 0.5 x worst regret against the best option.
+    regret = (grid.max(axis=0)[None, :] - grid).max(axis=1)
+    scores = means - REGRET_WEIGHT * regret
+    order = sorted(range(len(options)), key=lambda i: (-float(scores[i]), i))
     best = order[0]
     beat = float((grid[best] > grid[order[1]]).mean()) if len(order) > 1 else 1.0
     winners = np.argmax(grid, axis=0)
     win = {o: float((winners == i).mean()) for i, o in enumerate(options)}
-    return Ranking(tuple(options[i] for i in order), {o: float(means[i]) for i, o in enumerate(options)}, beat, win)
+    return Ranking(tuple(options[i] for i in order), {o: float(scores[i]) for i, o in enumerate(options)}, beat, win)
 
 
 # ---------- decide ----------
@@ -214,7 +243,11 @@ def _scenarios(question: Question, profile: DecisionProfile, twins: Sequence[Per
             out.append(Scenario(amount=amount, years_left=max(1, min(40, years_left))))
         else:
             out.append(
-                Scenario(amount=tw.savings if tw.savings > 0 else max(profile.savings, DEFAULT_AMOUNT), years_left=0)
+                Scenario(
+                    amount=tw.savings if tw.savings > 0 else max(profile.savings, DEFAULT_AMOUNT),
+                    years_left=0,
+                    debt=profile.other_debt,
+                )
             )
     return out
 
@@ -225,15 +258,51 @@ def _period_label(start: int) -> str:
 
 def _sources(macro: MacroTable, year: int, question: Question, region: str) -> list[SourceRef]:
     keys = [MacroKey.BANK_RATE, MacroKey.CPI_INFLATION, MacroKey.UNEMPLOYMENT, MacroKey.HOUSE_PRICE_CHANGE]
-    keys += [MacroKey.MORTGAGE_2Y_FIX, MacroKey.MORTGAGE_5Y_FIX] if question == "mortgage" else [MacroKey.STOCK_RETURN]
+    if question == "mortgage":
+        keys += [MacroKey.MORTGAGE_2Y_FIX, MacroKey.MORTGAGE_5Y_FIX, MacroKey.MORTGAGE_TRACKER]
+    else:
+        keys += [MacroKey.STOCK_RETURN]
     refs = [source_ref(macro, k, year) for k in keys]
     pay = source_ref(macro, MacroKey.MEDIAN_PAY, year, region)
     return [r for r in [*refs, pay] if r is not None]
 
 
 def evidence_sentence(rate: float) -> str:
-    n = int(round(rate * 10))
-    return f"{n} in 10 twins in similar past periods did better."
+    return f"{confidence_label(rate)}."
+
+
+def _money_reason(
+    question: Question,
+    profile: DecisionProfile,
+    macro: MacroTable,
+    year: int,
+    starts: Sequence[int],
+    best: str,
+    ranking: Ranking,
+) -> list[str]:
+    """One sentence with the user's own numbers: today's rates and the average £ a year gained against the
+    next best option over the matched periods."""
+    if len(ranking.options) < 2 or not starts:
+        return []
+    runner = ranking.options[1]
+    if question == "mortgage":
+        amount = profile.mortgage_balance or 0.0
+        if amount <= 0:
+            return []
+        sc = Scenario(amount=amount, years_left=max(1, min(40, profile.mortgage_years_left or DEFAULT_YEARS_LEFT)))
+        r2 = _rate(macro, MacroKey.MORTGAGE_2Y_FIX, year)
+        r5 = _rate(macro, MacroKey.MORTGAGE_5Y_FIX, year)
+        lead = f"Today a 2-year fix is {r2:.2f}% and a 5-year fix is {r5:.2f}%. "
+        what = f"For your £{amount:,.0f} mortgage"
+    else:
+        amount = max(profile.savings, DEFAULT_AMOUNT)
+        sc = Scenario(amount=amount, years_left=0, debt=profile.other_debt)
+        lead = ""
+        what = f"For £{amount:,.0f} of savings"
+    gap = sum(outcome(question, macro, best, y, sc) - outcome(question, macro, runner, y, sc) for y in starts)
+    per_year = gap / len(starts) * amount / HORIZON
+    direction = "better" if per_year >= 0 else "worse"
+    return [f"{lead}{what}, this was about £{abs(per_year):,.0f} a year {direction} than the next best choice."]
 
 
 def decide_with(
@@ -259,9 +328,11 @@ def decide_with(
         runner = OPTION_TEXT[ranking.options[1]][1].lower() if len(ranking.options) > 1 else ""
         sentence = evidence_sentence(ranking.beat_runner_up)
         reasons = [
-            f"We found {len(twins)} people like you and {len(starts)} past periods that looked like {as_of_year}.",
+            f"We found {len(twins)} people like you and {len(starts)} past periods that looked like {as_of_year} "
+            f"({', '.join(_period_label(y) for y in sorted(starts))}).",
             f"In those periods this option came out ahead of the next best choice ({runner}) "
             f"{int(round(ranking.beat_runner_up * 100))}% of the time.",
+            *_money_reason(question, profile, macro, as_of_year, starts, best, ranking),
             "Past periods do not predict the future. They show what has happened before.",
         ]
         success = ranking.beat_runner_up

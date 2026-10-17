@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Money tab scrolled</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F5F2EA; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="flex: 1; padding: 20px 20px 12px; display: flex; flex-direction: column; gap: 16px">
+
+    <div style="display: flex; align-items: center; gap: 12px; height: 44px">
+      <h1 style="flex: 1; margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">Money</h1>
+      <div style="font-size: 13px; font-weight: 700; padding: 3px 10px; border: 2px solid #16181D; border-radius: 12px 16px 11px 15px / 15px 11px 16px 12px; background: #FFFFFF">Mock data</div>
+    </div>
+
+    <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 18px 24px 16px 22px / 22px 16px 24px 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <div>
+          <div style="font-size: 13px; color: #4A4F59">Net worth</div>
+          <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">£38,200</div>
+        </div>
+        <div role="group" aria-label="Time range" style="display: flex; gap: 4px">
+          <button type="button" aria-pressed="true" style="height: 32px; padding: 0 10px; border: 2px solid #16181D; border-radius: 10px 13px 9px 12px; background: #16181D; color: #FFFFFF; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer">6M</button>
+          <button type="button" aria-pressed="false" style="height: 32px; padding: 0 10px; border: 2px solid #16181D; border-radius: 13px 9px 12px 10px; background: #FFFFFF; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer">1Y</button>
+          <button type="button" aria-pressed="false" style="height: 32px; padding: 0 10px; border: 2px solid #16181D; border-radius: 9px 12px 10px 13px; background: #FFFFFF; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer">All</button>
+        </div>
+      </div>
+      <svg width="100%" height="84" viewBox="0 0 330 84" fill="none" role="img" aria-label="Net worth rose from £37,050 in May to £38,200 in October">
+        <path d="M0 70 H330 M0 38 H330 M0 6 H330" stroke="#DDD8CC" stroke-width="1.5"></path>
+        <path d="M6 58 L68 54 L130 60 L192 40 L254 36 L324 14" stroke="#3FB57A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+        <circle cx="324" cy="14" r="5" fill="#3FB57A" stroke="#16181D" stroke-width="2.5"></circle>
+      </svg>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4A4F59"><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 4px"><span style="font-size: 17px; font-weight: 700">Subscriptions</span><span style="font-size: 13px; color: #4A4F59">£60 a month · 4 in total</span></div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 40px; border-bottom: 2px solid #DDD8CC"><dc-import name="Icon" icon="subscriptions" size="{{24}}" hint-size="24px,24px"></dc-import><span style="flex: 1; font-size: 17px">Streaming TV</span><span style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FF7A8A">Up £2</span><b style="font-size: 17px; width: 64px; text-align: right">£12.99</b></div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 40px; border-bottom: 2px solid #DDD8CC"><dc-import name="Icon" icon="health" size="{{24}}" hint-size="24px,24px"></dc-import><span style="flex: 1; font-size: 17px">Gym</span><b style="font-size: 17px; width: 64px; text-align: right">£32.00</b></div>
+      <div style="display: flex; align-items: center; gap: 10px; height: 40px"><dc-import name="Icon" icon="activities" size="{{24}}" hint-size="24px,24px"></dc-import><span style="flex: 1; font-size: 17px">Music</span><b style="font-size: 17px; width: 64px; text-align: right">£11.99</b></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700"><dc-import name="Icon" icon="budget" size="{{24}}" hint-size="24px,24px"></dc-import>Budgets</div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span><b>Food &amp; family</b></span><span>£310 of £400</span></div>
+        <div style="height: 14px; border: 3px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FFFFFF; overflow: hidden"><div style="width: 78%; height: 100%; background: #A78BFA; border-right: 3px solid #16181D"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span><b>Travel to work</b> · 90% used</span><span>£180 of £200</span></div>
+        <div style="height: 14px; border: 3px solid #16181D; border-radius: 11px 7px 10px 8px; background: #FFFFFF; overflow: hidden"><div style="width: 90%; height: 100%; background: #6C8EF5; border-right: 3px solid #16181D"></div></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700"><dc-import name="Icon" icon="goal" size="{{24}}" hint-size="24px,24px"></dc-import>Savings goals</div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span><b>Lisbon trip</b> · May 2027</span><span>£640 of £1,200</span></div>
+        <div style="height: 14px; border: 3px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FFFFFF; overflow: hidden"><div style="width: 53%; height: 100%; background: #3FB57A; border-right: 3px solid #16181D"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; font-size: 13px"><span><b>Rainy day fund</b></span><span>£3,000 of £5,000</span></div>
+        <div style="height: 14px; border: 3px solid #16181D; border-radius: 11px 7px 10px 8px; background: #FFFFFF; overflow: hidden"><div style="width: 60%; height: 100%; background: #3FB57A; border-right: 3px solid #16181D"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <nav aria-label="Tabs" style="height: 80px; flex: none; background: #FFFFFF; border-top: 3px solid #16181D; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center">
+    <a href="Money-Home.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px; font-weight: 700"><dc-import name="Icon" icon="tab-money" size="{{28}}" active="{{true}}" hint-size="28px,28px"></dc-import>Money</a>
+    <a href="Life-Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-life" size="{{28}}" hint-size="28px,28px"></dc-import>Life</a>
+    <a href="Play-Lobby.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-play" size="{{28}}" hint-size="28px,28px"></dc-import>Play</a>
+    <a href="You-Profile.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-you" size="{{28}}" hint-size="28px,28px"></dc-import>You</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

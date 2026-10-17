@@ -8,7 +8,7 @@ from dataclasses import dataclass
 DEFAULT_MODEL = "claude-opus-5-5"  # ADR 0007
 DEFAULT_TIMEOUT_SECONDS = 12.0
 CACHE_TTL_SECONDS = 30 * 24 * 3600
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"  # v2: Move.action is no longer reworded
 
 
 @dataclass(frozen=True)

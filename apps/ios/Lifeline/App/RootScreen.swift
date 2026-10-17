@@ -1,23 +1,61 @@
 import SwiftUI
 
-/// Top-level navigation glue. Character select flow, then the life shell with tabs.
+/// App tabs (ADR 0016), in this order. Money is the default.
+enum AppTab: String, Hashable, CaseIterable {
+    case money, life, play, you
+
+    var title: String {
+        switch self {
+        case .money: "Money"
+        case .life: "Life"
+        case .play: "Play"
+        case .you: "You"
+        }
+    }
+
+    /// Tab icon from the Lifeline set: white fill when inactive, colour fill when active.
+    var icon: LLIcon {
+        switch self {
+        case .money: .tabMoney
+        case .life: .tabLife
+        case .play: .tabPlay
+        case .you: .tabYou
+        }
+    }
+
+
+    /// The app always opens here. It does not restore the last tab (ADR 0016).
+    static let launch: AppTab = .money
+}
+
+/// Top-level navigation glue: Money, Life, Play, You.
 struct RootScreen: View {
     let session: GameSession
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selection: AppTab = .launch
 
     var body: some View {
-        @Bindable var session = session
-        Group {
-            switch session.phase {
-            case .selecting:
-                SelectionFlowScreen(session: session)
-                    .transition(.opacity)
-            case .playing:
-                LifeShellScreen(session: session)
-                    .transition(.opacity)
+        // Custom tab bar from the handoff. Every tab stays alive so its state and scroll position persist.
+        ZStack {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                let isActive = tab == selection
+                content(for: tab)
+                    .opacity(isActive ? 1 : 0)
+                    .allowsHitTesting(isActive)
+                    .accessibilityHidden(!isActive)
             }
         }
-        .animation(Motion.standard(reduceMotion: reduceMotion), value: session.phase)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Setup flows (character select, form, start year) hide the tab bar.
+            if !(selection == .life && session.phase == .selecting) {
+                LLTabBar(
+                    items: AppTab.allCases.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon) },
+                    selection: selection.rawValue
+                ) { id in
+                    if let tab = AppTab(rawValue: id) { selection = tab }
+                }
+            }
+        }
+        .paperBackground()
         .alert(
             "Something went wrong",
             isPresented: Binding(
@@ -30,6 +68,51 @@ struct RootScreen: View {
         } message: { message in
             Text(message)
         }
+    }
+
+    @ViewBuilder
+    private func content(for tab: AppTab) -> some View {
+        switch tab {
+        case .money:
+            NavigationStack {
+                MoneyHomeScreen(client: session.client) { lifeID in openLife(lifeID) }
+            }
+        case .life:
+            LifeTabScreen(session: session)
+        case .play:
+            NavigationStack {
+                PlayScreen(session: session) { selection = .life }
+            }
+        case .you:
+            NavigationStack { YouScreen(session: session) }
+        }
+    }
+
+    /// "Open in Life" from Test it: load the stored life, then show the Life tab.
+    private func openLife(_ lifeID: String) {
+        Task {
+            if await session.openLife(id: lifeID) { selection = .life }
+        }
+    }
+}
+
+/// Life tab: character select when no life runs, otherwise the running life.
+struct LifeTabScreen: View {
+    let session: GameSession
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            switch session.phase {
+            case .selecting:
+                SelectionFlowScreen(session: session)
+                    .transition(.opacity)
+            case .playing:
+                LifeShellScreen(session: session)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.standard(reduceMotion: reduceMotion), value: session.phase)
     }
 }
 
@@ -72,14 +155,21 @@ struct SelectionFlowScreen: View {
                 }
             }
         }
-        .sheet(item: $sheet) { sheet in
+        // Store and Rooms are full screens with their own header. Sources and Debug are sheets.
+        .llCover(item: $sheet.only { [.store, .rooms].contains($0) }) { sheet in
             let close: @MainActor () -> Void = { self.sheet = nil }
             switch sheet {
-            case .store: StoreScreen(session: session, onClose: close)
             case .rooms: RoomLobbyScreen(client: session.client, onLeave: close)
-            case .sources: SourcesScreen(client: session.client, onClose: close)
+            default: StoreScreen(session: session, onClose: close)
+            }
+        }
+        .llSheet(item: $sheet.only { [.sources, .debug].contains($0) }) { sheet in
+            let close: @MainActor () -> Void = { self.sheet = nil }
+            switch sheet {
             case .debug: DebugMenuScreen(activeKind: session.client.kind, onClose: close)
+            default: SourcesScreen(client: session.client, onClose: close)
             }
         }
     }
+
 }

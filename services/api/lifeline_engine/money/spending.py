@@ -77,10 +77,7 @@ def budgets(txs: Iterable[Transaction], month: str, limits: Mapping[Category, fl
     out: list[Budget] = []
     for c, limit in limits.items():
         spent = cur.get(c, (0.0, 0))[0]
-        if limit > 0:
-            progress = spent / limit
-        else:
-            progress = 1.0 if spent > 0 else 0.0
+        progress = spent / limit if limit > 0 else (1.0 if spent > 0 else 0.0)
         over = spent > limit
         status = "over" if over else "near" if progress >= NEAR_SHARE else "ok"
         out.append(

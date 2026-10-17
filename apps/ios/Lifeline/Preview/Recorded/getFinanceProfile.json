@@ -1,0 +1,78 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "profile": {
+    "age": 34,
+    "region": "yorkshire-and-the-humber",
+    "postcode": "LS6 1AN",
+    "annual_income": 33120.0,
+    "savings": 6850.42,
+    "other_debt": 0.0,
+    "housing": "mortgage",
+    "property_value": 240000.0,
+    "mortgage_balance": 180000.0,
+    "mortgage_years_left": 25,
+    "deal_ends_in_months": 6
+  },
+  "character": {
+    "id": "self-homeowner-leeds",
+    "name": "Priya Shah",
+    "emoji": "🙂",
+    "sex": "female",
+    "occupation": "Nurse",
+    "region": "yorkshire-and-the-humber",
+    "town": "Leeds",
+    "postcode": "LS6 1AN",
+    "birth_year": 1992,
+    "annual_income": 33120.0,
+    "savings": 6850.42,
+    "debt": 0.0,
+    "housing": "mortgage",
+    "property_value": 240000.0,
+    "mortgage_balance": 180000.0,
+    "blurb": "Built from sample bank data."
+  },
+  "personal_facts": [
+    {
+      "id": "subscriptions_total",
+      "concept_id": "budgeting",
+      "text": "You spend £38 a month on 2 subscriptions.",
+      "facts": {
+        "monthly_total": 38.0,
+        "count": 2.0
+      }
+    },
+    {
+      "id": "emergency_months",
+      "concept_id": "emergency-fund",
+      "text": "Your cash and savings cover 3.7 months of spending.",
+      "facts": {
+        "months": 3.7,
+        "liquid": 8037.0,
+        "monthly_spend": 2156.0
+      }
+    },
+    {
+      "id": "mortgage_rate",
+      "concept_id": "interest-rates",
+      "text": "Your mortgage rate is 4.42% and your fixed deal ends in 165 days.",
+      "facts": {
+        "rate_pct": 4.42,
+        "days_left": 165.0
+      }
+    },
+    {
+      "id": "savings_interest",
+      "concept_id": "compound-interest",
+      "text": "Your savings of £6,850 earned £86 in interest in the last year.",
+      "facts": {
+        "savings": 6850.0,
+        "interest": 86.0
+      }
+    }
+  ]
+}

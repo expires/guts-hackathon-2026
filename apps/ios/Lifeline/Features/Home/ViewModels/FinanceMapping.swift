@@ -28,6 +28,18 @@ enum FinanceMapping {
         return format(date, template: "EEEdMMM")
     }
 
+    /// "1 Nov".
+    static func shortDateText(_ raw: String) -> String {
+        guard let date = date(raw) else { return raw }
+        return format(date, template: "dMMM")
+    }
+
+    /// "Oct" from "2026-10-17".
+    static func shortMonthText(_ raw: String) -> String {
+        guard let date = date(raw) else { return raw }
+        return format(date, template: "MMM")
+    }
+
     /// "October 2026" from "2026-10".
     static func monthText(_ raw: String) -> String {
         guard let date = date(raw + "-01") else { return raw }

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Guess my spend</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 20px; background: #F5F2EA; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; gap: 16px; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <button type="button" aria-label="Back" style="width: 44px; height: 44px; flex: none; border: 3px solid #16181D; border-radius: 14px 18px 13px 17px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 L2 10 L10 18"></path></svg></button>
+    <h1 style="flex: 1; margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">Guess my spend</h1>
+    <div style="font-size: 13px; font-weight: 700; padding: 3px 10px; border: 2px solid #16181D; border-radius: 12px 16px 11px 15px / 15px 11px 16px 12px; background: #FFFFFF">Day 12</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <div style="font-size: 17px; font-weight: 700">How much will you spend today?</div>
+    <div style="font-size: 13px; color: #4A4F59">Friday 17 October · Mock data</div>
+  </div>
+
+  <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 18px 24px 16px 22px / 22px 16px 24px 18px; padding: 14px 16px; display: flex; align-items: center; gap: 12px">
+    <button type="button" aria-label="Guess £1 less" style="width: 52px; height: 52px; flex: none; border: 3px solid #16181D; border-radius: 16px 20px 15px 19px; background: #FFFFFF; font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 800; color: #16181D; cursor: pointer">−</button>
+    <div style="flex: 1; text-align: center">
+      <div style="font-size: 13px; color: #4A4F59">Your guess</div>
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1">£18</div>
+    </div>
+    <button type="button" aria-label="Guess £1 more" style="width: 52px; height: 52px; flex: none; border: 3px solid #16181D; border-radius: 20px 16px 19px 15px; background: #FFFFFF; font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 800; color: #16181D; cursor: pointer">+</button>
+  </div>
+
+  <section aria-label="Penny's prediction" style="position: relative; background: #FFFFFF; border: 3px solid #16181D; border-radius: 22px 30px 20px 28px / 28px 20px 30px 22px; box-shadow: 6px 7px 0 #16181D; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+    <svg width="56" height="56" viewBox="0 0 64 64" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Penny" style="position: absolute; top: -26px; right: 16px; transform: rotate(-6deg)"><path d="M32 6 C47 5.5 58.5 17 58 32.5 C57.5 47 47 58.5 31.5 58 C16.5 57.5 5.5 47 6 31.5 C6.5 17 17 6.5 32 6 Z" fill="#3FB57A"></path><ellipse cx="24" cy="30" rx="4" ry="5" fill="#FFFFFF" stroke-width="2.5"></ellipse><ellipse cx="40" cy="30" rx="4" ry="5" fill="#FFFFFF" stroke-width="2.5"></ellipse><circle cx="26" cy="29" r="2" fill="#16181D" stroke="none"></circle><circle cx="42" cy="29" r="2" fill="#16181D" stroke="none"></circle><path d="M27 42 Q32 45 37 42"></path></svg>
+    <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase">Penny thinks</div>
+    <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1">£14 – £26</div>
+    <div role="img" aria-label="Prediction range £14 to £26, most likely £20. Your guess £18 is inside the range." style="display: flex; flex-direction: column; gap: 4px">
+      <div style="position: relative; height: 22px; border: 3px solid #16181D; border-radius: 10px 14px 9px 13px / 13px 9px 14px 10px; background: #FFFFFF; overflow: hidden">
+        <div style="position: absolute; left: 35%; width: 30%; top: 0; bottom: 0; background: #3FB57A; border-left: 3px solid #16181D; border-right: 3px solid #16181D"></div>
+        <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; background: #16181D"></div>
+      </div>
+      <div style="position: relative; height: 34px; font-size: 13px">
+        <div style="position: absolute; left: 0">£0</div>
+        <div style="position: absolute; left: 45%; transform: translateX(-50%); text-align: center; line-height: 1.2"><svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M6 0 L12 8 L0 8 Z" fill="#16181D"></path></svg><br><b>You £18</b></div>
+        <div style="position: absolute; left: 50%; margin-left: 30px; top: 12px">Penny £20</div>
+        <div style="position: absolute; right: 0">£40</div>
+      </div>
+    </div>
+  </section>
+
+  <div style="display: flex; flex-direction: column">
+    <div style="font-size: 17px; font-weight: 700; padding-bottom: 4px">Top 3 reasons</div>
+    <div style="display: flex; align-items: center; gap: 12px; height: 44px; border-bottom: 2px solid #DDD8CC">
+      <div style="flex: 1; font-size: 17px">Rain today</div>
+      <div style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FF7A8A">+£6</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; height: 44px; border-bottom: 2px solid #DDD8CC">
+      <div style="flex: 1; font-size: 17px">It is Friday</div>
+      <div style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FF7A8A">+£4</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; height: 44px">
+      <div style="flex: 1; font-size: 17px">Payday is 9 days away</div>
+      <div style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #3FB57A">−£3</div>
+    </div>
+    <div style="font-size: 13px; color: #4A4F59; padding-top: 6px">Your normal day is £13. We check your real spend at 9pm.</div>
+  </div>
+
+  <button type="button" style="margin-top: auto; height: 52px; border: 3px solid #16181D; border-radius: 14px 20px 12px 18px / 18px 12px 20px 14px; background: #16181D; color: #FFFFFF; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Lock in £18</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Paper theme card options</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 2190px; height: 1060px; box-sizing: border-box; padding: 40px; background: #E9E5DB; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 40px">
+  <div style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px; height: 120px">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">1 · Sage</div>
+      <div style="font-size: 13px; font-weight: 700">#CFE6D6</div>
+      <div style="font-size: 13px">Soft money green. Ties the card to Penny and the Money area.</div>
+    </div>
+    <dc-import name="A2-Money" theme="Paper" card="Sage" hint-size="390px,844px"></dc-import>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px; height: 120px">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">2 · Peach</div>
+      <div style="font-size: 13px; font-weight: 700">#F8D3BE</div>
+      <div style="font-size: 13px">Warm and friendly. Sits well on the paper background.</div>
+    </div>
+    <dc-import name="A2-Money" theme="Paper" card="Peach" hint-size="390px,844px"></dc-import>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px; height: 120px">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">3 · Lilac</div>
+      <div style="font-size: 13px; font-weight: 700">#DED6FA</div>
+      <div style="font-size: 13px">Playful and calm. Stands apart from the green money bars.</div>
+    </div>
+    <dc-import name="A2-Money" theme="Paper" card="Lilac" hint-size="390px,844px"></dc-import>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px; height: 120px">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">4 · Powder</div>
+      <div style="font-size: 13px; font-weight: 700">#D3E3F8</div>
+      <div style="font-size: 13px">Cool and trustworthy. The most "finance app" of the five.</div>
+    </div>
+    <dc-import name="A2-Money" theme="Paper" card="Powder" hint-size="390px,844px"></dc-import>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px; height: 120px">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">5 · White</div>
+      <div style="font-size: 13px; font-weight: 700">#FFFFFF</div>
+      <div style="font-size: 13px">Quietest. The card leads by size and shadow only.</div>
+    </div>
+    <dc-import name="A2-Money" theme="Paper" card="White" hint-size="390px,844px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2190,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

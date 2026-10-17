@@ -12,6 +12,9 @@ from lifeline_contracts.domain import (
     Concept,
     DecisionProfile,
     LifeMode,
+    ParamKey,
+    ParamText,
+    ShortId,
     Tab,
 )
 from lifeline_contracts.observation import SourceStatus, Status
@@ -51,7 +54,7 @@ class CharactersResponse(_M):
 class CreateLifeRequest(_M):
     mode: LifeMode
     start_year: int = Field(ge=1990, le=2026)
-    preset_id: str | None = Field(default=None, description="Required when mode=preset")
+    preset_id: ShortId | None = Field(default=None, description="Required when mode=preset")
     character: CharacterSpec | None = Field(default=None, description="Required when mode=self or god")
     seed: int | None = Field(default=None, ge=0, le=2**31 - 1, description="Omit for a random seed")
     room_code: str | None = Field(default=None, pattern=r"^[A-Z0-9]{6}$")
@@ -65,7 +68,7 @@ class ChoiceRequest(_M):
 class ActionRequest(_M):
     tab: Tab
     action_id: str = Field(min_length=1, max_length=64)
-    params: dict[str, float | str] = Field(default_factory=dict)
+    params: dict[ParamKey, float | ParamText] = Field(default_factory=dict, max_length=10)
 
 
 class RewindRequest(_M):
@@ -82,7 +85,7 @@ class ChallengesResponse(_M):
 
 class DecisionRequest(_M):
     profile: DecisionProfile
-    life_id: str | None = Field(default=None, description="Optional 'Play yourself' life that reached the present")
+    life_id: ShortId | None = Field(default=None, description="Optional 'Play yourself' life that reached the present")
 
 
 RoomMode = Literal["duel", "group", "class"]
@@ -91,7 +94,7 @@ RoomMode = Literal["duel", "group", "class"]
 class CreateRoomRequest(_M):
     mode: RoomMode
     host_name: str = Field(min_length=1, max_length=24)
-    preset_id: str
+    preset_id: ShortId
     start_year: int = Field(ge=1990, le=2026)
 
 

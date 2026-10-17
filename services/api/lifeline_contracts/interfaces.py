@@ -8,6 +8,7 @@ Rules:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Protocol
 
 from lifeline_contracts.domain import (
@@ -27,6 +28,7 @@ from lifeline_contracts.domain import (
     Outcome,
     RewindResult,
 )
+from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.observation import Observation, SourceStatus
 
@@ -40,6 +42,20 @@ class DataHub(Protocol):
 
     async def macro_table(self) -> MacroTable:
         """Annual MacroTable for 1990..current year. Never raises: falls back to cached, then mock."""
+        ...
+
+    async def finance_snapshot(self, subject: str) -> FinanceSnapshot:
+        """Money tab data for one user (ADR 0016). Fixtures in Tier 1; TrueLayer in Tier 2. Never raises."""
+        ...
+
+    async def bank_holidays(self, region: str | None) -> set[date]:
+        """gov.uk bank holidays for the region's division (ADR 0017). Never raises."""
+        ...
+
+    async def daily_weather(
+        self, region: str | None, start: date, end: date, *, today: date | None = None
+    ) -> list[dict[str, object]]:
+        """Open-Meteo daily weather: [{date, temp_max_c, rain_mm, status}] (ADR 0017). Never raises."""
         ...
 
     async def lookup_postcode(self, postcode: str) -> dict[str, str] | None:

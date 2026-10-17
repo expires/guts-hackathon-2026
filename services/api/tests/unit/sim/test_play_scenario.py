@@ -108,3 +108,25 @@ def test_focus_makes_tagged_event_fire(macro: MacroTable) -> None:
 def test_bad_period(macro: MacroTable) -> None:
     with pytest.raises(SimError):
         api.play_scenario("s", OWNER, 2023, 2021, {}, 7, macro)
+
+
+def test_scenario_cost_mortgage(macro: MacroTable) -> None:
+    costs = {}
+    for opt in ("fix_5y", "svr"):
+        life = api.play_scenario("s", OWNER, 2021, 2024, {"mortgage_deal_end": opt}, 7, macro)
+        costs[opt] = api.scenario_cost(life, macro)
+        assert api.scenario_cost(life, macro) == costs[opt]  # deterministic
+        assert api.scenario_cost(life) == costs[opt]  # last table in this process
+    assert costs["fix_5y"] > 0 and costs["svr"] > 0
+    assert costs["svr"] > costs["fix_5y"]  # the standard rate costs more in 2023-2024
+
+
+def test_scenario_cost_other_tags(macro: MacroTable) -> None:
+    renter = next(c for c in api.presets() if c.id == "nurse-leeds")
+    keep = api.play_scenario("s", renter, 2021, 2024, {"subscription": "keep"}, 3, macro)
+    cancel = api.play_scenario("s", renter, 2021, 2024, {"subscription": "cancel"}, 3, macro)
+    assert api.scenario_cost(cancel, macro) < api.scenario_cost(keep, macro)
+    energy = api.play_scenario("s", renter, 2021, 2023, {"energy_bill": "keep"}, 3, macro)
+    assert api.scenario_cost(energy, macro) > 0
+    plain = api.new_life("p", renter, "preset", 2006, 1, macro)
+    assert api.scenario_cost(plain, macro) == 0.0

@@ -13,7 +13,7 @@ from lifeline_data.sources import SOURCES, missing_keys
 SPEC_SOURCES = {
     "boe", "ons", "nomis", "landregistry", "postcodes", "frankfurter", "coingecko", "yahoo", "fred", "octopus",
     "carbonintensity", "openmeteo", "police", "environmentagency", "companieshouse", "adzuna", "dvla", "dvsamot",
-    "statxplore", "epc", "openbanking",
+    "statxplore", "epc", "openbanking", "bankholidays",
 }
 
 

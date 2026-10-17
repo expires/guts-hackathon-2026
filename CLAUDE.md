@@ -23,7 +23,7 @@ The product name lives in one constant: `services/api/lifeline_contracts/brand.p
 | W3 sim | `services/api/lifeline_sim/`, `services/api/tests/unit/sim/`, `docs/index.md` |
 | W4 api | `services/api/lifeline_api/`, `services/api/tests/integration/`, `services/api/tests/unit/api/` |
 | W5 explain | `services/api/lifeline_explain/`, `services/api/tests/unit/explain/`, `docs/RESPONSIBLE_AI.md` |
-| USER (UI owner) | `apps/ios/Lifeline/Features/**/Views/**`, `apps/ios/Lifeline/DesignSystem/**`. NO AGENT EDITS THESE PATHS. Request view changes in `docs/UI_REQUESTS.md` |
+| USER (UI owner) | `apps/ios/Lifeline/Features/**/Views/**`, `apps/ios/Lifeline/DesignSystem/**`. NO AGENT EDITS THESE PATHS, EXCEPT during the ADR 0026 design rebuild (W6 and W7, until the user's handoff ends). Request view changes in `docs/UI_REQUESTS.md` |
 | W6 ios-core | `apps/ios/Lifeline/` (Networking, State, Preview/Fixtures, `Features/*/ViewModels/`, `Features/*/*Screen.swift`) except USER paths and W7 features; `apps/ios/LifelineTests/`, `apps/ios/LifelineUITests/` |
 | W7 ios-social-store | `apps/ios/Lifeline/Features/{Rooms,Decision,Bank,Store,TestIt}/` except existing `Views/` files; `apps/ios/LifelineWidget/`, `apps/ios/Lifeline.storekit`, `apps/ios/LifelineTests/Social/` |
 | W8 infra-docs | `services/api/Dockerfile`, `.github/workflows/`, `README.md`, `docs/architecture.md`, `docs/DEMO.md`, `docs/AI_USAGE.md`, `services/api/seed/`, `services/api/lifeline_data_attributions.json` |
@@ -58,3 +58,9 @@ The product name lives in one constant: `services/api/lifeline_contracts/brand.p
 
 `make up` · `make down` · `make test` · `make lint` · `make ios-gen` · `make ios-test` · `make demo-seed` · `make secrets-scan`
 - Every command-line `xcodebuild` uses `-derivedDataPath apps/ios/.build/DerivedData` (the Makefile does this). Never touch Xcode's default DerivedData; the user's GUI builds use it.
+
+## Temporary (ADR 0026): design rebuild for the user's iPhone
+
+- W6 and W7 may edit `Features/**/Views/**` and `DesignSystem/**` until BOSS records the end of ADR 0026. Afterwards those paths return to the user.
+- Phone builds: `make ios-device` (Mock configuration, MockClient, no backend). Simulator builds go through `tools/with-ios-lock.sh` (Makefile does this). Never run two xcodebuilds on `apps/ios/.build/DerivedData` at once.
+- Design source: `lifeline-design/HANDOFF.md` and `lifeline-design/screens/*.dc.html` (reference only; rebuild natively in SwiftUI, no web views).

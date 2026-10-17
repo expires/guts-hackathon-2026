@@ -19,6 +19,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from statistics import median
+from typing import Literal
 
 from lifeline_contracts.finance import Bill, Cadence, Category, PriceRise, Subscription, Transaction
 from lifeline_engine.money import dates
@@ -48,6 +49,8 @@ DUE_SOON_DAYS = 3
 BILL_WINDOW_DAYS = 30
 OVERDUE_GRACE_DAYS = 5
 
+BillKind = Literal["bill", "subscription", "rent", "mortgage", "loan", "card"]
+
 BILL_CATEGORIES: frozenset[Category] = frozenset({"bills", "housing", "subscriptions"})
 
 
@@ -74,9 +77,16 @@ class Recurring:
 
     def next_due(self, after: dates.date) -> dates.date:
         """First due date on or after `after`, or the first missed one when it is within the grace period."""
-        d = step(self.last_date, self.cadence)
+        d = self._skip_break(step(self.last_date, self.cadence))
         while (after - d).days > OVERDUE_GRACE_DAYS:
-            d = step(d, self.cadence)
+            d = self._skip_break(step(d, self.cadence))
+        return d
+
+    def _skip_break(self, d: dates.date) -> dates.date:
+        """Ten-payment council tax: no payment in February or March."""
+        text = f"{self.charges[-1].description} {self.charges[-1].merchant or ''}".lower()
+        if self.cadence == "monthly" and d.month in (2, 3) and any(w in text for w in TEN_PAYMENT_WORDS):
+            return dates.add_months(d, 4 - d.month)
         return d
 
 
@@ -95,6 +105,22 @@ def classify_cadence(gaps: Sequence[int]) -> Cadence | None:
         if all(lo <= g <= hi for g in gaps):
             return cadence
     return None
+
+
+TEN_PAYMENT_WORDS = ("council tax", "ctax", "council")
+TEN_PAYMENT_BREAK = (55, 100)  # the February-March break: one or two months skipped
+
+
+def is_ten_payment_schedule(items: Sequence[Transaction], gaps: Sequence[int]) -> bool:
+    """Council tax is often paid in 10 monthly instalments (April to January) with a February-March break.
+    Accept monthly gaps plus at most one break of 55-100 days per 10 payments."""
+    text = f"{items[-1].description} {items[-1].merchant or ''}".lower()
+    if not any(w in text for w in TEN_PAYMENT_WORDS):
+        return False
+    lo, hi = CADENCE_GAPS["monthly"]
+    breaks = [g for g in gaps if not lo <= g <= hi]
+    allowed = 1 + len(items) // 10
+    return all(TEN_PAYMENT_BREAK[0] <= g <= TEN_PAYMENT_BREAK[1] for g in breaks) and len(breaks) <= allowed
 
 
 def stable_subscription_amounts(amounts: Sequence[float]) -> bool:
@@ -169,6 +195,8 @@ def _recurring_from(key: str, items: list[Transaction], today: dates.date) -> Re
     ds = [dates.parse(t.date) for t in items]
     gaps = [(b - a).days for a, b in zip(ds, ds[1:], strict=False)]
     cadence = classify_cadence(gaps)
+    if cadence is None and is_ten_payment_schedule(items, gaps):
+        cadence = "monthly"
     if cadence is None or len(items) < MIN_CHARGES[cadence]:
         return None
     if (today - ds[-1]).days > ACTIVE_STEPS * CADENCE_DAYS[cadence]:
@@ -217,6 +245,14 @@ def detect_subscriptions(txs: Iterable[Transaction], today: dates.date | None = 
     return out
 
 
+_BILL_KINDS: dict[str, BillKind] = {
+    "bill": "bill",
+    "subscription": "subscription",
+    "rent": "rent",
+    "mortgage": "mortgage",
+    "loan": "loan",
+    "card": "card",
+}
 _KIND_EMOJI = {"mortgage": "🏠", "rent": "🏠", "card": "💳", "loan": "🏦", "subscription": "🔁"}
 
 
@@ -229,13 +265,13 @@ def upcoming_bills(txs: Iterable[Transaction], today: dates.date) -> list[Bill]:
         if days > BILL_WINDOW_DAYS:
             continue
         status = "overdue" if days < 0 else "due_soon" if days <= DUE_SOON_DAYS else "upcoming"
-        kind = r.kind if r.kind in ("bill", "subscription", "rent", "mortgage", "loan", "card") else "bill"
+        kind = _BILL_KINDS.get(r.kind, "bill")
         out.append(
             Bill(
                 id=f"bill_{_slug(r.key)}",
                 name=r.name,
                 emoji=_KIND_EMOJI.get(kind, emoji(r.category)),
-                kind=kind,  # type: ignore[arg-type]
+                kind=kind,
                 amount=round(r.amount, 2),
                 due_date=dates.iso(due),
                 status=status,

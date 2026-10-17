@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lifeline style guide</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1240px; height: 1000px; box-sizing: border-box; padding: 48px; background: #F5F2EA; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; gap: 32px">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1.1; color: #FFFFFF; -webkit-text-stroke: 9px #16181D; paint-order: stroke fill; text-shadow: 5px 5px 0 #16181D; padding: 4px 0 0 4px">Lifeline</div>
+      <div style="font-size: 17px; color: #4A4F59">Style guide · Paper theme · white Next Move card · hand-cut outlines</div>
+    </div>
+    <div style="font-size: 13px; font-weight: 700; padding: 3px 10px; border: 2px solid #16181D; border-radius: 12px 16px 11px 15px / 15px 11px 16px 12px; background: #FFFFFF">v1 · 17 Oct 2026</div>
+  </div>
+
+  <div style="flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px">
+
+    <div style="display: flex; flex-direction: column; gap: 24px">
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Base colours</div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 40px; border: 3px solid #16181D; border-radius: 12px 15px 11px 14px; background: #F5F2EA"></span><div style="font-size: 13px"><b style="font-size: 17px">Paper</b> #F5F2EA<br>Screen background</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 40px; border: 3px solid #16181D; border-radius: 15px 11px 14px 12px; background: #FFFFFF"></span><div style="font-size: 13px"><b style="font-size: 17px">Card</b> #FFFFFF<br>Cards, sheets, Next Move card, tab bar</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 40px; border: 3px solid #16181D; border-radius: 11px 14px 12px 15px; background: #16181D"></span><div style="font-size: 13px"><b style="font-size: 17px">Ink</b> #16181D<br>Text, outlines, shadows, main button</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 40px; border: 3px solid #16181D; border-radius: 14px 12px 15px 11px; background: #4A4F59"></span><div style="font-size: 13px"><b style="font-size: 17px">Muted</b> #4A4F59<br>Second-level text (7.9:1 on paper)</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 40px; border: 3px solid #16181D; border-radius: 12px 14px 11px 15px; background: #DDD8CC"></span><div style="font-size: 13px"><b style="font-size: 17px">Rule</b> #DDD8CC<br>Dividers inside lists only</div></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Life areas · always with a label</div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 28px; border: 3px solid #16181D; border-radius: 10px 13px 9px 12px; background: #6C8EF5"></span><div style="font-size: 13px"><b style="font-size: 17px">Work</b> #6C8EF5 · job, pay, commute</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 28px; border: 3px solid #16181D; border-radius: 13px 9px 12px 10px; background: #FFA94D"></span><div style="font-size: 13px"><b style="font-size: 17px">Home</b> #FFA94D · rent, mortgage, bills</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 28px; border: 3px solid #16181D; border-radius: 9px 12px 10px 13px; background: #3FB57A"></span><div style="font-size: 13px"><b style="font-size: 17px">Money</b> #3FB57A · savings, debt, Penny</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 28px; border: 3px solid #16181D; border-radius: 12px 10px 13px 9px; background: #A78BFA"></span><div style="font-size: 13px"><b style="font-size: 17px">Family</b> #A78BFA · people, food, kids</div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 28px; border: 3px solid #16181D; border-radius: 10px 12px 9px 13px; background: #FF7A8A"></span><div style="font-size: 13px"><b style="font-size: 17px">Health</b> #FF7A8A · health, gym, also "price up" flags</div></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 24px">
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Type · 4 sizes only</div>
+        <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1">£190</span><span style="font-size: 13px; color: #4A4F59">40 · Bricolage 800 · hero numbers, age</span></div>
+        <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">Fix for 5 years</span><span style="font-size: 13px; color: #4A4F59">24 · titles, year headers</span></div>
+        <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 17px">I bought a house in Leeds.</span><span style="font-size: 13px; color: #4A4F59">17 · Atkinson · body, buttons</span></div>
+        <div style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 13px; font-weight: 700">MEDIUM CONFIDENCE</span><span style="font-size: 13px; color: #4A4F59">13 · labels, captions</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Spacing · 4 / 8 / 12 / 16 / 20 / 32</div>
+        <div style="display: flex; align-items: flex-end; gap: 10px">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 4px; height: 4px; background: #16181D"></div><span style="font-size: 13px">4</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 8px; height: 8px; background: #16181D"></div><span style="font-size: 13px">8</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 12px; height: 12px; background: #16181D"></div><span style="font-size: 13px">12</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 16px; height: 16px; background: #16181D"></div><span style="font-size: 13px">16</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 20px; height: 20px; background: #16181D"></div><span style="font-size: 13px">20</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 32px; height: 32px; background: #16181D"></div><span style="font-size: 13px">32</span></div>
+        </div>
+        <div style="font-size: 13px; color: #4A4F59">Screen side margin 20. Gap between sections 16. Inside cards 16–20.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Shape</div>
+        <div style="display: flex; gap: 16px; align-items: center">
+          <div style="width: 96px; height: 64px; background: #FFFFFF; border: 3px solid #16181D; border-radius: 22px 30px 20px 28px / 28px 20px 30px 22px; box-shadow: 6px 7px 0 #16181D"></div>
+          <div style="font-size: 13px; line-height: 1.5">3px ink outline<br>Uneven corners, 4 different radii<br>Offset shadow 6 × 7px, hero only<br>Cards inside cards: never</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Rules</div>
+        <div style="font-size: 13px; line-height: 1.6">No gradients, glows or sparkles.<br>No emoji or system icons. Use the Lifeline icon set.<br>Colour is always paired with a word or shape.<br>"Mock data" chip on any screen with fake data.<br>"Demo payment" on every paywall.</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px">
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Components</div>
+
+      <div style="display: flex; gap: 8px">
+        <button type="button" style="height: 52px; padding: 0 20px; border: 3px solid #16181D; border-radius: 14px 20px 12px 18px / 18px 12px 20px 14px; background: #16181D; color: #FFFFFF; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Main</button>
+        <button type="button" style="height: 52px; padding: 0 20px; border: 3px solid #16181D; border-radius: 18px 12px 20px 14px / 14px 20px 12px 18px; background: #FFFFFF; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Second</button>
+        <button type="button" style="height: 52px; padding: 0 12px; border: none; background: transparent; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; cursor: pointer">Text</button>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+        <span style="font-size: 13px; font-weight: 700; padding: 3px 10px; border: 2px solid #16181D; border-radius: 12px 16px 11px 15px / 15px 11px 16px 12px; background: #FFFFFF">Mock data</span>
+        <span style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FF7A8A">Up £3</span>
+        <span style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #3FB57A">Saves £190</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 11px 8px 10px 7px; background: #FFFFFF"><span style="width: 10px; height: 10px; border: 2px solid #16181D; border-radius: 3px; background: #FFA94D"></span>Home</span>
+      </div>
+
+      <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 16px 20px 15px 19px / 19px 15px 20px 16px">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 2px solid #DDD8CC">
+          <dc-import name="Icon" icon="home" size="{{32}}" hint-size="32px,32px"></dc-import>
+          <div style="flex: 1"><div style="font-size: 17px; font-weight: 700">My home</div><div style="font-size: 13px; color: #4A4F59">List row · icon, title, line, chevron</div></div>
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 16px">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700"><span style="display: flex; align-items: center; gap: 6px"><dc-import name="Icon" icon="health" size="{{24}}" hint-size="24px,24px"></dc-import>Health</span><span>64%</span></div>
+          <div style="height: 18px; border: 3px solid #16181D; border-radius: 10px 14px 9px 13px / 13px 9px 14px 10px; background: #FFFFFF; overflow: hidden"><div style="width: 64%; height: 100%; background: #FF7A8A; border-right: 3px solid #16181D"></div></div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 20px">
+        <button type="button" aria-label="Age up to 30" style="width: 104px; height: 104px; flex: none; border-radius: 50% 48% 52% 49% / 49% 52% 48% 51%; background: #FFFFFF; border: 3px solid #16181D; box-shadow: 5px 6px 0 #16181D; color: #16181D; font-family: 'Bricolage Grotesque', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer"><span style="font-size: 40px; font-weight: 800; line-height: 1">29</span><span style="font-size: 13px; font-weight: 700; font-family: 'Atkinson Hyperlegible', sans-serif">AGE +1</span></button>
+        <div style="font-size: 13px; line-height: 1.5">Age button: the one main action in Life. It shows the current age. Tap adds one year to the story.</div>
+      </div>
+
+      <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 22px 30px 20px 28px / 28px 20px 30px 22px; box-shadow: 6px 7px 0 #16181D; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase">Next Move card · anatomy</div>
+        <div style="font-size: 13px; line-height: 1.6">1 · Eyebrow "Your next money move"<br>2 · One action in plain words (24)<br>3 · One line of context with real numbers (17)<br>4 · £ impact a year (40) + confidence word, meter, reason<br>5 · Test it (main) · Why? · Do this<br>6 · Penny's face matches the confidence</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1240,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
