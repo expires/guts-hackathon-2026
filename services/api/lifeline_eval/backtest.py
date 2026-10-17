@@ -17,6 +17,7 @@ from lifeline_contracts.domain import BacktestPeriod, DecisionProfile, Evaluatio
 from lifeline_contracts.macro import MacroTable
 from lifeline_engine.decision import HORIZON, Scenario, decide_with, options_for, rank_options
 from lifeline_engine.macro_access import latest_year
+from lifeline_engine.next_move import CONSTANT_RULE_TEXT, best_constant_rule
 from lifeline_engine.periods import table_years
 
 BASELINE = "fix_2y"
@@ -67,12 +68,13 @@ def evaluate(macro: MacroTable) -> Evaluation:
         )
 
     n = len(periods)
+    rule, rule_rate = best_constant_rule([p.realised_best for p in periods], options)
     return Evaluation(
-        method=METHOD,
+        method=f"{METHOD}. Best constant rule: {CONSTANT_RULE_TEXT[rule]}, right in {rule_rate:.1%} of periods.",
         n=n,
         hit_rate=sum(p.hit for p in periods) / n if n else 0.0,
         baseline_hit_rate=sum(p.realised_best == BASELINE for p in periods) / n if n else 0.0,
-        baseline=BASELINE_TEXT,
+        baseline=f"{BASELINE_TEXT} (best constant rule: {CONSTANT_RULE_TEXT[rule]}, {rule_rate:.1%})",
         periods=periods,
         # Engine is pure: no clock. The API layer replaces this with the server time.
         generated_at=f"{last}-01-01T00:00:00Z",

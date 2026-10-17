@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from lifeline_contracts.domain import CharacterSpec, Deltas, Event, LifeMode
 from lifeline_contracts.macro import MacroTable
 from lifeline_sim.actions import is_action_id, run_action
-from lifeline_sim.events.engine import Resolution, apply_effects, resolve
+from lifeline_sim.events.engine import Resolution, apply_effects, resolve, templates_by_id
 from lifeline_sim.index import IndexWeights
 from lifeline_sim.macroview import MacroView
 from lifeline_sim.setup import Setup
@@ -47,6 +47,13 @@ def view_for(macro: MacroTable) -> MacroView:
     while len(_VIEWS) > _VIEWS_MAX:
         _VIEWS.popitem(last=False)
     return mv
+
+
+def last_view() -> MacroView | None:
+    """The view of the most recently used MacroTable in this process, if any."""
+    if not _VIEWS:
+        return None
+    return next(reversed(_VIEWS.values()))[1]
 
 
 @dataclass(frozen=True)
@@ -85,6 +92,12 @@ def apply_decisions(s: SimState, decisions: Sequence[Decision], mv: MacroView, w
 def apply_choice(s: SimState, event: Event, choice_id: str, w: IndexWeights) -> tuple[Resolution, Deltas]:
     res = resolve(event, choice_id, s.seed)
     deltas = apply_effects(s, res.effects)
+    lt = templates_by_id().get(event.template_id)
+    living = res.effects.get("living", 0.0)
+    for tag in lt.t.tags if lt is not None else ():
+        s.tag_cost[tag] = s.tag_cost.get(tag, 0.0) - deltas.money
+        if isinstance(living, float | int) and living:
+            s.tag_living[tag] = s.tag_living.get(tag, 0.0) + float(living)
     s.pending = [e for e in s.pending if e.id != event.id]
     s.track_drawdown(w)
     return res, deltas

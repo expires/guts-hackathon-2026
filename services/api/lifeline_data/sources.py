@@ -61,6 +61,11 @@ SOURCES: dict[str, SourceInfo] = {
             OGL, 30 * DAY, url="https://postcodes.io/",
         ),
         SourceInfo(
+            "bankholidays", "GOV.UK bank holidays", "UK (England and Wales, Scotland, Northern Ireland)",
+            "Contains public sector information licensed under the Open Government Licence v3.0 (GOV.UK).",
+            OGL, DAY, tier=1, url="https://www.gov.uk/bank-holidays",
+        ),
+        SourceInfo(
             "frankfurter", "Frankfurter FX rates", "Global",
             "Exchange rates from Frankfurter, based on European Central Bank reference rates.",
             "Free to use (ECB reference rates)", HOUR, tier=1, url="https://www.frankfurter.app/",

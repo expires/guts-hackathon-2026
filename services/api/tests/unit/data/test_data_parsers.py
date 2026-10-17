@@ -19,7 +19,7 @@ from lifeline_data.base import PayloadError
 def test_boe_csv(fixture_text):
     rows = parse_boe_csv(fixture_text("boe_iadb.csv"))
     codes = {r[0] for r in rows}
-    assert codes == {"IUMBEDR", "IUMBV34", "IUMBV42", "IUMB6VJ", "IUMCCTL"}
+    assert codes == {"IUMBEDR", "IUMBV34", "IUMBV42", "IUMB6VJ", "IUMCCTL", "IUMTLMV", "IUMBV48", "IUMBV24"}
     bank = {d: v for c, d, v in rows if c == "IUMBEDR"}
     assert bank[date(1990, 1, 31)] == pytest.approx(14.875)
     # 2009 cut to 0.5

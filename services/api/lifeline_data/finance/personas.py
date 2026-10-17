@@ -144,40 +144,43 @@ _register(
     Persona(
         id=DEMO_PERSONA_ID,
         label="Homeowner with a mortgage (Leeds)",
-        name="Priya",
+        name="Priya Shah",
         sex="female",
-        birth_year=1988,
-        occupation="Marketing manager",
+        birth_year=1992,  # age 34 on 2026-10-17
+        occupation="Nurse",
         region="yorkshire-and-the-humber",
         town="Leeds",
         postcode="LS6 1AN",
-        gross_salary=38_000.0,
-        net_pay=2_486.32,
-        employer="NORTHGATE MEDIA LTD",
+        # NHS Agenda for Change band 5, top point (2025/26): 37,797 gross. Net after income tax, 8% NI and
+        # 9.8% NHS pension: 2,314.18 a month.
+        gross_salary=37_797.0,
+        net_pay=2_314.18,
+        employer="LEEDS TEACHING HOSPITALS NHS TRUST",
         housing="mortgage",
         bank="Lloyds",
-        current_balance=1_243.18,
+        current_balance=1_186.40,
         savings_provider="Halifax",
         savings_name="Everyday Saver",
         savings_balance=6_850.42,
         savings_rate_pct=1.25,
         savings_transfer=150.0,
-        daily_spend=23.0,
+        daily_spend=18.8,
+        # 2-year fix taken April 2025 at 4.42% (BoE IUMBV34, 2-year fix 75% LTV, April 2025).
+        # Payment = 180,000 repaid over 25 years at 4.42%.
         mortgage=MortgageDetails(
             balance=180_000.0,
-            rate_pct=2.09,
+            rate_pct=4.42,
             rate_type="fixed",
             fixed_until="2027-03-31",
-            years_left=23,
+            years_left=25,
             property_value=240_000.0,
-            monthly_payment=822.03,
+            monthly_payment=992.34,
             lender="Nationwide",
         ),
         energy=EnergyDetails(
             supplier="Octopus Energy", tariff="Flexible Octopus", monthly_cost=142.0, fixed_until=None
         ),
-        card=Card("Barclaycard", "Barclaycard Platinum", 24.9, -3_420.55, 0.30, 360.0),
-        pension_balance=41_200.0,
+        pension_balance=24_600.0,
         shops=(
             *_groceries(Shop("Morrisons", "WM MORRISONS", 5, 31.0, 0.6)),
             *_common_spend(),
@@ -194,20 +197,15 @@ _register(
             Bill("TV Licensing", "TV LICENCE MBP", 14.54, 1),
             Bill("Admiral", "ADMIRAL INSURANCE", 52.37, 5),
         ),
+        # Exactly 2 subscriptions, 37.98 a month in total (shown as 38). No price rise.
         subs=(
-            Sub("Netflix", "NETFLIX.COM", 12.99, 9, rise=(date(2026, 6, 1), 13.99)),
-            Sub("Spotify", "SPOTIFY UK", 12.99, 14),
-            Sub("Amazon Prime", "AMAZON PRIME", 8.99, 21, card=True),
-            Sub("Disney+", "DISNEY PLUS", 9.99, 3),
-            Sub("PureGym", "PUREGYM LTD", 27.99, 1),
-            Sub("iCloud", "APPLE.COM/BILL", 2.99, 25),
+            Sub("Netflix", "NETFLIX.COM", 12.99, 9),
+            Sub("PureGym", "PUREGYM LTD", 24.99, 1),
         ),
-        unused_subscriptions=("Disney+", "PureGym"),
         notes=(
-            "Fixed mortgage deal ends 2027-03-31.",
-            "Netflix rose from 12.99 to 13.99 in June 2026.",
-            "Disney+ and PureGym: no related spending, likely unused.",
-            "Credit card balance at 24.9% APR while savings earn 1.25%.",
+            "Two-year fixed mortgage deal at 4.42% ends 2027-03-31.",
+            "Two subscriptions: Netflix and PureGym, 37.98 a month.",
+            "Savings earn 1.25% in an easy-access account.",
         ),
     )
 )

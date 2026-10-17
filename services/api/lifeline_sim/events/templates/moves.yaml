@@ -17,7 +17,7 @@
   facts:
     old_rate: prev_bank_rate
     new_rate: bank_rate
-    rate_now: (bank_rate + tracker_margin) if on_tracker else svr_rate
+    rate_now: tracker_now if on_tracker else svr_rate
     extra_monthly: round(mortgage_balance * (bank_rate - prev_bank_rate) / 1200)
     rate_2y: mortgage_2y_fix
     rate_5y: mortgage_5y_fix

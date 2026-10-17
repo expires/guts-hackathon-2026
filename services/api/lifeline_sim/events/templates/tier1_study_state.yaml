@@ -1,0 +1,621 @@
+# Tier 1 study and state events. Schema: lifeline_sim/events/schema.py
+
+- id: study.masters
+  area: study
+  emoji: "🎓"
+  title: A master's degree?
+  text: "A one-year master's costs £{fees:,.0f} in fees, paid with a postgraduate loan. Graduates often earn about £{pay_gain:,.0f} a year more."
+  concept_id: human-capital
+  eligible:
+    age: [21, 35]
+    when: smarts > 55
+  probability: 0.03
+  facts:
+    fees: round(11000 * price_level)
+    pay_gain: round(median_pay * 0.08)
+    lost_pay: round(net_income * 0.5)
+  choices:
+    - id: skip
+      label: Keep working
+      emoji: "💼"
+      hint: No new debt
+      default: true
+      text: "You keep working."
+      good: false
+      effects: { }
+    - id: study
+      label: Do the master's
+      emoji: "📚"
+      hint: "£{fees:,.0f} loan, could pay £{pay_gain:,.0f} more"
+      branches:
+        - p: 0.65
+          text: "You passed and your pay rose £{pay_gain:,.0f} a year."
+          good: true
+          effects: { student_loan: fees, cash: -lost_pay, income: pay_gain, smarts: 8 }
+        - text: "You passed, but pay did not rise yet."
+          good: false
+          effects: { student_loan: fees, cash: -lost_pay, smarts: 8 }
+
+- id: study.apprenticeship
+  area: study
+  emoji: "🛠️"
+  title: An apprenticeship
+  text: "An apprenticeship pays £{app_pay:,.0f} a year while you train, with no fees. Typical pay here is £{median:,.0f}."
+  concept_id: human-capital
+  eligible:
+    age: [16, 24]
+    when: not employed or income < 20000
+  probability: 0.1
+  facts:
+    app_pay: round(median_pay * 0.55)
+    median: round(median_pay)
+    pay_change: round(app_pay - income)
+    flag_on: 1
+  choices:
+    - id: skip
+      label: Not for me
+      emoji: "🙅"
+      hint: No change
+      default: true
+      text: "You stick with your plans."
+      good: false
+      effects: { }
+    - id: apply
+      label: Apply
+      emoji: "📝"
+      hint: "Earn £{app_pay:,.0f} while you learn"
+      text: "You started an apprenticeship on £{app_pay:,.0f}."
+      good: true
+      effects: { set_employed: flag_on, income: pay_change, smarts: 4 }
+
+- id: study.language_class
+  area: study
+  emoji: "🗣️"
+  title: Learn a language
+  text: "An evening language class costs £{cost:,.0f} for the year."
+  concept_id: human-capital
+  eligible:
+    age: [16, 90]
+  probability: 0.03
+  facts:
+    cost: round(250 * price_level)
+  choices:
+    - id: skip
+      label: Maybe later
+      emoji: "🛋️"
+      hint: No cost
+      default: true
+      text: "You skip it this year."
+      good: false
+      effects: { }
+    - id: enrol
+      label: Enrol
+      emoji: "📖"
+      hint: "-£{cost:,.0f}"
+      text: "You enrolled for £{cost:,.0f}."
+      good: true
+      effects: { cash: -cost, smarts: 3, happiness: 2 }
+
+- id: study.professional_exam
+  area: study
+  emoji: "📝"
+  title: A professional exam
+  text: "A professional qualification costs £{cost:,.0f}. People who pass earn about {gain_pct:.0f}% more."
+  concept_id: human-capital
+  eligible:
+    age: [21, 50]
+    when: employed
+  probability: 0.04
+  facts:
+    cost: round(1200 * price_level)
+    gain_pct: 8
+    gain: round(income * gain_pct / 100)
+    pass_chance: clamp(0.3 + smarts / 150, 0.3, 0.9)
+  choices:
+    - id: skip
+      label: Not now
+      emoji: "🙅"
+      hint: No cost
+      default: true
+      text: "You put it off."
+      good: false
+      effects: { }
+    - id: sit
+      label: Sit the exam
+      emoji: "✍️"
+      hint: "-£{cost:,.0f}"
+      branches:
+        - p: pass_chance
+          text: "You passed. Pay rises £{gain:,.0f} a year."
+          good: true
+          effects: { cash: -cost, income: gain, smarts: 4 }
+        - text: "You failed this time. The £{cost:,.0f} is gone."
+          good: false
+          effects: { cash: -cost, smarts: 2, happiness: -3 }
+
+- id: study.loan_overpay
+  area: study
+  emoji: "🎓"
+  title: Pay off your student loan early?
+  text: "You owe £{owed:,.0f} on your student loan. Any balance left after the repayment period is written off, so overpaying may never pay back."
+  concept_id: student-loans
+  eligible:
+    age: [22, 50]
+    when: student_loan > 5000 and liquid > 8000
+  probability: 0.06
+  facts:
+    owed: round(student_loan)
+    overpay: round(min(liquid * 0.3, student_loan))
+  choices:
+    - id: keep
+      label: Keep your savings
+      emoji: "🏦"
+      hint: Repay from pay as normal
+      default: true
+      text: "You keep repaying through your pay."
+      good: true
+      effects: { }
+    - id: overpay
+      label: Overpay £{overpay:,.0f}
+      emoji: "💸"
+      hint: Less debt, less cash
+      text: "You overpaid £{overpay:,.0f}."
+      good: false
+      effects: { savings: -overpay, student_loan: -overpay }
+
+- id: study.loan_interest
+  area: study
+  emoji: "📈"
+  title: Student loan interest
+  text: "Your student loan now charges {rate:.1f}% a year. Your £{owed:,.0f} balance grows by about £{interest:,.0f} unless you repay more."
+  concept_id: student-loans
+  eligible:
+    age: [18, 55]
+    when: student_loan > 1000
+  probability: clamp((cpi_inflation - 2) / 6, 0.05, 0.6)
+  facts:
+    rate: cpi_inflation + 1
+    owed: round(student_loan)
+    interest: round(owed * rate / 100)
+  choices:
+    - id: ignore
+      label: Ignore it
+      emoji: "🙈"
+      hint: Repay from pay as usual
+      default: true
+      text: "You leave it. Repayments come from your pay."
+      good: true
+      effects: { }
+    - id: worry
+      label: Cut spending to repay faster
+      emoji: "😰"
+      hint: Less fun now
+      text: "You cut back to repay faster. You feel the pinch."
+      good: false
+      effects: { happiness: -3 }
+
+- id: study.bootcamp
+  area: study
+  emoji: "💻"
+  title: A coding bootcamp
+  text: "A 12-week bootcamp costs £{fee:,.0f}. Graduates often start on about £{start_pay:,.0f}."
+  concept_id: human-capital
+  eligible:
+    age: [20, 45]
+    when: income < median_pay
+  probability: 0.03
+  facts:
+    fee: round(8000 * price_level)
+    start_pay: round(median_pay * 1.05)
+    pay_change: round(start_pay - income)
+    lost: round(net_income * 0.25)
+    flag_on: 1
+  choices:
+    - id: skip
+      label: Not for me
+      emoji: "🙅"
+      hint: No cost
+      default: true
+      text: "You stay on your path."
+      good: false
+      effects: { }
+    - id: enrol
+      label: Do it
+      emoji: "💻"
+      hint: "-£{fee:,.0f}"
+      branches:
+        - p: 0.55
+          text: "You landed a developer job on £{start_pay:,.0f}."
+          good: true
+          effects: { cash: -fee - lost, set_employed: flag_on, income: pay_change, smarts: 6 }
+        - text: "No job came from it yet. You spent £{fee:,.0f}."
+          good: false
+          effects: { cash: -fee - lost, smarts: 4, happiness: -4 }
+
+- id: study.first_aid
+  area: study
+  emoji: "⛑️"
+  title: A free first aid course
+  text: "Your council runs a free first aid course on a Saturday."
+  concept_id: human-capital
+  eligible:
+    age: [16, 80]
+  probability: 0.03
+  facts:
+    zero: 0
+  choices:
+    - id: skip
+      label: Skip it
+      emoji: "🛋️"
+      hint: Lie in
+      default: true
+      text: "You had a lie-in."
+      good: false
+      effects: { }
+    - id: go
+      label: Go
+      emoji: "⛑️"
+      hint: Free
+      text: "You learned first aid."
+      good: true
+      effects: { smarts: 2, happiness: 1 }
+
+- id: state.tax_code_error
+  area: state
+  emoji: "📬"
+  title: A letter from HMRC
+  text: "Your tax code was wrong. HMRC says you underpaid £{owed:,.0f}. You can spread it over next year."
+  concept_id: tax-bands
+  eligible:
+    when: employed
+  probability: 0.03
+  facts:
+    owed: round(income * 0.015)
+  choices:
+    - id: pay
+      label: Pay it
+      emoji: "💷"
+      hint: "-£{owed:,.0f}"
+      default: true
+      text: "You paid £{owed:,.0f}."
+      good: false
+      effects: { cash: -owed }
+    - id: check
+      label: Check the sums
+      emoji: "🔍"
+      hint: HMRC can be wrong too
+      branches:
+        - p: 0.3
+          text: "HMRC got it wrong. You owe nothing."
+          good: true
+          effects: { smarts: 2 }
+        - text: "HMRC was right. You paid £{owed:,.0f}."
+          good: false
+          effects: { cash: -owed, smarts: 1 }
+
+- id: state.marriage_allowance
+  area: state
+  emoji: "💍"
+  title: Marriage allowance
+  text: "If one of you earns less than the personal allowance, you can transfer part of it and save £{saving:,.0f} a year."
+  concept_id: tax-bands
+  eligible:
+    when: married
+  probability: 0.05
+  facts:
+    saving: 252
+  choices:
+    - id: ignore
+      label: Do nothing
+      emoji: "😴"
+      hint: Miss £{saving:,.0f}
+      default: true
+      text: "You never got round to it."
+      good: false
+      effects: { }
+    - id: claim
+      label: Claim it
+      emoji: "📝"
+      hint: "+£{saving:,.0f} a year"
+      text: "You claimed £{saving:,.0f} a year."
+      good: true
+      effects: { cash: saving, smarts: 1 }
+
+- id: state.child_benefit
+  area: state
+  emoji: "👶"
+  title: Claim Child Benefit
+  text: "Child Benefit is worth about £{annual:,.0f} a year for your first child. Claiming also protects a parent's state pension."
+  concept_id: benefits
+  eligible:
+    when: children > 0
+  probability: 0.08
+  facts:
+    annual: round(1330 * price_level)
+    charge: round(annual * clamp((income - 60000) / 20000, 0, 1))
+    net: annual - charge
+  choices:
+    - id: skip
+      label: Do not claim
+      emoji: "🙅"
+      hint: Miss £{annual:,.0f}
+      default: true
+      text: "You did not claim."
+      good: false
+      effects: { }
+    - id: claim
+      label: Claim it
+      emoji: "📝"
+      hint: "+£{net:,.0f} after any tax charge"
+      text: "You claimed and received £{net:,.0f} after the tax charge."
+      good: true
+      effects: { cash: net }
+
+- id: state.ni_gaps
+  area: state
+  emoji: "🧩"
+  title: Gaps in your National Insurance
+  text: "Your state pension forecast shows missing years. Buying one year costs £{cost:,.0f} and adds about £{gain:,.0f} a year to your pension for life."
+  concept_id: state-pension
+  eligible:
+    age: [40, 66]
+  probability: 0.03
+  facts:
+    cost: round(900 * price_level)
+    gain: round(330 * price_level)
+    payback_years: round(cost / gain, 1)
+  choices:
+    - id: skip
+      label: Leave the gap
+      emoji: "🤷"
+      hint: Keep £{cost:,.0f}
+      default: true
+      text: "You leave the gap."
+      good: false
+      effects: { }
+    - id: buy
+      label: Buy the missing year
+      emoji: "🛒"
+      hint: "Pays back in about {payback_years:.1f} years of pension"
+      text: "You paid £{cost:,.0f} for an extra year of state pension."
+      good: true
+      effects: { cash: -cost, pension: cost, smarts: 1 }
+
+- id: state.late_tax_return
+  area: state
+  emoji: "⏰"
+  title: Your tax return is due
+  text: "Your self assessment is due on 31 January. Filing late costs a £{fine:,.0f} fine."
+  concept_id: tax-bands
+  eligible:
+    when: employed and (income > 100000 or bonus > 0)
+  probability: 0.1
+  facts:
+    fine: 100
+    adviser: round(400 * price_level)
+  choices:
+    - id: file
+      label: File it yourself
+      emoji: "📝"
+      hint: A few evenings
+      default: true
+      text: "You filed on time."
+      good: true
+      effects: { happiness: -1, smarts: 1 }
+    - id: late
+      label: Leave it
+      emoji: "😴"
+      hint: "-£{fine:,.0f} fine"
+      text: "You filed late and paid a £{fine:,.0f} fine."
+      good: false
+      effects: { cash: -fine }
+
+- id: state.winter_fuel
+  area: state
+  emoji: "🔥"
+  title: Winter fuel payment
+  text: "A payment of £{amount:,.0f} helps with heating this winter."
+  concept_id: benefits
+  eligible:
+    age: [66, 110]
+  probability: 0.2
+  facts:
+    amount: 200
+  choices:
+    - id: heat
+      label: Use it for heating
+      emoji: "🔥"
+      hint: "Warm winter"
+      default: true
+      text: "Your £{amount:,.0f} kept the house warm."
+      good: true
+      effects: { cash: amount, health: 2 }
+    - id: save
+      label: Save it and stay cold
+      emoji: "🥶"
+      hint: "+£{amount:,.0f} to savings"
+      text: "You saved the £{amount:,.0f} and wore jumpers."
+      good: false
+      effects: { savings: amount, health: -3 }
+
+- id: state.cost_of_living_payment
+  area: state
+  emoji: "💷"
+  title: Cost of living payment
+  text: "Prices rose {cpi_pct:.1f}%. The government pays £{amount:,.0f} to households on lower incomes."
+  concept_id: benefits
+  eligible:
+    years: [2022, 2023]
+    when: income < 25000
+  probability: 0.9
+  facts:
+    cpi_pct: cpi_inflation
+    amount: 650
+  choices:
+    - id: bills
+      label: Put it toward bills
+      emoji: "🧾"
+      hint: "+£{amount:,.0f}"
+      default: true
+      text: "The £{amount:,.0f} covered some bills."
+      good: true
+      effects: { cash: amount }
+    - id: treat
+      label: Treat the family
+      emoji: "🍕"
+      hint: A rare treat
+      text: "You spent it on a treat for the family."
+      good: false
+      effects: { happiness: 4 }
+
+- id: state.fiscal_drag
+  area: state
+  emoji: "🧮"
+  title: Frozen tax bands
+  text: "Tax bands are frozen while pay rose {pay_pct:.1f}%. More of your pay is taxed at {rate_pct:.0f}%, about £{extra_tax:,.0f} more this year."
+  concept_id: tax-bands
+  eligible:
+    years: [2021, 2028]
+    when: employed and income > 45000
+  probability: clamp(pay_growth / 15, 0.05, 0.4)
+  facts:
+    pay_pct: pay_growth
+    rate_pct: 40
+    extra_tax: round(income * pay_growth / 100 * 0.2)
+    sacrifice: round(income * 0.03)
+    sacrifice_cost: round(sacrifice * 0.58)
+  choices:
+    - id: accept
+      label: Accept it
+      emoji: "😐"
+      hint: "-£{extra_tax:,.0f}"
+      default: true
+      text: "You paid about £{extra_tax:,.0f} more tax."
+      good: false
+      effects: { cash: -extra_tax }
+    - id: pension
+      label: Pay more into your pension
+      emoji: "👵"
+      hint: "£{sacrifice:,.0f} in, costs you £{sacrifice_cost:,.0f}"
+      text: "You put £{sacrifice:,.0f} into your pension. It cost you £{sacrifice_cost:,.0f} after tax relief."
+      good: true
+      effects: { cash: -sacrifice_cost, pension: sacrifice }
+
+- id: state.pension_age_rise
+  area: state
+  emoji: "📆"
+  title: State pension age rises
+  text: "The state pension age rises by a year for people your age. That is £{lost:,.0f} of state pension you will wait for."
+  concept_id: state-pension
+  eligible:
+    age: [45, 64]
+  probability: 0.02
+  facts:
+    lost: round(median_pay * 0.32)
+    save_more: round(income * 0.02)
+  choices:
+    - id: accept
+      label: Accept it
+      emoji: "😐"
+      hint: Work a little longer
+      default: true
+      text: "You will work a year longer."
+      good: false
+      effects: { happiness: -2 }
+    - id: save
+      label: Save more for the gap
+      emoji: "🐖"
+      hint: "£{save_more:,.0f} a year into your pension"
+      text: "You pay an extra £{save_more:,.0f} a year into your pension."
+      good: true
+      effects: { cash: -save_more, pension: save_more }
+
+- id: state.universal_credit
+  area: state
+  emoji: "🤲"
+  title: Out of work
+  text: "Unemployment here is {unemployment_pct:.1f}%. Universal Credit could pay about £{monthly:,.0f} a month while you look."
+  concept_id: benefits
+  eligible:
+    age: [18, 65]
+    when: not employed and not retired
+  probability: 0.4
+  facts:
+    unemployment_pct: unemployment
+    monthly: round(400 * price_level)
+    annual: monthly * 6
+  choices:
+    - id: claim
+      label: Claim
+      emoji: "📝"
+      hint: "+£{annual:,.0f} over six months"
+      default: true
+      text: "You claimed £{annual:,.0f} while you looked for work."
+      good: true
+      effects: { cash: annual }
+    - id: skip
+      label: Get by on savings
+      emoji: "🏦"
+      hint: Keep your pride
+      text: "You got by on savings."
+      good: false
+      effects: { happiness: -2 }
+
+- id: state.jury_service
+  area: state
+  emoji: "⚖️"
+  title: Jury service
+  text: "You are called for two weeks of jury service. You lose about £{lost:,.0f} above the court's loss-of-earnings payment."
+  concept_id: income-protection
+  eligible:
+    age: [18, 75]
+    when: employed
+  probability: 0.02
+  facts:
+    lost: round(max(net_income / 26 - 130 * price_level, 0))
+  choices:
+    - id: serve
+      label: Serve
+      emoji: "⚖️"
+      hint: "-£{lost:,.0f}"
+      default: true
+      text: "You served. You lost £{lost:,.0f}."
+      good: true
+      effects: { cash: -lost, smarts: 2 }
+    - id: defer
+      label: Ask to defer
+      emoji: "📅"
+      hint: Later, same loss
+      text: "You deferred. It will come round again."
+      good: false
+      effects: { happiness: -1 }
+
+- id: state.energy_support
+  area: state
+  emoji: "🏛️"
+  title: Energy bill support
+  text: "Energy prices rose {energy_pct:.0f}%. The government takes £{support:,.0f} off every household's bill this winter."
+  concept_id: price-cap
+  tags: [energy_bill]
+  eligible:
+    years: [2022, 2023]
+  probability: clamp(energy_price_change / 40, 0, 1)
+  facts:
+    energy_pct: energy_price_change
+    support: 400
+  choices:
+    - id: keep
+      label: Let it cut your bill
+      emoji: "🧾"
+      hint: "+£{support:,.0f}"
+      default: true
+      text: "The £{support:,.0f} cut your bills."
+      good: true
+      effects: { cash: support }
+    - id: heat_more
+      label: Heat the house more
+      emoji: "🔥"
+      hint: Warmer, but no saving
+      text: "You used the support to keep warmer."
+      good: false
+      effects: { health: 2, happiness: 2 }

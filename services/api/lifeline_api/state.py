@@ -26,8 +26,8 @@ class AppState:
     life_locks: defaultdict[str, asyncio.Lock] = field(default_factory=lambda: defaultdict(asyncio.Lock))
     # Per-subject locks for read-modify-write on per-subject documents (budgets, goals, guesses, plan).
     subject_locks: defaultdict[str, asyncio.Lock] = field(default_factory=lambda: defaultdict(asyncio.Lock))
-    # Pure results keyed by (name, macro hash). The same table always gives the same result.
-    memo: dict[tuple[str, str], Any] = field(default_factory=dict)
+    # Pure results and short-lived caches keyed by (name, ...). Same inputs give the same result.
+    memo: dict[tuple[str, ...], Any] = field(default_factory=dict)
 
 
 def get_state(request: Request) -> AppState:

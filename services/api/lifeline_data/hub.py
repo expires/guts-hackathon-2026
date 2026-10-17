@@ -19,7 +19,7 @@ import os
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -28,20 +28,28 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.observation import Observation, SourceStatus, Status
-from lifeline_data.adapters import ADAPTERS, PostcodesAdapter
+from lifeline_data.adapters import ADAPTERS, BankHolidaysAdapter, OpenMeteoAdapter, PostcodesAdapter
 from lifeline_data.adapters.postcodes import normalise_postcode
 from lifeline_data.base import Adapter, CircuitBreaker, utcnow
 from lifeline_data.cache import ObservationCache, SnapshotStore, obs_key
 from lifeline_data.finance import DEMO_PERSONA_ID, fixture_snapshot
+from lifeline_data.logsafe import quiet_http_loggers, redact_urls
 from lifeline_data.macro import build_macro_table, mock_macro_table
 from lifeline_data.mocks import mock_postcode, mock_series
+from lifeline_data.prediction_inputs import (
+    division_for_region,
+    fixture_bank_holidays,
+    mock_daily_weather,
+    mock_weather_day,
+)
 from lifeline_data.settings import DataSettings
 from lifeline_data.sources import SOURCES, missing_keys
 
 log = logging.getLogger(__name__)
+quiet_http_loggers()  # keys in query strings (Adzuna) must never reach logs; applies to API and worker
 
 # Adapters that fetch one region per request. Others return every region in one payload.
-PER_REGION_SOURCES = frozenset({"landregistry"})
+PER_REGION_SOURCES = frozenset({"landregistry", "openmeteo"})
 
 
 STATE_KEY = "lifeline:source_state:{sid}"
@@ -231,7 +239,7 @@ class DataHub:
             try:
                 obs = await adapter.fetch_validated(series_id, fetch_region)
             except Exception as exc:
-                error = str(exc) or type(exc).__name__
+                error = redact_urls(str(exc) or type(exc).__name__)
                 log.warning("live fetch failed for %s/%s: %s", source, series_id, error)
             else:
                 await self.cache.set(ckey, obs)
@@ -319,7 +327,7 @@ class DataHub:
             try:
                 result = await self.postcodes_adapter().lookup(pc)
             except Exception as exc:
-                error = str(exc) or type(exc).__name__
+                error = redact_urls(str(exc) or type(exc).__name__)
                 if entry is not None:
                     await self._set_state("postcodes", "cached", error)
                     return entry.payload  # type: ignore[no-any-return]
@@ -346,6 +354,92 @@ class DataHub:
             log.exception("finance snapshot failed; using the demo persona")
             return fixture_snapshot(DEMO_PERSONA_ID)
 
+    # --- prediction inputs (ADR 0017) ----------------------------------------------------------
+
+    async def bank_holidays(self, region: str | None) -> set[date]:
+        """Bank holidays for the gov.uk division of `region` (None = England and Wales). Never raises.
+
+        Order: fresh cache -> live gov.uk -> stale cache ("cached") -> recorded gov.uk fixture ("mock").
+        """
+        division = division_for_region(region)
+        ckey = "lifeline:bankholidays"
+        ttl = SOURCES["bankholidays"].ttl_seconds
+        try:
+            entry = await self.cache.get_raw(ckey)
+            if entry is not None and self._clock() - entry.stored_at < ttl:
+                return {date.fromisoformat(d) for d in entry.payload.get(division, [])}
+            error = "offline mode"
+            adapter = self.adapter("bankholidays") if self.live_enabled else None
+            if isinstance(adapter, BankHolidaysAdapter):
+                try:
+                    parsed = await adapter.fetch_holidays()
+                except Exception as exc:
+                    error = redact_urls(str(exc) or type(exc).__name__)
+                else:
+                    payload = {k: sorted(d.isoformat() for d in v) for k, v in parsed.items()}
+                    await self.cache.set_raw(ckey, payload, keep_seconds=30 * ttl)
+                    await self._set_state("bankholidays", "live", None, utcnow())
+                    return set(parsed.get(division, set()))
+            if entry is not None:
+                await self._set_state("bankholidays", "cached", error)
+                return {date.fromisoformat(d) for d in entry.payload.get(division, [])}
+            await self._set_state("bankholidays", "mock", error)
+        except Exception:
+            log.exception("bank holidays failed; using the recorded fixture")
+        return set(fixture_bank_holidays().get(division, frozenset()))
+
+    async def daily_weather(
+        self, region: str | None, start: date, end: date, *, today: date | None = None
+    ) -> list[dict[str, Any]]:
+        """[{date, temp_max_c, rain_mm, status}] for every day in start..end. Never raises.
+
+        Live days come from Open-Meteo (archive for older days, forecast for recent and future days).
+        Days the source cannot give (or every day, when it fails) are labelled mock.
+        """
+        if end < start:
+            return []
+        today = today or date.today()
+        ckey = f"lifeline:weather:{region or 'uk'}:{start.isoformat()}:{end.isoformat()}"
+        ttl = SOURCES["openmeteo"].ttl_seconds
+        try:
+            entry = await self.cache.get_raw(ckey)
+            if entry is not None and self._clock() - entry.stored_at < ttl:
+                return self._weather_rows(entry.payload, region, start, end, "live")
+            error = "offline mode"
+            adapter = self.adapter("openmeteo") if self.live_enabled else None
+            if isinstance(adapter, OpenMeteoAdapter):
+                try:
+                    days = await adapter.daily_validated(region, start, end, today)
+                except Exception as exc:
+                    error = redact_urls(str(exc) or type(exc).__name__)
+                else:
+                    payload = {d.isoformat(): [t, r] for d, (t, r) in days.items()}
+                    await self.cache.set_raw(ckey, payload, keep_seconds=24 * ttl)
+                    await self._set_state("openmeteo", "live", None, utcnow())
+                    return self._weather_rows(payload, region, start, end, "live")
+            if entry is not None:
+                await self._set_state("openmeteo", "cached", error)
+                return self._weather_rows(entry.payload, region, start, end, "cached")
+            await self._set_state("openmeteo", "mock", error)
+        except Exception:
+            log.exception("daily weather failed; using mock weather")
+        return mock_daily_weather(region, start, end)
+
+    @staticmethod
+    def _weather_rows(
+        payload: dict[str, Any], region: str | None, start: date, end: date, status: Status
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        day = start
+        while day <= end:
+            hit = payload.get(day.isoformat())
+            if hit is None:
+                rows.append(mock_weather_day(region, day))
+            else:
+                rows.append({"date": day, "temp_max_c": float(hit[0]), "rain_mm": float(hit[1]), "status": status})
+            day += timedelta(days=1)
+        return rows
+
     # --- worker support ---------------------------------------------------------------------
 
     async def refresh_all(self) -> list[SourceStatus]:
@@ -361,7 +455,7 @@ class DataHub:
         try:
             result = await self.postcodes_adapter().lookup(PROBE_POSTCODE)
         except Exception as exc:
-            await self._set_state("postcodes", "mock", str(exc) or type(exc).__name__)
+            await self._set_state("postcodes", "mock", redact_urls(str(exc) or type(exc).__name__))
             return
         if result is None:
             await self._set_state("postcodes", "mock", "probe postcode not found")

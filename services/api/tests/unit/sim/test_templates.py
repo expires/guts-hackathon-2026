@@ -29,10 +29,10 @@ TEMPLATES = load_templates()
 
 
 def test_template_count_and_areas() -> None:
-    assert len(TEMPLATES) >= 30
+    assert len(TEMPLATES) >= 150
     areas = Counter(lt.t.area for lt in TEMPLATES)
-    assert len(areas) >= 6
-    assert all(n >= 1 for n in areas.values())
+    assert len(areas) == 11  # every area in BUILD_SPEC section 2
+    assert all(n >= 10 for n in areas.values()), areas
 
 
 @pytest.mark.parametrize("lt", TEMPLATES, ids=lambda lt: lt.t.id)

@@ -54,13 +54,15 @@ KEY_SPECS: dict[MacroKey, KeySpec] = {
     MacroKey.CRYPTO_RETURN: KeySpec("coingecko", "bitcoin", (), "percent"),
     MacroKey.GBP_USD: KeySpec("frankfurter", "GBPUSD", (), "rate"),
     MacroKey.ENERGY_PRICE_CHANGE: KeySpec("ons", "D7GT", (), "percent"),
-    MacroKey.FUEL_PRICE_CHANGE: KeySpec("ons", "cpi-07.2.2", (), "percent"),
-    MacroKey.RENT_CHANGE: KeySpec("ons", "IPHRP", _ALL, "percent"),
+    MacroKey.FUEL_PRICE_CHANGE: KeySpec("ons", "D7IO", (), "percent"),  # CPI annual rate 07.2.2 fuels
+    MacroKey.RENT_CHANGE: KeySpec("ons", "PIPR", _ALL, "percent"),  # PIPR; IPHRP alias for 2006-2015
     MacroKey.BURGLARY_RATE: KeySpec("police", "burglary", _GB_NI_NO_SCOT, "per_1000_households"),
     MacroKey.FLOOD_RISK: KeySpec("environmentagency", "flood-risk", _ENGLAND, "percent"),
     MacroKey.SAVINGS_RATE: KeySpec("boe", "IUMB6VJ", (), "percent"),
     MacroKey.CARD_RATE: KeySpec("boe", "IUMCCTL", (), "percent"),
     MacroKey.ENERGY_TARIFF: KeySpec("octopus", "dual-fuel-typical-bill", (), "gbp"),
+    MacroKey.MORTGAGE_SVR: KeySpec("boe", "IUMTLMV", (), "percent"),
+    MacroKey.MORTGAGE_TRACKER: KeySpec("boe", "IUMBV48", (), "percent"),
 }
 
 
@@ -179,6 +181,22 @@ _CARD_RATE = _series([
     18.9, 17.66, 15.69, 15.24, 16.05, 16.47, 15.68, 15.11, 16.05, 16.25,
     16.66, 17.29, 17.33, 18.14, 17.75, 17.93, 17.96, 17.95, 18.66, 20.77,
     20.9, 21.42, 22.48, 24.02, 24.65, 24.65, 24.71,
+])
+# Revert-to (standard variable) mortgage rate, year-end. BoE IUMTLMV from 1995 (real, recorded
+# October 2026); 1990-1994 approximate SVR history.
+_MORTGAGE_SVR = _series([
+    15.4, 11.5, 9.0, 8.0, 8.4, 7.95, 7.01, 8.5, 8.0, 7.1,
+    7.55, 5.67, 5.64, 5.59, 6.6, 6.35, 6.98, 7.68, 5.38, 3.97,
+    3.91, 4.12, 4.35, 4.39, 4.48, 4.49, 4.23, 4.54, 4.4, 4.27,
+    3.62, 3.61, 6.42, 7.92, 7.47, 6.77, 6.58,
+])
+# 2-year variable (tracker) rate, 75% LTV, year-end. BoE IUMBV48 from 1998 (real; the BoE reports 0
+# before April 1998); 1990-1997 approximate as Bank Rate + 1.
+_MORTGAGE_TRACKER = _series([
+    14.88, 11.38, 7.88, 6.38, 7.13, 7.38, 6.94, 8.25, 7.06, 5.39,
+    5.76, 4.15, 4.22, 3.88, 4.91, 4.61, 5.11, 5.75, 4.7, 3.31,
+    2.96, 3.02, 3.44, 2.77, 1.6, 1.78, 1.48, 1.69, 1.7, 1.94,
+    2.19, 1.65, 4.14, 5.69, 5.02, 4.19, 4.23,
 ])
 # Typical dual-fuel bill in gbp, average of what a household paid in the year (Ofgem cap levels from
 # 2019, including the Energy Price Guarantee of 2,500 from October 2022). Earlier years approximate.
@@ -318,13 +336,25 @@ def _mock_value(key: MacroKey, year: int, region: str | None) -> tuple[float, st
             v = _CARD_RATE[year]
         case MacroKey.ENERGY_TARIFF:
             v = float(_ENERGY_TARIFF[year])
+        case MacroKey.MORTGAGE_SVR:
+            v = _MORTGAGE_SVR[year]
+        case MacroKey.MORTGAGE_TRACKER:
+            v = _MORTGAGE_TRACKER[year]
         case MacroKey.FLOOD_RISK:
             base = _FLOOD_UK_BASE if region is None else _FLOOD_BASE[region]
             v = round(base + _FLOOD_TREND_PER_YEAR * (year - FIRST_YEAR), 2)
     return float(v), note
 
 
-def _make(key: MacroKey, year: int, region: str | None, value: float, status: Status, note: str | None) -> MacroValue:
+def _make(
+    key: MacroKey,
+    year: int,
+    region: str | None,
+    value: float,
+    status: Status,
+    note: str | None,
+    series_id: str | None = None,
+) -> MacroValue:
     spec = KEY_SPECS[key]
     return MacroValue(
         key=key,
@@ -332,7 +362,7 @@ def _make(key: MacroKey, year: int, region: str | None, value: float, status: St
         region=region,
         value=value,
         source=spec.source,
-        series_id=spec.series_id,
+        series_id=series_id or spec.series_id,
         status=status,
         note=note,
     )
@@ -357,6 +387,9 @@ def mock_macro_table() -> MacroTable:
 SERIES_TO_KEY: dict[tuple[str, str], MacroKey] = {
     (spec.source, spec.series_id): key for key, spec in KEY_SPECS.items()
 }
+# Older series that fill years the primary series does not cover. Lower priority than the primary.
+SERIES_ALIASES: dict[tuple[str, str], MacroKey] = {("ons", "IPHRP"): MacroKey.RENT_CHANGE}
+SERIES_TO_KEY.update(SERIES_ALIASES)
 
 # Annual-by-nature series: published once a year, kept as published (averaged if several points).
 AVERAGED_KEYS = frozenset({MacroKey.MEDIAN_PAY, MacroKey.UNEMPLOYMENT, MacroKey.OWNER_OCCUPIED_SHARE})
@@ -367,6 +400,18 @@ _STATUS_RANK: dict[str, int] = {"live": 2, "cached": 1, "mock": 0}
 def _worst_status(statuses: Iterable[str]) -> Status:
     worst = min(statuses, key=lambda s: _STATUS_RANK[s])
     return worst  # type: ignore[return-value]
+
+
+def _prefer_primary(group: list[Observation]) -> list[Observation]:
+    """When a primary series and an alias cover the same cell: the series with the better status wins
+    (live > cached > mock); on a tie the primary wins. A single series is returned unchanged."""
+    primary = [o for o in group if (o.source, o.series_id) not in SERIES_ALIASES]
+    alias = [o for o in group if (o.source, o.series_id) in SERIES_ALIASES]
+    if not primary or not alias:
+        return group
+    best_p = max(_STATUS_RANK[o.status] for o in primary)
+    best_a = max(_STATUS_RANK[o.status] for o in alias)
+    return alias if best_a > best_p else primary
 
 
 def build_macro_table(observations: Iterable[Observation], base: MacroTable | None = None) -> MacroTable:
@@ -392,6 +437,7 @@ def build_macro_table(observations: Iterable[Observation], base: MacroTable | No
 
     values: dict[str, MacroValue] = dict(base.values)
     for (key, year, region), group in buckets.items():
+        group = _prefer_primary(group)  # noqa: PLW2901
         if key in AVERAGED_KEYS:
             value = sum(o.value for o in group) / len(group)
             status = _worst_status(o.status for o in group)
@@ -400,7 +446,10 @@ def build_macro_table(observations: Iterable[Observation], base: MacroTable | No
             # already y/y, so the December point is December on December.
             last = max(group, key=lambda o: o.date)
             value, status = last.value, last.status
-        values[MacroTable.make_key(key, year, region)] = _make(key, year, region, round(value, 4), status, None)
+        series_id = group[0].series_id  # the alias (e.g. IPHRP) when it supplied the value
+        values[MacroTable.make_key(key, year, region)] = _make(
+            key, year, region, round(value, 4), status, None, series_id
+        )
 
     # Derive house price change from built prices where no direct change observation exists.
     for (key, year, region) in list(buckets):

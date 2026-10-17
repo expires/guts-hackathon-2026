@@ -71,6 +71,21 @@ class ProfileHints:
     occupation: str = "office worker"
 
 
+def hints_from_snapshot(snapshot: FinanceSnapshot, today: dates.date) -> ProfileHints:
+    """Holder details from the snapshot (ADR 0023), else the snapshot's region and postcode, else defaults."""
+    holder = snapshot.holder
+    if holder is None:
+        return ProfileHints(region=snapshot.region, postcode=snapshot.postcode)
+    return ProfileHints(
+        name=holder.name or "You",
+        age=today.year - holder.birth_year,
+        region=holder.region or snapshot.region,
+        town=holder.town,
+        postcode=holder.postcode or snapshot.postcode,
+        occupation=holder.occupation or ProfileHints.occupation,
+    )
+
+
 # ---------- balances ----------
 
 
@@ -140,12 +155,12 @@ def _history(snapshot: FinanceSnapshot, kinds: Sequence[str] | None) -> list[Poi
     i = 0
     for w in range(HISTORY_WEEKS + 1):
         d = dates.add_days(as_of, -7 * w)
-        if d < earliest and w > 0:
-            break
         while i < len(txs) and dates.parse(txs[i].date) > d:
             running -= txs[i].amount
             i += 1
         points.append(Point(date=dates.iso(d), value=round(running, 2)))
+        if d <= earliest:
+            break
     points.reverse()
     return points
 
@@ -242,7 +257,7 @@ def profile(
     snapshot: FinanceSnapshot, today: dates.date, hints: ProfileHints | None = None
 ) -> tuple[DecisionProfile, CharacterSpec]:
     """DecisionProfile and CharacterSpec from the snapshot. Both carry the same numbers."""
-    h = hints or ProfileHints()
+    h = hints or hints_from_snapshot(snapshot, today)
     age = max(16, min(100, h.age if h.age is not None else DEFAULT_AGE))
     region, town = _place(snapshot, h)
     income = min(10_000_000.0, annual_income(snapshot))

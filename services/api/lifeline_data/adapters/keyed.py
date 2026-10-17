@@ -107,6 +107,32 @@ def normalise_reg(reg: str) -> str:
     return value
 
 
+MOT_RESULTS = frozenset({"PASSED", "FAILED"})
+
+
+def validate_mot_history(data: Any, reg: str) -> dict[str, Any]:
+    """Reject anything that is not an MOT history for this registration.
+
+    Required: `registration` equal to the request, and either a `motTests` list (each item with a
+    PASSED or FAILED `testResult`) or, for a vehicle with no test yet, a `motTestDueDate`.
+    """
+    if not isinstance(data, dict):
+        raise PayloadError("dvsamot: payload is not an object")
+    if normalise_reg(str(data.get("registration", ""))) != reg:
+        raise PayloadError("dvsamot: registration missing or different")
+    tests = data.get("motTests")
+    if tests is None:
+        if not data.get("motTestDueDate"):
+            raise PayloadError("dvsamot: no motTests and no motTestDueDate")
+        return data
+    if not isinstance(tests, list):
+        raise PayloadError("dvsamot: motTests is not a list")
+    for t in tests:
+        if not isinstance(t, dict) or str(t.get("testResult", "")).upper() not in MOT_RESULTS:
+            raise PayloadError("dvsamot: MOT test without a PASSED or FAILED result")
+    return data
+
+
 class CompaniesHouseAdapter(Adapter):
     """Counts of companies in liquidation and in administration (employer insolvency events)."""
 
@@ -253,9 +279,7 @@ class DvsaMotAdapter(Adapter):
             if "HTTP 404" in str(exc):
                 return None
             raise
-        data = _json(resp.text)
-        if not isinstance(data, dict) or not isinstance(data.get("motTests", []), list):
-            raise PayloadError("dvsamot: unexpected payload")
+        data: dict[str, Any] = validate_mot_history(_json(resp.text), reg)
         return data
 
     async def fetch(self, series_id: str, region: str | None = None) -> list[Observation]:

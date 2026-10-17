@@ -4,9 +4,35 @@
 
 export BASE=${BASE:-http://localhost:8000}
 export DEMO_DEVICE_ID=${DEMO_DEVICE_ID:-demo-presenter-01}
-export TOKEN=$(curl -s -X POST $BASE/v1/auth/demo -H 'content-type: application/json' \
-  -d "{\"device_id\":\"$DEMO_DEVICE_ID\"}" | jq -r .access_token)
-api() { curl -s -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' "$@"; }
+# Sign in. Retries a 429 (the rate limit is per IP and shared by every local client).
+TOKEN=""
+for _i in 1 2 3 4 5 6; do
+  TOKEN=$(curl -s -X POST $BASE/v1/auth/demo -H 'content-type: application/json' \
+    -d "{\"device_id\":\"$DEMO_DEVICE_ID\"}" | jq -r '.access_token // empty')
+  [ -n "$TOKEN" ] && break
+  sleep $((_i * 2))
+done
+unset _i
+export TOKEN
+if [ -z "$TOKEN" ] || [ "$TOKEN" = null ]; then echo "demo.sh: sign-in failed. Is the stack up (make up)?" >&2; fi
+# api ARGS...: curl with the bearer token. Retries a 429 (rate limited) up to 5 times with a growing wait.
+# A 429 request was not processed, so a retry is safe for POST too. Other errors are returned as they are.
+# A body read from stdin (`-d @-`) is buffered once, so a retry sends the same body.
+api() {
+  local out code i a
+  local args=()
+  for a in "$@"; do
+    if [ "$a" = "@-" ]; then args+=("$(cat)"); else args+=("$a"); fi
+  done
+  for i in 1 2 3 4 5 6; do
+    out=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' "${args[@]}")
+    code=${out##*$'\n'}
+    [ "$code" = 429 ] || break
+    echo "rate limited, retry $i in $((i * 2))s" >&2
+    sleep $((i * 2))
+  done
+  printf '%s\n' "${out%$'\n'*}"
+}
 
 # new_life PRESET YEAR SEED -> prints the life id
 new_life() {

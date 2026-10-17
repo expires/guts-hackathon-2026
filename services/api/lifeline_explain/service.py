@@ -224,7 +224,6 @@ class Explainer:
             return text
 
         headline = pick(data.get("headline"), move.headline, all_facts, max(120, len(move.headline) + 40))
-        action = pick(data.get("action"), move.action, all_facts, max(60, len(move.action) + 20))
         new_ev = data.get("evidence")
         evidence = list(move.evidence)
         if isinstance(new_ev, list) and len(new_ev) == len(move.evidence):
@@ -236,4 +235,4 @@ class Explainer:
             log.info("explain: rejected some move %s fields (numbers)", move.kind)
         # Cache the raw reply either way: every cache hit runs through the verifier again.
         await self._cache_set(key, json.dumps(data))
-        return move.model_copy(update={"headline": headline, "action": action, "evidence": evidence})
+        return move.model_copy(update={"headline": headline, "evidence": evidence})

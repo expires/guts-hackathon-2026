@@ -1,13 +1,22 @@
 {
   "version": 1,
   "updated": "2026-10-17",
-  "note": "One entry per data source in BUILD_SPEC section 2. `id` matches the `source` field on Observation and SourceRef. Licence names come from each provider's published terms; check them again before any public launch.",
+  "note": "One entry per data source in BUILD_SPEC section 2, plus GOV.UK bank holidays (ADR 0017) and the fixture bank data. `id` matches the `source` field on Observation and SourceRef; `series` lists the series ids the adapters fetch. Licence names come from each provider's published terms; check them again before any public launch.",
   "sources": [
     {
       "id": "boe",
       "name": "Bank of England Statistical Interactive Database (IADB)",
       "url": "https://www.bankofengland.co.uk/boeapps/database/",
-      "series": ["IUMBEDR (Bank Rate)", "IUMBV34 (2-year fix, 75% LTV)", "IUMBV42 (5-year fix, 75% LTV)"],
+      "series": [
+        "IUMBEDR (Bank Rate)",
+        "IUMBV34 (2-year fix, 75% LTV)",
+        "IUMBV42 (5-year fix, 75% LTV)",
+        "IUMB6VJ (instant-access savings rate, households)",
+        "IUMCCTL (credit card rate, households)",
+        "IUMTLMV (revert-to / standard variable mortgage rate)",
+        "IUMBV48 (2-year variable / tracker mortgage, 75% LTV)",
+        "IUMBV24 (lifetime tracker mortgage; fetched, not used in the macro table)"
+      ],
       "coverage": "UK",
       "needs_key": false,
       "env_vars": [],
@@ -18,8 +27,15 @@
     {
       "id": "ons",
       "name": "Office for National Statistics time series and beta API",
-      "url": "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23/data",
-      "series": ["D7G7 (CPI annual rate)", "datasets from https://api.beta.ons.gov.uk/v1/datasets"],
+      "url": "https://www.ons.gov.uk/economy/inflationandpriceindices",
+      "series": [
+        "D7G7 (CPI annual rate)",
+        "D7GT (CPI energy annual rate)",
+        "D7IO (CPI annual rate, 07.2.2 fuels and lubricants)",
+        "PIPR (Price Index of Private Rents, from 2016)",
+        "IPHRP (Index of Private Housing Rental Prices, 2006-2015, discontinued February 2024)",
+        "datasets from https://api.beta.ons.gov.uk/v1/datasets"
+      ],
       "coverage": "UK",
       "needs_key": false,
       "env_vars": [],
@@ -31,7 +47,11 @@
       "id": "nomis",
       "name": "Nomis (official census and labour market statistics)",
       "url": "https://www.nomisweb.co.uk/api/v01/help",
-      "series": ["NM_30_1 (ASHE earnings)", "NM_17_5 (APS unemployment)", "NM_2072_1 (Census 2021 tenure)"],
+      "series": [
+        "NM_30_1 (ASHE earnings)",
+        "NM_17_5 (APS unemployment)",
+        "NM_2072_1 (Census 2021 tenure)"
+      ],
       "coverage": "Great Britain; Census 2021 tables cover England and Wales only",
       "needs_key": false,
       "env_vars": [],
@@ -43,7 +63,10 @@
       "id": "landregistry",
       "name": "HM Land Registry UK House Price Index (linked data)",
       "url": "https://landregistry.data.gov.uk/app/ukhpi",
-      "series": ["ukhpi/region/{region}/month/{yyyy-mm}"],
+      "series": [
+        "ukhpi-average-price",
+        "ukhpi-annual-change"
+      ],
       "coverage": "UK, including Scotland and Northern Ireland",
       "needs_key": false,
       "env_vars": [],
@@ -55,7 +78,9 @@
       "id": "postcodes",
       "name": "postcodes.io",
       "url": "https://postcodes.io/",
-      "series": ["postcode to region, local authority, coordinates"],
+      "series": [
+        "postcode to region, local authority, coordinates"
+      ],
       "coverage": "UK",
       "needs_key": false,
       "env_vars": [],
@@ -64,10 +89,28 @@
       "attribution": "Contains OS data © Crown copyright and database right 2026. Contains Royal Mail data © Royal Mail copyright and database right 2026. Source: Office for National Statistics licensed under the Open Government Licence v3.0."
     },
     {
+      "id": "bankholidays",
+      "name": "GOV.UK bank holidays",
+      "url": "https://www.gov.uk/bank-holidays.json",
+      "series": [
+        "england-and-wales",
+        "scotland",
+        "northern-ireland"
+      ],
+      "coverage": "UK (England and Wales, Scotland, Northern Ireland)",
+      "needs_key": false,
+      "env_vars": [],
+      "licence": "Open Government Licence v3.0",
+      "licence_url": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+      "attribution": "Contains public sector information licensed under the Open Government Licence v3.0 (GOV.UK)."
+    },
+    {
       "id": "frankfurter",
       "name": "Frankfurter exchange rates",
       "url": "https://www.frankfurter.app/",
-      "series": ["GBP reference rates"],
+      "series": [
+        "GBPUSD (daily from 1999-01-04)"
+      ],
       "coverage": "Global (European Central Bank reference rates)",
       "needs_key": false,
       "env_vars": [],
@@ -79,7 +122,9 @@
       "id": "coingecko",
       "name": "CoinGecko API",
       "url": "https://www.coingecko.com/en/api",
-      "series": ["bitcoin and ethereum prices in GBP"],
+      "series": [
+        "bitcoin (GBP, last 365 days; free tier)"
+      ],
       "coverage": "Global",
       "needs_key": false,
       "env_vars": [],
@@ -91,11 +136,13 @@
       "id": "yahoo",
       "name": "Yahoo Finance chart endpoint (unofficial)",
       "url": "https://query1.finance.yahoo.com/v8/finance/chart/",
-      "series": ["^FTSE", "^GSPC"],
+      "series": [
+        "^FTAS (FTSE All-Share price index, no dividends)"
+      ],
       "coverage": "Global markets",
       "needs_key": false,
       "env_vars": [],
-      "licence": "Yahoo terms of service. Unofficial endpoint, used for a non-commercial demo only. Cached hard; may block.",
+      "licence": "Yahoo terms of service. Unofficial endpoint, used for a non-commercial demo only. Cached hard; may block. Returns 429 from our network, so the app serves labelled mock data (ADR 0021).",
       "licence_url": "https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html",
       "attribution": "Market index data: Yahoo Finance."
     },
@@ -103,11 +150,13 @@
       "id": "fred",
       "name": "FRED, Federal Reserve Bank of St. Louis",
       "url": "https://fred.stlouisfed.org/series/IRLTLT01GBM156N",
-      "series": ["IRLTLT01GBM156N (UK 10-year government bond yield, OECD)"],
+      "series": [
+        "IRLTLT01GBM156N (UK 10-year government bond yield, OECD)"
+      ],
       "coverage": "UK",
       "needs_key": false,
       "env_vars": [],
-      "licence": "FRED terms of use; series originates from the OECD",
+      "licence": "FRED terms of use; series originates from the OECD; times out from our network, so the app serves labelled mock data (ADR 0021)",
       "licence_url": "https://fred.stlouisfed.org/legal/",
       "attribution": "Source: Organisation for Economic Co-operation and Development, retrieved from FRED, Federal Reserve Bank of St. Louis."
     },
@@ -115,7 +164,9 @@
       "id": "octopus",
       "name": "Octopus Energy products API",
       "url": "https://developer.octopus.energy/rest/",
-      "series": ["public tariff unit rates and standing charges"],
+      "series": [
+        "dual-fuel-typical-bill (mean of Octopus Flexible dual-fuel quotes, GB and regional)"
+      ],
       "coverage": "Great Britain",
       "needs_key": false,
       "env_vars": [],
@@ -127,7 +178,9 @@
       "id": "carbonintensity",
       "name": "Carbon Intensity API",
       "url": "https://carbonintensity.org.uk/",
-      "series": ["national and regional carbon intensity"],
+      "series": [
+        "intensity (regional carbon intensity)"
+      ],
       "coverage": "Great Britain",
       "needs_key": false,
       "env_vars": [],
@@ -138,8 +191,11 @@
     {
       "id": "openmeteo",
       "name": "Open-Meteo",
-      "url": "https://open-meteo.com/",
-      "series": ["historical and forecast weather"],
+      "url": "https://open-meteo.com/en/docs/historical-weather-api",
+      "series": [
+        "temperature_2m_max",
+        "precipitation_sum (archive and forecast, one point per region)"
+      ],
       "coverage": "Global",
       "needs_key": false,
       "env_vars": [],
@@ -151,7 +207,9 @@
       "id": "police",
       "name": "data.police.uk",
       "url": "https://data.police.uk/docs/",
-      "series": ["street-level crime (burglary)"],
+      "series": [
+        "burglary-1mile (street-level burglary count within 1 mile of a region point)"
+      ],
       "coverage": "England, Wales and Northern Ireland (no Scotland; UK average used)",
       "needs_key": false,
       "env_vars": [],
@@ -163,7 +221,9 @@
       "id": "environmentagency",
       "name": "Environment Agency real-time flood monitoring API",
       "url": "https://environment.data.gov.uk/flood-monitoring/doc/reference",
-      "series": ["flood warnings and areas"],
+      "series": [
+        "flood-warnings (current warning count by region)"
+      ],
       "coverage": "England only (UK average used elsewhere)",
       "needs_key": false,
       "env_vars": [],
@@ -175,10 +235,14 @@
       "id": "companieshouse",
       "name": "Companies House Public Data API",
       "url": "https://developer.company-information.service.gov.uk/",
-      "series": ["company profile and insolvency status"],
+      "series": [
+        "company profile and insolvency status"
+      ],
       "coverage": "UK",
       "needs_key": true,
-      "env_vars": ["COMPANIES_HOUSE_KEY"],
+      "env_vars": [
+        "COMPANIES_HOUSE_KEY"
+      ],
       "licence": "Open Government Licence v3.0",
       "licence_url": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
       "attribution": "Contains Companies House data licensed under the Open Government Licence v3.0."
@@ -187,10 +251,15 @@
       "id": "adzuna",
       "name": "Adzuna Jobs API",
       "url": "https://developer.adzuna.com/",
-      "series": ["advertised salaries and vacancy counts by job and region"],
+      "series": [
+        "advertised salaries and vacancy counts by job and region"
+      ],
       "coverage": "UK",
       "needs_key": true,
-      "env_vars": ["ADZUNA_APP_ID", "ADZUNA_APP_KEY"],
+      "env_vars": [
+        "ADZUNA_APP_ID",
+        "ADZUNA_APP_KEY"
+      ],
       "licence": "Adzuna API terms of service (attribution and link required)",
       "licence_url": "https://developer.adzuna.com/docs/terms_of_service",
       "attribution": "Jobs by Adzuna."
@@ -199,10 +268,14 @@
       "id": "dvla",
       "name": "DVLA Vehicle Enquiry Service API",
       "url": "https://developer-portal.driver-vehicle-licensing.api.gov.uk/",
-      "series": ["vehicle tax and MOT status, CO2 emissions"],
+      "series": [
+        "vehicle tax and MOT status, CO2 emissions"
+      ],
       "coverage": "Great Britain",
       "needs_key": true,
-      "env_vars": ["DVLA_KEY"],
+      "env_vars": [
+        "DVLA_KEY"
+      ],
       "licence": "DVLA Vehicle Enquiry Service API terms and conditions",
       "licence_url": "https://developer-portal.driver-vehicle-licensing.api.gov.uk/",
       "attribution": "Contains public sector information from the Driver and Vehicle Licensing Agency."
@@ -211,10 +284,14 @@
       "id": "dvsamot",
       "name": "DVSA MOT History API",
       "url": "https://documentation.history.mot.api.gov.uk/",
-      "series": ["MOT test results and failure rates"],
+      "series": [
+        "MOT test results and failure rates"
+      ],
       "coverage": "Great Britain",
       "needs_key": true,
-      "env_vars": ["DVSA_MOT_KEY"],
+      "env_vars": [
+        "DVSA_MOT_KEY"
+      ],
       "licence": "Open Government Licence v3.0",
       "licence_url": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
       "attribution": "Contains public sector information from the Driver and Vehicle Standards Agency licensed under the Open Government Licence v3.0."
@@ -223,10 +300,14 @@
       "id": "statxplore",
       "name": "DWP Stat-Xplore",
       "url": "https://stat-xplore.dwp.gov.uk/",
-      "series": ["benefit caseloads and award amounts"],
+      "series": [
+        "benefit caseloads and award amounts"
+      ],
       "coverage": "Great Britain",
       "needs_key": true,
-      "env_vars": ["DWP_STATXPLORE_KEY"],
+      "env_vars": [
+        "DWP_STATXPLORE_KEY"
+      ],
       "licence": "Open Government Licence v3.0",
       "licence_url": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
       "attribution": "Source: Department for Work and Pensions, Stat-Xplore, licensed under the Open Government Licence v3.0."
@@ -235,10 +316,14 @@
       "id": "epc",
       "name": "Energy Performance of Buildings Register (EPC)",
       "url": "https://epc.opendatacommunities.org/",
-      "series": ["domestic EPC ratings and energy costs"],
+      "series": [
+        "domestic EPC ratings and energy costs"
+      ],
       "coverage": "England and Wales",
       "needs_key": true,
-      "env_vars": ["EPC_KEY"],
+      "env_vars": [
+        "EPC_KEY"
+      ],
       "licence": "Open Government Licence v3.0 for non-address data; address data under Royal Mail and OS copyright",
       "licence_url": "https://epc.opendatacommunities.org/docs/copyright",
       "attribution": "Contains public sector information licensed under the Open Government Licence v3.0. Contains Royal Mail data © Royal Mail copyright and database right 2026. Contains OS data © Crown copyright and database right 2026."
@@ -247,13 +332,33 @@
       "id": "openbanking",
       "name": "TrueLayer Open Banking sandbox",
       "url": "https://docs.truelayer.com/",
-      "series": ["sandbox accounts, balances and transactions (synthetic)"],
+      "series": [
+        "sandbox accounts, balances and transactions (synthetic)"
+      ],
       "coverage": "UK (sandbox banks only)",
       "needs_key": true,
-      "env_vars": ["OB_CLIENT_ID", "OB_CLIENT_SECRET", "OB_REDIRECT_URI"],
+      "env_vars": [
+        "OB_CLIENT_ID",
+        "OB_CLIENT_SECRET",
+        "OB_REDIRECT_URI"
+      ],
       "licence": "TrueLayer developer terms. Sandbox data is synthetic; no real account data is used.",
       "licence_url": "https://truelayer.com/legal/",
       "attribution": "Bank connection powered by the TrueLayer sandbox."
+    },
+    {
+      "id": "bank",
+      "name": "Fixture bank data (sample personas)",
+      "url": "services/api/lifeline_data/ (repo path)",
+      "series": [
+        "fixtures:<persona> (accounts and 12 months of transactions to 2026-10-17)"
+      ],
+      "coverage": "Synthetic UK personas",
+      "needs_key": false,
+      "env_vars": [],
+      "licence": "Synthetic data written for this project. No real person's data.",
+      "licence_url": "",
+      "attribution": "Sample data. Not a real bank account."
     }
   ]
 }

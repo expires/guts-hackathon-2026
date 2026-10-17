@@ -21,6 +21,7 @@ from lifeline_contracts.domain import (
     Outcome,
     RewindResult,
     RewindState,
+    Ribbon,
     YearLog,
 )
 from lifeline_contracts.macro import MacroTable
@@ -43,7 +44,17 @@ from lifeline_sim.occupations import occupation
 from lifeline_sim.presets import god_mode_options as _god_mode_options
 from lifeline_sim.presets import presets as _presets
 from lifeline_sim.project import index_state, to_life
-from lifeline_sim.replay import Decision, LifeSpec, apply_choice, event_year, remember, replay, view_for
+from lifeline_sim.replay import (
+    Decision,
+    LifeSpec,
+    apply_choice,
+    event_year,
+    last_view,
+    remember,
+    replay,
+    view_for,
+)
+from lifeline_sim.ribbons import ribbons_before, update_ribbons
 from lifeline_sim.setup import Setup
 from lifeline_sim.state import SimState, initial_state
 from lifeline_sim.step import step_year
@@ -63,6 +74,7 @@ __all__ = [
     "play_scenario",
     "presets",
     "rewind",
+    "scenario_cost",
     "summary",
 ]
 
@@ -112,6 +124,10 @@ def _actions(s: SimState, mv: MacroView, history: list[YearLog]) -> list[Availab
         if h.year == s.year and h.event_id is not None and is_action_id(h.event_id)
     }
     return available_actions(s, mv, done)
+
+
+def _ribbons(prev: list[Ribbon], s: SimState, history: list[YearLog], twin: SimState, concepts: int) -> list[Ribbon]:
+    return update_ribbons(list(prev), s, history, index_state(s, twin, load_weights()).value, concepts)
 
 
 def _log(
@@ -229,7 +245,7 @@ def age(life: Life, macro: MacroTable) -> AgeResult:
         actions=_actions(s, mv, history),
         pending=list(s.pending),
         concepts_unlocked=list(life.concepts_unlocked),
-        ribbons=list(life.ribbons),
+        ribbons=_ribbons(life.ribbons, s, history, twin, len(life.concepts_unlocked)),
         rewind=life.rewind,
         room_code=life.room_code,
         w=w,
@@ -278,7 +294,7 @@ def choose(life: Life, event_id: str, choice_id: str, macro: MacroTable) -> Choi
         actions=_actions(s, mv, history),
         pending=pending,
         concepts_unlocked=unlocked,
-        ribbons=list(life.ribbons),
+        ribbons=_ribbons(life.ribbons, s, history, twin, len(unlocked)),
         rewind=life.rewind,
         room_code=life.room_code,
         w=w,
@@ -340,7 +356,7 @@ def act(life: Life, tab: str, action_id: str, params: dict[str, float | str], ma
         actions=_actions(s, mv, history),
         pending=list(life.pending_events),
         concepts_unlocked=unlocked,
-        ribbons=list(life.ribbons),
+        ribbons=_ribbons(life.ribbons, s, history, twin, len(unlocked)),
         rewind=life.rewind,
         room_code=life.room_code,
         w=w,
@@ -349,10 +365,66 @@ def act(life: Life, tab: str, action_id: str, params: dict[str, float | str], ma
 
 
 def rewind(life: Life, decision_id: str, macro: MacroTable) -> RewindResult:
-    """Tier 1. Plan: replay with the target choice flipped and later choices dropped."""
-    if not any(h.decision_id == decision_id for h in life.history):
+    """Go back to a past decision and take another path (ADR 0012).
+
+    - Event choice: replay up to that year with the decisions before it, then take the default
+      choice (or, if the default was taken, the first other choice). Later decisions are dropped.
+    - Tab action: replay without it. Later decisions are dropped.
+    - Free once per life (`rewind.free_left`), unlimited with `rewind.has_pass`. Otherwise
+      `payment_required`.
+    """
+    idx = next((i for i, h in enumerate(life.history) if h.decision_id == decision_id), None)
+    if idx is None:
         raise SimError("not_found", f"No decision {decision_id}.")
-    raise SimError("invalid_action", "Rewind is not available yet.")
+    if not life.rewind.has_pass and life.rewind.free_left <= 0:
+        raise SimError("payment_required", "You have used your free rewind. A Rewind Pass gives unlimited rewinds.")
+    target = life.history[idx]
+    year = target.year
+    w = load_weights()
+    mv = view_for(macro)
+    spec = _spec(life)
+    before = [
+        (h.event_id, h.choice_id) for h in life.history[:idx] if h.event_id is not None and h.choice_id is not None
+    ]
+    s = replay(spec, before, year, mv, w)
+    history = list(life.history[:idx])
+    decisions = list(before)
+    if not is_action_id(decision_id):
+        event = next((e for e in s.pending if e.id == decision_id), None)
+        if event is None:
+            raise SimError("not_found", f"Decision {decision_id} cannot be replayed.")
+        default = next(c.id for c in event.choices if c.is_default)
+        alt = default if target.choice_id != default else next(c.id for c in event.choices if c.id != default)
+        res, _ = apply_choice(s, event, alt, w)
+        decisions.append((decision_id, alt))
+        remember(mv, spec, False, decisions, s)
+        answered = {d[0] for d in decisions if event_year(d[0]) == year and not is_action_id(d[0])}
+        full_twin = replay(spec, [], year, mv, w, autopilot=True)
+        twin = _comparable_twin(spec, full_twin, answered, bool(s.pending), mv, w)
+        history.append(_log(s, res.text, twin, event_id=decision_id, choice_id=alt))
+    else:
+        remember(mv, spec, False, decisions, s)
+        answered = {d[0] for d in decisions if event_year(d[0]) == year and not is_action_id(d[0])}
+        full_twin = replay(spec, [], year, mv, w, autopilot=True)
+        twin = _comparable_twin(spec, full_twin, answered, bool(s.pending), mv, w)
+    rewind_state = (
+        life.rewind if life.rewind.has_pass else life.rewind.model_copy(update={"free_left": life.rewind.free_left - 1})
+    )
+    unlocked = list(life.concepts_unlocked)
+    new = to_life(
+        s,
+        life_id=life.id,
+        history=history,
+        twin=twin,
+        actions=_actions(s, mv, history),
+        pending=list(s.pending),
+        concepts_unlocked=unlocked,
+        ribbons=_ribbons(ribbons_before(life.ribbons, year), s, history, twin, len(unlocked)),
+        rewind=rewind_state,
+        room_code=life.room_code,
+        w=w,
+    )
+    return RewindResult(life=new, abandoned_index=life.index.value, abandoned_net_worth=life.finances.net_worth)
 
 
 # ---------- "Test it" scenarios (ADR 0018) ----------
@@ -361,7 +433,9 @@ POLICY_DEAL_END = "__deal_end_year"
 POLICY_FOCUS = "__focus"
 
 
-def scenario_setup(character: CharacterSpec, start_year: int, policy: dict[str, str]) -> Setup:
+def scenario_setup(
+    character: CharacterSpec, start_year: int, policy: dict[str, str], end_year: int | None = None
+) -> Setup:
     """The replayable setup for a scenario.
 
     - Deal end: `policy["__deal_end_year"]` when given, else the first year with events
@@ -379,7 +453,7 @@ def scenario_setup(character: CharacterSpec, start_year: int, policy: dict[str, 
     tags = known_tags()
     focus = {k for k in policy if k in tags}
     focus |= {t.strip() for t in policy.get(POLICY_FOCUS, "").split(",") if t.strip() in tags}
-    return Setup(deal_end_year=deal_end, focus=tuple(sorted(focus)))
+    return Setup(deal_end_year=deal_end, focus=tuple(sorted(focus)), focus_until=end_year if focus else None)
 
 
 def known_tags() -> set[str]:
@@ -421,7 +495,7 @@ def play_scenario(
     """
     if end_year < start_year:
         raise SimError("invalid_input", f"end_year {end_year} is before start_year {start_year}.")
-    setup = scenario_setup(character, start_year, policy)
+    setup = scenario_setup(character, start_year, policy, end_year)
     life = _new_life(life_id, character, "self", start_year, seed, macro, setup)
     while life.alive and life.year < end_year:
         life = age(life, macro).life
@@ -431,28 +505,86 @@ def play_scenario(
     return life
 
 
+MORTGAGE_TAGS = ("mortgage_deal_end", "mortgage_rate_change")
+
+
+def scenario_cost(life: Life, macro: MacroTable | None = None) -> float:
+    """GBP the scenario's policy-controlled costs came to, from `start_year` to `life.year`.
+
+    The tags are the life's focus tags (the tag keys of the `play_scenario` policy). The result
+    is the sum over those tags (mortgage tags count once), rounded to pence. Per tag:
+
+    - `mortgage_deal_end`, `mortgage_rate_change`: all mortgage payments (interest and capital).
+    - `savings_rate_change`: minus the interest earned on savings, plus interest a choice gave up
+      (for example staying with a poor rate). Lower is better; it is usually negative.
+    - `energy_bill`: the typical yearly energy bill (`ENERGY_TARIFF` for the region and year) for
+      each year played, plus the extra bills, fix premiums and fees of energy choices.
+    - `card_debt`: interest charged on card debt, plus fees and extra interest from card choices.
+    - `subscription`, `budget_overspend`, `emergency_fund` and other tags: the one-off costs of
+      the tagged choices, plus 12 x any monthly spending change they made, for every later year.
+
+    A life with no focus tags returns the mortgage payments when it has a mortgage, else 0.
+    `macro` should be the life's pinned MacroTable. When it is omitted, the table used by the
+    most recent sim call in this process is used; with none, `invalid_input`.
+    """
+    if macro is not None:
+        mv = view_for(macro)
+    else:
+        mv_last = last_view()
+        if mv_last is None:
+            raise SimError("invalid_input", "scenario_cost needs the life's MacroTable.")
+        mv = mv_last
+    spec = _spec(life)
+    s = replay(spec, _decisions(life), life.year, mv, load_weights())
+    tags = list(spec.setup.focus)
+    if not tags:
+        return round(s.mortgage_paid, 2)
+    total = 0.0
+    if any(t in MORTGAGE_TAGS for t in tags):
+        total += s.mortgage_paid
+    for tag in tags:
+        total += s.tag_cost.get(tag, 0.0)
+        if tag == "savings_rate_change":
+            total -= s.savings_interest
+        elif tag == "energy_bill":
+            total += s.energy_paid
+        elif tag == "card_debt":
+            total += s.card_interest_paid
+    return round(total, 2)
+
+
 # ---------- read-only views ----------
 
 
 _WARN_MARKERS = ("You missed", "Your debts grew too big")
 
 
-def _key_moments(life: Life, limit: int = 5) -> list[KeyMoment]:
-    """Year warnings first (missed payments, debt relief), then the choices that moved net worth most.
+YEAR_FALL_SHARE = 0.05  # a year's fall in net worth of 5% of max(|net worth|, starting pay) is a key moment
 
-    Tone: a fall in net worth is 📉, a rise is 📈, a warning is ⚠️. Choices with no money effect are skipped.
+
+def _key_moments(life: Life, limit: int = 5) -> list[KeyMoment]:
+    """Year warnings first (missed payments, debt relief), then the biggest money moves.
+
+    Moves are choices and tab actions that changed net worth, plus years where net worth fell
+    sharply (for example a house price crash with no decision). Tone: a fall is 📉, a rise
+    is 📈, a warning is ⚠️. Entries with no money effect are skipped.
     """
     warnings: list[KeyMoment] = []
     moves: list[tuple[float, KeyMoment]] = []
     prev_nw = life.history[0].net_worth if life.history else life.finances.net_worth
-    for h in life.history:
+    pay = max(life.character.annual_income, 1.0)
+    for h in life.history[1:]:
         change = h.net_worth - prev_nw
+        base = max(abs(prev_nw), pay)
         prev_nw = h.net_worth
         if h.decision_id is None:
             if any(mk in h.text for mk in _WARN_MARKERS):
                 warnings.append(KeyMoment(year=h.year, age=h.age, emoji="⚠️", text=h.text))
             elif "graduated" in h.text:
                 warnings.append(KeyMoment(year=h.year, age=h.age, emoji="🎓", text=h.text))
+            elif change <= -YEAR_FALL_SHARE * base:
+                text = f"Your net worth fell £{-change:,.0f} in {h.year}."
+                moves.append((abs(change), KeyMoment(year=h.year, age=h.age, emoji="📉", text=text)))
             continue
         if abs(change) >= 1:
             emoji = "📈" if change > 0 else "📉"
@@ -524,5 +656,41 @@ def challenges() -> list[Challenge]:
             character_id="nurse-leeds",
             start_year=2006,
             goal={"type": "index_at_least_by_year", "index": 110.0, "year": 2026.0},
+        ),
+        Challenge(
+            id="rate-shock-2022",
+            title="Ride out the 2022 rate shock",
+            emoji="📈",
+            description="Your fix ends as rates jump. Reach 2024 with no missed payment.",
+            character_id="teacher-glasgow",
+            start_year=2021,
+            goal={"type": "no_missed_payments_until", "year": 2024.0},
+        ),
+        Challenge(
+            id="debt-free-by-35",
+            title="Debt free by 35",
+            emoji="🧹",
+            description="Clear your card debt and student loan before you turn 35.",
+            character_id="student",
+            start_year=2025,
+            goal={"type": "debt_free_by_age", "age": 35.0},
+        ),
+        Challenge(
+            id="millionaire",
+            title="Make a million",
+            emoji="💎",
+            description="Reach a net worth of £1,000,000 at any age.",
+            character_id="banker-london",
+            start_year=2006,
+            goal={"type": "net_worth_at_least", "amount": 1_000_000.0},
+        ),
+        Challenge(
+            id="pension-pot",
+            title="Build a £100,000 pension",
+            emoji="👵",
+            description="Grow your pension to £100,000 before you turn 50.",
+            character_id="plumber",
+            start_year=2015,
+            goal={"type": "pension_at_least_by_age", "amount": 100_000.0, "age": 50.0},
         ),
     ]

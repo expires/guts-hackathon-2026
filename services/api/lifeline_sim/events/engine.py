@@ -38,7 +38,7 @@ from lifeline_sim.events.schema import (
     Template,
 )
 from lifeline_sim.expr import Expr
-from lifeline_sim.macroview import MacroView, macro_names
+from lifeline_sim.macroview import PRICE_LEVEL, SOFT_SOURCES, MacroView, macro_names
 from lifeline_sim.occupations import occupation, public_pay_cap
 from lifeline_sim.rng import uniform
 from lifeline_sim.state import SimState
@@ -128,6 +128,7 @@ def state_env(s: SimState) -> dict[str, float]:
 class LoadedTemplate:
     t: Template
     macro_keys: tuple[MacroKey, ...]  # every macro series the template reads, for sources and eligibility
+    soft_keys: tuple[MacroKey, ...] = ()  # cited when the table has them; never needed for eligibility
 
 
 def _exprs(t: Template) -> Iterable[Expr]:
@@ -149,8 +150,12 @@ def load_templates() -> tuple[LoadedTemplate, ...]:
         raw: Any = yaml.safe_load(entry.read_text(encoding="utf-8"))
         for item in raw or []:
             t = Template.model_validate(item)
-            used = sorted({names[n] for e in _exprs(t) for n in e.names if n in names}, key=lambda k: k.value)
-            out.append(LoadedTemplate(t=t, macro_keys=tuple(used)))
+            # `price_level` only scales fixed 2024-pound costs to the year. It is not a headline
+            # number, so it alone does not add the CPI series to the event's source chips (V5).
+            read = {n for e in _exprs(t) for n in e.names if n in names and n != PRICE_LEVEL}
+            used = sorted({names[n] for n in read}, key=lambda k: k.value)
+            soft = sorted({SOFT_SOURCES[n] for n in read if n in SOFT_SOURCES}, key=lambda k: k.value)
+            out.append(LoadedTemplate(t=t, macro_keys=tuple(used), soft_keys=tuple(soft)))
     out.sort(key=lambda lt: lt.t.id)
     ids = [lt.t.id for lt in out]
     if len(set(ids)) != len(ids):
@@ -206,7 +211,7 @@ def compute_facts(t: Template, env: Mapping[str, float]) -> dict[str, float]:
 
 def sources_for(lt: LoadedTemplate, s: SimState, mv: MacroView) -> list[SourceRef]:
     out: list[SourceRef] = []
-    for key in lt.macro_keys:
+    for key in (*lt.macro_keys, *lt.soft_keys):
         ref = mv.source_ref(key, s.year, s.region)
         if ref is not None:
             out.append(ref)
@@ -245,6 +250,9 @@ def build_event(lt: LoadedTemplate, s: SimState, mv: MacroView, env: Mapping[str
 def draw_events(s: SimState, mv: MacroView) -> list[Event]:
     env = {**mv.env(s.year, s.region), **state_env(s)}
     fired: list[tuple[int, float, str, LoadedTemplate]] = []
+    focus_on = bool(s.focus_tags) and (s.focus_until is None or s.year <= s.focus_until)
+    focus_tags = s.focus_tags if focus_on else ()
+    related = {r for tag in focus_tags for r in p.FOCUS_RELATED.get(tag, ())}
     for lt in load_templates():
         if not eligible(lt, s, mv, env):
             continue
@@ -252,17 +260,26 @@ def draw_events(s: SimState, mv: MacroView) -> list[Event]:
         if prob <= 0:
             continue
         priority = lt.t.priority
-        if s.focus_tags and any(tag in s.focus_tags for tag in lt.t.tags):
+        is_focus = any(tag in focus_tags for tag in lt.t.tags)
+        last = s.last_fired.get(lt.t.id)
+        if last is not None and s.year - last < p.EVENT_COOLDOWN_YEARS and not (lt.t.repeatable or is_focus):
+            continue
+        if is_focus:
             prob = 1.0
+        if is_focus or any(tag in related for tag in lt.t.tags):
             priority += p.FOCUS_PRIORITY_BOOST
         u = uniform(s.seed, s.year, "event", lt.t.id)
         if u < prob:
             fired.append((-priority, 0.0 if prob >= 1 else u / prob, lt.t.id, lt))
     fired.sort(key=lambda x: (x[0], x[1], x[2]))
-    return [
-        build_event(lt, s, mv, env, f"ev-{s.year}-{i + 1}")
-        for i, (_, _, _, lt) in enumerate(fired[: p.MAX_EVENTS_PER_YEAR])
-    ]
+    # Focused events ("Test it") come on top of the yearly cap, so the other events of the year
+    # are the same whichever option the scenario tests.
+    focused = [f for f in fired if -f[0] >= p.FOCUS_PRIORITY_BOOST]
+    others = [f for f in fired if -f[0] < p.FOCUS_PRIORITY_BOOST][: p.MAX_EVENTS_PER_YEAR]
+    chosen = focused + others
+    for _, _, tid, _ in chosen:
+        s.last_fired[tid] = s.year
+    return [build_event(lt, s, mv, env, f"ev-{s.year}-{i + 1}") for i, (_, _, _, lt) in enumerate(chosen)]
 
 
 # ---------- resolving ----------

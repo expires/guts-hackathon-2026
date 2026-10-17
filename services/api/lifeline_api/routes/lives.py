@@ -9,6 +9,7 @@ from fastapi import APIRouter, Path, Query, Request
 
 from lifeline_api.auth import OptionalSubject, Subject
 from lifeline_api.errors import ApiError, not_found
+from lifeline_api.explain_bridge import explain_new_events, explain_outcome
 from lifeline_api.money import fill_personal
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
@@ -136,6 +137,7 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
     life = await call_pure(sim_api.new_life, life_id, character, body.mode, body.start_year, seed, table)
     if body.room_code is not None and life.room_code != body.room_code:
         life = life.model_copy(update={"room_code": body.room_code})
+    life, _ = await explain_new_events(None, life)
     await state.store.create(LifeRecord(id=life_id, owner=sub, life=life, macro_hash=digest))
     return life
 
@@ -154,6 +156,8 @@ async def age_life(id: LifeId, request: Request, sub: Subject) -> AgeResult:  # 
         if rec.life.pending_events:
             raise ApiError(409, "pending_events", "Answer the open events before you age", source="sim")
         result = await call_pure(sim_api.age, rec.life, table)
+        life, events = await explain_new_events(rec.life, result.life, result.events)
+        result = result.model_copy(update={"life": life, "events": events})
         rec.life = result.life
         await state.store.save(rec)
     return result.model_copy(update={"lesson": await fill_personal(state, sub, result.lesson)})
@@ -165,6 +169,9 @@ async def choose_life(id: LifeId, body: ChoiceRequest, request: Request, sub: Su
     async with state.life_locks[id]:
         rec, table = await _load(state, id, sub)
         result = await call_pure(sim_api.choose, rec.life, body.event_id, body.choice_id, table)
+        life, _ = await explain_new_events(rec.life, result.life)
+        outcome = await explain_outcome(rec.life, body.event_id, result.outcome)
+        result = result.model_copy(update={"life": life, "outcome": outcome})
         rec.life = result.life
         await state.store.save(rec)
     return result.model_copy(update={"lesson": await fill_personal(state, sub, result.lesson)})
@@ -176,6 +183,8 @@ async def act_life(id: LifeId, body: ActionRequest, request: Request, sub: Subje
     async with state.life_locks[id]:
         rec, table = await _load(state, id, sub)
         result = await call_pure(sim_api.act, rec.life, body.tab, body.action_id, dict(body.params), table)
+        life, _ = await explain_new_events(rec.life, result.life)
+        result = result.model_copy(update={"life": life})
         rec.life = result.life
         await state.store.save(rec)
     return result.model_copy(update={"lesson": await fill_personal(state, sub, result.lesson)})
@@ -187,6 +196,8 @@ async def rewind_life(id: LifeId, body: RewindRequest, request: Request, sub: Su
     async with state.life_locks[id]:
         rec, table = await _load(state, id, sub)
         result = await call_pure(sim_api.rewind, rec.life, body.decision_id, table)
+        life, _ = await explain_new_events(rec.life, result.life)
+        result = result.model_copy(update={"life": life})
         rec.life = result.life
         await state.store.save(rec)
     return result
