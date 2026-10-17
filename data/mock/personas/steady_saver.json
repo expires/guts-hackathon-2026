@@ -1,0 +1,69 @@
+{
+  "id": "steady_saver",
+  "salary_merchant": "ACME LTD SALARY",
+  "salary_pence": 320000,
+  "rent_pence": 95000,
+  "groceries_pence": 32000,
+  "transport_pence": 9000,
+  "eating_out_pence": 12000,
+  "discretionary_pence": 15000,
+  "volatility": 0.08,
+  "isa_contribution_pence": 60000,
+  "pot_balance_pence": 450000,
+  "current_balance_pence": 185000,
+  "isa_cash_pence": 25000,
+  "subscriptions": [
+    {
+      "merchant": "NETFLIX",
+      "amount_pence": 1099,
+      "start_month_offset": 0,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "SPOTIFY",
+      "amount_pence": 1199,
+      "start_month_offset": 0,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "THREE MOBILE",
+      "amount_pence": 1800,
+      "start_month_offset": 0,
+      "category": "bills"
+    }
+  ],
+  "holdings": [
+    {
+      "instrument_id": "VWRL",
+      "name": "Vanguard FTSE All-World",
+      "asset_class": "equity",
+      "region": "global",
+      "value_pence": 1850000,
+      "quantity": 185.0
+    },
+    {
+      "instrument_id": "VUKE",
+      "name": "Vanguard FTSE 100",
+      "asset_class": "equity",
+      "region": "uk",
+      "value_pence": 420000,
+      "quantity": 127.273
+    },
+    {
+      "instrument_id": "VGOV",
+      "name": "Vanguard UK Gilt",
+      "asset_class": "bond",
+      "region": "uk",
+      "value_pence": 380000,
+      "quantity": 190.0
+    },
+    {
+      "instrument_id": "VFEM",
+      "name": "Vanguard FTSE Emerging Markets",
+      "asset_class": "equity",
+      "region": "em",
+      "value_pence": 250000,
+      "quantity": 83.333
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "id": "friend_jordan",
+  "salary_merchant": "ACME LTD SALARY",
+  "salary_pence": 300000,
+  "rent_pence": 95000,
+  "groceries_pence": 31000,
+  "transport_pence": 9500,
+  "eating_out_pence": 26000,
+  "discretionary_pence": 30000,
+  "volatility": 0.35,
+  "isa_contribution_pence": 20000,
+  "pot_balance_pence": 90000,
+  "current_balance_pence": 70000,
+  "isa_cash_pence": 6000,
+  "subscriptions": [
+    {
+      "merchant": "NETFLIX",
+      "amount_pence": 1099,
+      "start_month_offset": 0,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "SPOTIFY",
+      "amount_pence": 1199,
+      "start_month_offset": 1,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "AMAZON PRIME",
+      "amount_pence": 895,
+      "start_month_offset": 5,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "HBO MAX",
+      "amount_pence": 999,
+      "start_month_offset": 8,
+      "category": "entertainment"
+    }
+  ],
+  "holdings": [
+    {
+      "instrument_id": "VUSA",
+      "name": "Vanguard S&P 500",
+      "asset_class": "equity",
+      "region": "us",
+      "value_pence": 300000,
+      "quantity": 37.5
+    },
+    {
+      "instrument_id": "TSLA",
+      "name": "Tesla",
+      "asset_class": "equity",
+      "region": "us",
+      "value_pence": 150000,
+      "quantity": 7.5
+    },
+    {
+      "instrument_id": "VWRL",
+      "name": "Vanguard FTSE All-World",
+      "asset_class": "equity",
+      "region": "global",
+      "value_pence": 100000,
+      "quantity": 10.0
+    }
+  ]
+}

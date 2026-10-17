@@ -73,11 +73,15 @@ One interface for every source. Each adapter declares which capabilities it has.
 
 ```python
 class Capability(StrEnum):
-    BALANCES = "balances"; TRANSACTIONS = "transactions"; HOLDINGS = "holdings"
+    BALANCES = "balances"
+    TRANSACTIONS = "transactions"
+    HOLDINGS = "holdings"
+
 
 class FinanceAdapter(Protocol):
     name: str
     capabilities: frozenset[Capability]
+
     async def get_balances(self) -> list[Balance]: ...
     async def get_transactions(self, since: date) -> list[Transaction]: ...
     async def get_holdings(self) -> list[Holding]: ...
@@ -207,6 +211,7 @@ Trading212 API:
 3. What rate limits apply to each endpoint, and what does a rate-limited response look like?
 4. Demo or live environment for the hackathon? What does each base URL return?
 5. Is instrument metadata (asset class, region) available, or do we map tickers ourselves?
+5a. Are position prices (`currentPrice`) in the instrument's currency or the account currency (GBP)? The adapter currently assumes GBP, so USD-priced holdings would be valued wrong if it's the former.
 
 Monzo API:
 6. Playground token or a full OAuth 2.0 client for the demo? How long does a playground token last, and do we need refresh?

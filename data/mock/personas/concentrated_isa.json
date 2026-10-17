@@ -1,0 +1,61 @@
+{
+  "id": "concentrated_isa",
+  "salary_merchant": "ACME LTD SALARY",
+  "salary_pence": 380000,
+  "rent_pence": 120000,
+  "groceries_pence": 35000,
+  "transport_pence": 10000,
+  "eating_out_pence": 18000,
+  "discretionary_pence": 20000,
+  "volatility": 0.15,
+  "isa_contribution_pence": 80000,
+  "pot_balance_pence": 300000,
+  "current_balance_pence": 210000,
+  "isa_cash_pence": 40000,
+  "subscriptions": [
+    {
+      "merchant": "NETFLIX",
+      "amount_pence": 1099,
+      "start_month_offset": 0,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "SPOTIFY",
+      "amount_pence": 1199,
+      "start_month_offset": 0,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "GYMBOX",
+      "amount_pence": 3500,
+      "start_month_offset": 0,
+      "category": "personal_care"
+    }
+  ],
+  "holdings": [
+    {
+      "instrument_id": "NVDA",
+      "name": "NVIDIA",
+      "asset_class": "equity",
+      "region": "us",
+      "value_pence": 1450000,
+      "quantity": 120.833
+    },
+    {
+      "instrument_id": "TSLA",
+      "name": "Tesla",
+      "asset_class": "equity",
+      "region": "us",
+      "value_pence": 520000,
+      "quantity": 26.0
+    },
+    {
+      "instrument_id": "VWRL",
+      "name": "Vanguard FTSE All-World",
+      "asset_class": "equity",
+      "region": "global",
+      "value_pence": 60000,
+      "quantity": 6.0
+    }
+  ]
+}

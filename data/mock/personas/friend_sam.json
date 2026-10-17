@@ -1,0 +1,53 @@
+{
+  "id": "friend_sam",
+  "salary_merchant": "ACME LTD SALARY",
+  "salary_pence": 240000,
+  "rent_pence": 80000,
+  "groceries_pence": 26000,
+  "transport_pence": 7000,
+  "eating_out_pence": 15000,
+  "discretionary_pence": 18000,
+  "volatility": 0.3,
+  "isa_contribution_pence": 15000,
+  "pot_balance_pence": 60000,
+  "current_balance_pence": 55000,
+  "isa_cash_pence": 3000,
+  "subscriptions": [
+    {
+      "merchant": "SPOTIFY",
+      "amount_pence": 1199,
+      "start_month_offset": 0,
+      "category": "entertainment"
+    },
+    {
+      "merchant": "PUREGYM",
+      "amount_pence": 2499,
+      "start_month_offset": 3,
+      "category": "personal_care"
+    },
+    {
+      "merchant": "NOW TV",
+      "amount_pence": 1199,
+      "start_month_offset": 9,
+      "category": "entertainment"
+    }
+  ],
+  "holdings": [
+    {
+      "instrument_id": "VUKE",
+      "name": "Vanguard FTSE 100",
+      "asset_class": "equity",
+      "region": "uk",
+      "value_pence": 210000,
+      "quantity": 63.636
+    },
+    {
+      "instrument_id": "VWRL",
+      "name": "Vanguard FTSE All-World",
+      "asset_class": "equity",
+      "region": "global",
+      "value_pence": 120000,
+      "quantity": 12.0
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <title>Play Yourself</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand">Play Yourself</div>
+        <div id="segmented" class="segmented" role="tablist" aria-label="Sections"></div>
+      </div>
+    </header>
+
+    <main>
+      <div id="error" class="banner" role="alert" hidden>
+        <span class="banner-text"></span>
+        <button id="error-close" class="icon-btn" type="button" aria-label="Dismiss error">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <section id="tab-dashboard" class="panel" role="tabpanel" aria-labelledby="seg-dashboard" hidden>
+        <div class="page-head">
+          <h1>Overview</h1>
+          <p class="lede">Replay your own habits through past shocks. Demo data until you connect your accounts.</p>
+        </div>
+        <div id="sources" class="pills" aria-label="Data sources"></div>
+        <div class="card hero">
+          <p class="eyebrow">Net worth</p>
+          <p id="hero-value" class="display"></p>
+          <p class="muted">Liquid cash plus ISA value</p>
+        </div>
+        <div id="kpis" class="kpis"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h2>ISA allocation</h2>
+            <div class="alloc">
+              <div class="chart donut"><canvas id="c-alloc" role="img" aria-label="ISA allocation doughnut chart"></canvas></div>
+              <ul id="alloc-legend" class="legend"></ul>
+            </div>
+          </div>
+          <div class="card"><h2>Spend by category, last 6 months</h2><div class="chart"><canvas id="c-spend" role="img" aria-label="Spend by category bar chart"></canvas></div></div>
+        </div>
+        <div class="card"><h2>Recent transactions</h2><div class="scroll"><table id="txs"></table></div></div>
+      </section>
+
+      <section id="tab-habits" class="panel" role="tabpanel" aria-labelledby="seg-habits" hidden>
+        <div class="page-head">
+          <h1>Habits</h1>
+          <p class="lede">Seven factors, each scored 0 to 100. Ratios only, never amounts.</p>
+        </div>
+        <div class="card habit-card">
+          <div class="habit-top">
+            <div id="ring-host" class="ring-host"></div>
+            <div>
+              <h2>Overall habit score</h2>
+              <p class="muted">A blend of the seven factors below.</p>
+              <button id="explain-habits" class="btn tinted" type="button">Explain</button>
+            </div>
+          </div>
+          <ul id="factor-bars" class="factors"></ul>
+        </div>
+      </section>
+
+      <section id="tab-spending" class="panel" role="tabpanel" aria-labelledby="seg-spending" hidden>
+        <div class="page-head">
+          <h1>Spending</h1>
+          <p class="lede">Amounts stay on this device. Transfers are excluded.</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>Highlights</h2>
+            <div class="card-actions">
+              <label class="field-inline"><span class="sr-only">Period</span>
+                <select id="sp-months"><option value="3">Last 3 months</option><option value="6" selected>Last 6 months</option><option value="12">Last 12 months</option></select>
+              </label>
+              <button id="explain-sp" class="btn tinted" type="button">Explain</button>
+            </div>
+          </div>
+          <ul id="sp-insights" class="insights"></ul>
+        </div>
+        <div class="grid-2">
+          <div class="card"><h2>Income vs spend</h2><div class="chart"><canvas id="c-sp-month" role="img" aria-label="Income versus spend by month"></canvas></div></div>
+          <div class="card"><h2>Category by month</h2><div class="chart"><canvas id="c-sp-stack" role="img" aria-label="Spend by category and month"></canvas></div></div>
+        </div>
+        <div class="card"><h2>Categories</h2><div class="scroll"><table id="sp-cats"></table></div></div>
+        <div class="grid-2">
+          <div class="card"><h2>Top merchants</h2><div class="scroll"><table id="sp-merch"></table></div></div>
+          <div class="card"><h2>Weekday vs weekend</h2><p id="sp-pattern" class="muted small"></p><div class="chart"><canvas id="c-sp-week" role="img" aria-label="Spend by weekday"></canvas></div></div>
+        </div>
+        <div class="card"><h2>Subscriptions</h2><p id="sp-subtotal" class="muted"></p><div class="scroll"><table id="sp-subs"></table></div></div>
+        <div class="card"><h2>Unusual transactions</h2><p class="muted small">Outflows above 3 times the median for their category (categories with at least 5 transactions).</p><div class="scroll"><table id="sp-unusual"></table></div></div>
+      </section>
+
+      <section id="tab-backtest" class="panel" role="tabpanel" aria-labelledby="seg-backtest" hidden>
+        <div class="page-head">
+          <h1>Backtest</h1>
+          <p class="lede">Replay up to three strategies through a historic period.</p>
+        </div>
+        <div class="card">
+          <div class="controls">
+            <label>Period <select id="bt-period"></select></label>
+            <label>Technique <select id="bt-tech"><option value="dca">DCA (monthly)</option><option value="lump_sum">Lump sum</option></select></label>
+            <label>Rebalance <select id="bt-reb"><option value="annual">Annual</option><option value="none">None</option><option value="threshold">Threshold (5pp)</option></select></label>
+          </div>
+          <p class="label-cap">Strategies</p>
+          <div id="bt-presets" class="chips"></div>
+          <p id="bt-hint" class="form-error" role="alert" hidden>Pick between 1 and 3 strategies.</p>
+          <button id="bt-run" class="btn" type="button">Run backtest</button>
+          <p class="muted small">Index is time-weighted return rebased to 100. Your monthly contribution is derived from your savings transfers.</p>
+        </div>
+        <div class="card" id="bt-out" hidden>
+          <div class="card-head"><h2>Time-weighted return</h2><button id="explain-bt" class="btn tinted" type="button">Explain</button></div>
+          <div class="chart tall"><canvas id="c-bt" role="img" aria-label="Backtest return index line chart"></canvas></div>
+          <div class="scroll"><table id="bt-table"></table></div>
+        </div>
+      </section>
+
+      <section id="tab-scenarios" class="panel" role="tabpanel" aria-labelledby="seg-scenarios" hidden>
+        <div class="page-head">
+          <h1>Scenarios</h1>
+        </div>
+        <div class="notice">Modelled scenarios from similar past periods. Not a forecast. Not financial advice.</div>
+        <div class="card">
+          <div class="controls"><label>Strategy <select id="sc-strategy"></select></label></div>
+          <button id="sc-run" class="btn" type="button">Show scenarios</button>
+        </div>
+        <div class="card" id="sc-out" hidden>
+          <div class="card-head"><h2>Range of outcomes</h2><button id="explain-sc" class="btn tinted" type="button">Explain</button></div>
+          <p class="muted small" id="sc-label"></p>
+          <div class="chart tall"><canvas id="c-sc" role="img" aria-label="Scenario fan chart"></canvas></div>
+          <p class="legend-note"><span class="key band"></span>10th to 90th percentile <span class="key line"></span>Median</p>
+        </div>
+      </section>
+
+      <section id="tab-friends" class="panel" role="tabpanel" aria-labelledby="seg-friends" hidden>
+        <div class="page-head">
+          <h1>Friends</h1>
+          <p class="lede">Ranked by habit score. Scores are rebased so your own score is 100. No amounts are ever shown or shared.</p>
+        </div>
+        <div class="card">
+          <h2>Leaderboard</h2>
+          <ol id="lb" class="rank-list"></ol>
+          <label class="switch-row" for="share-pie"><span>Share my allocation pie (percentages only)</span><input type="checkbox" id="share-pie" class="switch" role="switch"></label>
+        </div>
+        <div class="card">
+          <h2>What leaves your device</h2>
+          <p class="muted small">This is exactly what friends can see about you.</p>
+          <pre id="card-json" tabindex="0"></pre>
+        </div>
+      </section>
+
+      <section id="tab-connections" class="panel" role="tabpanel" aria-labelledby="seg-connections" hidden>
+        <div class="page-head">
+          <h1>Accounts</h1>
+          <p class="lede">Keys stay on this machine. Only your habit scores leave the device.</p>
+        </div>
+        <div class="grid-2">
+          <div class="card" id="card-monzo">
+            <div class="card-head"><h2>Monzo</h2><span id="mode-monzo" class="pill"></span></div>
+            <p id="state-monzo" class="muted"></p>
+            <div class="btn-row">
+              <a id="monzo-oauth" class="btn" href="/v1/connect/monzo/start">Connect with Monzo</a>
+              <button id="monzo-paste" class="btn tinted" type="button">Paste a playground token</button>
+              <button id="disc-monzo" class="btn secondary" type="button" hidden>Disconnect</button>
+            </div>
+            <p id="monzo-oauth-note" class="muted small" hidden>Monzo sign-in needs MONZO_CLIENT_ID on the server. The playground token works without it.</p>
+            <label class="switch-row" for="monzo-remember"><span>Remember on this device</span><input type="checkbox" id="monzo-remember" class="switch" role="switch" checked></label>
+          </div>
+          <div class="card" id="card-t212">
+            <div class="card-head"><h2>Trading212</h2><span id="mode-trading212" class="pill"></span></div>
+            <p id="state-trading212" class="muted"></p>
+            <div class="btn-row">
+              <button id="t212-open" class="btn" type="button">Add API key</button>
+              <button id="disc-trading212" class="btn secondary" type="button" hidden>Disconnect</button>
+            </div>
+          </div>
+        </div>
+        <p class="muted small">Connections are read-only. Live endpoints are unverified against the official docs. Disconnecting returns that source to demo data.</p>
+      </section>
+    </main>
+
+    <footer class="muted small">Modelled scenarios are not advice. Returns data is synthetic.</footer>
+    <nav id="tabbar" class="tabbar" role="tablist" aria-label="Sections"></nav>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>
