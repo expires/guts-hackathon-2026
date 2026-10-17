@@ -19,7 +19,9 @@ from pydantic.json_schema import models_json_schema
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "services" / "api"))
 
+from lifeline_contracts import account as AC  # noqa: E402
 from lifeline_contracts import api_models as A  # noqa: E402
+from lifeline_contracts import chat as CH  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
 from lifeline_contracts import next_move as N  # noqa: E402
@@ -80,6 +82,22 @@ MODELS: list[type[BaseModel]] = [
     N.AddPlanItemRequest,
     N.PlanItem,
     N.PlanResponse,
+    N.FinanceHome,
+    AC.Me,
+    AC.ImportResult,
+    AC.ManualFinanceInput,
+    AC.ReversePostcode,
+    AC.HealthSignal,
+    AC.HealthSignalStored,
+    AC.LogPaymentRequest,
+    AC.LoggedPayment,
+    CH.NewsResponse,
+    CH.RateDecisions,
+    CH.ChatRequest,
+    CH.ChatResponse,
+    CH.ChatThreadsResponse,
+    CH.ChatThread,
+    CH.ChatStreamEvent,
 ]
 
 
@@ -505,6 +523,134 @@ def examples() -> dict[str, Any]:
         "Token": A.Token(access_token="eyJhbGciOiJIUzI1NiJ9.demo.sig", token_type="bearer", expires_in=86400),  # noqa: S106 (fake example token)
         **finance_examples(),
         **next_move_examples(),
+        **account_examples(),
+        **chat_examples(),
+    }
+
+
+def chat_examples() -> dict[str, Any]:
+    boe = D.SourceRef(source="boe", series_id="IUMBEDR", status="live")
+    you = D.SourceRef(source="bank", series_id="your-accounts", status="live")
+    resp = CH.ChatResponse(
+        thread_id="th_1",
+        message_id="msg_2",
+        reply_to="msg_1",
+        reaction="brain",
+        bubbles=[
+            CH.ChatBubble(
+                id="b1",
+                kind="answer",
+                text="Yes, for about 4 months. Your savings cover your bills and mortgage until April.",
+            ),
+            CH.ChatBubble(
+                id="b2", kind="caveat", text="This assumes your bills stay the same and you spend nothing extra."
+            ),
+            CH.ChatBubble(id="b3", kind="question", text="Do you want me to add a holiday in June?"),
+        ],
+        highlights=[CH.Highlight(bubble_id="b1", start=15, length=8, fact_id="f_cover", source_id="s_you")],
+        facts=[CH.ChatFact(id="f_cover", value=4, unit="months", label="Months of cover", source_id="s_you")],
+        sources=[
+            CH.ChatSource(id="s_you", group="your_data", label="Your accounts", ref=you, updated_at=NOW),
+            CH.ChatSource(id="s_boe", group="live_sources", label="Bank of England · live", ref=boe, updated_at=NOW),
+        ],
+        follow_up_question="Do you want me to add a holiday in June?",
+        confidence=0.8,
+        tool_calls=[CH.ToolCall(name="cash_flow_projection", ok=True, duration_ms=120)],
+        verified=True,
+    )
+    return {
+        "News": CH.NewsResponse(
+            status="live",
+            items=[
+                CH.NewsItem(
+                    id="n_1",
+                    headline="Lehman Brothers files for bankruptcy",
+                    section="Business",
+                    date="2008-09-15",
+                    url="https://www.theguardian.com/business/2008/sep/15/lehmanbrothers.creditcrunch",
+                )
+            ],
+        ),
+        "RateDecisions": CH.RateDecisions(
+            status="live",
+            next_decision="2026-11-05",
+            dates=["2026-11-05", "2026-12-17"],
+            source=D.SourceRef(source="boe-mpc", series_id="mpc-dates", status="live"),
+        ),
+        "ChatAsk": CH.ChatRequest(
+            message="What if I lose my job?", context=CH.ChatContext(screen="money", next_move_id="mv_fix_mortgage")
+        ),
+        "ChatAnswer": resp,
+        "ChatThreads": CH.ChatThreadsResponse(
+            threads=[CH.ChatThreadSummary(id="th_1", title="What if I lose my job?", updated_at=NOW, message_count=2)]
+        ),
+        "ChatThread": CH.ChatThread(
+            id="th_1",
+            title="What if I lose my job?",
+            messages=[
+                CH.ChatMessage(id="msg_1", role="user", created_at=NOW, text="What if I lose my job?", replies=1),
+                CH.ChatMessage(id="msg_2", role="penny", created_at=NOW, reply_to="msg_1", response=resp),
+            ],
+        ),
+    }
+
+
+def account_examples() -> dict[str, Any]:
+    stages = [
+        AC.ImportStage(name="read", label="Reading your statement", done=True),
+        AC.ImportStage(name="categorise", label="Sorting your spending", done=True),
+        AC.ImportStage(name="find_bills", label="Finding bills and subscriptions", done=True),
+        AC.ImportStage(name="build_profile", label="Building your profile", done=True),
+        AC.ImportStage(name="next_move", label="Finding your next move", done=True),
+    ]
+    tx = F.Transaction(
+        id="tx_logged_1",
+        account_id="acc_manual",
+        date="2026-10-17",
+        amount=-4.2,
+        description="Pret A Manger",
+        merchant="Pret A Manger",
+    )
+    return {
+        "Me": AC.Me(
+            id="usr_8f3a2c",
+            display_name="Priya",
+            auth_provider="apple",
+            created_at=NOW,
+            has_finance_data=True,
+            finance_inputs=["statement"],
+        ),
+        "ImportResult": AC.ImportResult(
+            import_id="imp_1",
+            status="done",
+            provider="monzo",
+            transactions=412,
+            first_date="2026-04-01",
+            last_date="2026-10-16",
+            months_covered=6.5,
+            stages=stages,
+        ),
+        "ManualFinance": AC.ManualFinanceInput(
+            postcode="LS6 1AN",
+            housing="mortgage",
+            mortgage_balance=180000,
+            mortgage_rate_pct=4.42,
+            mortgage_years_left=25,
+            deal_end="2027-03-31",
+            property_value=240000,
+            monthly_take_home=2314.18,
+            regular_costs=[AC.RegularCost(name="Council tax", monthly_amount=191, category="bills")],
+            savings=6850,
+        ),
+        "ReversePostcode": AC.ReversePostcode(
+            postcode="LS6 1AN", region="yorkshire-and-the-humber", town="Leeds", status="live"
+        ),
+        "HealthSignal": AC.HealthSignal(steps_per_day=8200, sleep_hours=7.1, measured_days=30),
+        "HealthSignalStored": AC.HealthSignalStored(
+            steps_per_day=8200, sleep_hours=7.1, measured_days=30, health_effect=2, updated_at=NOW
+        ),
+        "LogPayment": AC.LogPaymentRequest(amount=4.2, merchant="Pret A Manger"),
+        "LoggedPayment": AC.LoggedPayment(transaction=tx, category="eating_out"),
     }
 
 
@@ -645,6 +791,7 @@ def next_move_examples() -> dict[str, Any]:
             evidence_sentence="7 in 10 twins in similar past periods did better.",
             sources=[boe5, boe2, bank],
         ),
+        "FinanceHomeEmpty": N.FinanceHome(has_data=False, connect_prompt="Connect your money to see your next move"),
         "AddPlanItem": N.AddPlanItemRequest(move_id="mv_fix_mortgage"),
         "PlanItem": N.PlanItem(
             id="pl_1",
@@ -924,6 +1071,7 @@ ERR_EXAMPLES = {
     "Conflict": {
         "error": {"code": "pending_events", "message": "Answer the open events before you age.", "source": "sim"}
     },
+    "NoFinanceData": {"error": {"code": "no_finance_data", "message": "Connect your money first.", "source": "api"}},
     "RateLimited": {
         "error": {"code": "rate_limited", "message": "Too many requests. Try again in 30 seconds.", "source": "api"}
     },
@@ -1002,6 +1150,22 @@ TIER2_OPS = {
     "getBankSummary",
     "verifyPurchase",
     "signInWithApple",
+    "getMe",
+    "deleteAccount",
+    "resetDemo",
+    "signOut",
+    "importStatement",
+    "setManualFinance",
+    "logPayment",
+    "reversePostcode",
+    "setHealthSignal",
+    "getFinanceHome",
+    "askPenny",
+    "askPennyStream",
+    "listChatThreads",
+    "getChatThread",
+    "listNews",
+    "getRateDecisions",
 }
 
 LIFE_ID = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^lf_[a-z0-9]{6,32}$"}}
@@ -1268,6 +1432,8 @@ def paths() -> dict[str, Any]:
         },
         **finance_paths(),
         **next_move_paths(),
+        **account_paths(),
+        **chat_paths(),
         "/v1/purchases/verify": {
             "post": op(
                 "verifyPurchase",
@@ -1288,6 +1454,195 @@ MONTH = {
     "description": "YYYY-MM; default this month",
 }
 FIN = ("401", "422", "429")
+
+
+NO_CONTENT = {"204": {"description": "Done. No body."}}
+
+
+def chat_paths() -> dict[str, Any]:
+    """Ask Penny and news (ADR 0030-0034)."""
+    thread_id = {
+        "name": "id",
+        "in": "path",
+        "required": True,
+        "schema": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,64}$"},
+    }
+    year_q = [
+        {"name": "from", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
+        {"name": "to", "in": "query", "required": True, "schema": {"type": "string", "format": "date"}},
+        {
+            "name": "topic",
+            "in": "query",
+            "required": False,
+            "schema": {
+                "type": "string",
+                "enum": ["rates", "mortgages", "housing", "inflation", "energy", "jobs", "markets", "economy"],
+            },
+        },
+    ]
+    return {
+        "/v1/chat": {
+            "post": op(
+                "askPenny",
+                "Ask Penny: answers only through engine tools; every number verified",
+                "chat",
+                {**ok("ChatResponse", "ChatAnswer"), **errs("404", *STD)},
+                requestBody=body("ChatRequest", "ChatAsk"),
+            )
+        },
+        "/v1/chat/stream": {
+            "post": op(
+                "askPennyStream",
+                "Ask Penny, streamed as Server-Sent Events: reaction (<=1 s), real tool steps, verified bubbles, done",
+                "chat",
+                {
+                    "200": {
+                        "description": "text/event-stream; each `data:` line is one ChatStreamEvent (JSON)",
+                        "content": {
+                            "text/event-stream": {
+                                "schema": {"type": "string", "x-event-schema": ref("ChatStreamEvent")}
+                            }
+                        },
+                    },
+                    **errs("404", *STD),
+                },
+                requestBody=body("ChatRequest", "ChatAsk"),
+            )
+        },
+        "/v1/chat/threads": {
+            "get": op(
+                "listChatThreads",
+                "The caller's chat threads",
+                "chat",
+                {**ok("ChatThreadsResponse", "ChatThreads"), **errs("401", "429", "503")},
+            )
+        },
+        "/v1/chat/threads/{id}": {
+            "get": op(
+                "getChatThread",
+                "One thread with its messages and answer groups",
+                "chat",
+                {**ok("ChatThread", "ChatThread"), **errs("404", *STD)},
+                parameters=[thread_id],
+            )
+        },
+        "/v1/news": {
+            "get": op(
+                "listNews",
+                "Guardian headlines and links for a date range (context only)",
+                "chat",
+                {**ok("NewsResponse", "News"), **errs(*STD)},
+                parameters=year_q,
+            )
+        },
+        "/v1/rate-decisions": {
+            "get": op(
+                "getRateDecisions",
+                "Bank of England rate-decision dates (context only)",
+                "chat",
+                {**ok("RateDecisions", "RateDecisions"), **errs("401", "429", "503")},
+            )
+        },
+    }
+
+
+def account_paths() -> dict[str, Any]:
+    """Tier 2 away plan (ADR 0029): accounts, onboarding inputs, connectors."""
+    upload = {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "required": ["file"],
+                    "properties": {
+                        "file": {"type": "string", "format": "binary", "description": "CSV or PDF, max 5 MB"},
+                        "provider": {"type": "string", "enum": ["monzo", "revolut", "pdf", "unknown"]},
+                    },
+                }
+            }
+        },
+    }
+    return {
+        "/v1/me": {
+            "get": op("getMe", "The signed-in account", "account", {**ok("Me", "Me"), **errs("401", "429", "503")}),
+            "delete": op(
+                "deleteAccount",
+                "Delete the account and every stored record",
+                "account",
+                {**NO_CONTENT, **errs("401", "429", "503")},
+            ),
+        },
+        "/v1/me/reset": {
+            "post": op(
+                "resetDemo",
+                "Demo reset: clear this user's lives, plan, guesses and finance data",
+                "account",
+                {**ok("Me", "Me"), **errs("401", "429", "503")},
+            )
+        },
+        "/v1/auth/logout": {
+            "post": op("signOut", "Revoke the current token", "auth", {**NO_CONTENT, **errs("401", "429")})
+        },
+        "/v1/finance/statements": {
+            "post": op(
+                "importStatement",
+                "Upload a bank statement (Monzo or Revolut CSV first, then PDF)",
+                "finance",
+                {**ok("ImportResult", "ImportResult", "Imported", "201"), **errs("400", *STD)},
+                requestBody=upload,
+            )
+        },
+        "/v1/finance/manual": {
+            "put": op(
+                "setManualFinance",
+                "Enter your numbers instead of connecting a bank",
+                "finance",
+                {**ok("FinanceProfile", "FinanceProfile"), **errs(*STD)},
+                requestBody=body("ManualFinanceInput", "ManualFinance"),
+            )
+        },
+        "/v1/finance/transactions": {
+            "post": op(
+                "logPayment",
+                "Log one payment (App Intent for a Shortcuts Wallet-tap automation)",
+                "finance",
+                {**ok("LoggedPayment", "LoggedPayment", "Logged", "201"), **errs(*STD)},
+                requestBody=body("LogPaymentRequest", "LogPayment"),
+            )
+        },
+        "/v1/postcodes/reverse": {
+            "get": op(
+                "reversePostcode",
+                "Postcode, region and town for a location (fills the postcode)",
+                "account",
+                {**ok("ReversePostcode", "ReversePostcode"), **errs("404", *STD)},
+                parameters=[
+                    {
+                        "name": "lat",
+                        "in": "query",
+                        "required": True,
+                        "schema": {"type": "number", "minimum": 49.0, "maximum": 61.5},
+                    },
+                    {
+                        "name": "lon",
+                        "in": "query",
+                        "required": True,
+                        "schema": {"type": "number", "minimum": -8.7, "maximum": 2.0},
+                    },
+                ],
+            )
+        },
+        "/v1/me/health": {
+            "put": op(
+                "setHealthSignal",
+                "HealthKit steps and sleep for the Life Health stat",
+                "account",
+                {**ok("HealthSignalStored", "HealthSignalStored"), **errs(*STD)},
+                requestBody=body("HealthSignal", "HealthSignal"),
+            )
+        },
+    }
 
 
 def next_move_paths() -> dict[str, Any]:
@@ -1390,6 +1745,14 @@ def finance_paths() -> dict[str, Any]:
                 requestBody=body("CreateGoalRequest", "CreateGoal"),
             ),
         },
+        "/v1/finance/home": {
+            "get": op(
+                "getFinanceHome",
+                "Everything Money home needs in one request; has_data=false is a normal state, not an error",
+                "finance",
+                {**ok("FinanceHome", "FinanceHomeEmpty"), **errs("401", "429", "503")},
+            )
+        },
         "/v1/finance/prediction": {
             "get": op(
                 "getSpendPrediction",
@@ -1447,7 +1810,10 @@ def build() -> dict[str, Any]:
         "Unauthorized": ("Missing or invalid bearer token", "Unauthorized"),
         "PaymentRequired": ("Needs a demo purchase", "PaymentRequired"),
         "NotFound": ("Not found", "NotFound"),
-        "Conflict": ("State conflict", "Conflict"),
+        "Conflict": (
+            "State conflict, no finance data (no_finance_data) or no real data (data_unavailable)",
+            "Conflict",
+        ),
         "PayloadTooLarge": ("Body over 64 KB", "PayloadTooLarge"),
         "NotImplemented": ("Endpoint not built yet in this tier", "NotImplemented"),
         "StoreUnavailable": ("Life store unavailable", "StoreUnavailable"),
@@ -1463,8 +1829,39 @@ def build() -> dict[str, Any]:
         "lives",
         {**ok("LivesResponse", "Lives"), **errs("401", "429", "503")},
     )
+    no_data_ops = {
+        o["operationId"]
+        for path, item in p.items()
+        for o in item.values()
+        if path.startswith("/v1/finance/") or path.startswith("/v1/next-move")
+    }
+    # 409 source_disabled only for provider=truelayer (ADR 0027); Monzo (Yaffy's OAuth) works.
+    # 409 source_unavailable in live mode when the provider is not configured.
+    no_data_ops |= {"getBankAuthLink", "getBankSummary"}
+    p["/v1/bank/auth-link"]["get"].setdefault("parameters", []).append(
+        {
+            "name": "provider",
+            "in": "query",
+            "required": False,
+            "schema": {"type": "string", "enum": ["monzo", "truelayer"], "default": "monzo"},
+            "description": "Bank OAuth provider. Monzo is live; TrueLayer is disabled (409 source_disabled).",
+        }
+    )
+    no_data_ops |= {
+        "listCharacters",
+        "createLife",
+        "createDecision",
+        "getEvaluation",
+        "ageLife",
+        "chooseLife",
+        "actLife",
+        "rewindLife",
+        "addPlanItem",
+    }
     for item in p.values():
         for method, o in item.items():
+            if o["operationId"] in no_data_ops:
+                o["responses"].update(errs("409"))
             if method in ("post", "put"):
                 o["responses"].update(errs("413"))
             if o["operationId"] in TIER2_OPS and STUBS_DECLARED:
@@ -1482,7 +1879,19 @@ def build() -> dict[str, Any]:
         "security": [{"bearer": []}],
         "tags": [
             {"name": t}
-            for t in ("meta", "auth", "next-move", "lives", "learn", "decision", "finance", "rooms", "bank", "store")
+            for t in (
+                "meta",
+                "auth",
+                "account",
+                "next-move",
+                "lives",
+                "learn",
+                "decision",
+                "finance",
+                "rooms",
+                "bank",
+                "store",
+            )
         ],
         "paths": p,
         "components": {

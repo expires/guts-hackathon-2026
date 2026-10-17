@@ -24,6 +24,7 @@ from sqlalchemy import Column, DateTime, MetaData, String, Table, Text, delete, 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from lifeline_contracts.observation import Observation
+from lifeline_data.crypto import Sealer, StoreUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -132,6 +133,14 @@ snapshot_table = Table(
     Column("payload", Text, nullable=False),
     Column("fetched_at", DateTime(timezone=True), nullable=False),
 )
+# Per-user finance data (ADR 0029): imported statements or manual entry, as a FinanceSnapshot JSON.
+user_snapshot_table = Table(
+    "user_finance_snapshot",
+    metadata,
+    Column("subject", String(128), primary_key=True),
+    Column("payload", Text, nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
 
 
 class SnapshotStore:
@@ -143,6 +152,11 @@ class SnapshotStore:
         self._ready = False
         self._disabled = False
         self._memory: dict[str, list[Observation]] = {}
+
+    @property
+    def configured(self) -> bool:
+        """True when a database was injected or DATABASE_URL is set (even if it is down now)."""
+        return self._engine is not None or bool(self._url)
 
     async def _db(self) -> AsyncEngine | None:
         if self._disabled:
@@ -203,3 +217,103 @@ class SnapshotStore:
         if self._engine is not None:
             with contextlib.suppress(Exception):
                 await self._engine.dispose()
+
+
+MEMORY_TTL_SECONDS = 30.0
+
+
+class UserSnapshotStore:
+    """Per-user FinanceSnapshot JSON, encrypted at rest (Fernet, TOKEN_ENCRYPTION_KEY; V6 T2-F5).
+
+    Postgres is the source of truth when DATABASE_URL is set (or an engine is injected) (V3 T2-G1, N2):
+    - `put` writes Postgres first and caches in memory only after the commit. On failure it raises
+      StoreUnavailable and leaves memory unchanged.
+    - `get` always asks Postgres. No row -> None (another process may have deleted it). Memory is a
+      read-through copy used only when Postgres cannot be read, for at most MEMORY_TTL_SECONDS.
+    - `delete` raises StoreUnavailable when the Postgres delete fails (V6 T2-F4).
+    Without a database (dev and tests) the store lives in process memory.
+    Rows hold only ciphertext. Personal data is never logged.
+    """
+
+    def __init__(self, snapshots: SnapshotStore, sealer: Sealer, clock: Callable[[], float] = time.time) -> None:
+        self._snapshots = snapshots
+        self._sealer = sealer
+        self._clock = clock
+        self._memory: dict[str, tuple[str, float]] = {}  # subject -> (ciphertext, cached_at)
+
+    async def _engine_or_raise(self) -> AsyncEngine | None:
+        """None when no database is configured. Raises when one is configured but unreachable."""
+        engine = await self._snapshots._db()
+        if engine is None and self._snapshots.configured:
+            raise StoreUnavailable("user store unavailable")
+        return engine
+
+    async def put(self, subject: str, payload_json: str) -> bool:
+        """True when committed to Postgres, False when no database is configured (memory store)."""
+        cipher = self._sealer.seal(payload_json)
+        engine = await self._engine_or_raise()
+        if engine is None:
+            self._memory[subject] = (cipher, self._clock())
+            return False
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(delete(user_snapshot_table).where(user_snapshot_table.c.subject == subject))
+                await conn.execute(
+                    insert(user_snapshot_table).values(subject=subject, payload=cipher, updated_at=datetime.now(UTC))
+                )
+        except Exception as exc:
+            log.warning("user snapshot write failed (%s)", type(exc).__name__)
+            raise StoreUnavailable("user store write failed") from exc
+        self._memory[subject] = (cipher, self._clock())
+        return True
+
+    def _open(self, cipher: str) -> str | None:
+        try:
+            return self._sealer.open(cipher)
+        except Exception as exc:
+            log.warning("user snapshot could not be decrypted (%s)", type(exc).__name__)
+            return None
+
+    async def get(self, subject: str) -> str | None:
+        """Never raises."""
+        try:
+            engine = await self._engine_or_raise()
+        except StoreUnavailable:
+            return self._fresh_memory(subject)
+        if engine is None:
+            hit = self._memory.get(subject)
+            return None if hit is None else self._open(hit[0])
+        try:
+            async with engine.connect() as conn:
+                row = (
+                    await conn.execute(
+                        select(user_snapshot_table.c.payload).where(user_snapshot_table.c.subject == subject)
+                    )
+                ).first()
+        except Exception as exc:
+            log.warning("user snapshot read failed (%s)", type(exc).__name__)
+            return self._fresh_memory(subject)
+        if row is None:
+            self._memory.pop(subject, None)
+            return None
+        cipher = str(row[0])
+        self._memory[subject] = (cipher, self._clock())
+        return self._open(cipher)
+
+    def _fresh_memory(self, subject: str) -> str | None:
+        hit = self._memory.get(subject)
+        if hit is None or self._clock() - hit[1] > MEMORY_TTL_SECONDS:
+            return None
+        return self._open(hit[0])
+
+    async def delete(self, subject: str) -> None:
+        """Remove the user's row. Raises StoreUnavailable when the database delete fails."""
+        engine = await self._engine_or_raise()
+        if engine is not None:
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(delete(user_snapshot_table).where(user_snapshot_table.c.subject == subject))
+            except Exception as exc:
+                log.warning("user snapshot delete failed (%s)", type(exc).__name__)
+                raise StoreUnavailable("user store delete failed") from exc
+        self._memory.pop(subject, None)

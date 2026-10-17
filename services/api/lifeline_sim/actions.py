@@ -206,6 +206,8 @@ def _deposit(c: ActionCtx) -> float:
 def _can_buy_home(s: SimState, mv: MacroView) -> bool:
     if s.housing != "rent" or not s.employed:
         return False
+    if not _has_data(mv, s, MacroKey.HOUSE_PRICE, MacroKey.MORTGAGE_2Y_FIX):
+        return False
     price = mv.value(MacroKey.HOUSE_PRICE, s.year, s.region, 200_000.0) * 0.8
     return _liquid(s) >= price * p.ACTION_DEPOSIT_SHARE + p.HOME_BUY_FEES_2024 * mv.price_level(s.year)
 
@@ -479,7 +481,11 @@ def _pay_debt(c: ActionCtx) -> ActionResultText:
     s = c.s
     paid = _take(s, min(_amount(c, s.other_debt), s.other_debt))
     s.other_debt -= paid
-    apr = c.mv.value(MacroKey.CARD_RATE, s.year, None, 20.0) if c.mv.has(MacroKey.CARD_RATE) else 20.0
+    apr = (
+        _card_apr(c)
+        if c.mv.strict
+        else (c.mv.value(MacroKey.CARD_RATE, s.year, None, 20.0) if c.mv.has(MacroKey.CARD_RATE) else 20.0)
+    )
     saved = _r(paid * apr / 100)
     _stat(s, "happiness", 2)
     return ActionResultText(
@@ -514,13 +520,30 @@ def _borrow(c: ActionCtx) -> ActionResultText:
     amount = min(_amount(c, 1000.0 * c.pl), p.MAX_PERSONAL_LOAN_2024 * c.pl)
     s.cash += amount
     s.other_debt += amount
-    apr = c.mv.value(MacroKey.CARD_RATE, s.year, None, 20.0) if c.mv.has(MacroKey.CARD_RATE) else 20.0
+    apr = (
+        _card_apr(c)
+        if c.mv.strict
+        else (c.mv.value(MacroKey.CARD_RATE, s.year, None, 20.0) if c.mv.has(MacroKey.CARD_RATE) else 20.0)
+    )
     return ActionResultText(
         f"You borrowed £{amount:,.0f} at about {apr:.1f}% a year.", False, {"amount": _r(amount), "apr": round(apr, 2)}
     )
 
 
 # ---------- catalogue ----------
+
+
+def _has_data(mv: MacroView, s: SimState, *keys: MacroKey) -> bool:
+    """Live mode (ADR 0027): an action priced from data needs real values for this year."""
+    return not mv.strict or all(mv.opt(k, s.year, s.region) is not None for k in keys)
+
+
+def _card_apr(c: ActionCtx) -> float:
+    v = c.mv.opt(MacroKey.CARD_RATE, c.s.year)
+    if v is not None:
+        return v
+    bank = c.mv.opt(MacroKey.BANK_RATE, c.s.year)
+    return (bank if bank is not None else 0.0) + p.CARD_SPREAD
 
 
 def _always(s: SimState, mv: MacroView) -> bool:
@@ -538,11 +561,14 @@ ACTIONS: tuple[ActionSpec, ...] = (
     ),
     ActionSpec(
         "job", "new_job", "Look for a better job", "🔎", "Odds follow local unemployment",
-        lambda s, mv: s.employed, _new_job, "job-security",
+        lambda s, mv: s.employed and _has_data(mv, s, MacroKey.MEDIAN_PAY, MacroKey.UNEMPLOYMENT),
+        _new_job, "job-security",
     ),
     ActionSpec(
         "job", "find_work", "Find work", "📋", "Odds follow local unemployment",
-        lambda s, mv: not s.employed and not s.student and _working_age(s), _find_work, "job-security",
+        lambda s, mv: not s.employed and not s.student and _working_age(s)
+        and _has_data(mv, s, MacroKey.MEDIAN_PAY, MacroKey.UNEMPLOYMENT),
+        _find_work, "job-security",
     ),
     ActionSpec("job", "quit", "Quit your job", "🚪", "No pay until you find work", lambda s, mv: s.employed, _quit),
     ActionSpec(
@@ -555,7 +581,7 @@ ACTIONS: tuple[ActionSpec, ...] = (
     ),
     ActionSpec(
         "assets", "sell_home", "Sell your home", "🪧", "Fees, then you rent",
-        lambda s, mv: s.property_value > 0, _sell_home, "house-prices",
+        lambda s, mv: s.property_value > 0 and _has_data(mv, s, MacroKey.HOUSE_PRICE), _sell_home, "house-prices",
     ),
     ActionSpec(
         "assets", "overpay_mortgage", "Overpay the mortgage", "🏦", "Less interest from now on",
@@ -571,7 +597,8 @@ ACTIONS: tuple[ActionSpec, ...] = (
     ),
     ActionSpec(
         "assets", "buy_crypto", "Buy crypto", "🪙", "Can double or halve",
-        lambda s, mv: _liquid(s) > 0 and mv.has(MacroKey.CRYPTO_RETURN) and s.year >= p.CRYPTO_FROM_YEAR,
+        lambda s, mv: _liquid(s) > 0 and mv.has(MacroKey.CRYPTO_RETURN) and s.year >= p.CRYPTO_FROM_YEAR
+        and _has_data(mv, s, MacroKey.CRYPTO_RETURN),
         _buy_crypto, "crypto-risk", False, True,
     ),
     ActionSpec(

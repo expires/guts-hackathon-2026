@@ -347,6 +347,38 @@
       "attribution": "Bank connection powered by the TrueLayer sandbox."
     },
     {
+      "id": "guardian",
+      "name": "The Guardian Open Platform",
+      "url": "https://open-platform.theguardian.com/",
+      "series": [
+        "headlines by topic and date range (headline, one-sentence standfirst, section, date, article URL)"
+      ],
+      "coverage": "UK and world news",
+      "needs_key": true,
+      "env_vars": [
+        "GUARDIAN_API_KEY"
+      ],
+      "licence": "Guardian Open Platform terms. Headlines and links only; no article body text is stored or shown.",
+      "licence_url": "https://www.theguardian.com/open-platform/terms-and-conditions",
+      "attribution": "Powered by Guardian Open Platform. Each headline links to the article on theguardian.com.",
+      "use": "Context only (ADR 0030). Never a decision input."
+    },
+    {
+      "id": "boe-mpc",
+      "name": "Bank of England upcoming MPC dates",
+      "url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
+      "series": [
+        "Monetary Policy Committee rate-decision dates"
+      ],
+      "coverage": "UK",
+      "needs_key": false,
+      "env_vars": [],
+      "licence": "Bank of England terms of use (free reuse with attribution)",
+      "licence_url": "https://www.bankofengland.co.uk/legal",
+      "attribution": "Source: Bank of England, upcoming MPC dates.",
+      "use": "Context only (ADR 0030). Never a decision input."
+    },
+    {
       "id": "bank",
       "name": "Fixture bank data (sample personas)",
       "url": "services/api/lifeline_data/ (repo path)",

@@ -228,7 +228,7 @@ async def test_next_move(body: TestMoveRequest, request: Request, sub: Subject) 
         await state.store.put_macro(digest, table)
 
     snap = await money.snapshot(state, sub)
-    _, character = await call_pure(money.engine_profile, sub, snap)
+    _, character = await call_pure(money.engine_profile, snap, money.hints(state, sub, snap))
     # The sim runs events from start + 1, so start is the year before the test period (W2 scenario_years).
     start, _ = next_move_engine.scenario_years(move)
     character = shift_to_period(character, money.today(snap).year, start)

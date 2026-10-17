@@ -148,6 +148,18 @@ SOURCES: dict[str, SourceInfo] = {
             url="https://epc.opendatacommunities.org/",
         ),
         SourceInfo(
+            "guardian", "The Guardian Open Platform", "UK and world news",
+            "Headlines from The Guardian, powered by the Guardian Open Platform. Context only.",
+            "Guardian Open Platform terms (headlines and links only)", HOUR, needs_key=True,
+            key_env=("GUARDIAN_API_KEY",), tier=2, url="https://open-platform.theguardian.com/",
+        ),
+        SourceInfo(
+            "boe-mpc", "Bank of England MPC dates", "UK",
+            "Monetary Policy Committee dates from the Bank of England website. Context only.",
+            "Bank of England terms of use (free reuse with attribution)", DAY, tier=2,
+            url="https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
+        ),
+        SourceInfo(
             "openbanking", "Open Banking sandbox (TrueLayer)", "UK",
             "Sandbox account data via TrueLayer. Demo only.", "TrueLayer sandbox terms", 5 * 60,
             needs_key=True, key_env=("OB_CLIENT_ID", "OB_CLIENT_SECRET", "OB_REDIRECT_URI"), tier=1,
@@ -208,6 +220,20 @@ def base_url(name: str, env: Mapping[str, str]) -> str:
     if parts.scheme != "https" or not parts.hostname or parts.query or parts.fragment or " " in raw:
         return default
     return raw.rstrip("/")
+
+
+# ADR 0027: sources disabled by policy in live mode, with the ADR's reason.
+DISABLED_IN_LIVE: dict[str, str] = {
+    "adzuna": "No key. Disabled by the user",
+    "dvla": "Registrations closed; no key. Disabled by the user",
+    "dvsamot": "Needs an approval that takes days. Disabled by the user",
+    "openbanking": "The sandbox offers test banks only, so it cannot give real data. Disabled by the user",
+}
+# Disabled while they have no real data; they return automatically once a live fetch succeeds.
+UNRELIABLE_IN_LIVE: dict[str, str] = {
+    "yahoo": "Blocked or timing out from our network. Disabled while unavailable",
+    "fred": "Blocked or timing out from our network. Disabled while unavailable",
+}
 
 
 def missing_keys(source: SourceInfo, env: Mapping[str, str]) -> list[str]:

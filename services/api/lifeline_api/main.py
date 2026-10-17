@@ -5,6 +5,7 @@ APP_ENV=test: in-memory lives store, fakeredis, data hub offline (mock and fixtu
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -15,11 +16,14 @@ from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.types import Scope
 
+from lifeline_api import logsafe
+from lifeline_api.apple import AppleVerifier
 from lifeline_api.auth import bearer_subject
 from lifeline_api.bodylimit import BodySizeLimitMiddleware
 from lifeline_api.errors import CatchAllMiddleware, install_error_handlers
 from lifeline_api.ratelimit import Limiter, MemoryBucket, RateLimitMiddleware, RedisBucket
-from lifeline_api.routes import auth, finance, later, learn, lives, meta, next_move
+from lifeline_api.rooms import RoomHub
+from lifeline_api.routes import account, auth, chat, finance, later, learn, lives, meta, next_move, rooms
 from lifeline_api.settings import Settings
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeStore, MemoryLifeStore, PostgresLifeStore
@@ -31,6 +35,7 @@ from lifeline_explain import api as explain_api
 log = logging.getLogger("lifeline_api")
 
 MAX_BODY_BYTES = 64 * 1024
+MAX_STATEMENT_BYTES = 5 * 1024 * 1024
 
 
 def _redis_client(settings: Settings) -> Any | None:
@@ -57,6 +62,11 @@ def _hub(settings: Settings, redis: Any | None) -> DataHub:
     return DataHubImpl(settings, redis=redis)
 
 
+def _bucket(per_minute: int, redis: Any | None) -> Limiter:
+    fallback = MemoryBucket(per_minute)
+    return fallback if redis is None else RedisBucket(redis, per_minute, fallback)
+
+
 def build_state(settings: Settings) -> AppState:
     if settings.is_test:
         # Tests never call the network: the explain layer uses template text only.
@@ -72,7 +82,36 @@ def build_state(settings: Settings) -> AppState:
         limiter=limiter,
         jwt_secret=settings.signing_secret(),
         redis=redis,
+        apple=AppleVerifier(settings.apple_bundle_id, offline=settings.is_test),
+        rooms=RoomHub(redis),
+        chat_limiter=_bucket(settings.chat_rate_limit_per_minute, redis),  # keys "chat:<subject>"
+        read_limiter=_bucket(settings.read_rate_limit_per_minute, redis),  # keys "read:<subject>"
+        ip_limiter=_bucket(settings.ip_rate_limit_per_minute, redis),  # keys "ip:<addr>"
+        auth_limiter=_bucket(settings.auth_rate_limit_per_minute, redis),  # keys "auth:<ip>"
     )
+
+
+async def _warm_up(state: AppState) -> None:
+    """After a deploy, make the first requests fast: build the MacroTable, then import and build the chat
+    stack (LLM client, Penny, engine tools) once. Never fails startup."""
+    try:
+        table = await state.hub.macro_table()
+        await asyncio.to_thread(_warm_chat, table)
+        log.info("warm-up done")
+    except Exception as exc:
+        log.warning("warm-up skipped: %s", type(exc).__name__)
+
+
+def _warm_chat(table: Any) -> None:
+    from datetime import UTC, datetime
+
+    from lifeline_api.chat_service import no_data_snapshot
+    from lifeline_explain import chat as penny
+    from lifeline_explain.chat_engine_tools import EngineToolSet
+
+    penny.get_penny()  # imports the Anthropic SDK and builds the client once
+    tools = EngineToolSet(no_data_snapshot(datetime.now(UTC).date()), table, datetime.now(UTC).date())
+    tools.specs()
 
 
 @asynccontextmanager
@@ -84,9 +123,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Keep serving; /v1/health reports postgres as down and the store retries on first use.
         log.error("lives store did not start: %s", type(exc).__name__)
     app.state.lifeline = state
+    warm: asyncio.Task[Any] | None = None
+    if not state.settings.is_test:
+        # Build the MacroTable in the background so the first life or room start does not wait for it.
+        warm = asyncio.create_task(_warm_up(state))
     try:
         yield
     finally:
+        if warm is not None and not warm.done():
+            warm.cancel()
         await state.store.close()
         hub_close = getattr(state.hub, "aclose", None) or getattr(state.hub, "close", None)
         if hub_close is not None:
@@ -102,6 +147,7 @@ def _subject_from_scope(scope: Scope) -> str | None:
 
 
 def create_app() -> FastAPI:
+    logsafe.install()
     app = FastAPI(
         title=f"{PRODUCT_NAME} API",
         version="0.1.0",
@@ -110,11 +156,14 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
     install_error_handlers(app)
-    for r in (meta.router, auth.router, lives.router, finance.router, next_move.router, learn.router, later.router):
+    for r in (meta.router, auth.router, lives.router, finance.router, next_move.router, learn.router, account.router,
+              chat.router, rooms.router,
+              later.router):
         app.include_router(r)
     # Order: last added runs first. Outermost: catch-all, then body limit, then rate limit.
     app.add_middleware(RateLimitMiddleware, subject_of=_subject_from_scope)
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES,
+                       path_limits={"/v1/finance/statements": MAX_STATEMENT_BYTES})
     app.add_middleware(CatchAllMiddleware)
     return app
 

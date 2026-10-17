@@ -25,13 +25,24 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from lifeline_contracts.chat import NewsItem, NewsResponse, RateDecisions
+from lifeline_contracts.domain import SourceRef
 from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.observation import Observation, SourceStatus, Status
-from lifeline_data.adapters import ADAPTERS, BankHolidaysAdapter, OpenMeteoAdapter, PostcodesAdapter
-from lifeline_data.adapters.postcodes import normalise_postcode
-from lifeline_data.base import Adapter, CircuitBreaker, utcnow
-from lifeline_data.cache import ObservationCache, SnapshotStore, obs_key
+from lifeline_data.adapters import (
+    ADAPTERS,
+    BankHolidaysAdapter,
+    BoeMpcAdapter,
+    GuardianAdapter,
+    OpenMeteoAdapter,
+    PostcodesAdapter,
+)
+from lifeline_data.adapters.context import guardian_query
+from lifeline_data.adapters.postcodes import LAT_RANGE, LON_RANGE, normalise_postcode
+from lifeline_data.base import Adapter, CircuitBreaker, PayloadError, utcnow
+from lifeline_data.cache import ObservationCache, SnapshotStore, UserSnapshotStore, obs_key
+from lifeline_data.crypto import Sealer
 from lifeline_data.finance import DEMO_PERSONA_ID, fixture_snapshot
 from lifeline_data.logsafe import quiet_http_loggers, redact_urls
 from lifeline_data.macro import build_macro_table, mock_macro_table
@@ -43,7 +54,13 @@ from lifeline_data.prediction_inputs import (
     mock_weather_day,
 )
 from lifeline_data.settings import DataSettings
-from lifeline_data.sources import SOURCES, missing_key_message, missing_keys
+from lifeline_data.sources import (
+    DISABLED_IN_LIVE,
+    SOURCES,
+    UNRELIABLE_IN_LIVE,
+    missing_key_message,
+    missing_keys,
+)
 
 log = logging.getLogger(__name__)
 quiet_http_loggers()  # keys in query strings (Adzuna) must never reach logs; applies to API and worker
@@ -76,7 +93,7 @@ class SourceState:
     def from_json(cls, doc: Any) -> SourceState | None:
         try:
             status = doc["status"]
-            if status not in ("live", "cached", "mock"):
+            if status not in ("live", "cached", "mock", "unavailable"):
                 return None
             fetched = datetime.fromisoformat(doc["fetched_at"]) if doc.get("fetched_at") else None
             return cls(status, fetched, doc.get("last_error"), float(doc.get("updated_at") or 0.0))
@@ -102,8 +119,13 @@ class DataHub:
         self._sleep = sleep or asyncio.sleep
         offline = self.settings.offline
         self.live_enabled = client is not None or not offline
+        # ADR 0027: in live mode nothing falls back to mock data.
+        self.live_mode = self.settings.live_mode
+        self.no_data: Status = "unavailable" if self.live_mode else "mock"
         self.cache = ObservationCache(redis=redis, url="" if offline else self.settings.redis_url, clock=clock)
         self.snapshots = SnapshotStore(engine=db, url="" if offline else self.settings.database_url)
+        strict = self.live_mode or self.settings.app_env.lower() in ("prod", "production")
+        self.user_snapshots = UserSnapshotStore(self.snapshots, Sealer(self._env, strict=strict), clock=clock)
         self._client = client
         self._owns_client = client is None
         self._adapters: dict[str, Adapter] = {}
@@ -183,6 +205,17 @@ class DataHub:
         missing = missing_keys(info, self._env)
         return missing_key_message(missing[0]) if missing else None
 
+    def _fallback(self, source: str, series_id: str, region: str | None) -> list[Observation]:
+        """Demo mode: labelled mock series. Live mode: nothing."""
+        return [] if self.live_mode else mock_series(source, series_id, region)
+
+    def _disabled_reason(self, source: str) -> str | None:
+        """Live mode only: the ADR 0027 policy reason for a source that is switched off."""
+        if not self.live_mode:
+            return None
+        reason = DISABLED_IN_LIVE.get(source)
+        return f"Disabled: {reason}" if reason else None
+
     @staticmethod
     def _filter(observations: list[Observation], region: str | None) -> list[Observation]:
         if region is None:
@@ -207,17 +240,21 @@ class DataHub:
         except Exception as exc:  # last line of defence: never raise to the caller
             log.exception("series %s/%s failed", source, series_id)
             if source in SOURCES:
-                await self._set_state(source, "mock", f"internal error: {type(exc).__name__}")
-            return mock_series(source, series_id, region)
+                await self._set_state(source, self.no_data, f"internal error: {type(exc).__name__}")
+            return self._fallback(source, series_id, region)
 
     async def _series(self, source: str, series_id: str, region: str | None, force: bool) -> list[Observation]:
         info = SOURCES.get(source)
         if info is None:
             return []
+        disabled = self._disabled_reason(source)
+        if disabled is not None:
+            await self._set_state(source, "unavailable", disabled)
+            return []
         key_error = self._missing_key_error(source)
         if key_error is not None:
-            await self._set_state(source, "mock", key_error)
-            return mock_series(source, series_id, region)
+            await self._set_state(source, self.no_data, key_error)
+            return self._fallback(source, series_id, region)
 
         fetch_region = region if source in PER_REGION_SOURCES else None
         ckey = obs_key(source, series_id, fetch_region)
@@ -254,24 +291,40 @@ class DataHub:
         if snap:
             await self._set_state(source, "cached", error)
             return self._filter(self._relabel(snap, "cached"), region)
-        await self._set_state(source, "mock", error)
-        return mock_series(source, series_id, region)
+        if self.live_mode and source in UNRELIABLE_IN_LIVE:
+            error = f"Disabled: {UNRELIABLE_IN_LIVE[source]} ({error})"
+        await self._set_state(source, self.no_data, error)
+        return self._fallback(source, series_id, region)
 
     async def statuses(self) -> list[SourceStatus]:
         out: list[SourceStatus] = []
         for sid, info in SOURCES.items():
+            nd = self.no_data
+            disabled = self._disabled_reason(sid)
             key_error = self._missing_key_error(sid)
-            state = None if key_error is not None else await self._get_state(sid)
-            if key_error is not None:
-                state = SourceState("mock", None, key_error)
+            state = None if (key_error or disabled) is not None else await self._get_state(sid)
+            if disabled is not None:
+                state = SourceState("unavailable", None, disabled)
+            elif key_error is not None:
+                state = SourceState(nd, None, key_error)
             elif state is not None:
                 state = self._age_state(sid, state)
+                if self.live_mode and state.status == "mock":  # e.g. shared state written by a demo process
+                    state = SourceState("unavailable", state.fetched_at, state.last_error, state.updated_at)
             elif sid not in ADAPTERS and sid != "postcodes":
-                state = SourceState("mock", None, "no live adapter yet")
+                state = SourceState(nd, None, "no live adapter yet")
             elif not self.live_enabled:
-                state = SourceState("mock", None, "offline mode")
+                state = SourceState(nd, None, "offline mode")
             else:
-                state = SourceState("mock", None, "not fetched yet")
+                state = SourceState(nd, None, "not fetched yet")
+            if (
+                self.live_mode
+                and state.status == "unavailable"
+                and sid in UNRELIABLE_IN_LIVE
+                and not (state.last_error or "").startswith("Disabled:")
+            ):
+                reason = f"Disabled: {UNRELIABLE_IN_LIVE[sid]} ({state.last_error})"
+                state = SourceState("unavailable", state.fetched_at, reason, state.updated_at)
             out.append(
                 SourceStatus(
                     id=sid,
@@ -289,9 +342,14 @@ class DataHub:
         return out
 
     async def macro_table(self, *, force: bool = False) -> MacroTable:
-        """Annual MacroTable for 1990..2026. Never raises. Offline without a client: the mock table."""
+        """Annual MacroTable for 1990..2026. Never raises.
+
+        Demo mode: gaps are filled from the labelled mock table; offline without a client gives the
+        mock table. Live mode (ADR 0027): only live or cached values; gaps stay gaps; offline gives an
+        empty table.
+        """
         if not self.live_enabled:
-            return mock_macro_table()
+            return MacroTable(values={}) if self.live_mode else mock_macro_table()
         async with self._macro_lock:
             now = time.monotonic()
             if not force and self._macro is not None and now - self._macro[0] < self.settings.macro_table_ttl_seconds:
@@ -303,10 +361,17 @@ class DataHub:
                     for series_id, region in cls.default_series
                 ]
                 batches = await asyncio.gather(*calls)
-                table = build_macro_table(o for batch in batches for o in batch)
+                observations = [o for batch in batches for o in batch]
+                if self.live_mode:
+                    real = [o for o in observations if o.status in ("live", "cached")]
+                    table = build_macro_table(real, base=MacroTable(values={}))
+                else:
+                    table = build_macro_table(observations)
             except Exception:
-                log.exception("macro table build failed; using mock table")
-                return self._macro[1] if self._macro is not None else mock_macro_table()
+                log.exception("macro table build failed")
+                if self._macro is not None:
+                    return self._macro[1]
+                return MacroTable(values={}) if self.live_mode else mock_macro_table()
             self._macro = (now, table)
             return table
 
@@ -322,8 +387,8 @@ class DataHub:
             if entry is not None and self._clock() - entry.stored_at < ttl:
                 return entry.payload  # type: ignore[no-any-return]
             if not self.live_enabled:
-                await self._set_state("postcodes", "mock", "offline mode")
-                return mock_postcode(pc)
+                await self._set_state("postcodes", self.no_data, "offline mode")
+                return None if self.live_mode else mock_postcode(pc)
             try:
                 result = await self.postcodes_adapter().lookup(pc)
             except Exception as exc:
@@ -331,35 +396,191 @@ class DataHub:
                 if entry is not None:
                     await self._set_state("postcodes", "cached", error)
                     return entry.payload  # type: ignore[no-any-return]
-                await self._set_state("postcodes", "mock", error)
-                return mock_postcode(pc)
+                await self._set_state("postcodes", self.no_data, error)
+                return None if self.live_mode else mock_postcode(pc)
             await self._set_state("postcodes", "live", None, utcnow())
             if result is not None:
                 await self.cache.set_raw(ckey, result, keep_seconds=2 * ttl)
             return result
         except Exception:
             log.exception("postcode lookup failed")
-            return mock_postcode(pc)
+            return None if self.live_mode else mock_postcode(pc)
 
     # --- finance (ADR 0016, ADR 0018) ---------------------------------------------------------
 
-    async def finance_snapshot(self, subject: str) -> FinanceSnapshot:
+    async def finance_snapshot(self, subject: str) -> FinanceSnapshot | None:
         """Accounts, 12 months of transactions, mortgage and energy for one user. Never raises.
 
-        Tier 1: labelled fixture persona (status "mock", source "fixtures"), chosen per subject.
+        Demo mode: labelled fixture persona (status "mock", source "fixtures"), chosen per subject.
+        Live mode (ADR 0027): fixtures are never served; returns None (the API answers 409
+        no_finance_data) until the user's own data exists.
+        Both modes: the user's own data (statement import or manual entry, `set_user_snapshot`) wins.
         """
+        user = await self.get_user_snapshot(subject)
+        if user is not None:
+            return user
+        if self.live_mode:
+            return None
         try:
             return fixture_snapshot(subject)
         except Exception:
             log.exception("finance snapshot failed; using the demo persona")
             return fixture_snapshot(DEMO_PERSONA_ID)
 
+    async def reverse_postcode(self, lat: float, lon: float) -> dict[str, str] | None:
+        """{'postcode', 'region', 'town', 'status'} for the nearest postcode, via postcodes.io. Never raises.
+
+        None outside the UK box (lat 49-61.5, lon -8.7-2.0), at sea, or when the lookup fails and no
+        cached answer exists. Never a guess in live mode. Demo mode offline also returns None (a
+        point cannot be mapped to a postcode without the service).
+        """
+        try:
+            lat, lon = float(lat), float(lon)
+        except (TypeError, ValueError):
+            return None
+        if not (LAT_RANGE[0] <= lat <= LAT_RANGE[1] and LON_RANGE[0] <= lon <= LON_RANGE[1]):
+            return None
+        # About 100 m grid: nearby points share a cache entry; exact coordinates are not stored.
+        ckey = f"lifeline:postcode-reverse:{lat:.3f}:{lon:.3f}"
+        ttl = SOURCES["postcodes"].ttl_seconds
+        try:
+            entry = await self.cache.get_raw(ckey)
+            if entry is not None and self._clock() - entry.stored_at < ttl:
+                return None if entry.payload is None else {**entry.payload, "status": "live"}  # fresh copy
+            if not self.live_enabled:
+                await self._set_state("postcodes", self.no_data, "offline mode")
+                return None
+            try:
+                result = await self.postcodes_adapter().reverse(lat, lon)
+            except Exception as exc:
+                error = redact_urls(str(exc) or type(exc).__name__)
+                if entry is not None and entry.payload is not None:
+                    await self._set_state("postcodes", "cached", error)
+                    return {**entry.payload, "status": "cached"}
+                await self._set_state("postcodes", self.no_data, error)
+                return None
+            await self._set_state("postcodes", "live", None, utcnow())
+            await self.cache.set_raw(ckey, result, keep_seconds=2 * ttl)
+            return None if result is None else {**result, "status": "live"}
+        except Exception:
+            log.exception("reverse postcode failed")
+            return None
+
+    # --- per-user finance data (ADR 0029) --------------------------------------------------------
+
+    async def set_user_snapshot(self, subject: str, snapshot: FinanceSnapshot) -> bool:
+        """Store the user's own FinanceSnapshot (imported statement or manual entry), encrypted.
+        Replaces any previous one. Returns True when committed to Postgres, False when no database is
+        configured (process memory). Raises StoreUnavailable when the database write fails, and
+        EncryptionKeyMissing (a StoreUnavailable) when TOKEN_ENCRYPTION_KEY is missing in live mode or
+        prod: nothing is stored in plaintext."""
+        return await self.user_snapshots.put(subject, snapshot.model_dump_json())
+
+    async def get_user_snapshot(self, subject: str) -> FinanceSnapshot | None:
+        try:
+            raw = await self.user_snapshots.get(subject)
+            return None if raw is None else FinanceSnapshot.model_validate_json(raw)
+        except Exception:
+            log.warning("user snapshot unreadable; ignoring it")
+            return None
+
+    async def delete_user_snapshot(self, subject: str) -> None:
+        """Account deletion and demo reset. Raises StoreUnavailable when the Postgres delete fails
+        (the API answers 503 and does not revoke the account)."""
+        await self.user_snapshots.delete(subject)
+
+    # --- context: news and rate decisions (ADR 0030) -----------------------------------------------
+
+    async def news(self, start: date, end: date, topic: str = "rates", *, limit: int = 20) -> NewsResponse:
+        """Guardian headlines for a topic and date range. Never raises. Never mock (both modes).
+
+        Order: fresh cache -> live -> stale cache ("cached") -> NewsResponse(status="unavailable", items=[]).
+        """
+        if end < start:
+            start, end = end, start
+        limit = max(1, min(limit, 50))
+        try:
+            guardian_query(topic)
+        except PayloadError:
+            return NewsResponse(status="unavailable", items=[])
+        ckey = f"lifeline:news:{topic.strip().lower()}:{start.isoformat()}:{end.isoformat()}:{limit}"
+        ttl = SOURCES["guardian"].ttl_seconds
+        try:
+            entry = await self.cache.get_raw(ckey)
+            if entry is not None and self._clock() - entry.stored_at < ttl:
+                return NewsResponse(status="live", items=[NewsItem.model_validate(i) for i in entry.payload])
+            key_error = self._missing_key_error("guardian")
+            error = key_error or "offline mode"
+            adapter = self.adapter("guardian") if self.live_enabled and key_error is None else None
+            if isinstance(adapter, GuardianAdapter):
+                try:
+                    items = await adapter.search_guarded(topic, start, end, limit)
+                except Exception as exc:
+                    error = redact_urls(str(exc) or type(exc).__name__)
+                else:
+                    await self.cache.set_raw(ckey, [i.model_dump() for i in items], keep_seconds=7 * 24 * 3600)
+                    await self._set_state("guardian", "live", None, utcnow())
+                    return NewsResponse(status="live", items=items)
+            if entry is not None:
+                await self._set_state("guardian", "cached", error)
+                return NewsResponse(status="cached", items=[NewsItem.model_validate(i) for i in entry.payload])
+            await self._set_state("guardian", "unavailable", error)
+        except Exception:
+            log.exception("news failed")
+        return NewsResponse(status="unavailable", items=[])
+
+    async def rate_decisions(self, today: date | None = None) -> RateDecisions:
+        """Bank of England MPC rate-decision dates. Never raises. Never mock (both modes)."""
+        today = today or date.today()
+        ckey = "lifeline:boe-mpc:dates"
+        ttl = SOURCES["boe-mpc"].ttl_seconds
+
+        def answer(days: list[date], status: Status, note: str | None = None) -> RateDecisions:
+            upcoming = [d for d in days if d >= today]
+            listed = (upcoming or days)[:24]
+            return RateDecisions(
+                status=status,
+                next_decision=upcoming[0].isoformat() if upcoming else None,
+                dates=[d.isoformat() for d in listed],
+                source=SourceRef(source="boe-mpc", series_id="mpc-dates", status=status, note=note),
+            )
+
+        try:
+            entry = await self.cache.get_raw(ckey)
+            if entry is not None and self._clock() - entry.stored_at < ttl:
+                return answer([date.fromisoformat(d) for d in entry.payload], "live")
+            error = "offline mode"
+            adapter = self.adapter("boe-mpc") if self.live_enabled else None
+            if isinstance(adapter, BoeMpcAdapter):
+                try:
+                    days = await adapter.dates_guarded()
+                except Exception as exc:
+                    error = redact_urls(str(exc) or type(exc).__name__)
+                else:
+                    await self.cache.set_raw(ckey, [d.isoformat() for d in days], keep_seconds=60 * 24 * 3600)
+                    await self._set_state("boe-mpc", "live", None, utcnow())
+                    return answer(days, "live")
+            if entry is not None:
+                await self._set_state("boe-mpc", "cached", error)
+                return answer([date.fromisoformat(d) for d in entry.payload], "cached")
+            await self._set_state("boe-mpc", "unavailable", error)
+        except Exception:
+            log.exception("rate decisions failed")
+        return RateDecisions(
+            status="unavailable",
+            next_decision=None,
+            dates=[],
+            source=SourceRef(source="boe-mpc", series_id="mpc-dates", status="unavailable"),
+        )
+
     # --- prediction inputs (ADR 0017) ----------------------------------------------------------
 
     async def bank_holidays(self, region: str | None) -> set[date]:
         """Bank holidays for the gov.uk division of `region` (None = England and Wales). Never raises.
 
-        Order: fresh cache -> live gov.uk -> stale cache ("cached") -> recorded gov.uk fixture ("mock").
+        Order: fresh cache -> live gov.uk -> stale cache ("cached") -> recorded gov.uk copy.
+        The recorded copy is real gov.uk data saved on 2026-10-17: "mock" in demo mode, "cached" in
+        live mode (ADR 0027 allows cached real data).
         """
         division = division_for_region(region)
         ckey = "lifeline:bankholidays"
@@ -383,7 +604,10 @@ class DataHub:
             if entry is not None:
                 await self._set_state("bankholidays", "cached", error)
                 return {date.fromisoformat(d) for d in entry.payload.get(division, [])}
-            await self._set_state("bankholidays", "mock", error)
+            if self.live_mode:
+                await self._set_state("bankholidays", "cached", f"{error}; recorded gov.uk copy from 2026-10-17")
+            else:
+                await self._set_state("bankholidays", "mock", error)
         except Exception:
             log.exception("bank holidays failed; using the recorded fixture")
         return set(fixture_bank_holidays().get(division, frozenset()))
@@ -394,7 +618,8 @@ class DataHub:
         """[{date, temp_max_c, rain_mm, status}] for every day in start..end. Never raises.
 
         Live days come from Open-Meteo (archive for older days, forecast for recent and future days).
-        Days the source cannot give (or every day, when it fails) are labelled mock.
+        Demo mode: days the source cannot give (or every day, when it fails) are labelled mock.
+        Live mode (ADR 0027): only real days are returned; missing days are left out (may be []).
         """
         if end < start:
             return []
@@ -404,7 +629,7 @@ class DataHub:
         try:
             entry = await self.cache.get_raw(ckey)
             if entry is not None and self._clock() - entry.stored_at < ttl:
-                return self._weather_rows(entry.payload, region, start, end, "live")
+                return self._weather_rows(entry.payload, region, start, end, "live", self.live_mode)
             error = "offline mode"
             adapter = self.adapter("openmeteo") if self.live_enabled else None
             if isinstance(adapter, OpenMeteoAdapter):
@@ -416,25 +641,26 @@ class DataHub:
                     payload = {d.isoformat(): [t, r] for d, (t, r) in days.items()}
                     await self.cache.set_raw(ckey, payload, keep_seconds=24 * ttl)
                     await self._set_state("openmeteo", "live", None, utcnow())
-                    return self._weather_rows(payload, region, start, end, "live")
+                    return self._weather_rows(payload, region, start, end, "live", self.live_mode)
             if entry is not None:
                 await self._set_state("openmeteo", "cached", error)
-                return self._weather_rows(entry.payload, region, start, end, "cached")
-            await self._set_state("openmeteo", "mock", error)
+                return self._weather_rows(entry.payload, region, start, end, "cached", self.live_mode)
+            await self._set_state("openmeteo", self.no_data, error)
         except Exception:
-            log.exception("daily weather failed; using mock weather")
-        return mock_daily_weather(region, start, end)
+            log.exception("daily weather failed")
+        return [] if self.live_mode else mock_daily_weather(region, start, end)
 
     @staticmethod
     def _weather_rows(
-        payload: dict[str, Any], region: str | None, start: date, end: date, status: Status
+        payload: dict[str, Any], region: str | None, start: date, end: date, status: Status, real_only: bool = False
     ) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         day = start
         while day <= end:
             hit = payload.get(day.isoformat())
             if hit is None:
-                rows.append(mock_weather_day(region, day))
+                if not real_only:
+                    rows.append(mock_weather_day(region, day))
             else:
                 rows.append({"date": day, "temp_max_c": float(hit[0]), "rain_mm": float(hit[1]), "status": status})
             day += timedelta(days=1)
@@ -446,6 +672,10 @@ class DataHub:
         """Fetch every default series live (skip fresh cache) and rebuild the MacroTable."""
         await self.macro_table(force=True)
         await self.probe_postcodes()
+        # Context sources (ADR 0030): one call each keeps their shared status and cache current.
+        today = date.today()
+        await self.rate_decisions(today)
+        await self.news(today - timedelta(days=7), today, "rates")
         return await self.statuses()
 
     async def probe_postcodes(self) -> None:
@@ -455,10 +685,10 @@ class DataHub:
         try:
             result = await self.postcodes_adapter().lookup(PROBE_POSTCODE)
         except Exception as exc:
-            await self._set_state("postcodes", "mock", redact_urls(str(exc) or type(exc).__name__))
+            await self._set_state("postcodes", self.no_data, redact_urls(str(exc) or type(exc).__name__))
             return
         if result is None:
-            await self._set_state("postcodes", "mock", "probe postcode not found")
+            await self._set_state("postcodes", self.no_data, "probe postcode not found")
         else:
             await self._set_state("postcodes", "live", None, utcnow())
 

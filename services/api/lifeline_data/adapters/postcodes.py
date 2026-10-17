@@ -10,6 +10,10 @@ from lifeline_data.base import Adapter, FetchError, PayloadError
 from lifeline_data.regions import region_from_name
 
 POSTCODES_URL = "https://api.postcodes.io/postcodes/{pc}"
+POSTCODES_REVERSE_URL = "https://api.postcodes.io/postcodes"
+# UK bounding box for reverse lookups (covers Scilly, Shetland and Northern Ireland).
+LAT_RANGE = (49.0, 61.5)
+LON_RANGE = (-8.7, 2.0)
 
 # UK postcode shape, including GIR 0AA. Validates format only.
 POSTCODE_RE = re.compile(r"^(GIR ?0AA|[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2})$")
@@ -66,3 +70,23 @@ class PostcodesAdapter(Adapter):
             raise PayloadError(str(exc)) from exc
         self.breaker.record_success()
         return out
+
+    async def reverse(self, lat: float, lon: float) -> dict[str, str] | None:
+        """Nearest postcode to a point. None when outside the UK box or nothing is near (sea).
+        Network errors raise FetchError; a bad payload raises PayloadError. Uses the breaker."""
+        if not (LAT_RANGE[0] <= lat <= LAT_RANGE[1] and LON_RANGE[0] <= lon <= LON_RANGE[1]):
+            return None
+
+        async def run() -> dict[str, str] | None:
+            resp = await self.get(POSTCODES_REVERSE_URL, {"lon": round(lon, 6), "lat": round(lat, 6), "limit": 1})
+            data = json.loads(resp.text)
+            if not isinstance(data, dict) or "result" not in data:
+                raise PayloadError("postcodes: unexpected reverse payload")
+            result = data["result"]
+            if result is None or result == []:
+                return None
+            if not isinstance(result, list) or not isinstance(result[0], dict):
+                raise PayloadError("postcodes: unexpected reverse result")
+            return parse_postcode_result({"result": result[0]})
+
+        return await self.guarded(run)

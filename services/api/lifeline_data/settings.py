@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,6 +19,9 @@ class DataSettings(BaseSettings):
     app_env: str = "dev"
     redis_url: str = ""
     database_url: str = ""
+    # ADR 0027. "demo": fixtures and labelled mock fallback (local dev, tests). "live": no mock data
+    # anywhere; sources without real data report "unavailable". Railway sets DATA_MODE=live.
+    data_mode: Literal["demo", "live"] = "demo"
     # Force offline mode in any env (no network). APP_ENV=test is always offline.
     data_offline: bool = False
     http_timeout_seconds: float = Field(default=8.0, gt=0)
@@ -29,6 +32,10 @@ class DataSettings(BaseSettings):
     data_refresh_interval_seconds: float = Field(default=6 * 3600, gt=0)
     # How long DataHub reuses a built MacroTable before it rebuilds it (online mode only).
     macro_table_ttl_seconds: float = Field(default=3600, ge=0)
+
+    @property
+    def live_mode(self) -> bool:
+        return self.data_mode == "live"
 
     @property
     def offline(self) -> bool:

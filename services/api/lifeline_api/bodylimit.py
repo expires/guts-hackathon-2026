@@ -14,22 +14,25 @@ class _TooLarge(Exception):
 
 
 class BodySizeLimitMiddleware:
-    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+    def __init__(self, app: ASGIApp, max_bytes: int, path_limits: dict[str, int] | None = None) -> None:
+        """`path_limits` gives exact paths their own limit (e.g. statement uploads)."""
         self.app = app
-        self.max_bytes = max_bytes
+        self.default_max = max_bytes
+        self.path_limits = dict(path_limits or {})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        max_bytes = self.path_limits.get(scope.get("path", ""), self.default_max)
         for name, value in scope.get("headers", []):
             if name == b"content-length":
                 try:
-                    too_big = int(value) > self.max_bytes
+                    too_big = int(value) > max_bytes
                 except ValueError:
                     too_big = True
                 if too_big:
-                    await self._reject(scope, receive, send)
+                    await self._reject(scope, receive, send, max_bytes)
                     return
 
         seen = 0
@@ -40,7 +43,7 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
-                if seen > self.max_bytes:
+                if seen > max_bytes:
                     overflow = True
                     raise _TooLarge
             return message
@@ -53,8 +56,9 @@ class BodySizeLimitMiddleware:
         with contextlib.suppress(_TooLarge):
             await self.app(scope, counted_receive, guarded_send)
         if overflow:
-            await self._reject(scope, receive, send)
+            await self._reject(scope, receive, send, max_bytes)
 
-    async def _reject(self, scope: Scope, receive: Receive, send: Send) -> None:
-        resp = error_response(413, "payload_too_large", f"Request body is larger than {self.max_bytes} bytes")
+    @staticmethod
+    async def _reject(scope: Scope, receive: Receive, send: Send, max_bytes: int) -> None:
+        resp = error_response(413, "payload_too_large", f"Request body is larger than {max_bytes} bytes")
         await resp(scope, receive, send)

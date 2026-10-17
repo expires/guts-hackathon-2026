@@ -7,10 +7,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request
 
+from lifeline_api import challenges
 from lifeline_api.auth import OptionalSubject, Subject
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.explain_bridge import explain_new_events, explain_outcome
 from lifeline_api.money import fill_personal
+from lifeline_api.routes.later import has_entitlement
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
 from lifeline_api.store import LifeRecord, macro_hash
@@ -24,6 +26,7 @@ from lifeline_contracts.api_models import (
 from lifeline_contracts.domain import (
     ActionResult,
     AgeResult,
+    Challenge,
     CharacterSpec,
     ChoiceResult,
     Life,
@@ -73,6 +76,24 @@ async def _load(state: AppState, life_id: str, owner: str) -> tuple[LifeRecord, 
     return rec, table
 
 
+async def _random_character(seed: int, table: MacroTable) -> CharacterSpec:
+    """A person from the synthetic population, labelled as simulated (ADR 0027). Same seed, same person."""
+    drawn = await call_pure(engine_api.random_character, seed, table)
+    return sim_api.label_simulated(drawn)
+
+
+async def _challenges(state: AppState) -> list[Challenge]:
+    cached: list[Challenge] | None = state.memo.get(("challenges",))
+    if cached is None:
+        cached = await call_pure(sim_api.challenges)
+        state.memo[("challenges",)] = cached
+    return cached
+
+
+async def _after_write(state: AppState, sub: str, life: Life, *, reset: bool = False) -> None:
+    await challenges.record(state, sub, life, await _challenges(state), reset=reset)
+
+
 async def _presets() -> list[CharacterSpec]:
     return await call_pure(sim_api.presets)
 
@@ -86,7 +107,7 @@ async def list_characters(
     state = get_state(request)
     table, _ = await _current_macro(state, persist=False)
     presets = await _presets()
-    random_char = await call_pure(engine_api.random_character, new_seed() if seed is None else seed, table)
+    random_char = await _random_character(new_seed() if seed is None else seed, table)
     return CharactersResponse(presets=presets, random=random_char)
 
 
@@ -127,7 +148,7 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
         character = match
     elif body.mode == "random":
         # Same person as GET /v1/characters?seed=N: random_character(seed, same macro table).
-        character = await call_pure(engine_api.random_character, seed, table)
+        character = await _random_character(seed, table)
     else:
         if body.character is None:
             raise ApiError(422, "validation_error", f"character: required when mode is {body.mode}")
@@ -139,6 +160,7 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
         life = life.model_copy(update={"room_code": body.room_code})
     life, _ = await explain_new_events(None, life)
     await state.store.create(LifeRecord(id=life_id, owner=sub, life=life, macro_hash=digest))
+    await _after_write(state, sub, life)
     return life
 
 
@@ -160,6 +182,7 @@ async def age_life(id: LifeId, request: Request, sub: Subject) -> AgeResult:  # 
         result = result.model_copy(update={"life": life, "events": events})
         rec.life = result.life
         await state.store.save(rec)
+        await _after_write(state, sub, rec.life)
     return result.model_copy(update={"lesson": await fill_personal(state, sub, result.lesson)})
 
 
@@ -174,6 +197,7 @@ async def choose_life(id: LifeId, body: ChoiceRequest, request: Request, sub: Su
         result = result.model_copy(update={"life": life, "outcome": outcome})
         rec.life = result.life
         await state.store.save(rec)
+        await _after_write(state, sub, rec.life)
     return result.model_copy(update={"lesson": await fill_personal(state, sub, result.lesson)})
 
 
@@ -187,6 +211,7 @@ async def act_life(id: LifeId, body: ActionRequest, request: Request, sub: Subje
         result = result.model_copy(update={"life": life})
         rec.life = result.life
         await state.store.save(rec)
+        await _after_write(state, sub, rec.life)
     return result.model_copy(update={"lesson": await fill_personal(state, sub, result.lesson)})
 
 
@@ -195,11 +220,14 @@ async def rewind_life(id: LifeId, body: RewindRequest, request: Request, sub: Su
     state = get_state(request)
     async with state.life_locks[id]:
         rec, table = await _load(state, id, sub)
+        if not rec.life.rewind.has_pass and await has_entitlement(state, sub, "rewind_pass"):
+            rec.life = rec.life.model_copy(update={"rewind": rec.life.rewind.model_copy(update={"has_pass": True})})
         result = await call_pure(sim_api.rewind, rec.life, body.decision_id, table)
         life, _ = await explain_new_events(rec.life, result.life)
         result = result.model_copy(update={"life": life})
         rec.life = result.life
         await state.store.save(rec)
+        await _after_write(state, sub, rec.life, reset=True)
     return result
 
 

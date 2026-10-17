@@ -46,6 +46,22 @@ TIER1 = {
     "addPlanItem",
 }
 TIER2 = {
+    "askPennyStream",
+    "getFinanceHome",
+    "askPenny",
+    "listChatThreads",
+    "getChatThread",
+    "listNews",
+    "getRateDecisions",
+    "getMe",
+    "deleteAccount",
+    "resetDemo",
+    "signOut",
+    "importStatement",
+    "setManualFinance",
+    "logPayment",
+    "reversePostcode",
+    "setHealthSignal",
     "listChallenges",
     "createRoom",
     "getRoom",
@@ -346,7 +362,11 @@ def _example_body(op: dict[str, Any]) -> Any:
     return spec()["components"]["examples"][ref]["value"]
 
 
-LATER = sorted((m, p, o) for m, p, o in operations() if o in TIER1 | TIER2 and o != "bankCallback")
+LATER = sorted(
+    (m, p, o)
+    for m, p, o in operations()
+    if o in TIER1 | TIER2 and o not in ("bankCallback", "importStatement", "deleteAccount", "signOut", "askPennyStream")
+)
 
 
 @pytest.mark.parametrize("method,path,op_id", LATER, ids=[o for _, _, o in LATER])
@@ -485,3 +505,148 @@ async def test_next_move_flow(client: httpx.AsyncClient, auth: dict[str, str]) -
     plan = await client.get("/v1/plan", headers=auth)
     validate("GET", "/v1/plan", plan.status_code, plan.json())
     assert any(i["move_id"] == top["id"] for i in plan.json()["items"])
+
+
+# ---------------- Tier 2: accounts, onboarding, connectors (ADR 0029) ----------------
+
+MONZO_CSV = (
+    "Transaction ID,Date,Time,Type,Name,Emoji,Category,Amount,Currency,Local amount,Local currency,"
+    "Notes and #tags,Address,Receipt,Description,Category split,Money Out,Money In\n"
+    "tx_1,01/10/2026,08:01:00,Card payment,Pret A Manger,,Eating out,-4.20,GBP,-4.20,GBP,,,,PRET,,-4.20,\n"
+    "tx_2,01/10/2026,09:00:00,Faster payment,NHS SALARY,,Income,2314.18,GBP,2314.18,GBP,,,,SALARY,,,2314.18\n"
+)
+
+
+async def fresh_auth(client: httpx.AsyncClient) -> dict[str, str]:
+    import uuid
+
+    tok = await client.post("/v1/auth/demo", json={"device_id": f"t2-{uuid.uuid4().hex[:12]}"})
+    return {"Authorization": f"Bearer {tok.json()['access_token']}"}
+
+
+@pytest.mark.tier2
+async def test_account_lifecycle(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    me = await client.get("/v1/me", headers=auth)
+    validate("GET", "/v1/me", me.status_code, me.json())
+    assert me.status_code == 200 and me.json()["has_finance_data"] is False
+    r = await client.post("/v1/me/reset", headers=auth)
+    validate("POST", "/v1/me/reset", r.status_code, r.json())
+    d = await client.delete("/v1/me", headers=auth)
+    assert d.status_code == 204
+    gone = await client.get("/v1/me", headers=auth)
+    assert gone.status_code in (401, 404) and is_error(gone.json())
+
+
+@pytest.mark.tier2
+async def test_onboarding_statement_then_next_move(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    files = {"file": ("monzo.csv", MONZO_CSV.encode(), "text/csv")}
+    r = await client.post("/v1/finance/statements", files=files, data={"provider": "monzo"}, headers=auth)
+    validate("POST", "/v1/finance/statements", r.status_code, r.json())
+    assert r.status_code == 201 and r.json()["transactions"] >= 2
+    me = (await client.get("/v1/me", headers=auth)).json()
+    assert me["has_finance_data"] is True and "statement" in me["finance_inputs"]
+
+
+@pytest.mark.tier2
+async def test_onboarding_manual_entry(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    ex = spec()["components"]["examples"]["ManualFinance"]["value"]
+    r = await client.put("/v1/finance/manual", json=ex, headers=auth)
+    validate("PUT", "/v1/finance/manual", r.status_code, r.json())
+    assert r.status_code == 200
+    nm = await client.get("/v1/next-move", headers=auth)
+    validate("GET", "/v1/next-move", nm.status_code, nm.json())
+    assert nm.status_code == 200
+
+
+@pytest.mark.tier2
+async def test_connectors(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    r = await client.get("/v1/postcodes/reverse", params={"lat": 53.8, "lon": -1.57}, headers=auth)
+    validate("GET", "/v1/postcodes/reverse", r.status_code, r.json())
+    h = await client.put(
+        "/v1/me/health", json={"steps_per_day": 8000, "sleep_hours": 7, "measured_days": 30}, headers=auth
+    )
+    validate("PUT", "/v1/me/health", h.status_code, h.json())
+    assert h.status_code == 200
+    p = await client.post("/v1/finance/transactions", json={"amount": 4.2, "merchant": "Pret A Manger"}, headers=auth)
+    validate("POST", "/v1/finance/transactions", p.status_code, p.json())
+    assert p.status_code == 201
+
+
+# ---------------- Tier 2: Ask Penny and news (ADR 0030-0034) ----------------
+
+
+@pytest.mark.tier2
+async def test_news_and_rate_dates(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    n = await client.get("/v1/news", params={"from": "2008-09-01", "to": "2008-09-30"}, headers=auth)
+    validate("GET", "/v1/news", n.status_code, n.json())
+    for item in n.json().get("items", []):
+        assert set(item) <= {"id", "headline", "standfirst", "section", "date", "url", "source"}, "no body text"
+    r = await client.get("/v1/rate-decisions", headers=auth)
+    validate("GET", "/v1/rate-decisions", r.status_code, r.json())
+
+
+@pytest.mark.tier2
+async def test_ask_penny_numbers_are_facts(client: httpx.AsyncClient) -> None:
+    import re
+
+    auth = await fresh_auth(client)
+    ex = spec()["components"]["examples"]["ManualFinance"]["value"]
+    await client.put("/v1/finance/manual", json=ex, headers=auth)
+    r = await client.post("/v1/chat", json={"message": "What if I lose my job?"}, headers=auth)
+    validate("POST", "/v1/chat", r.status_code, r.json())
+    assert r.status_code == 200
+    body = r.json()
+    allowed = {round(abs(f["value"]), 2) for f in body["facts"]}
+    for b in body["bubbles"]:
+        for num in re.findall(r"\d[\d,]*(?:\.\d+)?", b["text"]):
+            v = round(float(num.replace(",", "")), 2)
+            assert v in allowed or any(abs(v - a) <= max(0.5, 0.005 * a) for a in allowed), f"unverified {num}"
+    t = await client.get(f"/v1/chat/threads/{body['thread_id']}", headers=auth)
+    validate("GET", "/v1/chat/threads/{id}", t.status_code, t.json())
+
+
+@pytest.mark.tier2
+async def test_ask_penny_out_of_scope_shrugs(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    r = await client.post("/v1/chat", json={"message": "Which shares should I buy tomorrow?"}, headers=auth)
+    validate("POST", "/v1/chat", r.status_code, r.json())
+    assert r.status_code == 200 and r.json()["reaction"] == "shrug"
+
+
+@pytest.mark.tier2
+async def test_ask_penny_stream_order(client: httpx.AsyncClient) -> None:
+    import json as _json
+
+    auth = await fresh_auth(client)
+    ex = spec()["components"]["examples"]["ManualFinance"]["value"]
+    await client.put("/v1/finance/manual", json=ex, headers=auth)
+    events = []
+    async with client.stream("POST", "/v1/chat/stream", json={"message": "Why this move?"}, headers=auth) as r:
+        assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+        async for line in r.aiter_lines():
+            if line.startswith("data:"):
+                events.append(_json.loads(line[5:].strip()))
+    types = [e["type"] for e in events]
+    assert types[0] == "reaction" and types[-1] == "done"
+    assert all(t in ("tool_step", "verifying", "bubble") for t in types[1:-1])
+    last_step = max((i for i, t in enumerate(types) if t == "tool_step"), default=0)
+    assert types.index("bubble") > last_step
+    done = events[-1]["response"]
+    streamed = [e["bubble"]["bubble"]["id"] for e in events if e["type"] == "bubble"]
+    assert streamed == [b["id"] for b in done["bubbles"]]
+
+
+@pytest.mark.tier2
+async def test_finance_home_empty_is_not_an_error(client: httpx.AsyncClient) -> None:
+    auth = await fresh_auth(client)
+    r = await client.get("/v1/finance/home", headers=auth)
+    validate("GET", "/v1/finance/home", r.status_code, r.json())
+    assert r.status_code == 200
+    body = r.json()
+    if not body["has_data"]:
+        assert body.get("connect_prompt") and "next_move" not in body and "prediction" not in body

@@ -25,7 +25,7 @@ from lifeline_engine.money import dates
 from lifeline_engine.money.categorise import categorise
 from lifeline_engine.money.recurring import detect_recurring, detect_salary, detect_subscriptions
 from lifeline_engine.money.spending import by_category, monthly_totals
-from lifeline_engine.money.text import digit_facts, gbp, money_value
+from lifeline_engine.money.text import clean_name, gbp, money_value
 
 DEFAULT_AGE = 35
 DEFAULT_REGION = "north-west"
@@ -93,8 +93,14 @@ def _sum(accounts: Sequence[Account], kinds: Sequence[str]) -> float:
     return round(sum(a.balance for a in accounts if a.kind in kinds), 2)
 
 
+def is_cash(account: Account) -> bool:
+    """Current accounts and cash savings (savings accounts, cash ISAs). Not stocks and shares ISAs (ADR 0033)."""
+    return account.kind == "current" or is_cash_savings(account)
+
+
 def liquid(snapshot: FinanceSnapshot) -> float:
-    return _sum(snapshot.accounts, LIQUID_KINDS)
+    """Cash: current accounts plus cash savings. A stocks and shares ISA is an investment, not cash."""
+    return round(sum(a.balance for a in snapshot.accounts if is_cash(a)), 2)
 
 
 def is_cash_savings(account: Account) -> bool:
@@ -122,7 +128,7 @@ def _has_mortgage_account(snapshot: FinanceSnapshot) -> bool:
 
 
 def balance(snapshot: FinanceSnapshot) -> float:
-    """Sum of current, savings and ISA accounts."""
+    """Cash: current accounts, savings accounts and cash ISAs."""
     return liquid(snapshot)
 
 
@@ -137,14 +143,14 @@ def net_worth(snapshot: FinanceSnapshot) -> float:
     return round(total, 2)
 
 
-def _history(snapshot: FinanceSnapshot, kinds: Sequence[str] | None) -> list[Point]:
+def _history(snapshot: FinanceSnapshot, cash_only: bool) -> list[Point]:
     """Weekly balances going back from as_of. Balance at the end of day d = today's balance minus every
     transaction after d. Property value is held constant (no history in the data)."""
     as_of = dates.parse(snapshot.as_of)
-    accounts = [a for a in snapshot.accounts if kinds is None or a.kind in kinds]
+    accounts = [a for a in snapshot.accounts if not cash_only or is_cash(a)]
     ids = {a.id for a in accounts}
     current = sum(a.balance for a in accounts)
-    if kinds is None and snapshot.mortgage is not None:
+    if not cash_only and snapshot.mortgage is not None:
         current += snapshot.mortgage.property_value
         if not _has_mortgage_account(snapshot):
             current -= snapshot.mortgage.balance
@@ -166,11 +172,11 @@ def _history(snapshot: FinanceSnapshot, kinds: Sequence[str] | None) -> list[Poi
 
 
 def balance_history(snapshot: FinanceSnapshot) -> list[Point]:
-    return _history(snapshot, LIQUID_KINDS)
+    return _history(snapshot, True)
 
 
 def net_worth_history(snapshot: FinanceSnapshot) -> list[Point]:
-    return _history(snapshot, None)
+    return _history(snapshot, False)
 
 
 # ---------- spending averages ----------
@@ -335,12 +341,11 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
             PersonalFact(
                 id=f"price_rise_{s.id}",
                 concept_id="inflation",
-                text=f"{s.merchant} went up from {gbp(s.price_rise.from_amount, True)} "
+                text=f"{clean_name(s.merchant)} went up from {gbp(s.price_rise.from_amount, True)} "
                 f"to {gbp(s.price_rise.to_amount, True)} {per}.",
                 facts={
                     "from_amount": money_value(s.price_rise.from_amount, True),
                     "to_amount": money_value(s.price_rise.to_amount, True),
-                    **digit_facts(s.merchant),
                 },
             )
         )

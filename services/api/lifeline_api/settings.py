@@ -39,7 +39,16 @@ class Settings(BaseSettings):
     database_url: str = ""
     redis_url: str = ""
     public_base_url: str = "http://localhost:8000"
+    # Per signed-in user: writes (POST, PUT, DELETE) use RATE_LIMIT_PER_MINUTE, reads (GET) the larger
+    # READ_RATE_LIMIT_PER_MINUTE (the app fans out several reads per screen). The per-IP limit is only an
+    # abuse guard, so it is high.
     rate_limit_per_minute: int = Field(default=120, ge=1, le=100_000)
+    read_rate_limit_per_minute: int = Field(default=300, ge=1, le=100_000)
+    ip_rate_limit_per_minute: int = Field(default=1200, ge=1, le=1_000_000)
+    # Ask Penny: per user, on top of the general limit (each message may call the LLM several times).
+    chat_rate_limit_per_minute: int = Field(default=6, ge=1, le=1000)
+    # Demo sign-in per IP, so rotating device ids cannot mint fresh per-user buckets.
+    auth_rate_limit_per_minute: int = Field(default=20, ge=1, le=10_000)
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_seconds: int = Field(default=30 * 24 * 3600, ge=60)
     apple_bundle_id: str = "com.lifeline.app"

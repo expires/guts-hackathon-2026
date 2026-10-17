@@ -60,7 +60,7 @@ from lifeline_engine.money.profile import (
 )
 from lifeline_engine.money.recurring import detect_salary, detect_subscriptions
 from lifeline_engine.money.spending import by_category
-from lifeline_engine.money.text import digit_facts, gbp, money_value, pct, pct_value, unsupported_numbers
+from lifeline_engine.money.text import clean_name, gbp, money_value, pct, pct_value, unsupported_numbers
 from lifeline_engine.periods import similar_years
 from lifeline_engine.population import Person
 from lifeline_engine.wording import best_choice_label, confidence_label
@@ -968,9 +968,10 @@ def _subscription(ctx: Context) -> Candidate | None:
     assert s.price_rise is not None
     impact = s.monthly_cost * 12
     total = sum(x.monthly_cost for x in subs)
-    names = digit_facts(s.merchant)
+    name = clean_name(s.merchant)
+    names: dict[str, float] = {}
     e1 = _ev(
-        f"{s.merchant} went up from {gbp(s.price_rise.from_amount, True)} to "
+        f"{name} went up from {gbp(s.price_rise.from_amount, True)} to "
         f"{gbp(s.price_rise.to_amount, True)} {_PER[s.cadence]}.",
         {"from": money_value(s.price_rise.from_amount, True), "to": money_value(s.price_rise.to_amount, True), **names},
         _bank_ref(ctx.snapshot),
@@ -980,10 +981,10 @@ def _subscription(ctx: Context) -> Candidate | None:
         {"monthly_total": money_value(total), "count": float(len(subs))},
         _bank_ref(ctx.snapshot),
     )
-    e3 = _ev(f"Cancelling {s.merchant} saves {gbp(impact)} a year.", {"impact": money_value(impact), **names})
+    e3 = _ev(f"Cancelling {name} saves {gbp(impact)} a year.", {"impact": money_value(impact), **names})
     return _move(
-        ctx, "cancel_subscription", f"cancel_subscription-{_slug(s.merchant)}", f"Cancel {s.merchant}",
-        f"{s.merchant} put its price up", impact, impact, 1.0, SURE_LABEL, [e1, e2, e3],
+        ctx, "cancel_subscription", f"cancel_subscription-{_slug(name)}", f"Cancel {name}",
+        f"{name} put its price up", impact, impact, 1.0, SURE_LABEL, [e1, e2, e3],
         [_bank_ref(ctx.snapshot)], _options("cancel", ["keep"]), ctx.matched_test_period(), "budgeting",
     )
 
@@ -1096,13 +1097,77 @@ def next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, s
         ranked = [_fallback(ctx)]
     top = ranked[0].move
     backtest = mortgage_backtest(macro, ctx.year) if top.kind in ("fix_mortgage", "remortgage") else None
+    shown = [top, *[c.move for c in ranked[1:3]]]
+    refs = [r for mv in shown for r in [*mv.sources, *(e.source for e in mv.evidence if e.source is not None)]]
+    if any(mv.testable or mv.kind in TWIN_KINDS for mv in shown):
+        refs += context_inputs(ctx)
+    decision = decision_sources(refs)
     return NextMoveResponse(
         meta=finance_meta(snapshot),
         top=top,
         runners_up=[c.move for c in ranked[1:3]],
         backtest=backtest,
+        decision_sources=decision,
+        decision_source_count=count_decision_sources(decision),
         generated_at=f"{dates.iso(today)}T00:00:00Z",
     )
+
+
+# ---------- decision sources (ADR 0032) ----------
+
+DECISION_PROVIDERS: dict[str, str] = {
+    "boe": "Bank of England",
+    "ons": "ONS",
+    "nomis": "Nomis",
+    "landregistry": "HM Land Registry",
+    "companieshouse": "Companies House",
+    "octopus": "Octopus Energy",
+    "frankfurter": "Frankfurter (FX)",
+    "coingecko": "CoinGecko",
+}
+TWIN_KINDS: frozenset[str] = frozenset(
+    {"fix_mortgage", "remortgage", "move_savings", "switch_energy", "pay_off_debt", "build_emergency_fund"}
+)
+_STATUS_ORDER = {"live": 0, "cached": 1, "mock": 2, "unavailable": 3}
+
+
+def context_inputs(ctx: Context) -> list[SourceRef]:
+    """Inputs read by twins (synthetic population) and period matching for `ctx.year`."""
+    keys = [
+        (MacroKey.BANK_RATE, None),
+        (MacroKey.CPI_INFLATION, None),
+        (MacroKey.HOUSE_PRICE_CHANGE, None),
+        (MacroKey.UNEMPLOYMENT, None),
+        (MacroKey.STOCK_RETURN, None),
+        (MacroKey.MEDIAN_PAY, ctx.profile.region),
+        (MacroKey.OWNER_OCCUPIED_SHARE, ctx.profile.region),
+        (MacroKey.HOUSE_PRICE, ctx.profile.region),
+    ]
+    return [r for r in (source_ref(ctx.macro, k, ctx.year, reg) for k, reg in keys) if r is not None]
+
+
+def count_decision_sources(sources: Sequence[SourceRef]) -> int:
+    """ADR 0032: an unavailable source is listed but not counted."""
+    return sum(1 for r in sources if r.status != "unavailable")
+
+
+def decision_sources(refs: Sequence[SourceRef]) -> list[SourceRef]:
+    """One SourceRef per decision provider actually read (ADR 0032): the user's bank data and the providers in
+    DECISION_PROVIDERS. Game-only and context sources are dropped. series_id lists the series read; status is the
+    weakest one (live, then cached, then mock, then unavailable)."""
+    groups: dict[str, list[SourceRef]] = {}
+    for r in refs:
+        key = r.source if r.source.startswith("bank:") or r.source in DECISION_PROVIDERS else None
+        if key is not None:
+            groups.setdefault(key, []).append(r)
+    out: list[SourceRef] = []
+    for key in sorted(groups, key=lambda k: (not k.startswith("bank:"), k)):
+        items = groups[key]
+        series = sorted({r.series_id for r in items})
+        status = max((r.status for r in items), key=lambda st: (_STATUS_ORDER.get(st, 3), st))
+        label = "Your bank data" if key.startswith("bank:") else DECISION_PROVIDERS[key]
+        out.append(SourceRef(source=key, series_id=",".join(series)[:200], status=status, note=label))
+    return out
 
 
 # ---------- Test it ----------

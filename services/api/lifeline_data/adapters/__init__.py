@@ -2,6 +2,7 @@
 
 from lifeline_data.adapters.boe import BoEAdapter
 from lifeline_data.adapters.calendar_weather import BankHolidaysAdapter, OpenMeteoAdapter
+from lifeline_data.adapters.context import BoeMpcAdapter, GuardianAdapter
 from lifeline_data.adapters.energy import CarbonIntensityAdapter, OctopusAdapter
 from lifeline_data.adapters.keyed import (
     AdzunaAdapter,
@@ -41,6 +42,8 @@ ADAPTERS = {
         AdzunaAdapter,
         DvlaAdapter,
         DvsaMotAdapter,
+        GuardianAdapter,
+        BoeMpcAdapter,
     )
 }
 
@@ -48,6 +51,7 @@ __all__ = [
     "ADAPTERS",
     "AdzunaAdapter",
     "BankHolidaysAdapter",
+    "BoeMpcAdapter",
     "BoEAdapter",
     "CarbonIntensityAdapter",
     "CoinGeckoAdapter",
@@ -58,6 +62,7 @@ __all__ = [
     "EpcAdapter",
     "FrankfurterAdapter",
     "FredAdapter",
+    "GuardianAdapter",
     "LandRegistryAdapter",
     "NomisAdapter",
     "OctopusAdapter",

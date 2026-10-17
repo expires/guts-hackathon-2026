@@ -1,0 +1,118 @@
+{
+ "response": {
+  "status": "ok",
+  "userTier": "developer",
+  "total": 142,
+  "startIndex": 1,
+  "pageSize": 8,
+  "currentPage": 1,
+  "pages": 18,
+  "orderBy": "newest",
+  "results": [
+   {
+    "id": "business/2026/oct/17/bank-of-england-governor-andrew-bailey-walks-out-imf-summit-protest-russia",
+    "type": "article",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-17T12:15:37Z",
+    "webTitle": "Bank of England governor walks out of IMF summit in protest against Russia",
+    "webUrl": "https://www.theguardian.com/business/2026/oct/17/bank-of-england-governor-andrew-bailey-walks-out-imf-summit-protest-russia",
+    "fields": {
+     "headline": "Bank of England governor walks out of IMF summit in protest against Russia",
+     "trailText": "Andrew Bailey among finance leaders to leave session in Bangkok when Russian finance minister addressed group"
+    }
+   },
+   {
+    "id": "business/2026/oct/17/imf-warns-scale-subsidies-weather-global-chaos-untenable",
+    "type": "article",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-17T10:00:27Z",
+    "webTitle": "‘Countries are defying gravity’: how much longer can global economy resist chaos?",
+    "webUrl": "https://www.theguardian.com/business/2026/oct/17/imf-warns-scale-subsidies-weather-global-chaos-untenable",
+    "fields": {
+     "headline": "‘Countries are defying gravity’: how much longer can global economy resist chaos?",
+     "trailText": "Sky-high oil prices and geopolitical turmoil have made less of a dent than feared … just don’t bank on it to last"
+    }
+   },
+   {
+    "id": "business/live/2026/oct/16/john-healey-set-to-raise-bank-taxes-shares-profits-stock-markets-imf-latest-news-updates",
+    "type": "liveblog",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-16T15:42:59Z",
+    "webTitle": "IMF suggests UK should cut spending rather than raise taxes on banks, as Healey prepares budget raid – as it happened",
+    "webUrl": "https://www.theguardian.com/business/live/2026/oct/16/john-healey-set-to-raise-bank-taxes-shares-profits-stock-markets-imf-latest-news-updates",
+    "fields": {
+     "headline": "IMF suggests UK should cut spending rather than raise taxes on banks, as Healey prepares budget raid – as it happened",
+     "trailText": "Rolling coverage of the latest economic and financial news"
+    }
+   },
+   {
+    "id": "business/2026/oct/16/target-pensions-or-welfare-not-banks-imf-tells-john-healey",
+    "type": "article",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-16T15:33:29Z",
+    "webTitle": "Target pensions or welfare, not banks, IMF tells John Healey",
+    "webUrl": "https://www.theguardian.com/business/2026/oct/16/target-pensions-or-welfare-not-banks-imf-tells-john-healey",
+    "fields": {
+     "headline": "Target pensions or welfare, not banks, IMF tells John Healey",
+     "trailText": "Supporters of planned tax, however, say banks were bailed out by taxpayers during the financial crisis and can afford to pay more now"
+    }
+   },
+   {
+    "id": "business/nils-pratley-on-finance/2026/oct/15/water-torture-thames-sector-wide-reform-delay-public-control",
+    "type": "article",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-15T18:00:31Z",
+    "webTitle": "The water torture goes on at Thames. Sector-wide reform isn’t moving much faster | Nils Pratley",
+    "webUrl": "https://www.theguardian.com/business/nils-pratley-on-finance/2026/oct/15/water-torture-thames-sector-wide-reform-delay-public-control",
+    "fields": {
+     "headline": "The water torture goes on at Thames. Sector-wide reform isn’t moving much faster",
+     "trailText": "If ‘public control’ bit is delaying overhaul, that needs to be nailed down sharpish or continued uncertainty could be costly"
+    }
+   },
+   {
+    "id": "business/2026/oct/15/thames-water-24bn-going-bust-this-year-early-2027",
+    "type": "article",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-15T17:14:48Z",
+    "webTitle": "Thames Water asks for £2.4bn more to avoid going bust this year or early 2027",
+    "webUrl": "https://www.theguardian.com/business/2026/oct/15/thames-water-24bn-going-bust-this-year-early-2027",
+    "fields": {
+     "headline": "Thames Water asks for £2.4bn more to avoid going bust this year or early 2027",
+     "trailText": "Water company tells creditors it will not survive long enough to agree refinancing deal without more money"
+    }
+   },
+   {
+    "id": "business/live/2026/oct/15/tech-stock-sell-off-markets-uk-gdp-economy-august-imf-latest-news-updates",
+    "type": "liveblog",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-15T14:59:52Z",
+    "webTitle": "Wall Street drops after jump in US producer inflation; John Healey says UK banks are part of ‘jewel in the crown’ – as it happened",
+    "webUrl": "https://www.theguardian.com/business/live/2026/oct/15/tech-stock-sell-off-markets-uk-gdp-economy-august-imf-latest-news-updates",
+    "fields": {
+     "headline": "Wall Street drops after jump in US producer inflation; John Healey says UK banks are part of ‘jewel in the crown’ – as it happened",
+     "trailText": "John Healey has spoken to UK journalists at the IMF annual meeting in Bangkok, and said banks are a part of the “jewel” in the UK’s economic crown"
+    }
+   },
+   {
+    "id": "business/2026/oct/15/uk-economy-unexpectedly-grows-01-in-august-despite-fuel-hit-to-household-budgets",
+    "type": "article",
+    "sectionId": "business",
+    "sectionName": "Business",
+    "webPublicationDate": "2026-10-15T06:05:17Z",
+    "webTitle": "UK economy unexpectedly grows in August despite fall in consumer spending",
+    "webUrl": "https://www.theguardian.com/business/2026/oct/15/uk-economy-unexpectedly-grows-01-in-august-despite-fuel-hit-to-household-budgets",
+    "fields": {
+     "headline": "UK economy unexpectedly grows in August despite fall in consumer spending",
+     "trailText": "Latest data showing surprise 0.1% growth is boost to John Healey a fortnight before his first budget"
+    }
+   }
+  ]
+ }
+}

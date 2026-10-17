@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Status = Literal["live", "cached", "mock"]
+Status = Literal["live", "cached", "mock", "unavailable"]
 
 
 class Observation(BaseModel):

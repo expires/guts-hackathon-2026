@@ -33,11 +33,11 @@ async def inputs(state: AppState, sub: str) -> Inputs:
     as_of = money.today(snap)
     first = min((date.fromisoformat(t.date) for t in snap.transactions), default=as_of)
     last = as_of + timedelta(days=FORECAST_DAYS)
-    key = ("predict-inputs", sub, snap.source, snap.as_of)
+    key = ("predict-inputs", sub, money.fingerprint(snap))
     hit = state.memo.get(key)
     if hit is not None:
         return cast(Inputs, hit)
-    profile, _ = await call_pure(money.engine_profile, sub, snap)
+    profile, _ = await call_pure(money.engine_profile, snap, money.hints(state, sub, snap))
     hub: Any = state.hub  # bank_holidays and daily_weather are on lifeline_data.hub.DataHub (ADR 0017)
     holidays: set[date] = await hub.bank_holidays(profile.region)
     rows: list[dict[str, Any]] = await hub.daily_weather(profile.region, first, last, today=as_of)
@@ -49,7 +49,7 @@ async def inputs(state: AppState, sub: str) -> Inputs:
 
 
 async def backtest(state: AppState, sub: str, inp: Inputs) -> predict.Backtest:
-    key = ("predict-backtest", sub, inp.snap.source, inp.snap.as_of)
+    key = ("predict-backtest", sub, money.fingerprint(inp.snap))
     hit = state.memo.get(key)
     if hit is None:
         hit = await call_pure(predict.backtest, inp.snap, inp.holidays, inp.weather)

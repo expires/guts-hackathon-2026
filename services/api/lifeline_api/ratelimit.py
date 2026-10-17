@@ -103,12 +103,24 @@ class RedisBucket:
 
 
 def client_ip(scope: Scope) -> str:
+    """The address the rate limiter keys on.
+
+    Behind Railway's edge, uvicorn runs with --forwarded-allow-ips='*' and sets scope["client"] from the
+    LEFTMOST X-Forwarded-For entry, which the client controls. The RIGHTMOST entry is the one our edge
+    appended (the address that connected to it), so it is used when the header is present.
+    """
+    for name, value in scope.get("headers", []):
+        if name == b"x-forwarded-for":
+            parts = [p.strip() for p in value.decode("latin-1").split(",") if p.strip()]
+            if parts:
+                return str(parts[-1])[:64]
     client = scope.get("client")
     return str(client[0]) if client else "unknown"
 
 
 class RateLimitMiddleware:
-    """Applies the limiter to /v1 paths except health. Keys: ip:<addr> and sub:<subject>."""
+    """Applies the limiters to /v1 paths except health: ip:<addr> (abuse guard), then per subject
+    read:<subject> for GET and HEAD or sub:<subject> for writes. Every 429 carries Retry-After."""
 
     def __init__(self, app: ASGIApp, subject_of: Callable[[Scope], str | None]) -> None:
         self.app = app
@@ -119,13 +131,15 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
         state = scope["app"].state.lifeline
-        limiter: Limiter = state.limiter
-        keys = [f"ip:{client_ip(scope)}"]
+        checks: list[tuple[Limiter, str]] = [(state.ip_limiter or state.limiter, f"ip:{client_ip(scope)}")]
         sub = self._subject_of(scope)
         if sub:
-            keys.append(f"sub:{sub}")
+            if scope.get("method") in ("GET", "HEAD") and state.read_limiter is not None:
+                checks.append((state.read_limiter, f"read:{sub}"))
+            else:
+                checks.append((state.limiter, f"sub:{sub}"))
         wait = 0.0
-        for key in keys:
+        for limiter, key in checks:
             wait = max(wait, await limiter.take(key))
         if wait > 0:
             retry = str(max(1, math.ceil(wait)))

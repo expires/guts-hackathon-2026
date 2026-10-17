@@ -44,8 +44,8 @@ class DataHub(Protocol):
         """Annual MacroTable for 1990..current year. Never raises: falls back to cached, then mock."""
         ...
 
-    async def finance_snapshot(self, subject: str) -> FinanceSnapshot:
-        """Money tab data for one user (ADR 0016). Fixtures in Tier 1; TrueLayer in Tier 2. Never raises."""
+    async def finance_snapshot(self, subject: str) -> FinanceSnapshot | None:
+        """Money tab data for one user (ADR 0016). None in live mode without user data (ADR 0027). Never raises."""
         ...
 
     async def bank_holidays(self, region: str | None) -> set[date]:

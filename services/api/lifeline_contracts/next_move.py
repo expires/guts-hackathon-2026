@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from lifeline_contracts.domain import CharacterSpec, IsoDate, ShortId, SourceRef
-from lifeline_contracts.finance import FinanceMeta, Point
+from lifeline_contracts.finance import Bill, FinanceMeta, Point, SpendPrediction
 
 MoveKind = Literal[
     "fix_mortgage",
@@ -84,6 +84,15 @@ class NextMoveResponse(_M):
     top: Move
     runners_up: list[Move] = Field(max_length=2)
     backtest: NextMoveBacktest | None = None
+    decision_sources: list[SourceRef] = Field(
+        default_factory=list,
+        description="Decision inputs only (user data, BoE, ONS, Nomis, Land Registry, Companies House, Octopus, FX, "
+        "CoinGecko) with status. Game-only and context sources (news, rate dates) are not counted (ADR 0032).",
+    )
+    decision_source_count: int = Field(default=0, ge=0, description="'Based on N sources'")
+    context_lines: list[str] = Field(
+        default_factory=list, max_length=3, description="Context only, never a decision input (e.g. next MPC date)"
+    )
     generated_at: str
 
 
@@ -133,3 +142,22 @@ class AddPlanItemRequest(_M):
 class PlanResponse(_M):
     items: list[PlanItem]
     total_impact_per_year: float
+
+
+# ---------- Money home in one request (user UX fix) ----------
+
+
+class FinanceHome(_M):
+    """Everything Money home needs in ONE request. No data is a normal state (has_data=false), not an error."""
+
+    has_data: bool
+    meta: FinanceMeta | None = None
+    balance: float | None = Field(default=None, description="'In your account' tile")
+    net_worth: float | None = Field(default=None, description="'Net worth' tile")
+    next_move: NextMoveResponse | None = Field(default=None, description="Compact card uses top only")
+    prediction: SpendPrediction | None = Field(default=None, description="Guess my spend")
+    coming_up: list[Bill] = Field(default_factory=list, max_length=3)
+    coming_up_more: bool = False
+    connect_prompt: str | None = Field(
+        default=None, description="Shown when has_data is false: 'Connect your money to see your next move'"
+    )

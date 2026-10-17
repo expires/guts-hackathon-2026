@@ -9,13 +9,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
-import time
 from datetime import date
 from typing import Any, cast
 
+from lifeline_api.errors import ApiError
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState
+from lifeline_api.store import StoreUnavailable
 from lifeline_contracts.domain import CharacterSpec, DecisionProfile, Lesson
 from lifeline_contracts.finance import FinanceMeta, FinanceSnapshot, PersonalFact
 from lifeline_data.finance import persona_for_subject
@@ -24,19 +26,70 @@ from lifeline_engine.money import ProfileHints
 
 log = logging.getLogger(__name__)
 
-SNAPSHOT_TTL_SECONDS = 60.0
+
+
+def no_finance_data() -> ApiError:
+    """Live mode (ADR 0027): the user has not connected or entered their own money data yet."""
+    return ApiError(409, "no_finance_data", "Connect your money first.", source="data")
+
+
+async def stored_snapshot(state: AppState, sub: str) -> FinanceSnapshot | None:
+    """The data the user gave us (statement, manual entry, logged payments). Kept by the data hub (W1)."""
+    hub: Any = state.hub
+    snap: FinanceSnapshot | None = await hub.get_user_snapshot(sub)
+    return snap
+
+
+async def save_snapshot(state: AppState, sub: str, snap: FinanceSnapshot) -> None:
+    """Replace the user's own data. Raises StoreUnavailable when it cannot be kept durably."""
+    hub: Any = state.hub
+    try:
+        durable = await hub.set_user_snapshot(sub, snap)
+    except Exception as exc:
+        log.warning("user snapshot write failed: %s", type(exc).__name__)
+        raise StoreUnavailable() from exc
+    finally:
+        forget(state, sub)
+    try:
+        await state.store.delete_doc(sub, "next_move")  # the stored next move was built from the old data
+    except StoreUnavailable:
+        log.warning("stale next move not cleared: store unavailable")
+    if not durable and not state.settings.is_test and state.settings.database_url:
+        raise StoreUnavailable()
+
+
+async def delete_snapshot(state: AppState, sub: str) -> None:
+    hub: Any = state.hub
+    await hub.delete_user_snapshot(sub)
+    forget(state, sub)
+
+
+def forget(state: AppState, sub: str) -> None:
+    """Drop every per-subject cache entry (after the user's data changes or is deleted)."""
+    for key in [k for k in state.memo if len(k) > 1 and k[1] == sub]:
+        state.memo.pop(key, None)
+
+
+async def maybe_snapshot(state: AppState, sub: str) -> FinanceSnapshot | None:
+    """The caller's FinanceSnapshot, or None when there is none (live mode without user data).
+
+    The hub returns the user's own data first; otherwise the demo persona (demo mode) or None (live mode).
+    """
+    hub: Any = state.hub  # Protocol may still say FinanceSnapshot; W1 returns None in live mode (ADR 0027)
+    snap: FinanceSnapshot | None = await hub.finance_snapshot(sub)
+    return snap
+
+
+def fingerprint(snap: FinanceSnapshot) -> str:
+    """Changes whenever the snapshot content changes. Keys the per-snapshot caches."""
+    return hashlib.sha256(snap.model_dump_json().encode()).hexdigest()[:16]
 
 
 async def snapshot(state: AppState, sub: str) -> FinanceSnapshot:
-    key = ("snapshot", sub)
-    hit = state.memo.get(key)
-    now = time.monotonic()
-    if hit is not None and now - hit[0] < SNAPSHOT_TTL_SECONDS:
-        return cast(FinanceSnapshot, hit[1])
-    # `finance_snapshot` is on lifeline_data.hub.DataHub (ADR 0016); the shared Protocol does not list it yet.
-    hub: Any = state.hub
-    snap: FinanceSnapshot = await hub.finance_snapshot(sub)
-    state.memo[key] = (now, snap)
+    """The caller's FinanceSnapshot. 409 no_finance_data when there is none."""
+    snap = await maybe_snapshot(state, sub)
+    if snap is None:
+        raise no_finance_data()
     return snap
 
 
@@ -44,8 +97,11 @@ def meta(snap: FinanceSnapshot) -> FinanceMeta:
     return money_engine.finance_meta(snap)
 
 
-def hints(sub: str, snap: FinanceSnapshot) -> ProfileHints | None:
-    """Facts that bank data does not carry (name, age, place, job). Fixture data: from the persona."""
+def hints(state: AppState, sub: str, snap: FinanceSnapshot) -> ProfileHints | None:
+    """Facts that bank data does not carry (name, age, place, job).
+
+    Fixture data: from the persona. User data: None, so the engine reads `snapshot.holder` and `region`.
+    """
     if snap.source != "fixtures":
         return None
     p = persona_for_subject(sub)
@@ -58,13 +114,17 @@ def today(snap: FinanceSnapshot) -> date:
 
 
 async def personal_facts(state: AppState, sub: str) -> list[PersonalFact]:
-    snap = await snapshot(state, sub)
+    """Facts from the caller's own data only. Empty when the caller has none."""
+    snap = await maybe_snapshot(state, sub)
+    if snap is None:
+        return []
     key = ("facts", sub)
+    fp = fingerprint(snap)
     hit = state.memo.get(key)
-    if hit is not None and hit[0] is snap:
+    if hit is not None and hit[0] == fp:
         return cast(list[PersonalFact], hit[1])
     facts = await call_pure(money_engine.personal_facts, snap)
-    state.memo[key] = (snap, facts)
+    state.memo[key] = (fp, facts)
     return facts
 
 
@@ -83,7 +143,7 @@ async def fill_personal(state: AppState, sub: str, lesson: Lesson | None) -> Les
     return lesson.model_copy(update={"personal": match.text})
 
 
-def engine_profile(sub: str, snap: FinanceSnapshot) -> tuple[DecisionProfile, CharacterSpec]:
+def engine_profile(snap: FinanceSnapshot, hints_: ProfileHints | None) -> tuple[DecisionProfile, CharacterSpec]:
     """The same profile for /v1/finance/profile, the next move and Test it (ADR 0018)."""
-    profile, character = money_engine.profile(snap, today(snap), hints(sub, snap))
+    profile, character = money_engine.profile(snap, today(snap), hints_)
     return profile, character

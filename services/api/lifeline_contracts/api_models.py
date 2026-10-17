@@ -79,8 +79,16 @@ class ConceptsResponse(_M):
     concepts: list[Concept]
 
 
+class ChallengeProgress(_M):
+    challenge_id: str
+    life_id: str
+    status: Literal["in_progress", "won", "lost"]
+    detail: str | None = Field(default=None, max_length=200)
+
+
 class ChallengesResponse(_M):
     challenges: list[Challenge]
+    progress: list[ChallengeProgress] = Field(default_factory=list, description="Caller's progress, when signed in")
 
 
 class DecisionRequest(_M):
@@ -102,6 +110,8 @@ class Player(_M):
     id: str
     name: str
     is_host: bool
+    ready: bool = False
+    connected: bool = True
     life_id: str | None = None
     age: int | None = None
     year: int | None = None
@@ -169,7 +179,8 @@ class Token(_M):
 
 
 class WsClientMessage(_M):
-    type: Literal["join", "progress", "finish", "start", "ping"]
+    type: Literal["join", "ready", "progress", "finish", "start", "leave", "ping"]
+    player_id: str | None = Field(default=None, max_length=64, description="Resume token after a reconnect")
     name: str | None = Field(default=None, max_length=24)
     life_id: str | None = None
     age: int | None = None
@@ -179,7 +190,8 @@ class WsClientMessage(_M):
 
 
 class WsServerMessage(_M):
-    type: Literal["roster", "rival", "started", "finished", "error", "pong"]
+    type: Literal["roster", "rival", "started", "finished", "error", "pong", "welcome"]
+    you: Player | None = Field(default=None, description="Sent with 'welcome': your player id for reconnects")
     room: Room | None = None
     player: Player | None = None
     error: ErrorBody | None = None

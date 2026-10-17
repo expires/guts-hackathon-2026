@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 from lifeline_contracts.finance import Category, Transaction
+from lifeline_engine.money.text import clean_name
 
 # (label, emoji) per category.
 CATEGORY_INFO: dict[Category, tuple[str, str]] = {
@@ -304,10 +305,11 @@ def merchant_key(tx: Transaction) -> str:
 
 
 def display_name(tx: Transaction) -> str:
-    """Name to show for a payee: the merchant field, else the description in title case."""
+    """Name to show for a payee: the merchant field, else the description in title case. Untrusted text, so it
+    is cleaned (no digits, %, currency signs or number words) before it reaches any engine text."""
     if tx.merchant:
-        return tx.merchant
-    return " ".join(w.capitalize() for w in merchant_key(tx).split()) or tx.description
+        return clean_name(tx.merchant)
+    return clean_name(" ".join(w.capitalize() for w in merchant_key(tx).split()) or tx.description)
 
 
 def is_card_or_loan_payment(tx: Transaction) -> bool:

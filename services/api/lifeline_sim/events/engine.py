@@ -129,6 +129,7 @@ class LoadedTemplate:
     t: Template
     macro_keys: tuple[MacroKey, ...]  # every macro series the template reads, for sources and eligibility
     soft_keys: tuple[MacroKey, ...] = ()  # cited when the table has them; never needed for eligibility
+    macro_vars: frozenset[str] = frozenset()  # macro formula variables read; each must have a value (ADR 0027)
 
 
 def _exprs(t: Template) -> Iterable[Expr]:
@@ -155,7 +156,8 @@ def load_templates() -> tuple[LoadedTemplate, ...]:
             read = {n for e in _exprs(t) for n in e.names if n in names and n != PRICE_LEVEL}
             used = sorted({names[n] for n in read}, key=lambda k: k.value)
             soft = sorted({SOFT_SOURCES[n] for n in read if n in SOFT_SOURCES}, key=lambda k: k.value)
-            out.append(LoadedTemplate(t=t, macro_keys=tuple(used), soft_keys=tuple(soft)))
+            all_read = frozenset(n for e in _exprs(t) for n in e.names if n in names)
+            out.append(LoadedTemplate(t=t, macro_keys=tuple(used), soft_keys=tuple(soft), macro_vars=all_read))
     out.sort(key=lambda lt: lt.t.id)
     ids = [lt.t.id for lt in out]
     if len(set(ids)) != len(ids):
@@ -195,6 +197,9 @@ def eligible(lt: LoadedTemplate, s: SimState, mv: MacroView, env: Mapping[str, f
     if e.housing is not None and s.housing not in e.housing:
         return False
     if any(not mv.has(k) for k in lt.macro_keys):
+        return False
+    # Live mode (ADR 0027): a template that reads a value missing for this year and place does not fire.
+    if any(n not in env for n in lt.macro_vars):
         return False
     return e.when is None or bool(e.when.eval(env))
 

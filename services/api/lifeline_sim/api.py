@@ -6,6 +6,9 @@ and never mutate their inputs. Rule violations raise `SimError`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from lifeline_contracts.chat import ChatFact
 from lifeline_contracts.domain import (
     ActionResult,
     AgeResult,
@@ -22,9 +25,10 @@ from lifeline_contracts.domain import (
     RewindResult,
     RewindState,
     Ribbon,
+    SourceRef,
     YearLog,
 )
-from lifeline_contracts.macro import MacroTable
+from lifeline_contracts.macro import MacroKey, MacroTable
 from lifeline_sim import params as p
 from lifeline_sim.actions import (
     action_decision_id,
@@ -38,16 +42,20 @@ from lifeline_sim.actions import (
 from lifeline_sim.concepts import CONCEPTS, build_concept, build_lesson, concept_ids
 from lifeline_sim.errors import SimError
 from lifeline_sim.events.engine import templates_by_id
+from lifeline_sim.health import HealthInput, health_id
 from lifeline_sim.index import IndexWeights, load_weights
 from lifeline_sim.macroview import MacroView
 from lifeline_sim.occupations import occupation
 from lifeline_sim.presets import god_mode_options as _god_mode_options
 from lifeline_sim.presets import presets as _presets
 from lifeline_sim.project import index_state, to_life
+from lifeline_sim.projection import ChoiceProjection
 from lifeline_sim.replay import (
+    TEMPLATE_COST_PREFIX,
     Decision,
     LifeSpec,
     apply_choice,
+    apply_health,
     event_year,
     last_view,
     remember,
@@ -68,7 +76,9 @@ __all__ = [
     "age",
     "challenges",
     "choose",
+    "compare_event_choices",
     "concepts",
+    "data_gaps",
     "god_mode_options",
     "new_life",
     "play_scenario",
@@ -156,6 +166,22 @@ def new_life(
     return _new_life(life_id, character, mode, start_year, seed, macro, Setup())
 
 
+SIMULATED_LABEL = "Simulated from ONS and Nomis data."
+
+
+def label_simulated(character: CharacterSpec) -> CharacterSpec:
+    """ADR 0027: a character drawn from the synthetic population says so in its blurb.
+
+    Apply it where the character is drawn (engine `random_character` or the API), so the life and
+    `GET /v1/characters` show the same person. `new_life` does not change the character."""
+    blurb = character.blurb or ""
+    if SIMULATED_LABEL in blurb:
+        return character
+    room = 200 - len(SIMULATED_LABEL) - 1
+    text = f"{blurb[:room].rstrip()} {SIMULATED_LABEL}".strip()
+    return character.model_copy(update={"blurb": text})
+
+
 def _new_life(
     life_id: str,
     character: CharacterSpec,
@@ -221,7 +247,10 @@ def _year_text(s: SimState) -> str:
     return " ".join(parts)
 
 
-def age(life: Life, macro: MacroTable) -> AgeResult:
+def age(life: Life, macro: MacroTable, health: HealthInput | None = None) -> AgeResult:
+    """One year passes. `health` (optional, ADR 0029): the phone's average steps and sleep give a
+    Health change of -10 to +10 this year (rule in `lifeline_sim.health`). It is stored in this
+    year's history entry, so replay gives the same life."""
     if not life.alive:
         raise SimError("dead", "This life has ended.")
     if life.pending_events:
@@ -232,11 +261,22 @@ def age(life: Life, macro: MacroTable) -> AgeResult:
     decisions = _decisions(life)
     s = replay(spec, decisions, life.year, mv, w)
     step_year(s, mv, w)
+    health_text = ""
+    health_choice: str | None = None
+    if health is not None and not health.empty and s.alive:
+        change = apply_health(s, health)
+        health_choice = health.encode()
+        decisions.append((health_id(s.year), health_choice))
+        health_text = f" Your steps and sleep changed your health by {change:+d}."
+        s.track_drawdown(w)
     remember(mv, spec, False, decisions, s)
     full_twin = replay(spec, [], s.year, mv, w, autopilot=True)
     remember(mv, spec, True, [], full_twin)
     twin = _comparable_twin(spec, full_twin, set(), bool(s.pending), mv, w)
-    history = [*life.history, _log(s, _year_text(s), twin)]
+    entry = _log(s, _year_text(s) + health_text, twin)
+    if health_choice is not None:
+        entry = entry.model_copy(update={"event_id": health_id(s.year), "choice_id": health_choice})
+    history = [*life.history, entry]
     new = to_life(
         s,
         life_id=life.id,
@@ -539,18 +579,146 @@ def scenario_cost(life: Life, macro: MacroTable | None = None) -> float:
     tags = list(spec.setup.focus)
     if not tags:
         return round(s.mortgage_paid, 2)
+    total = base_flows(s, tags) + sum(s.tag_cost.get(tag, 0.0) for tag in tags)
+    return round(total, 2)
+
+
+def base_flows(s: SimState, tags: Sequence[str]) -> float:
+    """Running cost flows the tags control (see `scenario_cost`), without one-off choice costs."""
     total = 0.0
     if any(t in MORTGAGE_TAGS for t in tags):
         total += s.mortgage_paid
     for tag in tags:
-        total += s.tag_cost.get(tag, 0.0)
         if tag == "savings_rate_change":
             total -= s.savings_interest
         elif tag == "energy_bill":
             total += s.energy_paid
         elif tag == "card_debt":
             total += s.card_interest_paid
-    return round(total, 2)
+    return total
+
+
+def data_gaps(life: Life, macro: MacroTable) -> dict[int, list[str]]:
+    """Debug view (ADR 0027): for each year, the macro names a yearly step skipped because the
+    live table has no value for that year and place (for example `stock_return`). Empty in demo mode."""
+    s = replay(_spec(life), _decisions(life), life.year, view_for(macro), load_weights())
+    return {y: sorted(set(names)) for y, names in sorted(s.data_gaps.items())}
+
+
+# ---------- "Not sure? Ask Penny" (ADR 0031) ----------
+
+MAX_PROJECTION_YEARS = 10
+_PROJECTION_KEYS = (
+    MacroKey.BANK_RATE,
+    MacroKey.CPI_INFLATION,
+    MacroKey.MEDIAN_PAY,
+    MacroKey.HOUSE_PRICE_CHANGE,
+    MacroKey.STOCK_RETURN,
+    MacroKey.GILT_10Y,
+    MacroKey.MORTGAGE_SVR,
+    MacroKey.MORTGAGE_TRACKER,
+)
+
+
+def compare_event_choices(life: Life, event_id: str, macro: MacroTable, years: int = 3) -> list[ChoiceProjection]:
+    """Project each choice of an open event `years` years ahead (1-10). Pure: stores nothing.
+
+    Per choice: take it, take the default at the other open events of the year that are still
+    open, then AGE `years` times with the default at every event and no tab actions. Same seed,
+    so the years ahead differ only through the choice. The Index compares with the autopilot twin.
+    """
+    if not life.alive:
+        raise SimError("dead", "This life has ended.")
+    event = next((e for e in life.pending_events if e.id == event_id), None)
+    if event is None:
+        raise SimError("not_found", f"No open event {event_id}.")
+    if not 1 <= years <= MAX_PROJECTION_YEARS:
+        raise SimError("invalid_input", f"years must be between 1 and {MAX_PROJECTION_YEARS}.")
+    w = load_weights()
+    mv = view_for(macro)
+    spec = _spec(life)
+    base = replay(spec, _decisions(life), life.year, mv, w)
+    lt = templates_by_id().get(event.template_id)
+    tags = lt.t.tags if lt is not None else ()
+    tpl_key = f"{TEMPLATE_COST_PREFIX}{event.template_id}"
+    end_year = life.year + years
+    twin = replay(spec, [], end_year, mv, w, autopilot=True)
+    sources = _projection_sources(event.sources, mv, life.year, end_year, base.region)
+    out: list[ChoiceProjection] = []
+    for choice in event.choices:
+        s = base.clone()
+        cost0 = base_flows(s, tags) + s.tag_cost.get(tpl_key, 0.0)
+        missed0 = s.missed
+        apply_choice(s, next(e for e in s.pending if e.id == event_id), choice.id, w)
+        for ev in list(s.pending):
+            apply_choice(s, ev, next(c.id for c in ev.choices if c.is_default), w)
+        path_years = [s.year]
+        path = [round(s.net_worth, 2)]
+        while s.alive and s.year < end_year:
+            step_year(s, mv, w)
+            for ev in list(s.pending):
+                apply_choice(s, ev, next(c.id for c in ev.choices if c.is_default), w)
+            path_years.append(s.year)
+            path.append(round(s.net_worth, 2))
+        cost = round(base_flows(s, tags) + s.tag_cost.get(tpl_key, 0.0) - cost0, 2)
+        missed = s.missed - missed0
+        twin_now = twin if twin.year == s.year else replay(spec, [], s.year, mv, w, autopilot=True)
+        index = index_state(s, twin_now, w).value
+        fid = f"{event_id}.{choice.id}"
+        facts = [
+            ChatFact(id=f"{fid}.end_net_worth", value=path[-1], unit="gbp", label=f"Net worth in {s.year}"),
+            ChatFact(
+                id=f"{fid}.net_worth_change",
+                value=round(path[-1] - path[0], 2),
+                unit="gbp",
+                label=f"Change in net worth {path_years[0]} to {s.year}",
+            ),
+            ChatFact(id=f"{fid}.cost", value=cost, unit="gbp", label=f"Cost of this choice to {s.year}"),
+            ChatFact(id=f"{fid}.missed_payments", value=float(missed), unit="count", label="Missed payments"),
+            ChatFact(id=f"{fid}.index", value=index, unit="count", label=f"Index in {s.year}"),
+            ChatFact(id=f"{fid}.years", value=float(s.year - life.year), unit="years", label="Years projected"),
+        ]
+        out.append(
+            ChoiceProjection(
+                event_id=event_id,
+                choice_id=choice.id,
+                label=choice.label,
+                is_default=choice.is_default,
+                start_year=life.year,
+                end_year=s.year,
+                years=path_years,
+                net_worth_path=path,
+                end_net_worth=path[-1],
+                cost=cost,
+                missed_payments=missed,
+                index=index,
+                alive=s.alive,
+                facts=facts,
+                sources=sources,
+            )
+        )
+    return out
+
+
+def _projection_sources(
+    event_sources: list[SourceRef], mv: MacroView, start: int, end: int, region: str
+) -> list[SourceRef]:
+    """The event's own sources, then the series the yearly steps read, each once."""
+    out: list[SourceRef] = []
+    seen: set[tuple[str, str]] = set()
+    refs = list(event_sources)
+    for key in _PROJECTION_KEYS:
+        for y in range(start + 1, end + 1):
+            ref = mv.source_ref(key, y, region)
+            if ref is not None:
+                refs.append(ref)
+                break
+    for ref in refs:
+        k = (ref.source, ref.series_id)
+        if k not in seen:
+            seen.add(k)
+            out.append(ref)
+    return out
 
 
 # ---------- read-only views ----------

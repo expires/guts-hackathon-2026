@@ -94,8 +94,16 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     y, r = s.year, s.region
     occ = occupation(s.character.occupation)
     m = mv.env(y, r)
-    cpi = m[MacroKey.CPI_INFLATION.value]
-    bank = m[MacroKey.BANK_RATE.value]
+
+    def need(name: str) -> float | None:
+        """The formula variable, or None (and a recorded gap) when live data has no value."""
+        v = m.get(name)
+        if v is None:
+            s.data_gaps.setdefault(y, []).append(name)
+        return v
+
+    cpi = need(MacroKey.CPI_INFLATION.value)
+    bank = need(MacroKey.BANK_RATE.value)
 
     # 1-2. Work, retirement, pay growth
     if s.age >= p.STATE_PENSION_AGE and (s.employed or (s.income <= 0 and not s.student)):
@@ -105,32 +113,47 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         s.employed = False
         s.retired = True
         s.years_in_role = 0
-        s.income = round(p.STATE_PENSION_SHARE_OF_MEDIAN_PAY * mv.value(MacroKey.MEDIAN_PAY, y, None, 35_000.0))
+        median = mv.opt(MacroKey.MEDIAN_PAY, y, None) if mv.strict else mv.value(MacroKey.MEDIAN_PAY, y, None, 35_000.0)
+        if median is not None:
+            s.income = round(p.STATE_PENSION_SHARE_OF_MEDIAN_PAY * median)
+        else:
+            s.data_gaps.setdefault(y, []).append(MacroKey.MEDIAN_PAY.value)
+            s.income = round(p.FULL_STATE_PENSION_2024 * m["price_level"])
     elif s.student and s.age >= p.GRADUATION_AGE:
         s.student = False
         s.employed = True
         s.last_graduated = True
         s.years_in_role = 0
         s.job_title = "Graduate"
-        s.income = round(p.GRADUATE_PAY_SHARE * mv.value(MacroKey.MEDIAN_PAY, y, r, 30_000.0))
+        median = mv.opt(MacroKey.MEDIAN_PAY, y, r) if mv.strict else mv.value(MacroKey.MEDIAN_PAY, y, r, 30_000.0)
+        if median is not None:
+            s.income = round(p.GRADUATE_PAY_SHARE * median)
+        else:
+            s.data_gaps.setdefault(y, []).append(MacroKey.MEDIAN_PAY.value)  # keeps the current pay
         s.rent = round(s.rent / p.STUDENT_RENT_SHARE)
     elif s.employed:
-        growth = m[PAY_GROWTH] / 100
-        cap = public_pay_cap(y) if occ.public_sector else None
-        if cap is not None:
-            growth = min(growth, cap / 100)
-        s.income *= 1 + max(-0.1, min(0.2, growth))
+        pay_growth = need(PAY_GROWTH)
+        if pay_growth is not None:
+            growth = pay_growth / 100
+            cap = public_pay_cap(y) if occ.public_sector else None
+            if cap is not None:
+                growth = min(growth, cap / 100)
+            s.income *= 1 + max(-0.1, min(0.2, growth))
         s.years_in_role += 1
-    elif s.retired:
+    elif s.retired and cpi is not None:
         s.income *= 1 + max(0.0, cpi) / 100
 
     # 3. Take-home pay. Bonus follows the stock market for occupations that have one.
-    bonus = s.income * occ.bonus_rate(m[MacroKey.STOCK_RETURN.value]) if s.employed else 0.0
+    bonus_stock = m.get(MacroKey.STOCK_RETURN.value)
+    if bonus_stock is None and s.employed and occ.bonus_cap > 0:
+        need(MacroKey.STOCK_RETURN.value)  # no bonus without market data
+    bonus = s.income * occ.bonus_rate(bonus_stock) if s.employed and bonus_stock is not None else 0.0
     gross = s.income + bonus
     drawdown = 0.0
     if s.retired and s.pension > 0:
         # Drawdown rate: the 10-year gilt yield (an annuity proxy), at least PENSION_DRAWDOWN.
-        rate = max(p.PENSION_DRAWDOWN, m[MacroKey.GILT_10Y.value] / 100)
+        gilt_now = m.get(MacroKey.GILT_10Y.value)
+        rate = max(p.PENSION_DRAWDOWN, gilt_now / 100) if gilt_now is not None else p.PENSION_DRAWDOWN
         drawdown = s.pension * rate
         s.pension -= drawdown
     tax = income_tax(gross + drawdown)
@@ -144,7 +167,7 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     s.student_loan += maintenance
     net = gross + drawdown + maintenance - tax - ni - pension_in - sl_repay
     s.pension += pension_in + employer_in
-    s.student_loan = (s.student_loan - sl_repay) * (1 + max(0.0, cpi) / 100)
+    s.student_loan = (s.student_loan - sl_repay) * (1 + max(0.0, cpi) / 100 if cpi is not None else 1.0)
 
     # 4. Costs
     housing = 0.0
@@ -153,9 +176,13 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     elif s.housing == "mortgage" and s.mortgage_balance > 0:
         if s.mortgage_fixed_until is None or y > s.mortgage_fixed_until:
             s.mortgage_tracker = False
-            s.mortgage_rate = round(m[SVR_RATE], 2)
+            svr_now = need(SVR_RATE)
+            if svr_now is not None:  # no data: the current rate stays
+                s.mortgage_rate = round(svr_now, 2)
         elif s.mortgage_tracker:
-            s.mortgage_rate = round(m[TRACKER_NOW], 2)
+            tracker_now = need(TRACKER_NOW)
+            if tracker_now is not None:
+                s.mortgage_rate = round(tracker_now, 2)
         rate = max(0.0, s.mortgage_rate or 0.0)
         years_left = max(1, s.mortgage_years_left)
         housing = 12 * monthly_payment(s.mortgage_balance, rate, years_left)
@@ -177,7 +204,8 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         benefits = min(max(0.0, 12 * floor + housing - net), p.BENEFIT_CAP_2024 * m["price_level"])
     net += benefits
     cap = max(floor, (p.LIVING_MAX_SHARE_OF_NET * net - housing) / 12)
-    s.living = max(floor, min(s.living * (1 + cpi / 100), cap))
+    grown = s.living * (1 + cpi / 100) if cpi is not None else s.living
+    s.living = max(floor, min(grown, cap))
     costs = housing + 12 * s.living
 
     # 5. Cash flow and missed payments. A shortfall draws on savings, shares, crypto and
@@ -186,7 +214,7 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     if s.cash < 0:
         s.cash = -_draw(s, -s.cash)
     if s.cash < 0:
-        s.cash = -_borrow_on_home(s, -s.cash, m[SVR_RATE])
+        s.cash = -_borrow_on_home(s, -s.cash, m.get(SVR_RATE, s.mortgage_rate or p.VARIABLE_MARGIN))
     missed = 0
     if s.cash < 0:
         short = -s.cash
@@ -200,7 +228,7 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     s.missed += missed
 
     # 6. Debt interest, repayment, debt relief, savings sweep
-    card_interest = s.other_debt * max(0.0, bank + p.CARD_SPREAD) / 100
+    card_interest = s.other_debt * max(0.0, bank + p.CARD_SPREAD) / 100 if bank is not None else 0.0
     s.card_interest_paid += card_interest
     s.other_debt += card_interest
     monthly = costs / 12
@@ -229,20 +257,27 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         s.savings += excess
 
     # 7. Returns
-    interest = s.savings * max(p.SAVINGS_FLOOR, bank + p.SAVINGS_SPREAD) / 100
+    interest = s.savings * max(p.SAVINGS_FLOOR, bank + p.SAVINGS_SPREAD) / 100 if bank is not None else 0.0
     s.savings_interest += interest
     s.savings += interest
-    if mv.has(MacroKey.ENERGY_TARIFF):
+    if MacroKey.ENERGY_TARIFF.value in m:
         s.energy_paid += m[MacroKey.ENERGY_TARIFF.value]
     for tag, monthly in s.tag_living.items():
         s.tag_cost[tag] = s.tag_cost.get(tag, 0.0) + 12 * monthly
-    stock = m[MacroKey.STOCK_RETURN.value]
-    gilt = m[MacroKey.GILT_10Y.value]
-    s.investments *= 1 + stock / 100
+    # Live mode: a return with no data for the year is skipped (recorded in data_gaps), not assumed.
+    stock = need(MacroKey.STOCK_RETURN.value) if s.investments or s.pension else m.get(MacroKey.STOCK_RETURN.value)
+    gilt = need(MacroKey.GILT_10Y.value) if s.pension else m.get(MacroKey.GILT_10Y.value)
+    if stock is not None:
+        s.investments *= 1 + stock / 100
     if mv.has(MacroKey.CRYPTO_RETURN):
-        s.crypto *= 1 + max(-95.0, m[MacroKey.CRYPTO_RETURN.value]) / 100
-    s.pension *= 1 + (p.PENSION_STOCK_SHARE * stock + (1 - p.PENSION_STOCK_SHARE) * gilt) / 100
-    s.property_value *= 1 + m[MacroKey.HOUSE_PRICE_CHANGE.value] / 100
+        crypto = need(MacroKey.CRYPTO_RETURN.value) if s.crypto else m.get(MacroKey.CRYPTO_RETURN.value)
+        if crypto is not None:
+            s.crypto *= 1 + max(-95.0, crypto) / 100
+    if stock is not None and gilt is not None:
+        s.pension *= 1 + (p.PENSION_STOCK_SHARE * stock + (1 - p.PENSION_STOCK_SHARE) * gilt) / 100
+    hpc = need(MacroKey.HOUSE_PRICE_CHANGE.value) if s.property_value else m.get(MacroKey.HOUSE_PRICE_CHANGE.value)
+    if hpc is not None:
+        s.property_value *= 1 + hpc / 100
 
     # 8. Stats
     if s.age >= 75:

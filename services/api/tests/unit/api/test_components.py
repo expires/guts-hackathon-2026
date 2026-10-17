@@ -229,3 +229,14 @@ def test_sim_error_mapping() -> None:
         e = sim_error_to_api(SimError(code, "msg"))  # type: ignore[arg-type]
         assert (e.status, e.code, e.source) == (status, code, "sim")
     assert sim_error_to_api(SimError("invalid_input", "too young")).status == 422  # type: ignore[arg-type]
+
+
+def test_tokens_are_redacted_from_logs() -> None:
+    import logging
+
+    from lifeline_api.logsafe import RedactTokens
+
+    args = ("1.2.3.4", "/v1/rooms/ABC123?token=eyJ.abc.def")
+    record = logging.LogRecord("uvicorn.error", logging.INFO, __file__, 1, '%s - "WebSocket %s" [accepted]', args, None)
+    assert RedactTokens().filter(record)
+    assert "eyJ" not in record.getMessage() and "token=[redacted]" in record.getMessage()

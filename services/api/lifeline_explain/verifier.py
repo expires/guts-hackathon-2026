@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 _WORDS: dict[str, float] = {
     "zero": 0,
+    "nil": 0,
+    "nought": 0,
     "two": 2,
     "three": 3,
     "four": 4,
@@ -53,7 +55,8 @@ _WORDS: dict[str, float] = {
     "half": 0.5,
     "quarter": 0.25,
 }
-# "one" is too common as a pronoun ("no one", "the one"). It counts only inside a ratio ("one in 10").
+# "one" is too common as a pronoun ("no one", "the one"). It counts inside a ratio ("one in 10") or before a
+# unit word ("one percent", "one year"). "none" counts before a unit word ("none percent").
 _RATIO_WORDS = {**_WORDS, "one": 1}
 
 _NUM = r"\d[\d,]*(?:\.\d+)?|\.\d+"
@@ -66,6 +69,9 @@ _NUMBER_RE = re.compile(
     rf"|\s*thousand\b)?",
     re.IGNORECASE,
 )
+_UNIT_WORD = r"(?:per\s*cent|percent|pounds?|quid|years?|months?|weeks?|days?)"
+_ONE_RE = re.compile(rf"\b(?P<word>one|none)\s+(?={_UNIT_WORD}\b)", re.IGNORECASE)
+_AFTER_RE = re.compile(r"^\s*(?P<u>per\s*cent|percent|pounds?|quid|days?|weeks?|months?|years?)\b", re.IGNORECASE)
 _WORD_RE = re.compile(rf"\b(?P<word>{'|'.join(sorted(_WORDS, key=len, reverse=True))})\b", re.IGNORECASE)
 
 _SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6, "bn": 1e9, "billion": 1e9}
@@ -82,6 +88,26 @@ class Found:
     decimals: int
     is_percent: bool = False
     is_ratio: bool = False
+    start: int = 0
+    end: int = 0
+    kind: str | None = None  # written unit: percent, gbp, days, weeks, months, years, or None
+
+
+def _kind(text: str, start: int, end: int, is_percent: bool) -> str | None:
+    if is_percent:
+        return "percent"
+    before = text[:start].rstrip(" -\u2212")
+    if before.endswith("\u00a3"):
+        return "gbp"
+    m = _AFTER_RE.match(text[end:])
+    if not m:
+        return None
+    u = m.group("u").lower().replace(" ", "")
+    if u in {"percent"}:
+        return "percent"
+    if u.startswith(("pound", "quid")):
+        return "gbp"
+    return u if u.endswith("s") else u + "s"
 
 
 def _token_value(tok: str) -> tuple[float, int]:
@@ -103,7 +129,7 @@ def extract_numbers(text: str) -> list[Found]:
         b, _ = _token_value(m.group("b"))
         if not (0 < b <= 1000 and a <= b):
             continue  # not a ratio ("born 1990 in 2022"): numbers are checked one by one below
-        found.append(Found(m.group(0), a / b, 4, is_ratio=True))
+        found.append(Found(m.group(0), a / b, 4, is_ratio=True, start=m.start(), end=m.end(), kind="ratio"))
         spans.append(m.span())
 
     def taken(pos: int) -> bool:
@@ -119,14 +145,29 @@ def extract_numbers(text: str) -> list[Found]:
         if scale_key in _SCALE:
             value *= _SCALE[scale_key]
             decimals = 0
-        found.append(Found(m.group(0).strip(), value, decimals, is_percent=is_percent))
+        raw = m.group(0).rstrip()
+        end = m.start() + len(raw)
+        kind = _kind(text, m.start(), end, is_percent)
+        found.append(Found(raw, value, decimals, is_percent=kind == "percent", start=m.start(), end=end, kind=kind))
         spans.append(m.span())
 
     for m in _WORD_RE.finditer(text):
         if taken(m.start()):
             continue
         word = m.group("word").lower()
-        found.append(Found(m.group(0), float(_WORDS[word]), 0))
+        kind = _kind(text, m.start(), m.end(), False)
+        found.append(Found(m.group(0), float(_WORDS[word]), 0, kind == "percent", start=m.start(), end=m.end(),
+                           kind=kind))  # fmt: skip
+        spans.append(m.span())
+
+    for m in _ONE_RE.finditer(text):
+        if taken(m.start()):
+            continue
+        value = 1.0 if m.group("word").lower() == "one" else 0.0
+        kind = _kind(text, m.start(), m.start() + len(m.group("word")), False)
+        found.append(Found(m.group("word"), value, 0, kind == "percent", start=m.start(),
+                           end=m.start() + len(m.group("word")), kind=kind))  # fmt: skip
+    found.sort(key=lambda f: f.start)
     return found
 
 
@@ -153,6 +194,28 @@ def number_matches(f: Found, allowed: Iterable[float]) -> bool:
         # Facts may store a percent as 4.1 or as 0.041.
         cands.append((f.value / 100, f.decimals + 2))
     return any(_close(v, a, d) for v, d in cands for a in allowed_list)
+
+
+# Which written units may stand for a fact of each unit (chat facts carry units; ADR 0031, V6 T2-F6).
+_UNIT_OK: dict[str, frozenset[str | None]] = {
+    "gbp": frozenset({"gbp"}),
+    "gbp_per_month": frozenset({"gbp"}),
+    "gbp_per_year": frozenset({"gbp"}),
+    "percent": frozenset({"percent", "ratio"}),
+    "months": frozenset({None, "months"}),
+    "years": frozenset({None, "years"}),
+    "count": frozenset({None, "days", "weeks", "months", "years"}),
+    "date_year": frozenset({None}),
+}
+
+
+def fact_matches(f: Found, value: float, unit: str) -> bool:
+    """Unit-aware match: '165 days' never verifies '165%', percent facts need percent text, money needs £."""
+    if f.kind not in _UNIT_OK.get(unit, frozenset({None})):
+        return False
+    if f.is_ratio:
+        return 0 <= value <= 100 and round(abs(value) / 100, 1) == round(f.value, 1)
+    return _close(f.value, value, f.decimals)
 
 
 @dataclass(frozen=True)

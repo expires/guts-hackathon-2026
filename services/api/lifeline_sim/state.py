@@ -82,6 +82,7 @@ class SimState:
     pending: list[Event] = field(default_factory=list)
     focus_tags: tuple[str, ...] = ()  # scenario setup, see lifeline_sim.setup
     focus_until: int | None = None  # focus applies up to this year (the scenario end year)
+    data_gaps: dict[int, list[str]] = field(default_factory=dict)  # year -> macro names a step skipped (ADR 0027)
     last_fired: dict[str, int] = field(default_factory=dict)  # template id -> last year it fired (cooldown)
     # Running totals since the start year, for `api.scenario_cost` ("Test it", ADR 0018).
     mortgage_paid: float = 0.0  # mortgage payments
@@ -195,7 +196,7 @@ def initial_state(
     if s.housing == "own" and s.mortgage_balance > 0:
         s.housing = "mortgage"
     if s.housing == "mortgage":
-        s.mortgage_rate = mv.value(MacroKey.MORTGAGE_2Y_FIX, start_year, None, 4.5)
+        s.mortgage_rate = _rate(mv, MacroKey.MORTGAGE_2Y_FIX, start_year)
         s.mortgage_fixed_until = start_year + p.FIRST_FIX_YEARS
         s.mortgage_years_left = max(10, min(p.DEFAULT_MORTGAGE_TERM, 67 - age))
         if setup.deal_end_year is not None:
@@ -204,7 +205,7 @@ def initial_state(
             fix_len = 2 if setup.deal_end_year - start_year <= 2 else 5
             key = MacroKey.MORTGAGE_2Y_FIX if fix_len == 2 else MacroKey.MORTGAGE_5Y_FIX
             struck = min(start_year, setup.deal_end_year - fix_len)
-            s.mortgage_rate = mv.value(key, struck, None, 4.5)
+            s.mortgage_rate = _rate(mv, key, struck)
             s.mortgage_fixed_until = setup.deal_end_year
     s.focus_tags = setup.focus
     s.focus_until = setup.focus_until
@@ -223,6 +224,15 @@ def initial_state(
     s.peak = s.nw0
     s.track_drawdown(w)
     return s
+
+
+def _rate(mv: MacroView, key: MacroKey, year: int) -> float:
+    """A quoted mortgage rate. Live gaps (before 1995) use the variable-rate rule: Bank Rate + margin."""
+    v = mv.opt(key, year) if mv.strict else mv.value(key, year, None, 4.5)
+    if v is not None:
+        return v
+    bank = mv.opt(MacroKey.BANK_RATE, year)
+    return round((bank if bank is not None else 0.0) + p.VARIABLE_MARGIN, 2)
 
 
 def _ratio(mv: MacroView, key: MacroKey, year: int, base_year: int, region: str) -> float:

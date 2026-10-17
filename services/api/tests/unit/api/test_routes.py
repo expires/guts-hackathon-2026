@@ -80,9 +80,7 @@ async def test_characters_without_auth_and_deterministic(client: httpx.AsyncClie
 @pytest.mark.parametrize(
     "method,path,body",
     [
-        ("GET", "/v1/challenges", None),
-        ("POST", "/v1/purchases/verify", {"product_id": "lifeline.rewindpass", "demo": True}),
-        ("GET", "/v1/rooms/ABC123", None),
+        ("POST", "/v1/purchases/verify", {"product_id": "lifeline.rewindpass", "demo": False}),
         ("GET", "/v1/bank/auth-link", None),
     ],
 )
@@ -93,7 +91,7 @@ async def test_later_tiers_answer_501(client: httpx.AsyncClient, method: str, pa
 
 async def test_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
-    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "3")
+    monkeypatch.setenv("IP_RATE_LIMIT_PER_MINUTE", "3")
     from lifeline_api.main import app
 
     transport = httpx.ASGITransport(app=app)
@@ -212,3 +210,144 @@ async def test_guess_for_impossible_day_is_422(client: httpx.AsyncClient) -> Non
     r = await client.post("/v1/finance/guesses", json={"date": "2026-02-30", "amount": 10},
                           headers=await _auth(client))
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+async def test_random_character_is_labelled_simulated(client: httpx.AsyncClient) -> None:
+    from lifeline_sim.api import SIMULATED_LABEL
+
+    auth = await _auth(client)
+    body = (await client.get("/v1/characters", params={"seed": 21})).json()
+    assert SIMULATED_LABEL in body["random"]["blurb"]
+    assert all(SIMULATED_LABEL not in (p.get("blurb") or "") for p in body["presets"])
+    person = body["random"]
+    start = min(2026, max(1990, person["birth_year"] + 30))
+    life = (await client.post("/v1/lives", json={"mode": "random", "start_year": start, "seed": 21},
+                              headers=auth)).json()
+    assert life["character"] == person
+    listed = (await client.get("/v1/lives", headers=auth)).json()["lives"]
+    assert any(x["id"] == life["id"] for x in listed)
+
+
+TIER2_ACCOUNT = [
+    ("GET", "/v1/me", None),
+    ("DELETE", "/v1/me", None),
+    ("POST", "/v1/me/reset", None),
+    ("PUT", "/v1/me/health", {"steps_per_day": 8000, "sleep_hours": 7, "measured_days": 30}),
+    ("POST", "/v1/auth/logout", None),
+    ("PUT", "/v1/finance/manual", {"postcode": "LS6 1AN", "housing": "rent", "monthly_take_home": 2000}),
+    ("POST", "/v1/finance/transactions", {"amount": 3.2, "merchant": "Pret"}),
+    ("GET", "/v1/postcodes/reverse?lat=53.8&lon=-1.55", None),
+]
+
+
+@pytest.mark.parametrize("method,path,body", TIER2_ACCOUNT)
+async def test_account_routes_need_auth(client: httpx.AsyncClient, method: str, path: str, body: object) -> None:
+    assert (await client.request(method, path, json=body)).status_code == 401
+    r = await client.request(method, path, json=body, headers=await _auth(client))
+    assert r.status_code in (200, 201, 204, 404, 501), r.text
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("PUT", "/v1/me/health", {"steps_per_day": -1, "sleep_hours": 7, "measured_days": 30}),
+        ("PUT", "/v1/finance/manual", {"postcode": "x", "housing": "rent", "monthly_take_home": 2000}),
+        ("POST", "/v1/finance/transactions", {"amount": 0, "merchant": "Pret"}),
+        ("GET", "/v1/postcodes/reverse?lat=40&lon=0", None),
+        ("POST", "/v1/finance/statements", {"file": "not multipart"}),
+    ],
+)
+async def test_account_stubs_validate(client: httpx.AsyncClient, method: str, path: str, body: object) -> None:
+    r = await client.request(method, path, json=body, headers=await _auth(client))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+async def test_statement_upload_has_its_own_5mb_limit(client: httpx.AsyncClient) -> None:
+    auth = await _auth(client)
+    one_mb = {"file": ("statement.csv", b"x" * 1_000_000, "text/csv")}
+    r = await client.post("/v1/finance/statements", files=one_mb, headers=auth)
+    assert r.status_code != 413, "1 MB is allowed on this route"
+    six_mb = {"file": ("statement.csv", b"x" * 6_000_000, "text/csv")}
+    r = await client.post("/v1/finance/statements", files=six_mb, headers=auth)
+    assert r.status_code == 413 and r.json()["error"]["code"] == "payload_too_large"
+    r = await client.post("/v1/finance/transactions", files=one_mb, headers=auth)
+    assert r.status_code == 413, "other routes keep the 64 KB limit"
+
+
+CHAT_ROUTES = [
+    ("GET", "/v1/chat/threads", None),
+    ("GET", "/v1/chat/threads/th_1", None),
+    ("GET", "/v1/news?from=2026-10-01&to=2026-10-17&topic=rates", None),
+    ("GET", "/v1/rate-decisions", None),
+]
+
+
+@pytest.mark.parametrize("method,path,body", CHAT_ROUTES)
+async def test_chat_routes_need_auth(client: httpx.AsyncClient, method: str, path: str, body: object) -> None:
+    assert (await client.request(method, path, json=body)).status_code == 401
+    r = await client.request(method, path, json=body, headers=await _auth(client))
+    assert r.status_code in (200, 404), r.text
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("POST", "/v1/chat", {"bogus": 1}),
+        ("GET", "/v1/chat/threads/bad id!", None),
+        ("GET", "/v1/news?from=2026-10-01", None),
+        ("GET", "/v1/news?from=2026-10-01&to=2026-02-30", None),
+        ("GET", "/v1/news?from=2026-10-01&to=2026-10-17&topic=gossip", None),
+    ],
+)
+async def test_chat_stubs_validate(client: httpx.AsyncClient, method: str, path: str, body: object) -> None:
+    r = await client.request(method, path, json=body, headers=await _auth(client))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+async def test_truelayer_is_disabled_monzo_untouched(client: httpx.AsyncClient) -> None:
+    auth = await _auth(client)
+    assert (await client.get("/v1/bank/auth-link", params={"provider": "truelayer"})).status_code == 401
+    r = await client.get("/v1/bank/auth-link", params={"provider": "truelayer"}, headers=auth)
+    assert r.status_code == 409 and r.json()["error"]["code"] == "source_disabled"
+    r = await client.get("/v1/bank/auth-link", headers=auth)
+    assert r.status_code == 501, "Monzo path stays as on main until the integration merge"
+    r = await client.get("/v1/bank/auth-link", params={"provider": "barclays"}, headers=auth)
+    assert r.status_code == 422
+
+
+async def test_reverse_postcode(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from lifeline_api.main import app
+
+    auth = await _auth(client)
+    hub = app.state.lifeline.hub
+
+    async def leeds(lat: float, lon: float) -> dict[str, str]:
+        return {"postcode": "LS6 1AN", "region": "yorkshire-and-the-humber", "town": "Leeds", "status": "live"}
+
+    async def at_sea(lat: float, lon: float) -> None:
+        return None
+
+    monkeypatch.setattr(hub, "reverse_postcode", leeds)
+    r = await client.get("/v1/postcodes/reverse", params={"lat": 53.82, "lon": -1.57}, headers=auth)
+    assert r.status_code == 200 and r.json()["postcode"] == "LS6 1AN" and r.json()["status"] == "live"
+    monkeypatch.setattr(hub, "reverse_postcode", at_sea)
+    r = await client.get("/v1/postcodes/reverse", params={"lat": 53.82, "lon": -1.57}, headers=auth)
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+
+
+async def test_reads_have_a_larger_budget_than_writes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
+    monkeypatch.setenv("READ_RATE_LIMIT_PER_MINUTE", "6")
+    from lifeline_api.main import app
+
+    transport = httpx.ASGITransport(app=app)
+    async with app.router.lifespan_context(app), httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        auth = await _auth(c, "budget-device-01")
+        reads = [(await c.get("/v1/plan", headers=auth)).status_code for _ in range(7)]
+        assert reads == [200] * 6 + [429]
+        body = {"name": "Trip", "target": 100}
+        writes = [(await c.post("/v1/finance/goals", json=body, headers=auth)).status_code for _ in range(3)]
+        assert writes == [201, 201, 429], "writes keep the smaller budget"
+        r = await c.post("/v1/finance/goals", json=body, headers=auth)
+        assert r.status_code == 429 and int(r.headers["retry-after"]) >= 1

@@ -23,6 +23,7 @@ from lifeline_contracts.domain import CharacterSpec, Deltas, Event, LifeMode
 from lifeline_contracts.macro import MacroTable
 from lifeline_sim.actions import is_action_id, run_action
 from lifeline_sim.events.engine import Resolution, apply_effects, resolve, templates_by_id
+from lifeline_sim.health import HealthInput, health_effect, is_health_id
 from lifeline_sim.index import IndexWeights
 from lifeline_sim.macroview import MacroView
 from lifeline_sim.setup import Setup
@@ -30,6 +31,7 @@ from lifeline_sim.state import SimState, initial_state
 from lifeline_sim.step import step_year
 
 Decision = tuple[str, str]  # (event_id, choice_id)
+TEMPLATE_COST_PREFIX = "tpl:"  # tag_cost / tag_living key for one template's own choices
 
 _VIEWS: OrderedDict[int, tuple[MacroTable, MacroView]] = OrderedDict()
 _VIEWS_MAX = 4
@@ -70,9 +72,9 @@ class LifeSpec:
 
 
 def event_year(event_id: str) -> int | None:
-    """Event ids are `ev-<year>-<n>`. Tab action ids are `act-<year>-<n>`."""
+    """Event ids are `ev-<year>-<n>`. Tab action ids are `act-<year>-<n>`. Health input: `hl-<year>-1`."""
     parts = event_id.split("-")
-    if len(parts) == 3 and parts[0] in ("ev", "act") and parts[1].isdigit():
+    if len(parts) == 3 and parts[0] in ("ev", "act", "hl") and parts[1].isdigit():
         return int(parts[1])
     return None
 
@@ -80,6 +82,11 @@ def event_year(event_id: str) -> int | None:
 def apply_decisions(s: SimState, decisions: Sequence[Decision], mv: MacroView, w: IndexWeights) -> None:
     """Apply one year's recorded decisions in recorded order: event choices and tab actions."""
     for decision_id, choice_id in decisions:
+        if is_health_id(decision_id):
+            h = HealthInput.decode(choice_id)
+            if h is not None:
+                apply_health(s, h)
+            continue
         if is_action_id(decision_id):
             if run_action(s, mv, decision_id, choice_id) is not None:
                 s.track_drawdown(w)
@@ -89,12 +96,22 @@ def apply_decisions(s: SimState, decisions: Sequence[Decision], mv: MacroView, w
             apply_choice(s, found, choice_id, w)
 
 
+def apply_health(s: SimState, h: HealthInput) -> int:
+    """Apply the phone health signal to the Health stat. Returns the change applied."""
+    if not s.alive:
+        return 0
+    before = s.health
+    s.health = max(0, min(100, s.health + health_effect(h)))
+    return s.health - before
+
+
 def apply_choice(s: SimState, event: Event, choice_id: str, w: IndexWeights) -> tuple[Resolution, Deltas]:
     res = resolve(event, choice_id, s.seed)
     deltas = apply_effects(s, res.effects)
     lt = templates_by_id().get(event.template_id)
     living = res.effects.get("living", 0.0)
-    for tag in lt.t.tags if lt is not None else ():
+    keys = (*lt.t.tags, f"{TEMPLATE_COST_PREFIX}{lt.t.id}") if lt is not None else ()
+    for tag in keys:
         s.tag_cost[tag] = s.tag_cost.get(tag, 0.0) - deltas.money
         if isinstance(living, float | int) and living:
             s.tag_living[tag] = s.tag_living.get(tag, 0.0) + float(living)

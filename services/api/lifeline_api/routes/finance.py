@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import UTC, datetime
 from datetime import date as date_cls
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import AfterValidator
 
 from lifeline_api import money, prediction
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError
+from lifeline_api.routes.next_move import _latest as latest_next_move
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
 from lifeline_api.store import StoreUnavailable
@@ -37,8 +40,11 @@ from lifeline_contracts.finance import (
     SubscriptionsResponse,
     UpdateBudgetsRequest,
 )
+from lifeline_contracts.next_move import FinanceHome
 from lifeline_engine import money as money_engine
 from lifeline_engine.money import predict
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["finance"])
 
@@ -146,8 +152,8 @@ async def create_goal(body: CreateGoalRequest, request: Request, sub: Subject) -
 
 @router.get("/v1/finance/profile", response_model=FinanceProfile, response_model_exclude_none=True)
 async def get_finance_profile(request: Request, sub: Subject) -> FinanceProfile:
-    _, snap = await _snap(request, sub)
-    return await call_pure(money_engine.finance_profile, snap, money.today(snap), money.hints(sub, snap))
+    state, snap = await _snap(request, sub)
+    return await call_pure(money_engine.finance_profile, snap, money.today(snap), money.hints(state, sub, snap))
 
 
 # Spend prediction (ADR 0017). The evaluation route is registered before /prediction on purpose.
@@ -257,3 +263,57 @@ async def make_guess(body: GuessRequest, request: Request, sub: Subject) -> Spen
         docs[body.date] = doc
         await state.store.put_doc(sub, DOC_GUESSES, list(docs.values()))
     return pred.model_copy(update={"guess": _guess_state(doc, pred.actual)})
+
+
+# ---------- Money home: one request (UX) ----------
+
+CONNECT_PROMPT = "Connect your money to see your next move"
+HOME_BILLS = 3
+
+
+@router.get("/v1/finance/home", response_model=FinanceHome, response_model_exclude_none=True)
+async def get_finance_home(request: Request, sub: Subject) -> Any:
+    """Everything Money home needs. No data is a normal state: 200 with has_data=false and a prompt.
+
+    Parts that fail on their own (next move, prediction) are left out rather than failing the screen.
+    The client still hides the prediction numbers until `prediction.guess` is set.
+    """
+    state = get_state(request)
+    snap = await money.maybe_snapshot(state, sub)
+    if snap is None:
+        empty = FinanceHome(has_data=False, connect_prompt=CONNECT_PROMPT)
+        return JSONResponse(empty.model_dump(mode="json", include={"has_data", "connect_prompt"}))
+    overview = await call_pure(money_engine.overview, snap)
+    bills = await call_pure(money_engine.bills_response, snap, money.today(snap))
+
+    next_move = None
+    try:
+        next_move, _ = await latest_next_move(state, sub)
+    except ApiError as exc:
+        log.info("home: next move unavailable (%s)", exc.code)
+    except StoreUnavailable:
+        log.info("home: next move unavailable (store)")
+
+    pred = None
+    try:
+        inp = await prediction.inputs(state, sub)
+        day = money.today(inp.snap)
+        if prediction.earliest_day(inp) <= day:
+            try:
+                guesses = await _guess_docs(state, sub)
+            except StoreUnavailable:
+                guesses = {}
+            pred = await _prediction(state, sub, inp, day, guesses.get(day.isoformat()))
+    except ApiError as exc:
+        log.info("home: prediction unavailable (%s)", exc.code)
+
+    return FinanceHome(
+        has_data=True,
+        meta=money.meta(snap),
+        balance=overview.balance,
+        net_worth=overview.net_worth,
+        next_move=next_move,
+        prediction=pred,
+        coming_up=bills.items[:HOME_BILLS],
+        coming_up_more=len(bills.items) > HOME_BILLS,
+    )

@@ -50,6 +50,8 @@ BANKRUPTCY_INCOME_FLOOR_2024 = 10_000.0
 # State pension.
 STATE_PENSION_AGE = 66
 STATE_PENSION_SHARE_OF_MEDIAN_PAY = 0.32
+# Used only when the year has no median pay value (live mode gaps): full new state pension 2024/25.
+FULL_STATE_PENSION_2024 = 11_502.0
 
 # Spreads over Bank Rate.
 # Variable mortgage rate = Bank Rate + margin. Label: "Bank Rate + 2.0 points", an approximate

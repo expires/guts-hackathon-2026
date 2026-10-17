@@ -1,0 +1,15 @@
+{
+ "status": 200,
+ "result": [
+  {
+   "postcode": "LS6 1AN",
+   "country": "England",
+   "region": "Yorkshire and The Humber",
+   "admin_district": "Leeds",
+   "parish": "Leeds, unparished area",
+   "longitude": -1.560746,
+   "latitude": 53.807813,
+   "distance": 3.3484637608666734
+  }
+ ]
+}

@@ -109,6 +109,16 @@ class LifeStore(Protocol):
 
     async def put_doc(self, owner: str, kind: str, doc: Any) -> None: ...
 
+    async def delete_doc(self, owner: str, kind: str) -> None: ...
+
+    async def list_docs(self, owner: str, prefix: str) -> dict[str, Any]:
+        """Documents of `owner` whose kind starts with `prefix`, keyed by kind."""
+        ...
+
+    async def delete_owner(self, owner: str, keep: tuple[str, ...] = ()) -> int:
+        """Delete every life and document of `owner`, except document kinds in `keep`. Returns rows deleted."""
+        ...
+
 
 class MemoryLifeStore:
     """Process-local store for tests and for dev without DATABASE_URL."""
@@ -159,6 +169,21 @@ class MemoryLifeStore:
     async def put_doc(self, owner: str, kind: str, doc: Any) -> None:
         # Stored as JSON text, so callers never share mutable state with the store (same as Postgres).
         self._docs[(owner, kind)] = json.dumps(doc)
+
+    async def delete_doc(self, owner: str, kind: str) -> None:
+        self._docs.pop((owner, kind), None)
+
+    async def list_docs(self, owner: str, prefix: str) -> dict[str, Any]:
+        return {k: json.loads(v) for (o, k), v in self._docs.items() if o == owner and k.startswith(prefix)}
+
+    async def delete_owner(self, owner: str, keep: tuple[str, ...] = ()) -> int:
+        lives = [k for k, r in self._lives.items() if r.owner == owner]
+        docs = [key for key in self._docs if key[0] == owner and key[1] not in keep]
+        for k in lives:
+            del self._lives[k]
+        for key in docs:
+            del self._docs[key]
+        return len(lives) + len(docs)
 
 
 _SCHEMA = (
@@ -355,6 +380,41 @@ class PostgresLifeStore:
                 ),
                 {"owner": owner, "kind": kind, "doc": json.dumps(doc)},
             )
+
+    @_guarded
+    async def delete_doc(self, owner: str, kind: str) -> None:
+        await self._ensure_schema()
+        async with self._eng().begin() as conn:
+            await conn.execute(text("DELETE FROM user_docs WHERE owner = :owner AND kind = :kind"),
+                               {"owner": owner, "kind": kind})
+
+    @_guarded
+    async def list_docs(self, owner: str, prefix: str) -> dict[str, Any]:
+        await self._ensure_schema()
+        pattern = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        async with self._eng().connect() as conn:
+            rows = (
+                await conn.execute(
+                    text("SELECT kind, doc FROM user_docs WHERE owner = :owner AND kind LIKE :pattern"),
+                    {"owner": owner, "pattern": pattern},
+                )
+            ).all()
+        out: dict[str, Any] = {}
+        for row in rows:
+            raw: Any = row.doc
+            out[row.kind] = json.loads(raw) if isinstance(raw, str) else raw
+        return out
+
+    @_guarded
+    async def delete_owner(self, owner: str, keep: tuple[str, ...] = ()) -> int:
+        await self._ensure_schema()
+        async with self._eng().begin() as conn:
+            lives = await conn.execute(text("DELETE FROM lives WHERE owner = :owner"), {"owner": owner})
+            docs = await conn.execute(
+                text("DELETE FROM user_docs WHERE owner = :owner AND NOT (kind = ANY(:keep))"),
+                {"owner": owner, "keep": list(keep)},
+            )
+        return int(lives.rowcount or 0) + int(docs.rowcount or 0)
 
     @staticmethod
     def _params(record: LifeRecord) -> dict[str, Any]:
