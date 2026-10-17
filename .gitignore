@@ -1,0 +1,63 @@
+# ---- Secrets & credentials (never commit) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+tokens/
+*.token
+.monzo_token*
+.trading212_key*
+
+# ---- Real personal financial data (local only) ----
+# Live adapter caches and any exports from Monzo / Trading212 stay on the device.
+data/cache/
+data/private/
+data/live/
+*.ofx
+*.qif
+exports/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.ipynb_checkpoints/
+
+# ---- Node (experience layer) ----
+node_modules/
+.next/
+.vite/
+.turbo/
+.parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Editors & OS ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
+logs/
