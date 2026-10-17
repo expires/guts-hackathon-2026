@@ -6,51 +6,65 @@ struct BankConnectView: View {
     var actions: BankConnectActions = .noop
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                    Image(systemName: "building.columns.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.tint)
-                        .accessibilityHidden(true)
-                    Text("Fill in from your bank").font(.largeTitle.bold())
-                    Text(state.privacyNote).foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                ScreenHeader(title: "Your bank", icon: .bank) {
+                    HeaderSquareButton(kind: .close, identifier: "bank.close", action: actions.onClose)
+                }
+                Text("Fill in from your bank")
+                    .font(.llHero)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(state.privacyNote)
+                    .font(.llBody)
+                    .foregroundStyle(Theme.Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    switch state.step {
-                    case .intro:
-                        PrimaryButton(title: "Connect \(state.providerName)", systemImage: "link", action: actions.onConnect)
-                            .accessibilityIdentifier("bank.connect")
-                    case .connecting:
-                        LoadingStateView(state: .init(message: "Waiting for your bank"))
-                    case .connected:
-                        if let summary = state.summary {
-                            GlassCard {
-                                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                                    if state.status == .mock {
-                                        DemoDataBadge()
-                                    }
-                                    LabeledContent("Accounts", value: "\(summary.accounts)")
-                                    LabeledContent("Pay per year", value: Money.format(summary.annualIncome))
-                                    LabeledContent("Savings", value: Money.format(summary.savings))
-                                    LabeledContent("Home", value: summary.housingLabel)
-                                    LabeledContent("Region", value: summary.regionLabel)
+                switch state.step {
+                case .intro:
+                    PrimaryButton(title: "Connect \(state.providerName)", icon: .bank, action: actions.onConnect)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .accessibilityIdentifier("bank.connect")
+                case .connecting:
+                    LoadingStateView(state: .init(message: "Waiting for your bank"))
+                case .connected:
+                    if let summary = state.summary {
+                        InkCard {
+                            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                                if state.status == .mock {
+                                    DemoDataBadge()
                                 }
+                                row("Accounts", "\(summary.accounts)")
+                                row("Pay per year", Money.format(summary.annualIncome))
+                                row("Savings", Money.format(summary.savings))
+                                row("Home", summary.housingLabel)
+                                row("Region", summary.regionLabel)
                             }
-                            PrimaryButton(title: "Use these numbers", systemImage: "checkmark", action: actions.onUseProfile)
-                                .accessibilityIdentifier("bank.useProfile")
                         }
-                    case let .failed(error):
-                        ErrorStateView(state: error, onRetry: actions.onConnect)
+                        PrimaryButton(title: "Use these numbers", icon: .check, action: actions.onUseProfile)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .accessibilityIdentifier("bank.useProfile")
                     }
-                }
-                .padding(Theme.Spacing.l)
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: actions.onClose)
+                case let .failed(error):
+                    ErrorStateView(state: error, onRetry: actions.onConnect)
                 }
             }
+            .foregroundStyle(Theme.Palette.ink)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
+            .padding(.bottom, Theme.Spacing.xxl)
         }
+        .paperBackground()
+    }
+
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.llBody).foregroundStyle(Theme.Palette.muted)
+            Spacer(minLength: Theme.Spacing.m)
+            Text(value).font(.llBodyBold).multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

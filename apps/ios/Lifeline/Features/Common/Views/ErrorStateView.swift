@@ -7,18 +7,18 @@ struct ErrorStateView: View {
 
     var body: some View {
         VStack(spacing: Theme.Spacing.m) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.largeTitle)
-                .foregroundStyle(.orange)
+            LLIconImage(.crash)
+                .font(.llHero)
+                .foregroundStyle(Theme.Palette.home)
                 .accessibilityHidden(true)
-            Text(state.title).font(.headline)
+            Text(state.title).font(.llBodyBold)
             Text(state.message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.llBody)
+                .foregroundStyle(Theme.Palette.muted)
                 .multilineTextAlignment(.center)
             if state.canRetry {
-                Button("Try again", systemImage: "arrow.clockwise", action: onRetry)
-                    .buttonStyle(.glassProminent)
+                Button("Try again", icon: .rewind, action: onRetry)
+                    .buttonStyle(.main)
                     .frame(minHeight: Theme.minTarget)
                     .accessibilityIdentifier("error.retry")
             }

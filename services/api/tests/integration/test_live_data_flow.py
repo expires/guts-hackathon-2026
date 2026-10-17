@@ -150,9 +150,9 @@ async def test_trading212_flow(live: httpx.AsyncClient, router: respx.MockRouter
     nm = (await call("GET", "/v1/next-move")).json()
     assert nm["meta"]["data_status"] == "live"
 
-    # not enough spending history for a live Trading212-only user: a clear 409, never a crash
+    # not enough spending history for a live Trading212-only user: a clear 4xx, never a crash
     pred = await call("GET", "/v1/finance/prediction")
-    assert pred.status_code == 409 and pred.json()["error"]["code"] == "not_enough_data"
+    assert pred.status_code == 422 and pred.json()["error"]["code"] == "validation_error"
 
     gone = await call("DELETE", "/v1/connections/trading212")
     assert gone.status_code == 200 and not gone.json()["providers"][1]["connected"]

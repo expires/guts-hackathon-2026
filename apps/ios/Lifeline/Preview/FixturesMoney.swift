@@ -59,7 +59,7 @@ extension Fixtures {
 
     @MainActor
     enum Why {
-        /// Mortgage move. The mock concepts have no "fixed-vs-variable" lesson yet.
+        /// Mortgage move whose concept has no lesson (state for a concept the API does not know).
         static var noLesson: NextMoveWhyViewState {
             var state = NextMoveWhyViewModel.makeState(
                 move: ContractExamples.nextMove.top, lesson: nil, lessonPhase: .ready, isSampleData: true
@@ -68,13 +68,24 @@ extension Fixtures {
             return state
         }
 
-        /// Subscriptions move with a lesson and a personal sentence from `FinanceProfile`.
-        /// The lesson text is the contract example lesson (layout only).
+        /// Mortgage move with the contract "fixed-vs-variable" lesson, rate bars and the decision link.
+        static var mortgage: NextMoveWhyViewState {
+            let move = ContractExamples.nextMove.top
+            let lesson = ContractExamples.concepts.first { $0.id == move.conceptId }?.lesson
+            var state = NextMoveWhyViewModel.makeState(move: move, lesson: lesson, lessonPhase: .ready, isSampleData: true)
+            state.hasDecisionDetail = true
+            return state
+        }
+
+        /// Subscriptions move with the contract "subscriptions" lesson and its personal sentence.
         static var withLesson: NextMoveWhyViewState {
-            var lesson = ContractExamples.lesson
-            lesson.personal = ContractExamples.financeProfile.personalFacts.first?.text
+            let move = ContractExamples.nextMove.runnersUp[0]
+            var lesson = ContractExamples.concepts.first { $0.id == move.conceptId }?.lesson ?? ContractExamples.lesson
+            if lesson.personal == nil {
+                lesson.personal = ContractExamples.financeProfile.personalFacts.first { $0.conceptId == move.conceptId }?.text
+            }
             return NextMoveWhyViewModel.makeState(
-                move: ContractExamples.nextMove.runnersUp[0], lesson: lesson, lessonPhase: .ready, isSampleData: true
+                move: move, lesson: lesson, lessonPhase: .ready, isSampleData: true
             )
         }
 
@@ -254,10 +265,20 @@ extension Fixtures {
 
     @MainActor
     enum MoneyHome {
+        /// Header and payday from the contract examples (morning greeting, profile emoji, days to payday).
+        static var header: MoneyHomeViewState.Header {
+            MoneyHomeViewModel.header(
+                profile: ContractExamples.financeProfile,
+                now: FinanceMapping.date(ContractExamples.spendPrediction.date)!.addingTimeInterval(9 * 3600)
+            )
+        }
+
+        static var payday: String? { ContractExamples.spendPrediction.daysToPayday.map(MoneyHomeViewModel.paydayText) }
+
         /// Nothing connected: sample data and the "Connect your accounts" card.
         static var ready: MoneyHomeViewState {
             .init(
-                nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess,
+                header: header, paydayText: payday, nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess,
                 connections: .from(SampleInvesting.connections()),
                 investmentsLink: MoneyWidgetsViewModel.moveLink(for: .investments, moves: Fixtures.allMoves)
             )
@@ -265,7 +286,7 @@ extension Fixtures {
 
         static var revealed: MoneyHomeViewState {
             .init(
-                nextMove: NextMove.inPlan, widgets: Widgets.ready, guess: Guess.revealed,
+                header: header, paydayText: payday, nextMove: NextMove.inPlan, widgets: Widgets.ready, guess: Guess.revealed,
                 connections: .from(SampleInvesting.connections())
             )
         }
@@ -290,6 +311,7 @@ extension Fixtures {
                 bills: .success(bills), budgets: .success(budgets), goals: .success(goals), moves: Fixtures.allMoves
             )
             return .init(
+                header: header, paydayText: payday,
                 nextMove: NextMoveViewModel.makeState(response: nextMove, phase: .ready),
                 widgets: widgets,
                 guess: GuessSpendViewModel.makeState(

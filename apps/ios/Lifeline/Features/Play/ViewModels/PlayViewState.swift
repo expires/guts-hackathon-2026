@@ -40,6 +40,8 @@ struct PlayViewState: Equatable, Sendable {
     var isSampleData: Bool
     /// Disables start buttons while a life is starting.
     var isBusy: Bool
+    /// Same Life lobby for the "Rooms" segment (W7, fixture data while rooms are Tier 2). Nil hides it.
+    var room: RoomLobbyViewState? = nil
 }
 
 struct PlayActions {
@@ -51,6 +53,8 @@ struct PlayActions {
     var onOpenRooms: @MainActor () -> Void = {}
     var onOpenConcepts: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
+    /// Lobby buttons for the "Rooms" segment.
+    var room: RoomLobbyActions = .noop
 
     static var noop: Self { .init() }
 }

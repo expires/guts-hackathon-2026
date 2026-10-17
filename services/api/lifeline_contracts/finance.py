@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from lifeline_contracts.accounts import Holding
-from lifeline_contracts.domain import CharacterSpec, DecisionProfile
+from lifeline_contracts.domain import CharacterSpec, DecisionProfile, IsoDate, IsoMonth
 from lifeline_contracts.observation import Status
 
 AccountKind = Literal["current", "savings", "credit", "isa", "pension", "mortgage", "loan"]
@@ -62,7 +62,7 @@ class Transaction(_M):
 
     id: str
     account_id: str
-    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date: IsoDate
     amount: float
     currency: Literal["GBP"] = "GBP"
     description: str = Field(max_length=200)
@@ -74,7 +74,7 @@ class MortgageDetails(_M):
     balance: float = Field(ge=0)
     rate_pct: float = Field(ge=0, le=30)
     rate_type: Literal["fixed", "tracker", "variable"]
-    fixed_until: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    fixed_until: IsoDate | None = None
     years_left: int = Field(ge=0, le=40)
     property_value: float = Field(ge=0)
     monthly_payment: float = Field(ge=0)
@@ -85,7 +85,16 @@ class EnergyDetails(_M):
     supplier: str
     tariff: str
     monthly_cost: float = Field(ge=0)
-    fixed_until: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    fixed_until: IsoDate | None = None
+
+
+class AccountHolder(_M):
+    name: str = Field(max_length=40)
+    birth_year: int = Field(ge=1900, le=2026)
+    occupation: str | None = Field(default=None, max_length=60)
+    region: str | None = None
+    town: str | None = Field(default=None, max_length=60)
+    postcode: str | None = Field(default=None, max_length=10)
 
 
 class FinanceSnapshot(_M):
@@ -94,12 +103,15 @@ class FinanceSnapshot(_M):
     status: Status
     source: str = Field(description="'fixtures', 'truelayer', 'monzo', 'trading212' or 'monzo+trading212'")
     persona: str | None = Field(default=None, description="Fixture persona id when status is mock")
-    as_of: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    region: str | None = Field(default=None, description="Canonical region slug of the account holder")
+    postcode: str | None = Field(default=None, max_length=10)
+    as_of: IsoDate
     accounts: list[Account]
     transactions: list[Transaction]
     mortgage: MortgageDetails | None = None
     energy: EnergyDetails | None = None
     holdings: list[Holding] = Field(default_factory=list, description="Investment positions (Trading212)")
+    holder: AccountHolder | None = Field(default=None, description="Bank identity data or fixture persona")
 
 
 # ---------- API responses ----------
@@ -113,7 +125,7 @@ class FinanceMeta(_M):
 
 
 class Point(_M):
-    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date: IsoDate
     value: float
 
 
@@ -138,7 +150,7 @@ class CategorySpend(_M):
 
 class SpendingResponse(_M):
     meta: FinanceMeta
-    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+    month: IsoMonth
     total: float = Field(ge=0)
     categories: list[CategorySpend]
 
@@ -146,7 +158,7 @@ class SpendingResponse(_M):
 class PriceRise(_M):
     from_amount: float
     to_amount: float
-    since: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    since: IsoDate
 
 
 class Subscription(_M):
@@ -174,7 +186,7 @@ class Bill(_M):
     emoji: str
     kind: Literal["bill", "subscription", "rent", "mortgage", "loan", "card"]
     amount: float = Field(ge=0)
-    due_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    due_date: IsoDate
     status: Literal["upcoming", "due_soon", "paid", "overdue"]
 
 
@@ -196,7 +208,7 @@ class Budget(_M):
 
 class BudgetsResponse(_M):
     meta: FinanceMeta
-    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+    month: IsoMonth
     items: list[Budget]
 
 
@@ -230,7 +242,7 @@ class CreateGoalRequest(_M):
     emoji: str = Field(default="🎯", max_length=8)
     target: float = Field(gt=0, le=10_000_000)
     saved: float = Field(default=0, ge=0, le=10_000_000)
-    target_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    target_date: IsoDate | None = None
 
 
 class InvestmentsResponse(_M):
@@ -282,8 +294,8 @@ class LivesResponse(_M):
 
 
 class Reason(_M):
-    """One feature contribution. effect is in GBP vs the baseline day; the effects of all features sum to
-    predicted - baseline."""
+    """One feature-group contribution in GBP: predicted minus the prediction with that group at its training
+    mean (ADR 0017). Effects are per group in a log model, so they need not sum exactly to predicted - baseline."""
 
     feature: str = Field(description="e.g. payday, weekend, rain, bank_holiday, recent_trend")
     label: str = Field(description="Plain English, e.g. 'It is Friday'")
@@ -314,7 +326,7 @@ class GuessState(_M):
 
 class SpendPrediction(_M):
     meta: FinanceMeta
-    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date: IsoDate
     predicted: float = Field(ge=0)
     low: float = Field(ge=0, description="10th percentile")
     high: float = Field(ge=0, description="90th percentile")
@@ -332,12 +344,12 @@ class SpendPrediction(_M):
 
 
 class GuessRequest(_M):
-    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date: IsoDate
     amount: float = Field(ge=0, le=100_000)
 
 
 class GuessDay(_M):
-    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date: IsoDate
     guess: float = Field(ge=0)
     predicted: float = Field(ge=0)
     actual: float | None = None
@@ -354,7 +366,7 @@ class GuessesResponse(_M):
 
 
 class BacktestDay(_M):
-    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date: IsoDate
     predicted: float
     low: float
     high: float

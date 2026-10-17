@@ -21,6 +21,14 @@ struct NextMoveCardState: Equatable, Sendable {
         var impactPerYear: Double
         /// "£1,240 a year better off".
         var impactText: String
+        /// "£1,240" (hero number, 40 pt).
+        var impactAmountText: String
+        /// "a year better off" or "a year worse off".
+        var impactCaption: String
+        /// "High confidence", "Medium confidence" or "Low confidence".
+        var confidenceWord: String
+        /// Filled segments of the 3-segment meter.
+        var confidenceFilled: Int
         /// "Worst past period: £310 a year worse off".
         var worstCaseText: String
         /// 0 to 1.

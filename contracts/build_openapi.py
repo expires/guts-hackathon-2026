@@ -393,7 +393,68 @@ def examples() -> dict[str, Any]:
                     area="money",
                     summary="Prices rise over time.",
                     lesson=LESSON,
-                )
+                ),
+                D.Concept(
+                    id="fixed-vs-variable",
+                    title="Fixed or variable",
+                    emoji="🔒",
+                    area="home",
+                    summary="A fix keeps your payment the same. A variable rate moves with Bank Rate.",
+                    lesson=D.Lesson(
+                        concept_id="fixed-vs-variable",
+                        title="Lock it or let it move",
+                        chart=D.Chart(
+                            kind="line",
+                            title="Bank Rate at year end",
+                            x_label="Year",
+                            y_label="%",
+                            points=[
+                                D.ChartPoint(x=2021, y=0.25),
+                                D.ChartPoint(x=2022, y=3.5),
+                                D.ChartPoint(x=2023, y=5.25),
+                            ],
+                            source=D.SourceRef(source="boe", series_id="IUMBEDR", status="live"),
+                        ),
+                        sentences=[
+                            "A fixed rate costs a little more when rates fall but protects you when they rise.",
+                            "In 2022 Bank Rate rose from 0.25% to 3.5%, so variable payments jumped.",
+                        ],
+                        quiz=D.Quiz(
+                            question="Rates are about to rise fast. Which payment stays the same?",
+                            options=["Fixed", "Variable", "Tracker"],
+                            answer_index=0,
+                        ),
+                        personal="Your deal ends in 165 days.",
+                    ),
+                ),
+                D.Concept(
+                    id="subscriptions",
+                    title="Subscriptions",
+                    emoji="📺",
+                    area="money",
+                    summary="Small monthly payments add up.",
+                    lesson=D.Lesson(
+                        concept_id="subscriptions",
+                        title="The quiet spend",
+                        chart=D.Chart(
+                            kind="bar",
+                            title="Your subscriptions per month",
+                            x_label="Month",
+                            y_label="£",
+                            points=[D.ChartPoint(x=1, y=41), D.ChartPoint(x=2, y=44), D.ChartPoint(x=3, y=47)],
+                        ),
+                        sentences=[
+                            "Each one looks small, but together they are a bill.",
+                            "Prices rise quietly, so check them once a year.",
+                        ],
+                        quiz=D.Quiz(
+                            question="You pay £13 a month for something you never use. What does it cost a year?",
+                            options=["£13", "£156", "£52"],
+                            answer_index=1,
+                        ),
+                        personal="You spend £47 a month on 6 subscriptions.",
+                    ),
+                ),
             ]
         ),
         "Challenges": A.ChallengesResponse(
@@ -1020,8 +1081,18 @@ def errs(*codes: str) -> dict[str, Any]:
     return {c: {"$ref": f"#/components/responses/{names[c]}"} for c in codes}
 
 
-# True while some non-Tier-0 endpoints may still answer 501 not_implemented. Set False when all tiers are built.
+# True while some Tier 2 endpoints may still answer 501 not_implemented. Set False when Tier 2 is built.
 STUBS_DECLARED = True
+TIER2_OPS = {
+    "listChallenges",
+    "createRoom",
+    "getRoom",
+    "getBankAuthLink",
+    "bankCallback",
+    "getBankSummary",
+    "verifyPurchase",
+    "signInWithApple",
+}
 
 LIFE_ID = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^lf_[a-z0-9]{6,32}$"}}
 STD = ("401", "422", "429", "503")
@@ -1595,22 +1666,11 @@ def build() -> dict[str, Any]:
         "lives",
         {**ok("LivesResponse", "Lives"), **errs("401", "429", "503")},
     )
-    tier0 = {
-        "getHealth",
-        "listSources",
-        "signInDemo",
-        "listCharacters",
-        "createLife",
-        "getLife",
-        "ageLife",
-        "chooseLife",
-        "getLifeSummary",
-    }
     for item in p.values():
         for method, o in item.items():
             if method in ("post", "put"):
                 o["responses"].update(errs("413"))
-            if o["operationId"] not in tier0 and STUBS_DECLARED:
+            if o["operationId"] in TIER2_OPS and STUBS_DECLARED:
                 o["responses"].update(errs("501"))
     return {
         "openapi": "3.1.0",

@@ -24,7 +24,7 @@ from lifeline_contracts.macro import MacroKey
 from lifeline_sim import params as p
 from lifeline_sim.events.engine import draw_events
 from lifeline_sim.index import IndexWeights
-from lifeline_sim.macroview import PAY_GROWTH, MacroView
+from lifeline_sim.macroview import PAY_GROWTH, SVR_RATE, TRACKER_NOW, MacroView
 from lifeline_sim.mortgage import monthly_payment, remaining_balance
 from lifeline_sim.occupations import occupation, public_pay_cap
 from lifeline_sim.rng import uniform
@@ -51,7 +51,7 @@ def _draw(s: SimState, amount: float) -> float:
     return max(0.0, amount)
 
 
-def _borrow_on_home(s: SimState, amount: float, bank_rate: float) -> float:
+def _borrow_on_home(s: SimState, amount: float, svr: float) -> float:
     """Secured borrowing against home equity, up to EQUITY_RELEASE_LTV. Returns the unpaid rest."""
     room = s.property_value * p.EQUITY_RELEASE_LTV - s.mortgage_balance
     take = min(max(0.0, room), amount)
@@ -60,7 +60,7 @@ def _borrow_on_home(s: SimState, amount: float, bank_rate: float) -> float:
     if s.mortgage_balance <= 0:
         s.housing = "mortgage"
         s.mortgage_years_left = max(p.EQUITY_RELEASE_MIN_YEARS, min(p.DEFAULT_MORTGAGE_TERM, 75 - s.age))
-        s.mortgage_rate = round(bank_rate + p.VARIABLE_MARGIN, 2)
+        s.mortgage_rate = round(svr, 2)
         s.mortgage_fixed_until = None
         s.mortgage_tracker = False
     s.mortgage_balance += take
@@ -153,12 +153,13 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     elif s.housing == "mortgage" and s.mortgage_balance > 0:
         if s.mortgage_fixed_until is None or y > s.mortgage_fixed_until:
             s.mortgage_tracker = False
-            s.mortgage_rate = round(bank + p.VARIABLE_MARGIN, 2)
+            s.mortgage_rate = round(m[SVR_RATE], 2)
         elif s.mortgage_tracker:
-            s.mortgage_rate = round(bank + p.TRACKER_MARGIN, 2)
+            s.mortgage_rate = round(m[TRACKER_NOW], 2)
         rate = max(0.0, s.mortgage_rate or 0.0)
         years_left = max(1, s.mortgage_years_left)
         housing = 12 * monthly_payment(s.mortgage_balance, rate, years_left)
+        s.mortgage_paid += housing
         s.mortgage_balance = remaining_balance(s.mortgage_balance, rate, years_left, 12)
         s.mortgage_years_left = years_left - 1
         if s.mortgage_years_left <= 0 or s.mortgage_balance < 1:
@@ -185,7 +186,7 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     if s.cash < 0:
         s.cash = -_draw(s, -s.cash)
     if s.cash < 0:
-        s.cash = -_borrow_on_home(s, -s.cash, bank)
+        s.cash = -_borrow_on_home(s, -s.cash, m[SVR_RATE])
     missed = 0
     if s.cash < 0:
         short = -s.cash
@@ -199,7 +200,9 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     s.missed += missed
 
     # 6. Debt interest, repayment, debt relief, savings sweep
-    s.other_debt *= 1 + max(0.0, bank + p.CARD_SPREAD) / 100
+    card_interest = s.other_debt * max(0.0, bank + p.CARD_SPREAD) / 100
+    s.card_interest_paid += card_interest
+    s.other_debt += card_interest
     monthly = costs / 12
     spare = s.cash - p.DEBT_BUFFER_MONTHS * monthly
     if s.other_debt > 0 and spare > 0:
@@ -226,7 +229,13 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         s.savings += excess
 
     # 7. Returns
-    s.savings *= 1 + max(p.SAVINGS_FLOOR, bank + p.SAVINGS_SPREAD) / 100
+    interest = s.savings * max(p.SAVINGS_FLOOR, bank + p.SAVINGS_SPREAD) / 100
+    s.savings_interest += interest
+    s.savings += interest
+    if mv.has(MacroKey.ENERGY_TARIFF):
+        s.energy_paid += m[MacroKey.ENERGY_TARIFF.value]
+    for tag, monthly in s.tag_living.items():
+        s.tag_cost[tag] = s.tag_cost.get(tag, 0.0) + 12 * monthly
     stock = m[MacroKey.STOCK_RETURN.value]
     gilt = m[MacroKey.GILT_10Y.value]
     s.investments *= 1 + stock / 100

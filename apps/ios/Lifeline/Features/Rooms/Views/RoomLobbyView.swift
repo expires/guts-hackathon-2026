@@ -1,69 +1,84 @@
+// Rebuilt for ADR 0026 (Play-Lobby.dc.html) by W7.
 import SwiftUI
-import UIKit
 
-/// "Same Life" lobby: create or join a room, share the code, wait for players.
+/// "Same Life" lobby as a full screen: create or join a room, share the code, wait for players.
 struct RoomLobbyView: View {
     let state: RoomLobbyViewState
     var actions: RoomLobbyActions = .noop
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                    switch state.phase {
-                    case let .loading(loading):
-                        LoadingStateView(state: loading)
-                    case let .failed(error):
-                        ErrorStateView(state: error, onRetry: actions.onJoin)
-                    case .ready:
-                        if let room = state.room {
-                            roomContent(room)
-                        } else {
-                            entry
-                        }
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                ScreenHeader(title: "Same Life", leading: HeaderSquareButton(kind: .back, identifier: "room.leave", action: actions.onLeave)) {
+                    if state.isSampleData { DemoDataBadge() }
                 }
-                .padding(Theme.Spacing.l)
+                RoomLobbyContent(state: state, actions: actions)
             }
-            .navigationTitle("Same Life")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Leave", action: actions.onLeave)
-                        .accessibilityIdentifier("room.leave")
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
+            .padding(.bottom, Theme.Spacing.xxl)
+        }
+        .paperBackground()
+    }
+}
+
+/// Lobby body. The Play tab shows it under its "Rooms" segment; `RoomLobbyView` wraps it as a screen.
+struct RoomLobbyContent: View {
+    let state: RoomLobbyViewState
+    var actions: RoomLobbyActions = .noop
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            switch state.phase {
+            case let .loading(loading):
+                LoadingStateView(state: loading)
+            case let .failed(error):
+                ErrorStateView(state: error, onRetry: actions.onJoin)
+            case .ready:
+                if let room = state.room {
+                    roomContent(room)
+                } else {
+                    entry
                 }
             }
         }
+        .foregroundStyle(Theme.Palette.ink)
     }
 
     private var entry: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             Text("Everyone plays the same life with the same events. Who handles it best?")
-                .foregroundStyle(.secondary)
-            GlassEffectContainer(spacing: Theme.Spacing.s) {
-                VStack(spacing: Theme.Spacing.s) {
-                    ForEach([("duel", "Duel", "2 players"), ("group", "Group", "Up to 8 players"), ("class", "Class", "A host runs the room")], id: \.0) { mode in
-                        Button { actions.onCreate(mode.0) } label: {
-                            VStack(alignment: .leading) {
-                                Text("New \(mode.1)").font(.headline)
-                                Text(mode.2).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: Theme.minTarget, alignment: .leading)
+                .font(.llBody)
+            VStack(spacing: Theme.Spacing.s) {
+                ForEach([("duel", "Duel", "2 players"), ("group", "Group", "Up to 8 players"), ("class", "Class", "A host runs the room")], id: \.0) { mode in
+                    Button { actions.onCreate(mode.0) } label: {
+                        HStack {
+                            Text("New \(mode.1)").lineLimit(1)
+                            Spacer(minLength: Theme.Spacing.s)
+                            Text(mode.2).font(.llLabel).lineLimit(1).minimumScaleFactor(0.7)
                         }
-                        .buttonStyle(.glass)
-                        .accessibilityIdentifier("room.create.\(mode.0)")
                     }
+                    .buttonStyle(.second)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .accessibilityIdentifier("room.create.\(mode.0)")
                 }
             }
-            SectionTitle(text: "Join with a code")
-            HStack {
+            BlockTitle(text: "Join with a code")
+            HStack(spacing: Theme.Spacing.s) {
                 TextField("Room code", text: Binding(get: { state.joinCode }, set: actions.onJoinCodeChange))
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                    .font(.title2.monospaced())
-                    .frame(minHeight: Theme.minTarget)
+                    .font(.llTitle)
+                    .padding(.horizontal, Theme.Spacing.m)
+                    .frame(minHeight: Theme.buttonHeight)
+                    .inkSurface(.buttonThird)
                     .accessibilityIdentifier("room.code")
                 Button("Join", action: actions.onJoin)
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.main)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: 104)
                     .disabled(!state.canJoin)
                     .accessibilityIdentifier("room.join")
             }
@@ -72,48 +87,75 @@ struct RoomLobbyView: View {
 
     private func roomContent(_ room: RoomLobbyViewState.RoomInfo) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            GlassCard {
-                VStack(spacing: Theme.Spacing.s) {
-                    Text("Room code").font(.subheadline).foregroundStyle(.secondary)
+            HStack(spacing: Theme.Spacing.m) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Same Life room").font(.llLabelBold).foregroundStyle(Theme.Palette.muted)
                     Text(room.code)
-                        .font(.system(size: 44, weight: .bold, design: .monospaced))
+                        .font(.llHero)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                         .accessibilityIdentifier("room.codeLabel")
-                    if let png = room.qrPNG, let image = UIImage(data: png) {
-                        Image(uiImage: image)
-                            .interpolation(.none)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 160, height: 160)
-                            .accessibilityLabel("QR code to join room \(room.code)")
-                    }
-                    ShareLink(item: room.joinURL) {
-                        Label("Share invite", systemImage: "square.and.arrow.up")
-                            .frame(minHeight: Theme.minTarget)
-                    }
-                    Text("\(room.modeLabel) · starts \(String(room.startYear))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
+                Spacer(minLength: 0)
+                ShareLink(item: room.joinURL) { Text("Share").lineLimit(1) }
+                    .buttonStyle(.second)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: 110)
+                    .accessibilityLabel("Share the room code \(room.code)")
+                    .accessibilityIdentifier("room.share")
             }
-            SectionTitle(text: "Players \(room.players.count) of \(room.maxPlayers)")
-            ForEach(room.players) { player in
-                HStack {
-                    Image(systemName: "person.crop.circle.fill").accessibilityHidden(true)
-                    Text(player.isMe ? "\(player.name) (you)" : player.name)
-                    Spacer()
-                    if player.isHost {
-                        Text("Host").font(.caption).foregroundStyle(.secondary)
+            .padding(Theme.Spacing.l)
+            .inkSurface(.hero, hero: true)
+
+            if !state.lifeLine.isEmpty {
+                InkCard(shape: .cardAlt) {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        Text("Everyone plays the same life").font(.llBodyBold)
+                        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+                            LLIconImage(LLIcon(rawValue: state.lifeFace) ?? .facePriya, size: 48)
+                            Text(state.lifeLine).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                        }
+                        Text(state.rulesLine).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                     }
                 }
-                .frame(minHeight: Theme.minTarget)
                 .accessibilityElement(children: .combine)
             }
-            Text(room.statusLabel).font(.footnote).foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 0) {
+                BlockTitle(text: state.playersTitle.isEmpty ? "Players \(room.players.count) of \(room.maxPlayers)" : state.playersTitle)
+                    .padding(.bottom, Theme.Spacing.xs)
+                ForEach(Array(room.players.enumerated()), id: \.element.id) { offset, player in
+                    if offset > 0 { RuleDivider() }
+                    HStack(spacing: Theme.Spacing.m) {
+                        LLIconImage(LLIcon(rawValue: player.face) ?? .faceTeen, size: 32)
+                        HStack(spacing: 0) {
+                            Text(player.name).font(player.isMe ? .llBodyBold : .llBody)
+                            if player.isHost { Text(" · host").font(.llBody) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if player.isReady {
+                            Chip(text: player.statusText, fill: Theme.Palette.money)
+                        } else {
+                            Text(player.statusText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                        }
+                    }
+                    .frame(minHeight: Theme.minTarget)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("room.player.\(player.id)")
+                }
+            }
             if state.isHost {
-                PrimaryButton(title: "Start", systemImage: "play.fill", action: actions.onStart)
-                    .disabled(!state.canStart)
-                    .accessibilityIdentifier("room.start")
+                Button(action: actions.onStart) {
+                    Text(state.startTitle).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .buttonStyle(.main)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .disabled(!state.canStart)
+                .accessibilityIdentifier("room.start")
+            } else {
+                Text(room.statusLabel).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
         }
     }
@@ -121,38 +163,12 @@ struct RoomLobbyView: View {
 
 // MARK: - Previews (one per fixture: light, dark, AX3 Dynamic Type)
 
-#Preview("Entry · light") {
-    RoomLobbyView(state: Fixtures.Rooms.entry)
-}
-
-#Preview("Entry · dark") {
-    RoomLobbyView(state: Fixtures.Rooms.entry).previewDark()
-}
-
-#Preview("Entry · AX3") {
-    RoomLobbyView(state: Fixtures.Rooms.entry).previewLargeType()
-}
-
-#Preview("Lobby, 4 players · light") {
-    RoomLobbyView(state: Fixtures.Rooms.lobbyFour)
-}
-
-#Preview("Lobby, 4 players · dark") {
-    RoomLobbyView(state: Fixtures.Rooms.lobbyFour).previewDark()
-}
-
-#Preview("Lobby, 4 players · AX3") {
-    RoomLobbyView(state: Fixtures.Rooms.lobbyFour).previewLargeType()
-}
-
-#Preview("Joining · light") {
-    RoomLobbyView(state: Fixtures.Rooms.joining)
-}
-
-#Preview("Joining · dark") {
-    RoomLobbyView(state: Fixtures.Rooms.joining).previewDark()
-}
-
-#Preview("Joining · AX3") {
-    RoomLobbyView(state: Fixtures.Rooms.joining).previewLargeType()
-}
+#Preview("Demo lobby · light") { RoomLobbyView(state: RoomsFixtures.lobby) }
+#Preview("Demo lobby · dark") { RoomLobbyView(state: RoomsFixtures.lobby).previewDark() }
+#Preview("Demo lobby · AX3") { RoomLobbyView(state: RoomsFixtures.lobby).previewLargeType() }
+#Preview("Entry · light") { RoomLobbyView(state: Fixtures.Rooms.entry) }
+#Preview("Entry · dark") { RoomLobbyView(state: Fixtures.Rooms.entry).previewDark() }
+#Preview("Entry · AX3") { RoomLobbyView(state: Fixtures.Rooms.entry).previewLargeType() }
+#Preview("Joining · light") { RoomLobbyView(state: Fixtures.Rooms.joining) }
+#Preview("Joining · dark") { RoomLobbyView(state: Fixtures.Rooms.joining).previewDark() }
+#Preview("Joining · AX3") { RoomLobbyView(state: Fixtures.Rooms.joining).previewLargeType() }

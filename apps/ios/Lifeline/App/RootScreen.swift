@@ -1,31 +1,77 @@
 import SwiftUI
 
-/// Top-level navigation glue (ADR 0016): Money (default), Life (the game), You.
-/// Also owns deep links: `lifeline://connected?...` after the Monzo sign-in in Safari.
+/// App tabs (ADR 0016), in this order. Money is the default.
+enum AppTab: String, Hashable, CaseIterable {
+    case money, life, play, you
+
+    var title: String {
+        switch self {
+        case .money: "Money"
+        case .life: "Life"
+        case .play: "Play"
+        case .you: "You"
+        }
+    }
+
+    /// Tab icon from the Lifeline set: white fill when inactive, colour fill when active.
+    var icon: LLIcon {
+        switch self {
+        case .money: .tabMoney
+        case .life: .tabLife
+        case .play: .tabPlay
+        case .you: .tabYou
+        }
+    }
+
+
+    /// The app always opens here. It does not restore the last tab (ADR 0016).
+    static let launch: AppTab = .money
+}
+
+/// Top-level navigation glue: Money, Life, Play, You.
 struct RootScreen: View {
     let session: GameSession
     @State private var coordinator = AppCoordinator()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        @Bindable var session = session
         @Bindable var coordinator = coordinator
-        TabView(selection: $coordinator.selectedTab) {
-            Tab("Money", systemImage: "sterlingsign.circle", value: AppTab.money) {
-                NavigationStack { MoneyHomeScreen(client: session.client) }
+        let selection = coordinator.selectedTab
+        // Custom tab bar from the handoff. Every tab stays alive so its state and scroll position persist.
+        // A VStack (not `.safeAreaInset`): the content frame shrinks, so every NavigationStack lays out
+        // above the bar, also right after the bar appears at the end of a setup flow.
+        VStack(spacing: 0) {
+            ZStack {
+                ForEach(AppTab.allCases, id: \.self) { tab in
+                    let isActive = tab == selection
+                    content(for: tab)
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                        .accessibilityHidden(!isActive)
+                }
             }
-            Tab("Life", systemImage: "heart.text.square", value: AppTab.life) {
-                lifeFlow
-                    // The game has its own tab bar while a life is running.
-                    .toolbarVisibility(session.phase == .playing ? .hidden : .automatic, for: .tabBar)
-            }
-            Tab("You", systemImage: "person.crop.circle", value: AppTab.you) {
-                NavigationStack { YouScreen(client: session.client) }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Setup flows (character select, form, start year) hide the tab bar.
+            if showsTabBar {
+                LLTabBar(
+                    items: AppTab.allCases.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon) },
+                    selection: selection.rawValue
+                ) { id in
+                    if let tab = AppTab(rawValue: id) { coordinator.selectedTab = tab }
+                }
             }
         }
+        .paperBackground()
         .onOpenURL { coordinator.handle($0) }
-        .sheet(item: $coordinator.sheet) { sheet in
-            sheetContent(sheet)
+        .llSheet(item: $coordinator.sheet.only { [.accounts, .investments, .habits].contains($0) }) { sheet in
+            let close: @MainActor () -> Void = { coordinator.sheet = nil }
+            switch sheet {
+            case .investments: InvestmentsScreen(client: session.client, onClose: close)
+            case .habits: HabitsScreen(client: session.client, onClose: close)
+            default:
+                AccountsScreen(
+                    client: session.client, onConnectionsChanged: { coordinator.connectionsChanged() }, onClose: close
+                )
+            }
         }
         .alert(
             "Something went wrong",
@@ -45,7 +91,42 @@ struct RootScreen: View {
         .environment(coordinator)
     }
 
-    private var lifeFlow: some View {
+    private var showsTabBar: Bool {
+        !(coordinator.selectedTab == .life && session.phase == .selecting)
+    }
+
+    @ViewBuilder
+    private func content(for tab: AppTab) -> some View {
+        switch tab {
+        case .money:
+            NavigationStack {
+                MoneyHomeScreen(client: session.client) { lifeID in openLife(lifeID) }
+            }
+        case .life:
+            LifeTabScreen(session: session)
+        case .play:
+            NavigationStack {
+                PlayScreen(session: session) { coordinator.selectedTab = .life }
+            }
+        case .you:
+            NavigationStack { YouScreen(session: session) }
+        }
+    }
+
+    /// "Open in Life" from Test it: load the stored life, then show the Life tab.
+    private func openLife(_ lifeID: String) {
+        Task {
+            if await session.openLife(id: lifeID) { coordinator.selectedTab = .life }
+        }
+    }
+}
+
+/// Life tab: character select when no life runs, otherwise the running life.
+struct LifeTabScreen: View {
+    let session: GameSession
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         Group {
             switch session.phase {
             case .selecting:
@@ -57,25 +138,6 @@ struct RootScreen: View {
             }
         }
         .animation(Motion.standard(reduceMotion: reduceMotion), value: session.phase)
-    }
-
-    @ViewBuilder
-    private func sheetContent(_ sheet: AppSheet) -> some View {
-        let close: @MainActor () -> Void = { coordinator.sheet = nil }
-        switch sheet {
-        case .accounts:
-            AccountsScreen(client: session.client, onConnectionsChanged: { coordinator.connectionsChanged() }, onClose: close)
-        case .investments:
-            InvestmentsScreen(client: session.client, onClose: close)
-        case .habits:
-            HabitsScreen(client: session.client, onClose: close)
-        case .sources:
-            SourcesScreen(client: session.client, onClose: close)
-        case .store:
-            StoreScreen(session: session, onClose: close)
-        case .debug:
-            DebugMenuScreen(activeKind: session.client.kind, onClose: close)
-        }
     }
 }
 
@@ -118,14 +180,21 @@ struct SelectionFlowScreen: View {
                 }
             }
         }
-        .sheet(item: $sheet) { sheet in
+        // Store and Rooms are full screens with their own header. Sources and Debug are sheets.
+        .llCover(item: $sheet.only { [.store, .rooms].contains($0) }) { sheet in
             let close: @MainActor () -> Void = { self.sheet = nil }
             switch sheet {
-            case .store: StoreScreen(session: session, onClose: close)
             case .rooms: RoomLobbyScreen(client: session.client, onLeave: close)
-            case .sources: SourcesScreen(client: session.client, onClose: close)
+            default: StoreScreen(session: session, onClose: close)
+            }
+        }
+        .llSheet(item: $sheet.only { [.sources, .debug].contains($0) }) { sheet in
+            let close: @MainActor () -> Void = { self.sheet = nil }
+            switch sheet {
             case .debug: DebugMenuScreen(activeKind: session.client.kind, onClose: close)
+            default: SourcesScreen(client: session.client, onClose: close)
             }
         }
     }
+
 }

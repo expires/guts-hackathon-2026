@@ -24,6 +24,22 @@ ENV_FILES: tuple[Path, ...] | None = (
 _TEST_JWT_SECRET = "test-only-jwt-secret-not-for-production-use"  # noqa: S105
 
 
+# Known placeholder values. Prod refuses them (case-insensitive).
+PLACEHOLDER_SECRETS = frozenset({"change-me-dev-only", "changeme", "change-me", "secret", "dev", "test", "password"})
+MIN_PROD_SECRET_LENGTH = 32
+
+
+def weak_secret_reason(secret: str) -> str | None:
+    """Why `secret` is not acceptable in prod, or None if it is. The reason never contains the value."""
+    if not secret:
+        return "it is not set"
+    if secret.strip().lower() in PLACEHOLDER_SECRETS:
+        return "it is a known placeholder value"
+    if len(secret) < MIN_PROD_SECRET_LENGTH:
+        return f"it is shorter than {MIN_PROD_SECRET_LENGTH} characters"
+    return None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILES, extra="ignore", case_sensitive=False)
 
@@ -42,8 +58,17 @@ class Settings(BaseSettings):
         return self.app_env == "test"
 
     def signing_secret(self) -> str:
-        """JWT_SECRET. Test mode uses a fixed test secret. Dev uses a per-process random secret. Prod fails."""
+        """JWT_SECRET. Test mode uses a fixed test secret. Dev uses a per-process random secret.
+
+        Prod refuses to start when the secret is missing, a known placeholder, or shorter than 32 characters.
+        """
         secret = self.jwt_secret.get_secret_value()
+        if self.app_env == "prod":
+            problem = weak_secret_reason(secret)
+            if problem is not None:
+                # Never include the value in the message.
+                raise RuntimeError(f"JWT_SECRET is not safe for prod: {problem}")
+            return secret
         if secret:
             return secret
         if self.is_test:

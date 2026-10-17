@@ -1,12 +1,64 @@
 # Lifeline
 
-**Aladdin stress tests portfolios. We stress test a life.**
+**Many sources. One answer: your next money move. Play it before you live it.**
 
-Lifeline is a BitLife-style iOS game about money on real UK data. You live a full financial life, birth to death. Each AGE tap is one year. Events come from real data for that person, place and year: Bank Rate, mortgage rates, house prices, pay, unemployment, inflation. When "Play yourself" reaches today, the app gives one clear recommended action for your real situation, with evidence.
+Lifeline answers one question: "What is my next money move?" It reads your money (sample bank data until bank connection ships), combines it with live UK data, and gives one move with its yearly value in £, its worst case and its evidence. "Test it" plays that move through a past shock in a life simulation before you make it in real life.
 
-GUTS Hackathon 2026 · BlackRock / Aladdin challenge: "One app. Every source. One clear decision."
+The life simulation is a BitLife-style game on real UK data. You live a full financial life, birth to death. Each AGE tap is one year. Events come from real data for that person, place and year: Bank Rate, mortgage rates, house prices, pay, unemployment, inflation.
 
-> **Not financial advice.** The Real-life Decision is education. It shows how people like you did in similar past periods. It is not a forecast or a recommendation.
+GUTS Hackathon 2026 · BlackRock / Aladdin challenge: "One app. Every source. One clear decision." Aladdin stress tests portfolios. We stress test a life.
+
+> **Not financial advice.** The Next Move and the Real-life Decision are education. They show how people like you did in similar past periods. They are not a forecast or a recommendation.
+
+## The app
+
+Four tabs (ADR 0016). The app always opens on Money.
+
+| Tab | What it does |
+|---|---|
+| **Money** | Balance and net worth over time, spending by category, subscriptions with price-rise flags, bills for the next 30 days, budgets, savings goals, "Guess my spend". The **Next Move** card is the first element. Data is labelled "Sample data" until bank OAuth (Tier 2). |
+| **Life** | The game. Character select (Play yourself, Random, God Mode, presets), AGE, event sheets, action menus (Job, Assets, People, Money, Activities), lessons, rewind, life summary, Real-life Decision. |
+| **Play** | Same Life rooms (Tier 2), challenges, ribbons, the collection of lesson concepts. |
+| **You** | Profile, bank connection, settings. |
+
+## Next Move
+
+`GET /v1/next-move` returns one top move and up to two runners-up (ADR 0018). The engine computes every number; the LLM may only reword the text, and a verifier rejects any new number (ADR 0019).
+
+1. **Candidates.** The engine (`lifeline_engine`, no LLM) lists moves the data supports: fix or remortgage, move savings, cancel or switch a subscription, switch energy, pay off debt, build an emergency fund, cut a budget.
+2. **Score.** For each option it simulates 20 similar people ("twins") through 5 matched past periods plus a standard stress period (mortgages: 2021-2023 rate shock). Options are chosen by regret: `expected - 0.5 x worst regret` (ADR 0020).
+3. **Card.** Action, deadline ("Your deal ends in 165 days"), expected £ a year, worst case, confidence ("In 8 of 10 similar cases this was the best choice"), 3 evidence points, sources with live, cached or mock status.
+4. **Test it.** `POST /v1/next-move/test` plays your real profile through the stress period once per option, on the same seed, and stores each run as a life. The card and Test it can disagree; the evidence says why (for example "a tracker saved £4,841 a year, though fixing for 5 years saved £7,828").
+5. **Why?** The lesson for the move's concept, with one sentence about your own numbers.
+6. **Do this.** `POST /v1/plan` adds the move to your plan.
+
+## Accuracy (honest)
+
+All figures below use labelled fixture data and the mock macro table. They describe our sample personas, not real users. Details: [docs/prediction.md](docs/prediction.md). We did not tune the engine to beat the baselines (ADR 0023).
+
+Mortgage choice (fix 2 years, fix 5 years or tracker), walk-forward over 28 past deal-end years, 1995 to 2022:
+
+| Method | Right choice |
+|---|---|
+| Next Move engine | 64.3% |
+| Real-life Decision engine (`/v1/evaluation`) | 71.4% |
+| Baseline: always fix for 2 years | 14.3% |
+| Best constant rule: always take a tracker | 71.4% |
+
+- The engines beat the naive 2-year baseline.
+- Neither beats "always take a tracker" on this data. The Decision engine recommends a tracker in all 28 years, so it only ties that rule. The Next Move engine moves some years away from the tracker because of its stress-period penalty, and loses 7.1 points to the rule.
+
+Daily spend prediction (ridge regression, ADR 0017), walk-forward over 90 days, mean absolute error (MAE):
+
+| Persona | Model MAE | Weekday-average MAE | Result |
+|---|---|---|---|
+| homeowner-leeds | £28.74 | £26.93 | Model loses by £1.81 |
+| renter-saver-london | £17.46 | £20.22 | Model wins by £2.76 |
+| subscription-creep-manchester | £19.28 | £22.37 | Model wins by £3.09 |
+| overspender-bristol | £19.80 | £21.62 | Model wins by £1.82 |
+
+- The model wins for 3 of 4 personas. It loses for homeowner-leeds, which has large weekend spend and 26% of days with no spend.
+- The 10% to 90% range holds 69% to 82% of days (target about 80%).
 
 > **Two plans in one repo.** `BUILD_SPEC.md` defines the product we are building (this section). The team's original README for the "Play yourself" web layer follows below, unchanged. Where the two differ, `BUILD_SPEC.md` wins. `docs/STATUS.md` lists each difference.
 
@@ -16,7 +68,7 @@ Needs Docker (Docker Desktop or Colima with the compose plugin), `make`, and `uv
 
 ```bash
 make up          # copies .env.example to .env if missing, builds, starts api + worker + postgres + redis, waits for /v1/health
-make demo-seed   # loads demo lives and a Same Life room (see docs/DEMO.md)
+make demo-seed   # seeds Next Move, Test it, plan and demo lives for device demo-presenter-01 (see docs/DEMO.md)
 make test        # Python unit, contract and integration tests (offline, recorded fixtures)
 make down        # stop
 ```
@@ -34,14 +86,14 @@ Three layers, joined by a FastAPI service. Full description: [docs/architecture.
 ```mermaid
 flowchart LR
   subgraph EXP["Experience"]
-    IOS["iOS 26 app<br/>SwiftUI, Liquid Glass"]
+    IOS["iOS 26 app<br/>Money, Life, Play, You tabs"]
   end
   subgraph SVC["Service"]
     API["FastAPI /v1<br/>REST + WebSocket rooms"]
   end
   subgraph DEC["Decision (pure Python)"]
     SIM["sim: events, stats, Index, rewind"]
-    ENG["engine: population, twins, periods, ranking"]
+    ENG["engine: Next Move, twins, periods,<br/>money insights, spend prediction"]
     EXPL["explain: LLM wording + number verifier"]
   end
   subgraph DATA["Data integration"]
@@ -68,7 +120,8 @@ flowchart LR
 - iOS code is split into pure Views and ViewModels (ADR 0011). Views and `DesignSystem` are owned by the UI owner (a human); agents own ViewModels, glue and networking, and ask for view changes in [docs/UI_REQUESTS.md](docs/UI_REQUESTS.md).
 - Networking goes through `LifelineClient`: `LiveClient` calls the API, `MockClient` serves contract examples with no backend. The `Playground` scheme opens a gallery of every screen on `MockClient`.
 - `lifeline_engine` and `lifeline_sim` are pure: no network, database or clock. Same data plus same seed gives the same life.
-- The LLM writes wording only. The engine decides every outcome and number.
+- The LLM writes wording only. The engine decides every outcome and number. A verifier checks every number in LLM text against engine facts; any mismatch falls back to the template (ADR 0019).
+- Money tab data feeds "Play yourself" and the Next Move through one profile (`/v1/finance/profile`), so the card, the Money tab and the game agree.
 
 ## Trade-offs
 
@@ -83,6 +136,9 @@ flowchart LR
 | LLM for wording only, with a number verifier and templates | Numbers stay auditable; no invented figures | Less varied text when the LLM fails or a number does not match |
 | Native iOS only, no web client | Liquid Glass, StoreKit, Sign in with Apple, widgets | No Android or browser play |
 | Bank OAuth on the backend (state + PKCE) | Tokens never reach the device | Needs a public callback URL for real banks; sandbox only for now |
+| Next Move risk includes a fixed stress period, options chosen by regret (ADR 0020) | The card and "Test it" tell one story; a move that fails a 2022-style shock is penalised openly | Can rank below the best constant rule on calm-period data (see Accuracy) |
+| Ridge regression for daily spend (ADR 0017) | Exact £ reasons per feature group; fits 6 to 12 months of data | Loses to the weekday average for one persona |
+| Fixture bank personas until bank OAuth (ADR 0021) | The Money tab and Next Move work with zero keys | All Money data is sample data, labelled |
 | Two-stage non-root Docker image with `uv sync --frozen` | Reproducible builds from `uv.lock`; smaller attack surface | Image is about 480 MB because of numpy and the Anthropic SDK |
 
 ## API conventions
@@ -102,19 +158,20 @@ Machine-readable list: [`services/api/lifeline_data_attributions.json`](services
 
 | Source | Used for | Coverage | Key | Licence | Attribution |
 |---|---|---|---|---|---|
-| Bank of England IADB | Bank Rate (IUMBEDR), 2-year fix (IUMBV34), 5-year fix (IUMBV42) | UK | No | Bank of England terms | Source: Bank of England Statistical Interactive Database. |
-| ONS time series and beta API | Inflation (D7G7) and more | UK | No | OGL v3.0 | Source: Office for National Statistics licensed under the Open Government Licence v3.0. |
+| Bank of England IADB | Bank Rate (IUMBEDR), 2-year fix (IUMBV34), 5-year fix (IUMBV42), savings rate (IUMB6VJ), card rate (IUMCCTL), revert-to mortgage rate (IUMTLMV), tracker (IUMBV48) | UK | No | Bank of England terms | Source: Bank of England Statistical Interactive Database. |
+| ONS time series and beta API | Inflation (D7G7), energy (D7GT), fuel (D7IO), rents (PIPR from 2016; IPHRP before) | UK | No | OGL v3.0 | Source: Office for National Statistics licensed under the Open Government Licence v3.0. |
 | Nomis | Earnings (ASHE), unemployment (APS), Census 2021 tenure | GB; Census: England and Wales | No | OGL v3.0 | Source: Office for National Statistics via Nomis, OGL v3.0. |
 | HM Land Registry UK HPI | House prices by region | UK incl. Scotland | No | OGL v3.0 | Contains HM Land Registry data © Crown copyright and database right 2026. |
 | postcodes.io | Postcode to region | UK | No | MIT (service); OGL v3.0 (data) | Contains OS data and Royal Mail data © Crown copyright / Royal Mail copyright 2026. |
+| GOV.UK bank holidays | Spend prediction feature | UK | No | OGL v3.0 | Contains public sector information licensed under the OGL v3.0 (GOV.UK). |
 | Frankfurter | GBP exchange rates | Global | No | MIT (service); ECB rates | Exchange rates: European Central Bank, via Frankfurter. |
 | CoinGecko | Crypto prices | Global | No | CoinGecko API terms | Crypto price data provided by CoinGecko. |
-| Yahoo chart (unofficial) | Stock index prices | Global | No | Yahoo terms; demo only, cached | Market index data: Yahoo Finance. |
-| FRED | UK 10-year gilt yield (IRLTLT01GBM156N) | UK | No | FRED terms (OECD series) | Source: OECD, retrieved from FRED, Federal Reserve Bank of St. Louis. |
-| Octopus Energy | Energy tariffs | GB | No | Octopus API terms | Energy tariff data: Octopus Energy. |
+| Yahoo chart (unofficial) | FTSE All-Share (^FTAS) | Global | No | Yahoo terms; blocked from our network, so labelled mock (ADR 0021) | Market index data: Yahoo Finance. |
+| FRED | UK 10-year gilt yield (IRLTLT01GBM156N) | UK | No | FRED terms (OECD series); times out from our network, so labelled mock | Source: OECD, retrieved from FRED, Federal Reserve Bank of St. Louis. |
+| Octopus Energy | Energy tariff (Flexible dual-fuel quotes) | GB | No | Octopus API terms | Energy tariff data: Octopus Energy. |
 | Carbon Intensity API | Grid carbon intensity | GB | No | CC BY 4.0 | Carbon Intensity API, NESO, CC BY 4.0. |
-| Open-Meteo | Weather | Global | No | CC BY 4.0 | Weather data by Open-Meteo.com. |
-| Police UK | Burglary rates | England, Wales, NI | No | OGL v3.0 | Contains public sector information from data.police.uk, OGL v3.0. |
+| Open-Meteo | Weather for the spend prediction | Global | No | CC BY 4.0 | Weather data by Open-Meteo.com. |
+| Police UK | Burglary counts near a region point | England, Wales, NI | No | OGL v3.0 | Contains public sector information from data.police.uk, OGL v3.0. |
 | Environment Agency flood API | Flood warnings | England | No | OGL v3.0 | Environment Agency flood and river level data from the real-time data API (Beta). |
 | Companies House | Employer insolvency | UK | `COMPANIES_HOUSE_KEY` | OGL v3.0 | Contains Companies House data, OGL v3.0. |
 | Adzuna | Job offers and salaries | UK | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | Adzuna API terms | Jobs by Adzuna. |
@@ -122,14 +179,16 @@ Machine-readable list: [`services/api/lifeline_data_attributions.json`](services
 | DVSA MOT History | MOT fail rates | GB | `DVSA_MOT_KEY` | OGL v3.0 | Contains public sector information from DVSA, OGL v3.0. |
 | DWP Stat-Xplore | Benefits | GB | `DWP_STATXPLORE_KEY` | OGL v3.0 | Source: DWP Stat-Xplore, OGL v3.0. |
 | EPC register | Home energy ratings | England and Wales | `EPC_KEY` | OGL v3.0 (plus Royal Mail and OS for addresses) | Contains public sector information licensed under the OGL v3.0. |
+| Fixture bank data | Money tab and Next Move until bank OAuth | Synthetic personas | No | Our own synthetic data | Sample data. Not a real bank account. |
 | TrueLayer sandbox | "Play yourself" bank connection | UK sandbox | `OB_CLIENT_ID`, `OB_CLIENT_SECRET`, `OB_REDIRECT_URI` | TrueLayer developer terms | Bank connection powered by the TrueLayer sandbox. |
 
 Where a source excludes Scotland, the app uses the UK average and says "UK average used" in the event detail.
 
 ## Demo
 
-Full script with exact taps, API calls and fallbacks: [docs/DEMO.md](docs/DEMO.md).
+Full script with exact taps, API calls and fallbacks: [docs/DEMO.md](docs/DEMO.md). The demo narrates live engine output, not a fixed answer (ADR 0020).
 
+0. Money tab, then the Next Move card ("Your deal ends in 165 days"), Test it through the 2021-2023 rate shock with all options side by side, Why?, then Do this.
 1. Play a nurse (Leeds) and a banker (London) from 2006 through 2008: same crash, different lives.
 2. A judge joins a Same Life room via QR and plays the 2021 to 2023 rate shock.
 3. Rewind a bad choice. Show the other path and the Index difference.
@@ -138,6 +197,7 @@ Full script with exact taps, API calls and fallbacks: [docs/DEMO.md](docs/DEMO.m
 ## More docs
 
 - [docs/architecture.md](docs/architecture.md): layers, runtime, request flow.
+- [docs/prediction.md](docs/prediction.md): spend model and Next Move backtests.
 - `docs/index.md`: the Index formula. `docs/RESPONSIBLE_AI.md`: where AI is used and how it is checked.
 - [docs/AI_USAGE.md](docs/AI_USAGE.md): how Claude Code built this, and the AI-usage statement draft.
 - [docs/adr/](docs/adr/): decision records. [docs/STATUS.md](docs/STATUS.md): progress, mocks, known issues.

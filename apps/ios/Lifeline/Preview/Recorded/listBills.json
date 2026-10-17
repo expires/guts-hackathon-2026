@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "total_next_30_days": 1531.73,
+  "items": [
+    {
+      "id": "bill_ee",
+      "name": "EE",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 22.0,
+      "due_date": "2026-10-18",
+      "status": "due_soon"
+    },
+    {
+      "id": "bill_leeds-city-council",
+      "name": "Leeds City Council",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 191.0,
+      "due_date": "2026-11-01",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_nationwide",
+      "name": "Nationwide",
+      "emoji": "🏠",
+      "kind": "mortgage",
+      "amount": 992.34,
+      "due_date": "2026-11-01",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_puregym",
+      "name": "PureGym",
+      "emoji": "🔁",
+      "kind": "subscription",
+      "amount": 24.99,
+      "due_date": "2026-11-01",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_tv-licensing",
+      "name": "TV Licensing",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 14.54,
+      "due_date": "2026-11-01",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_admiral",
+      "name": "Admiral",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 52.37,
+      "due_date": "2026-11-05",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_octopus-energy",
+      "name": "Octopus Energy",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 142.0,
+      "due_date": "2026-11-06",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_netflix",
+      "name": "Netflix",
+      "emoji": "🔁",
+      "kind": "subscription",
+      "amount": 12.99,
+      "due_date": "2026-11-09",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_virgin-media",
+      "name": "Virgin Media",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 38.0,
+      "due_date": "2026-11-12",
+      "status": "upcoming"
+    },
+    {
+      "id": "bill_yorkshire-water",
+      "name": "Yorkshire Water",
+      "emoji": "💡",
+      "kind": "bill",
+      "amount": 41.5,
+      "due_date": "2026-11-15",
+      "status": "upcoming"
+    }
+  ]
+}

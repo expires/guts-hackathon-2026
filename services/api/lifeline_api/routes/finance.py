@@ -1,25 +1,24 @@
-"""Money tab (ADR 0016, 0017). Every handler reads the caller's own snapshot (`money.snapshot`): live or cached
-Monzo and Trading212 data when connected, else the labelled sample persona (`meta.data_status` says which).
-
-Per-subject documents in the store: `budgets` (limits by category), `goals` (savings goals), `guesses`
-(Guess my spend, one per day).
-"""
+"""Money tab (ADR 0016) and spend prediction (ADR 0017). Budget limits, goals and guesses are stored per subject."""
 
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, date, datetime
-from typing import Annotated, Any, cast
+from datetime import UTC, datetime
+from datetime import date as date_cls
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request
+from pydantic import AfterValidator
 
-from lifeline_api import money
+from lifeline_api import money, prediction
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
+from lifeline_api.store import StoreUnavailable
 from lifeline_contracts.finance import (
     BillsResponse,
+    BudgetLimit,
     BudgetsResponse,
     Category,
     CreateGoalRequest,
@@ -32,37 +31,43 @@ from lifeline_contracts.finance import (
     GuessRequest,
     GuessState,
     InvestmentsResponse,
-    ModelInfo,
     PredictionEvaluation,
     SavingsGoal,
     SpendingResponse,
     SpendPrediction,
     SubscriptionsResponse,
     UpdateBudgetsRequest,
-    Weather,
 )
-from lifeline_data.prediction_inputs import fixture_holidays_for, mock_weather_day
 from lifeline_engine import money as money_engine
-from lifeline_engine.money import dates, predict
+from lifeline_engine.money import predict
 from lifeline_engine.money.profile import is_cash_savings
 
 router = APIRouter(tags=["finance"])
 
-Month = Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}$")]
-Day = Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")]
-
-DOC_BUDGETS = "budgets"
-DOC_GOALS = "goals"
-DOC_GUESSES = "guesses"
-MAX_GUESS_ITEMS = 60
-NOT_ENOUGH = (
-    "We need about seven weeks of spending history before we can predict a day. "
-    "Connect your bank, or check back soon."
-)
+MAX_GOALS = 20
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def _real_month(v: str | None) -> str | None:
+    if v is not None and not 1 <= int(v[5:7]) <= 12:
+        raise ValueError("not a real month")
+    return v
+
+
+def _real_day(v: str | None) -> str | None:
+    if v is not None:
+        date_cls.fromisoformat(v)  # ValueError for e.g. 2026-02-30 -> 422 validation_error
+    return v
+
+
+Month = Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}$"), AfterValidator(_real_month)]
+Day = Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$"), AfterValidator(_real_day)]
+
+
+DOC_BUDGETS = "budgets"
+DOC_GOALS = "goals"
 
 
 async def _snap(request: Request, sub: str) -> tuple[AppState, FinanceSnapshot]:
@@ -94,14 +99,14 @@ async def list_bills(request: Request, sub: Subject) -> BillsResponse:
     return await call_pure(money_engine.bills_response, snap, money.today(snap))
 
 
-# ---------- budgets ----------
+async def _stored_limits(state: AppState, sub: str) -> dict[Category, float]:
+    doc = await state.store.get_doc(sub, DOC_BUDGETS)
+    return {BudgetLimit.model_validate(x).category: BudgetLimit.model_validate(x).limit for x in (doc or [])}
 
 
 async def _limits(state: AppState, sub: str, snap: FinanceSnapshot) -> dict[Category, float]:
-    doc = await state.store.get_doc(sub, DOC_BUDGETS)
-    if isinstance(doc, dict) and doc:
-        return {cast(Category, c): float(v) for c, v in doc.items()}
-    return money.default_limits(snap)
+    """Stored limits, or suggested ones (10% above the 3-month average of the biggest categories) when none are set."""
+    return await _stored_limits(state, sub) or money.default_limits(snap)
 
 
 @router.get("/v1/finance/budgets", response_model=BudgetsResponse, response_model_exclude_none=True)
@@ -112,21 +117,19 @@ async def list_budgets(request: Request, sub: Subject, month: Month = None) -> B
 
 @router.put("/v1/finance/budgets", response_model=BudgetsResponse, response_model_exclude_none=True)
 async def update_budgets(body: UpdateBudgetsRequest, request: Request, sub: Subject) -> BudgetsResponse:
+    """Upsert: the listed categories get the new limits, other stored limits stay."""
     state, snap = await _snap(request, sub)
     async with state.subject_locks[f"{sub}:{DOC_BUDGETS}"]:
-        limits = await _limits(state, sub, snap)
+        limits = await _stored_limits(state, sub)
         for item in body.items:
             limits[item.category] = item.limit
-        await state.store.put_doc(sub, DOC_BUDGETS, dict(limits))
+        await state.store.put_doc(sub, DOC_BUDGETS, [{"category": c, "limit": v} for c, v in limits.items()])
     return await call_pure(money_engine.budgets_response, snap, limits, None)
-
-
-# ---------- goals ----------
 
 
 async def _goals(state: AppState, sub: str) -> list[SavingsGoal]:
     doc = await state.store.get_doc(sub, DOC_GOALS)
-    return [SavingsGoal.model_validate(g) for g in (doc or [])]
+    return [SavingsGoal.model_validate(x) for x in (doc or [])]
 
 
 @router.get("/v1/finance/goals", response_model=GoalsResponse, response_model_exclude_none=True)
@@ -138,9 +141,12 @@ async def list_goals(request: Request, sub: Subject) -> GoalsResponse:
 @router.post("/v1/finance/goals", status_code=201, response_model=SavingsGoal, response_model_exclude_none=True)
 async def create_goal(body: CreateGoalRequest, request: Request, sub: Subject) -> SavingsGoal:
     state, snap = await _snap(request, sub)
-    goal = money_engine.goal_from_request(f"gl_{secrets.token_hex(5)}", body, money.today(snap))
+    goal = await call_pure(money_engine.goal_from_request, f"gl_{secrets.token_hex(6)}", body, money.today(snap))
     async with state.subject_locks[f"{sub}:{DOC_GOALS}"]:
-        goals = [*await _goals(state, sub), goal]
+        goals = await _goals(state, sub)
+        if len(goals) >= MAX_GOALS:
+            raise ApiError(422, "validation_error", f"You can keep up to {MAX_GOALS} goals")
+        goals.append(goal)
         await state.store.put_doc(sub, DOC_GOALS, [g.model_dump(mode="json") for g in goals])
     return goal
 
@@ -149,9 +155,6 @@ async def create_goal(body: CreateGoalRequest, request: Request, sub: Subject) -
 async def get_finance_profile(request: Request, sub: Subject) -> FinanceProfile:
     _, snap = await _snap(request, sub)
     return await call_pure(money_engine.finance_profile, snap, money.today(snap), money.hints(sub, snap))
-
-
-# ---------- investments ----------
 
 
 @router.get("/v1/finance/investments", response_model=InvestmentsResponse, response_model_exclude_none=True)
@@ -174,182 +177,110 @@ async def get_investments(request: Request, sub: Subject) -> InvestmentsResponse
     )
 
 
-# ---------- spend prediction and Guess my spend (ADR 0017) ----------
+# Spend prediction (ADR 0017). The evaluation route is registered before /prediction on purpose.
 
 
-def _weather_fn(sub: str, snap: FinanceSnapshot) -> predict.Weather:
-    hints = money.hints(sub, snap)
-    region = hints.region if hints else None
-
-    def weather(day: date) -> tuple[float, float]:
-        w = mock_weather_day(region, day)
-        return float(w["temp_max_c"]), float(w["rain_mm"])
-
-    return weather
+DOC_GUESSES = "guesses"
 
 
-def _holidays(sub: str, snap: FinanceSnapshot) -> frozenset[date]:
-    hints = money.hints(sub, snap)
-    return frozenset(fixture_holidays_for(hints.region if hints else None))
+async def _guess_docs(state: AppState, sub: str) -> dict[str, dict[str, Any]]:
+    doc = await state.store.get_doc(sub, DOC_GUESSES)
+    return {g["date"]: g for g in (doc or [])}
 
 
-def _not_enough() -> ApiError:
-    return ApiError(409, "not_enough_data", NOT_ENOUGH)
+def _guess_state(doc: dict[str, Any] | None, actual: float | None) -> GuessState | None:
+    if doc is None:
+        return None
+    if actual is None:
+        return GuessState(amount=doc["amount"], made_at=doc["made_at"])
+    return GuessState(
+        amount=doc["amount"],
+        made_at=doc["made_at"],
+        points=predict.score_guess(doc["amount"], actual),
+        beat_model=predict.beat_model(doc["amount"], doc["predicted"], actual),
+    )
 
 
-async def _evaluation(state: AppState, sub: str, snap: FinanceSnapshot) -> predict.Evaluation:
-    key = ("prediction", sub)
-    hit = state.memo.get(key)
-    if hit is not None and hit[0] is snap:
-        return cast(predict.Evaluation, hit[1])
+def _day(inp: prediction.Inputs, raw: str | None) -> date_cls:
     try:
-        ev = await call_pure(
-            predict.evaluate, snap.transactions, money.today(snap), _holidays(sub, snap), _weather_fn(sub, snap)
-        )
-    except ValueError:
-        raise _not_enough() from None
-    state.memo[key] = (snap, ev)
-    return ev
-
-
-def _parse_day(text: str | None, snap: FinanceSnapshot) -> date:
-    today = money.today(snap)
-    if text is None:
-        return today
-    try:
-        day = date.fromisoformat(text)
-    except ValueError:
-        raise ApiError(422, "validation_error", "date: not a real calendar day") from None
-    if day > today:
-        raise ApiError(422, "validation_error", "date: that day has not happened yet")
+        day = money.today(inp.snap) if raw is None else date_cls.fromisoformat(raw)
+    except ValueError as exc:
+        raise ApiError(422, "validation_error", "date: not a real calendar day") from exc
+    lo, hi = prediction.earliest_day(inp), inp.last_day
+    if not lo <= day <= hi:
+        raise ApiError(422, "validation_error", f"date: pick a day from {lo.isoformat()} to {hi.isoformat()}")
     return day
 
 
-async def _guesses(state: AppState, sub: str) -> dict[str, dict[str, Any]]:
-    doc = await state.store.get_doc(sub, DOC_GUESSES)
-    return cast(dict[str, dict[str, Any]], doc) if isinstance(doc, dict) else {}
-
-
-async def _predict(
-    state: AppState, sub: str, snap: FinanceSnapshot, day: date
-) -> tuple[predict.DayPrediction, predict.Evaluation]:
-    ev = await _evaluation(state, sub, snap)
-    try:
-        pred = await call_pure(
-            predict.predict_day, snap.transactions, day, _holidays(sub, snap), _weather_fn(sub, snap)
-        )
-    except ValueError:
-        raise _not_enough() from None
-    return pred, ev
-
-
-def _guess_state(guess: dict[str, Any], pred: float, actual: float | None) -> GuessState:
-    amount = float(guess["amount"])
-    points = predict.guess_points(amount, actual) if actual is not None else None
-    return GuessState(
-        amount=amount,
-        made_at=str(guess["made_at"]),
-        points=points,
-        beat_model=predict.beat_model(amount, pred, actual) if actual is not None else None,
+async def _prediction(state: AppState, sub: str, inp: prediction.Inputs, day: date_cls,
+                      guess: dict[str, Any] | None) -> SpendPrediction:
+    bt = await prediction.backtest(state, sub, inp)
+    pred = await call_pure(
+        predict.prediction_response, inp.snap, day, inp.holidays, inp.weather,
+        inp.weather_status.get(day, "mock"), None, bt,
     )
-
-
-def _weather_info(sub: str, snap: FinanceSnapshot, day: date) -> Weather:
-    w = mock_weather_day(money.hints(sub, snap).region if money.hints(sub, snap) else None, day)
-    wet = float(w["rain_mm"]) >= 1.0
-    return Weather(
-        summary=f"{'Wet' if wet else 'Dry'}, {float(w['temp_max_c']):.0f} degrees",
-        temp_max_c=float(w["temp_max_c"]),
-        rain_mm=float(w["rain_mm"]),
-        status="mock",
-    )
-
-
-async def _build_prediction(state: AppState, sub: str, snap: FinanceSnapshot, day: date) -> SpendPrediction:
-    pred, ev = await _predict(state, sub, snap, day)
-    today = money.today(snap)
-    actual = predict.actual_spend(snap.transactions, day) if day < today else None
-    guess = (await _guesses(state, sub)).get(day.isoformat())
-    return SpendPrediction(
-        meta=money.meta(snap),
-        date=day.isoformat(),
-        predicted=pred.predicted,
-        low=pred.low,
-        high=pred.high,
-        baseline=pred.baseline,
-        reasons=pred.reasons,
-        weather=_weather_info(sub, snap, day),
-        is_bank_holiday=day in _holidays(sub, snap),
-        days_to_payday=pred.days_to_payday,
-        guess=_guess_state(guess, pred.predicted, actual) if guess else None,
-        actual=actual,
-        model=ModelInfo(
-            name=predict.MODEL_NAME,
-            trained_on_days=pred.trained_on_days,
-            mae=ev.mae,
-            baseline_mae=ev.baseline_mae,
-            interval_coverage=ev.coverage,
-        ),
-    )
-
-
-# The evaluation route is registered before /prediction on purpose.
+    if guess is not None:
+        pred = pred.model_copy(update={"guess": _guess_state(guess, pred.actual)})
+    return pred
 
 
 @router.get("/v1/finance/prediction/evaluation", response_model=PredictionEvaluation,
             response_model_exclude_none=True)
 async def get_prediction_evaluation(request: Request, sub: Subject) -> PredictionEvaluation:
-    state, snap = await _snap(request, sub)
-    ev = await _evaluation(state, sub, snap)
-    return PredictionEvaluation(
-        meta=money.meta(snap),
-        method=predict.MODEL_NAME,
-        n_days=len(ev.days),
-        mae=ev.mae,
-        baseline_mae=ev.baseline_mae,
-        baseline="Average spend on the same weekday over the days before",
-        interval_coverage=ev.coverage,
-        days=ev.days,
-    )
+    state = get_state(request)
+    inp = await prediction.inputs(state, sub)
+    bt = await prediction.backtest(state, sub, inp)
+    return await call_pure(predict.evaluation_response, inp.snap, inp.holidays, inp.weather, bt)
 
 
 @router.get("/v1/finance/prediction", response_model=SpendPrediction, response_model_exclude_none=True)
-async def get_spend_prediction(request: Request, sub: Subject, date: Day = None) -> SpendPrediction:
-    state, snap = await _snap(request, sub)
-    return await _build_prediction(state, sub, snap, _parse_day(date, snap))
+async def get_spend_prediction(request: Request, sub: Subject, date: Day = None) -> SpendPrediction:  # noqa: A002
+    """The full prediction. The client hides predicted, low, high and reasons until `guess` is set."""
+    state = get_state(request)
+    inp = await prediction.inputs(state, sub)
+    day = _day(inp, date)
+    try:
+        guesses = await _guess_docs(state, sub)
+    except StoreUnavailable:
+        guesses = {}  # The prediction does not need the store. Show it without a guess.
+    return await _prediction(state, sub, inp, day, guesses.get(day.isoformat()))
 
 
 @router.get("/v1/finance/guesses", response_model=GuessesResponse, response_model_exclude_none=True)
 async def list_guesses(request: Request, sub: Subject) -> GuessesResponse:
-    state, snap = await _snap(request, sub)
-    guesses = await _guesses(state, sub)
-    today = money.today(snap)
-    items: list[GuessDay] = []
-    points_by_day: dict[str, int | None] = {}
-    for key in sorted(guesses, reverse=True)[:MAX_GUESS_ITEMS]:
-        day = dates.parse(key)
-        pred, _ = await _predict(state, sub, snap, day)
-        actual = predict.actual_spend(snap.transactions, day) if day < today else None
-        gs = _guess_state(guesses[key], pred.predicted, actual)
-        points_by_day[key] = gs.points
-        items.append(GuessDay(date=key, guess=gs.amount, predicted=pred.predicted, actual=actual, points=gs.points,
-                              beat_model=gs.beat_model))
-    current, best = predict.streaks(points_by_day)
-    return GuessesResponse(meta=money.meta(snap), points_total=sum(p or 0 for p in points_by_day.values()),
-                           streak=current, best_streak=best, items=items)
+    state = get_state(request)
+    inp = await prediction.inputs(state, sub)
+    docs = await _guess_docs(state, sub)
+    items = [
+        predict.score_day(GuessDay(
+            date=d, guess=g["amount"], predicted=g["predicted"],
+            actual=prediction.actual_spend(inp, date_cls.fromisoformat(d)),
+        ))
+        for d, g in sorted(docs.items(), reverse=True)
+    ]
+    totals = predict.guess_totals(items)
+    return GuessesResponse(
+        meta=money.meta(inp.snap),
+        points_total=totals.points_total,
+        streak=totals.streak,
+        best_streak=totals.best_streak,
+        items=items,
+    )
 
 
 @router.post("/v1/finance/guesses", status_code=201, response_model=SpendPrediction,
              response_model_exclude_none=True)
 async def make_guess(body: GuessRequest, request: Request, sub: Subject) -> SpendPrediction:
-    state, snap = await _snap(request, sub)
-    day = _parse_day(body.date, snap)
+    """One guess per day. The guess is stored with the model's prediction for that day, for scoring later."""
+    state = get_state(request)
+    inp = await prediction.inputs(state, sub)
+    day = _day(inp, body.date)
+    pred = await _prediction(state, sub, inp, day, None)
     async with state.subject_locks[f"{sub}:{DOC_GUESSES}"]:
-        guesses = await _guesses(state, sub)
-        if day.isoformat() in guesses:
-            raise ApiError(409, "already_guessed", "You already guessed that day")
-        await _predict(state, sub, snap, day)  # fails early (409) when there is not enough history
-        guesses[day.isoformat()] = {"amount": body.amount, "made_at": _utc_now()}
-        await state.store.put_doc(sub, DOC_GUESSES, guesses)
-    return await _build_prediction(state, sub, snap, day)
-
+        docs = await _guess_docs(state, sub)
+        if body.date in docs:
+            raise ApiError(409, "already_guessed", "You already made a guess for this day")
+        doc = {"date": body.date, "amount": body.amount, "made_at": _utc_now(), "predicted": pred.predicted}
+        docs[body.date] = doc
+        await state.store.put_doc(sub, DOC_GUESSES, list(docs.values()))
+    return pred.model_copy(update={"guess": _guess_state(doc, pred.actual)})

@@ -13,12 +13,16 @@ import random
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TypeVar
 
 import httpx
 
 from lifeline_contracts.observation import Observation, Status
+from lifeline_data.logsafe import redact_urls
 from lifeline_data.settings import BROWSER_USER_AGENT, DataSettings
+from lifeline_data.sources import missing_key_message, resolve_key
+
+T = TypeVar("T")
 
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
@@ -131,6 +135,8 @@ class Adapter:
     # Series fetched by the worker and used for the MacroTable: list of (series_id, region).
     default_series: ClassVar[tuple[tuple[str, str | None], ...]] = ()
     bounds: ClassVar[dict[str, tuple[float, float]]] = {}
+    # Per-source request timeout in seconds. None = settings.http_timeout_seconds (default 8 s).
+    timeout_seconds: ClassVar[float | None] = None
 
     def __init__(
         self,
@@ -156,21 +162,35 @@ class Adapter:
 
     async def fetch_validated(self, series_id: str, region: str | None = None) -> list[Observation]:
         """Fetch through the breaker and validate. Any failure counts against the breaker."""
+
+        async def run() -> list[Observation]:
+            return validate_observations(await self.fetch(series_id, region), self.bounds)
+
+        return await self.guarded(run)
+
+    async def guarded(self, fn: Callable[[], Awaitable[T]]) -> T:
+        """Run one adapter call through the circuit breaker. Unexpected errors become PayloadError."""
         if not self.breaker.allow():
             raise CircuitOpenError(f"{self.source_id}: circuit open")
         try:
-            result = validate_observations(await self.fetch(series_id, region), self.bounds)
+            result = await fn()
         except AdapterError:
             self.breaker.record_failure()
+            self._memo.clear()  # never reuse a body that failed parsing or validation
             raise
         except Exception as exc:  # parse bugs, unexpected shapes
             self.breaker.record_failure()
-            raise PayloadError(f"{self.source_id}: {type(exc).__name__}: {exc}") from exc
+            self._memo.clear()
+            raise PayloadError(redact_urls(f"{self.source_id}: {type(exc).__name__}: {exc}")) from exc
         self.breaker.record_success()
         return result
 
     async def get_text(self, url: str, params: dict[str, Any] | None = None) -> str:
-        """GET body as text, memoised for `memo_seconds`."""
+        """GET body as text, memoised for `memo_seconds`.
+
+        One payload often holds several series (BoE, ONS). Any failed `guarded` call clears the memo,
+        so a body that failed parsing or validation is never served again.
+        """
         key = url + "?" + "&".join(f"{k}={v}" for k, v in sorted((params or {}).items()))
         hit = self._memo.get(key)
         now = self._clock()
@@ -217,7 +237,7 @@ class Adapter:
                     headers=sent,
                     json=json_body,
                     auth=auth if auth is not None else httpx.USE_CLIENT_DEFAULT,
-                    timeout=self.settings.http_timeout_seconds,
+                    timeout=self.timeout_seconds or self.settings.http_timeout_seconds,
                     follow_redirects=True,
                 )
             except httpx.TimeoutException as exc:
@@ -240,9 +260,9 @@ class Adapter:
 
     def key(self, name: str) -> str:
         """Value of a required env var. Never logged. Missing -> MissingKeyError (hub serves mock)."""
-        value = self.env.get(name, "")
+        value = resolve_key(name, self.env)
         if not value:
-            raise MissingKeyError(f"{name} not set")
+            raise MissingKeyError(missing_key_message(name))
         return value
 
     def obs(

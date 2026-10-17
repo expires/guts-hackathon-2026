@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import fakeredis.aioredis
 import httpx
 import pytest
@@ -11,10 +13,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from lifeline_contracts.macro import MacroKey, MacroTable
 from lifeline_contracts.observation import SourceStatus
 from lifeline_data.adapters.boe import BOE_URL
+from lifeline_data.adapters.ons import ONS_BASE, PIPR_PAGE
 from lifeline_data.hub import DataHub
 from lifeline_data.sources import SOURCES
 
 EMPTY_ENV: dict[str, str] = {}
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "data"
 
 
 def make_hub(settings, client, clock, no_sleep, **kw) -> DataHub:
@@ -119,7 +123,8 @@ async def test_breaker_open_serves_cached_without_network(settings, client, cloc
 async def test_missing_key_gives_mock_status(settings):
     hub = DataHub(settings, env={})
     st = status_of(await hub.statuses(), "companieshouse")
-    assert st.status == "mock" and st.needs_key and st.last_error == "COMPANIES_HOUSE_KEY not set"
+    assert st.status == "mock" and st.needs_key
+    assert st.last_error == "COMPANIES_HOUSE_KEY not set (or COMPANIES_HOUSE_API_KEY)"
     adz = status_of(await hub.statuses(), "adzuna")
     assert adz.last_error == "ADZUNA_APP_ID not set"
     assert await hub.series("companieshouse", "anything") == []
@@ -128,7 +133,7 @@ async def test_missing_key_gives_mock_status(settings):
 async def test_key_present_is_not_reported_missing(settings):
     hub = DataHub(settings, env={"COMPANIES_HOUSE_KEY": "x"})
     st = status_of(await hub.statuses(), "companieshouse")
-    assert st.last_error != "COMPANIES_HOUSE_KEY not set"
+    assert not (st.last_error or "").startswith("COMPANIES_HOUSE_KEY not set")
 
 
 async def test_offline_hub_sends_no_requests(settings):
@@ -228,7 +233,67 @@ def _mock_iphrp(fixture_text, router=respx):
     router.get(IPHRP_CSV).mock(return_value=httpx.Response(200, text=fixture_text("ons_iphrp.csv")))
 
 
+PIPR_PAGE_URL = f"{ONS_BASE}/{PIPR_PAGE}/data"
+PIPR_RELEASE = f"/{PIPR_PAGE}/16september2026"
+
+
+def _mock_pipr(router=respx):
+    router.get(PIPR_PAGE_URL).mock(return_value=httpx.Response(200, json={"datasets": [{"uri": PIPR_RELEASE}]}))
+    router.get(f"{ONS_BASE}{PIPR_RELEASE}/data").mock(
+        return_value=httpx.Response(200, json={"downloads": [{"file": "pipr.xlsx"}]})
+    )
+    router.get(url__startswith=f"{ONS_BASE}/file").mock(
+        return_value=httpx.Response(200, content=(FIXTURES / "ons_pipr_sample.xlsx").read_bytes())
+    )
+
+
+def _mock_tier1_sources(fixture_text, router=respx):
+    """Every no-key Tier 1 source, from recorded fixtures (Yahoo and FRED: shape samples)."""
+    fx = fixture_text
+    router.get(url__startswith="https://www.gov.uk/bank-holidays.json").mock(
+        return_value=httpx.Response(200, text=fx("bankholidays.json"))
+    )
+    router.get(url__startswith="https://api.open-meteo.com/").mock(
+        return_value=httpx.Response(200, text=fx("openmeteo_forecast_leeds.json"))
+    )
+    router.get(url__startswith="https://archive-api.open-meteo.com/").mock(
+        return_value=httpx.Response(200, text=fx("openmeteo_archive_leeds.json"))
+    )
+    router.get(url__startswith="https://api.frankfurter.app/").mock(
+        return_value=httpx.Response(200, text=fx("frankfurter_gbpusd.json"))
+    )
+    router.get(url__startswith="https://api.coingecko.com/").mock(
+        return_value=httpx.Response(200, text=fx("coingecko_bitcoin.json"))
+    )
+    router.get(url__startswith="https://query1.finance.yahoo.com/").mock(
+        return_value=httpx.Response(200, text=fx("yahoo_ftas_sample.json"))
+    )
+    router.get(url__startswith="https://fred.stlouisfed.org/").mock(
+        return_value=httpx.Response(200, text=fx("fred_gilt_sample.csv"))
+    )
+    router.get("https://api.octopus.energy/v1/products/").mock(
+        return_value=httpx.Response(200, text=fx("octopus_products.json"))
+    )
+    router.get(url__startswith="https://api.octopus.energy/v1/products/VAR-").mock(
+        return_value=httpx.Response(200, text=fx("octopus_flexible.json"))
+    )
+    router.get(url__startswith="https://api.carbonintensity.org.uk/").mock(
+        return_value=httpx.Response(200, text=fx("carbonintensity_regional.json"))
+    )
+    router.get(url__startswith="https://data.police.uk/api/crimes-street-dates").mock(
+        return_value=httpx.Response(200, text=fx("police_dates.json"))
+    )
+    router.get(url__startswith="https://data.police.uk/api/crimes-street/").mock(
+        return_value=httpx.Response(200, text=fx("police_burglary_leeds.json"))
+    )
+    router.get(url__startswith="https://environment.data.gov.uk/").mock(
+        return_value=httpx.Response(200, text=fx("environmentagency_floods.json"))
+    )
+
+
 def _mock_all_sources(fixture_text, router=respx):
+    _mock_pipr(router)
+    _mock_tier1_sources(fixture_text, router)
     router.get(url__startswith=BOE_URL).mock(return_value=httpx.Response(200, text=fixture_text("boe_iadb.csv")))
     router.get(url__startswith="https://www.ons.gov.uk/").mock(
         return_value=httpx.Response(200, text=fixture_text("ons_d7g7.json"))

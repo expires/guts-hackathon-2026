@@ -1,337 +1,545 @@
-"""Daily spend prediction and "Guess my spend" scoring (ADR 0017). Pure: no clock, no I/O, no global RNG.
+"""Daily spend prediction and "Guess my spend" scoring (ADR 0017). Pure numpy, no LLM, no clock.
 
-Model: ridge regression (L2, closed form, numpy) on log(1 + daily spend), refit for every test day
-(walk-forward: a day is only ever predicted from days before it).
+Target: log(1 + daily spend). Daily spend = outflows that day, excluding transfers, savings, income,
+housing (rent, mortgage), bills, subscriptions and fees (scheduled payments live in the bills list).
 
-Daily spend is the money that left on a day, excluding transfers, savings, income, rent, mortgage and other
-scheduled bills. Features are grouped so that the reasons are exact in the model: with centred inputs the
-prediction in log space is `mean(y) + sum over groups of (group contribution)`, and the baseline ("a typical
-day") is the prediction with every feature at its training mean.
+Features, by group (the reasons use the groups):
+- weekday: one-hot Monday..Sunday.
+- payday: days since the last salary credit / 30, and a flag for the first 3 days after payday
+  (payday 0, 1, 2). Paydays come from detected salary credits, projected monthly after the last one.
+- bank_holiday: flag (dates from gov.uk, passed in by the caller).
+- weather: max temperature (C) and rain (mm) for the user's region (passed in). Missing values take
+  the training mean, so they add nothing.
+- recent_trend: mean log spend of the 7 days before.
+- month_end: flag for the last 3 days of the month.
 
-Reasons are converted to GBP by adding the groups to the baseline one at a time, largest first, so the effects
-telescope: the effects of ALL groups sum to `predicted - baseline` (the API shows the top 3).
-
-Weather and bank holidays are passed in (the data layer owns them). The penalty `ALPHA` is fixed rather than
-tuned (history is only months long); this is a simplification of ADR 0017 and is stated in the model name.
+Model: ridge regression on standardised features, unpenalised intercept. alpha is chosen from
+ALPHAS by walk-forward validation over the last VALIDATION_DAYS training days.
+Range: the 10th and 90th percentiles of walk-forward residuals (log space), mapped back to GBP.
+Reasons: effect of a group in GBP = predicted - prediction with that group at its training mean.
+Baseline ("typical day") = prediction with every feature at its training mean = expm1(intercept).
 """
 
 from __future__ import annotations
 
+import calendar
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
 
 import numpy as np
 from numpy.typing import NDArray
 
-from lifeline_contracts.finance import BacktestDay, Reason, Transaction
+from lifeline_contracts.finance import (
+    BacktestDay,
+    Category,
+    FinanceSnapshot,
+    GuessDay,
+    GuessState,
+    ModelInfo,
+    PredictionEvaluation,
+    Reason,
+    SpendPrediction,
+    Transaction,
+    Weather,
+)
+from lifeline_contracts.observation import Status
 from lifeline_engine.money import dates
 from lifeline_engine.money.categorise import NOT_SPENDING, categorise
 from lifeline_engine.money.recurring import detect_salary
 
 FloatArray = NDArray[np.float64]
+WeatherDays = Mapping[dates.date, tuple[float, float]]  # day -> (max temp C, rain mm), same as lifeline_data
 
-ALPHA = 10.0
-MIN_TRAIN_DAYS = 45
-BACKTEST_DAYS = 90
-INTERVAL_DAYS = 60
-MIN_RESIDUALS = 10
-DEFAULT_LOG_SPREAD = 0.6
-MODEL_NAME = "ridge regression on log spend"
-EXCLUDED = NOT_SPENDING | {"housing", "bills"}
+EXCLUDED: frozenset[Category] = NOT_SPENDING | {"housing", "bills", "subscriptions", "fees"}
+GROUPS: tuple[str, ...] = ("weekday", "payday", "bank_holiday", "weather", "recent_trend", "month_end")
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+ALPHAS: tuple[float, ...] = (0.3, 1.0, 3.0, 10.0, 30.0, 100.0)
+VALIDATION_DAYS = 28
+RESIDUAL_DAYS = 60
+MIN_TRAIN_DAYS = 28
+BACKTEST_DAYS = 90
+PAYDAY_WINDOW = 3
+TREND_DAYS = 7
+MONTH_END_DAYS = 3
+STREAK_POINTS = 70
+METHOD = "Ridge regression on log daily spend (weekday, payday, bank holiday, weather, last 7 days, month end)"
+BASELINE_TEXT = "Average spend for the same weekday"
 
-# (group id, number of columns). Column order in the matrix follows this list.
-GROUPS: tuple[tuple[str, int], ...] = (
-    ("weekday", 7),
-    ("payday", 2),
-    ("bank_holiday", 1),
-    ("weather", 2),
-    ("recent_trend", 1),
-    ("month_end", 1),
-)
 
-Weather = Callable[[date], tuple[float, float]]  # day -> (max temperature C, rain mm)
+# ---------- data ----------
+
+
+def is_daily_spend(t: Transaction) -> bool:
+    return t.amount < 0 and categorise(t) not in EXCLUDED
+
+
+def daily_spend(txs: Sequence[Transaction], start: dates.date, end: dates.date) -> dict[dates.date, float]:
+    """Spend per day from `start` to `end` inclusive. Days without spend are 0."""
+    out = {dates.add_days(start, i): 0.0 for i in range((end - start).days + 1)}
+    for t in txs:
+        d = dates.parse(t.date)
+        if d in out and is_daily_spend(t):
+            out[d] += -t.amount
+    return {d: round(v, 2) for d, v in out.items()}
+
+
+def paydays(txs: Sequence[Transaction], until: dates.date) -> list[dates.date]:
+    """Detected salary dates, projected monthly after the last one up to `until` + 40 days."""
+    inc = detect_salary(txs)
+    if inc is None:
+        return []
+    days = list(inc.payday_dates)
+    nxt = dates.add_months(days[-1], 1)
+    while nxt <= dates.add_days(until, 40):
+        days.append(nxt)
+        nxt = dates.add_months(nxt, 1)
+    return days
+
+
+# ---------- features ----------
+
+
+@dataclass(frozen=True)
+class DayInputs:
+    holidays: frozenset[dates.date]
+    weather: Mapping[dates.date, tuple[float, float]]
+    paydays: tuple[dates.date, ...]
+
+
+def days_since_payday(d: dates.date, pays: Sequence[dates.date]) -> int | None:
+    past = [p for p in pays if p <= d]
+    return (d - past[-1]).days if past else None
+
+
+def days_to_payday(d: dates.date, pays: Sequence[dates.date]) -> int | None:
+    future = [p for p in pays if p >= d]
+    return (future[0] - d).days if future else None
+
+
+def feature_row(d: dates.date, log_hist: Mapping[dates.date, float], inp: DayInputs) -> dict[str, list[float]]:
+    """Raw features per group. NaN marks a missing value (filled with the training mean)."""
+    since = days_since_payday(d, inp.paydays)
+    prev = [log_hist[x] for x in (dates.add_days(d, -k) for k in range(1, TREND_DAYS + 1)) if x in log_hist]
+    w = inp.weather.get(d)
+    last_day = calendar.monthrange(d.year, d.month)[1]
+    return {
+        "weekday": [1.0 if d.weekday() == i else 0.0 for i in range(7)],
+        "payday": [
+            float("nan") if since is None else min(since, 35) / 30,
+            float("nan") if since is None else (1.0 if since < PAYDAY_WINDOW else 0.0),
+        ],
+        "bank_holiday": [1.0 if d in inp.holidays else 0.0],
+        "weather": [float("nan"), float("nan")] if w is None else [float(w[0]), float(w[1])],
+        "recent_trend": [float(np.mean(prev)) if prev else float("nan")],
+        "month_end": [1.0 if d.day > last_day - MONTH_END_DAYS else 0.0],
+    }
+
+
+def _slices() -> dict[str, slice]:
+    sizes = {"weekday": 7, "payday": 2, "bank_holiday": 1, "weather": 2, "recent_trend": 1, "month_end": 1}
+    out: dict[str, slice] = {}
+    i = 0
+    for g in GROUPS:
+        out[g] = slice(i, i + sizes[g])
+        i += sizes[g]
+    return out
+
+
+SLICES = _slices()
+N_FEATURES = sum(s.stop - s.start for s in SLICES.values())
+
+
+def _flat(row: Mapping[str, list[float]]) -> list[float]:
+    return [v for g in GROUPS for v in row[g]]
+
+
+# ---------- ridge ----------
+
+
+@dataclass(frozen=True)
+class Ridge:
+    mean: FloatArray
+    scale: FloatArray
+    beta: FloatArray
+    intercept: float
+    alpha: float
+
+    def z(self, x: FloatArray) -> FloatArray:
+        filled = np.where(np.isnan(x), self.mean, x)
+        out: FloatArray = (filled - self.mean) / self.scale
+        return out
+
+    def predict_log(self, x: FloatArray) -> float:
+        return float(self.intercept + self.z(x) @ self.beta)
+
+    def contributions(self, x: FloatArray) -> dict[str, float]:
+        """Log-space contribution of each group: sum of beta * z over its features."""
+        zx = self.z(x) * self.beta
+        return {g: float(zx[s].sum()) for g, s in SLICES.items()}
+
+
+def fit_ridge(x: FloatArray, y: FloatArray, alpha: float) -> Ridge:
+    """Ridge on standardised columns. NaN takes the column mean. Constant columns get beta 0."""
+    col_mean = np.nanmean(np.where(np.isnan(x).all(axis=0), 0.0, x), axis=0) if x.size else np.zeros(x.shape[1])
+    col_mean = np.where(np.isnan(col_mean), 0.0, col_mean)
+    filled = np.where(np.isnan(x), col_mean, x)
+    sd = filled.std(axis=0)
+    scale = np.where(sd > 1e-12, sd, 1.0)
+    z = (filled - col_mean) / scale
+    z[:, sd <= 1e-12] = 0.0
+    y_mean = float(y.mean()) if y.size else 0.0
+    a = z.T @ z + alpha * np.eye(z.shape[1])
+    beta = np.linalg.solve(a, z.T @ (y - y_mean))
+    return Ridge(mean=col_mean, scale=scale, beta=beta, intercept=y_mean, alpha=alpha)
+
+
+# ---------- dataset ----------
+
+
+@dataclass(frozen=True)
+class Dataset:
+    days: tuple[dates.date, ...]
+    x: FloatArray
+    y: FloatArray  # log1p spend
+    spend: FloatArray
+
+
+def build_dataset(spend: Mapping[dates.date, float], inp: DayInputs, extra: Sequence[dates.date] = ()) -> Dataset:
+    """Rows for every day in `spend` (with targets) plus `extra` days (targets NaN)."""
+    log_hist = {d: float(np.log1p(v)) for d, v in spend.items()}
+    days = sorted({*spend, *extra})
+    x = np.array([_flat(feature_row(d, log_hist, inp)) for d in days], dtype=np.float64)
+    y = np.array([log_hist.get(d, float("nan")) for d in days], dtype=np.float64)
+    s = np.array([spend.get(d, float("nan")) for d in days], dtype=np.float64)
+    return Dataset(days=tuple(days), x=x, y=y, spend=s)
+
+
+def _walk_forward_log_errors(ds: Dataset, idx: Sequence[int], alpha: float) -> list[float]:
+    """Residuals (actual - predicted, log space) for rows `idx`, each fitted on all rows before it."""
+    out: list[float] = []
+    for i in idx:
+        if i < MIN_TRAIN_DAYS:
+            continue
+        m = fit_ridge(ds.x[:i], ds.y[:i], alpha)
+        out.append(float(ds.y[i] - m.predict_log(ds.x[i])))
+    return out
+
+
+def choose_alpha(ds: Dataset, end: int) -> float:
+    """alpha with the lowest walk-forward MAE in GBP over the VALIDATION_DAYS rows before `end`."""
+    idx = list(range(max(MIN_TRAIN_DAYS, end - VALIDATION_DAYS), end))
+    if not idx:
+        return 10.0
+    best, best_err = 10.0, float("inf")
+    for a in ALPHAS:
+        errs = []
+        for i in idx:
+            m = fit_ridge(ds.x[:i], ds.y[:i], a)
+            errs.append(abs(float(np.expm1(m.predict_log(ds.x[i]))) - float(ds.spend[i])))
+        err = float(np.mean(errs))
+        if err < best_err - 1e-9:
+            best, best_err = a, err
+    return best
+
+
+def weekday_baseline(ds: Dataset, end: int, d: dates.date) -> float:
+    """Average spend on the same weekday over rows before `end`."""
+    vals = [float(ds.spend[i]) for i in range(end) if ds.days[i].weekday() == d.weekday()]
+    return float(np.mean(vals)) if vals else (float(np.mean(ds.spend[:end])) if end else 0.0)
+
+
+# ---------- prediction ----------
 
 
 @dataclass(frozen=True)
 class DayPrediction:
+    date: dates.date
     predicted: float
     low: float
     high: float
     baseline: float
-    reasons: list[Reason]
+    reasons: tuple[Reason, ...]
+    is_bank_holiday: bool
     days_to_payday: int | None
+    actual: float | None
     trained_on_days: int
+    alpha: float
 
 
-@dataclass(frozen=True)
-class Evaluation:
-    days: list[BacktestDay]
-    mae: float
-    baseline_mae: float
-    coverage: float
+def _inputs(snapshot: FinanceSnapshot, holidays: Collection[dates.date], weather: WeatherDays | None,
+            until: dates.date) -> DayInputs:
+    return DayInputs(
+        holidays=frozenset(holidays),
+        weather=dict(weather or {}),
+        paydays=tuple(paydays(snapshot.transactions, until)),
+    )
 
 
-def daily_spend(txs: Sequence[Transaction]) -> dict[date, float]:
-    """Money out per day (GBP, positive). Days without spending are absent."""
-    out: dict[date, float] = {}
-    for t in txs:
-        if t.amount >= 0 or categorise(t) in EXCLUDED:
-            continue
-        d = dates.parse(t.date)
-        out[d] = out.get(d, 0.0) - t.amount
-    return out
+def _history(snapshot: FinanceSnapshot) -> dict[dates.date, float]:
+    """Daily spend from the first transaction to the day before as_of (as_of itself is not over yet)."""
+    as_of = dates.parse(snapshot.as_of)
+    if not snapshot.transactions:
+        return {}
+    start = min(dates.parse(t.date) for t in snapshot.transactions)
+    return daily_spend(snapshot.transactions, start, dates.add_days(as_of, -1))
 
 
-def _payday_day(txs: Sequence[Transaction]) -> int | None:
-    inc = detect_salary(txs)
-    if inc is None:
-        return None
-    days = sorted(d.day for d in inc.payday_dates)
-    return days[len(days) // 2]
-
-
-def _days_since_payday(d: date, payday: int) -> int:
-    if d.day >= payday:
-        return d.day - payday
-    prev_last = (d.replace(day=1) - timedelta(days=1)).day
-    return d.day + min(prev_last, 31) - payday
-
-
-def _days_to_payday(d: date, payday: int) -> int:
-    since = _days_since_payday(d, payday)
-    return 0 if since == 0 else max(0, 30 - since)
-
-
-@dataclass(frozen=True)
-class _Table:
-    days: list[date]
-    x: FloatArray
-    y: FloatArray  # log1p of daily spend
-    spend: FloatArray
-    index: dict[date, int]
-    payday: int | None
-
-
-def _features(
-    d: date, log_hist: Mapping[date, float], payday: int | None, holidays: frozenset[date], weather: Weather
-) -> list[float]:
-    row = [1.0 if d.weekday() == k else 0.0 for k in range(7)]
-    if payday is None:
-        row += [0.0, 0.0]
-    else:
-        since = _days_since_payday(d, payday)
-        row += [1.0 if since <= 2 else 0.0, since / 30.0]
-    row.append(1.0 if d in holidays else 0.0)
-    temp, rain = weather(d)
-    row += [temp, rain]
-    prior = [log_hist.get(d - timedelta(days=k), 0.0) for k in range(1, 8)]
-    row.append(sum(prior) / 7.0)
-    last = (d.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    row.append(1.0 if (last - d).days <= 2 else 0.0)
-    return row
-
-
-def _table(txs: Sequence[Transaction], end: date, holidays: frozenset[date], weather: Weather) -> _Table | None:
-    """One row per day from the first transaction to `end` inclusive."""
-    spend = daily_spend(txs)
-    if not txs:
-        return None
-    start = min(dates.parse(t.date) for t in txs)
-    if end < start:
-        return None
-    payday = _payday_day(txs)
-    days = [start + timedelta(days=k) for k in range((end - start).days + 1)]
-    log_hist = {d: math.log1p(spend.get(d, 0.0)) for d in days}
-    x = np.array([_features(d, log_hist, payday, holidays, weather) for d in days], dtype=np.float64)
-    y = np.array([log_hist[d] for d in days], dtype=np.float64)
-    s = np.array([spend.get(d, 0.0) for d in days], dtype=np.float64)
-    return _Table(days, x, y, s, {d: i for i, d in enumerate(days)}, payday)
-
-
-@dataclass(frozen=True)
-class _Fit:
-    ybar: float
-    xbar: FloatArray
-    scale: FloatArray
-    w: FloatArray
-
-    def contributions(self, row: FloatArray) -> FloatArray:
-        return ((row - self.xbar) / self.scale) * self.w
-
-    def predict(self, row: FloatArray) -> float:
-        return self.ybar + float(self.contributions(row).sum())
-
-
-def _fit(x: FloatArray, y: FloatArray) -> _Fit:
-    xbar = x.mean(axis=0)
-    scale = x.std(axis=0)
-    scale = np.where(scale < 1e-9, 1.0, scale)
-    z = (x - xbar) / scale
-    ybar = float(y.mean())
-    a = z.T @ z + ALPHA * np.eye(z.shape[1])
-    w = np.linalg.solve(a, z.T @ (y - ybar))
-    return _Fit(ybar, xbar, scale, w)
-
-
-def _walk_forward(t: _Table, first: int, last: int) -> list[tuple[int, float]]:
-    """(row index, predicted log spend) for rows first..last, each fitted on the rows before it."""
-    out: list[tuple[int, float]] = []
-    for i in range(first, last + 1):
-        if i < MIN_TRAIN_DAYS:
-            continue
-        out.append((i, _fit(t.x[:i], t.y[:i]).predict(t.x[i])))
-    return out
-
-
-def _spread(residuals: Sequence[float]) -> tuple[float, float]:
-    """(q10, q90) of log residuals, forced to straddle zero. A wide default until there are enough."""
-    if len(residuals) < MIN_RESIDUALS:
-        return -DEFAULT_LOG_SPREAD, DEFAULT_LOG_SPREAD
-    q10, q90 = (float(q) for q in np.percentile(np.array(residuals), [10, 90]))
-    return min(q10, 0.0), max(q90, 0.0)
-
-
-def _money(z: float) -> float:
-    return round(max(0.0, math.expm1(z)), 2)
-
-
-def _weekday_means(t: _Table, upto: int) -> dict[int, float]:
-    out: dict[int, float] = {}
-    for wd in range(7):
-        vals = [t.spend[i] for i in range(upto) if t.days[i].weekday() == wd]
-        out[wd] = float(np.mean(vals)) if vals else 0.0
-    return out
-
-
-def _label(group: str, d: date, row: FloatArray, payday: int | None, holiday: bool, temp: float, rain: float,
-           effect: float) -> str:
+def reason_label(group: str, d: dates.date, inp: DayInputs, x: Mapping[str, list[float]], effect: float) -> str:
     if group == "weekday":
-        return f"It is a {WEEKDAYS[d.weekday()]}"
-    if group == "payday" and payday is not None:
-        since = _days_since_payday(d, payday)
+        return f"It is {WEEKDAYS[d.weekday()]}"
+    if group == "payday":
+        since = days_since_payday(d, inp.paydays)
+        if since is None:
+            return "Payday is not known"
         if since == 0:
-            return "It is payday"
-        return f"You were paid {since} day{'s' if since != 1 else ''} ago"
+            return "You were paid today"
+        if since == 1:
+            return "You were paid yesterday"
+        if since < PAYDAY_WINDOW + 4:
+            return f"You were paid {since} days ago"
+        to = days_to_payday(d, inp.paydays)
+        return f"Payday is {to} days away" if to is not None else f"It is {since} days since payday"
     if group == "bank_holiday":
-        return "It is a bank holiday" if holiday else "It is a normal working day"
+        return "It is a bank holiday" if d in inp.holidays else "It is a normal day, not a bank holiday"
     if group == "weather":
-        if rain >= 1.0:
-            return f"It is wet, {temp:.0f} degrees"
-        return f"It is dry, {temp:.0f} degrees"
+        w = inp.weather.get(d)
+        if w is None:
+            return "No weather data"
+        return f"It is {w[0]:.0f}°C and {'rainy' if w[1] >= 1.0 else 'dry'}"
     if group == "recent_trend":
-        return "Your last week was busier than usual" if effect >= 0 else "Your last week was quieter than usual"
-    return "It is near the end of the month" if row[-1] >= 1.0 else "It is not near the end of the month"
+        return "You spent more than usual in the last 7 days" if effect > 0 else (
+            "You spent less than usual in the last 7 days"
+        )
+    return "It is the end of the month" if x["month_end"][0] > 0 else "It is not the end of the month"
+
+
+def _predict_row(ds: Dataset, i: int, inp: DayInputs, alpha: float, residuals: Sequence[float]) -> DayPrediction:
+    d = ds.days[i]
+    train = [j for j in range(i) if not np.isnan(ds.y[j])]
+    trained = len(train)
+    if trained < MIN_TRAIN_DAYS:
+        base = weekday_baseline(ds, i, d)
+        return DayPrediction(d, round(base, 2), round(base * 0.5, 2), round(base * 1.5, 2), round(base, 2), (),
+                             d in inp.holidays, days_to_payday(d, inp.paydays),
+                             None if np.isnan(ds.spend[i]) else float(ds.spend[i]), trained, alpha)
+    m = fit_ridge(ds.x[train], ds.y[train], alpha)
+    xi = ds.x[i]
+    pred_log = m.predict_log(xi)
+    predicted = max(0.0, float(np.expm1(pred_log)))
+    res = np.array(residuals if len(residuals) >= 10 else [0.0], dtype=np.float64)
+    lo_q, hi_q = float(np.quantile(res, 0.1)), float(np.quantile(res, 0.9))
+    low = max(0.0, float(np.expm1(pred_log + min(0.0, lo_q))))
+    high = max(predicted, float(np.expm1(pred_log + max(0.0, hi_q))))
+    baseline = max(0.0, float(np.expm1(m.intercept)))
+    contrib = m.contributions(xi)
+    row = feature_row(d, {ds.days[j]: float(ds.y[j]) for j in train}, inp)
+    effects = {g: predicted - max(0.0, float(np.expm1(pred_log - c))) for g, c in contrib.items()}
+    top = sorted(GROUPS, key=lambda g: (-abs(effects[g]), GROUPS.index(g)))[:3]
+    reasons = tuple(
+        Reason(feature=g, label=reason_label(g, d, inp, row, effects[g]), effect=round(effects[g], 2)) for g in top
+    )
+    return DayPrediction(
+        date=d,
+        predicted=round(predicted, 2),
+        low=round(low, 2),
+        high=round(high, 2),
+        baseline=round(baseline, 2),
+        reasons=reasons,
+        is_bank_holiday=d in inp.holidays,
+        days_to_payday=days_to_payday(d, inp.paydays),
+        actual=None if np.isnan(ds.spend[i]) else round(float(ds.spend[i]), 2),
+        trained_on_days=trained,
+        alpha=alpha,
+    )
 
 
 def predict_day(
-    txs: Sequence[Transaction], target: date, holidays: frozenset[date], weather: Weather
+    snapshot: FinanceSnapshot,
+    day: dates.date,
+    holidays: Collection[dates.date] = (),
+    weather: WeatherDays | None = None,
 ) -> DayPrediction:
-    """Prediction for `target` from all days before it. Raises ValueError with fewer than MIN_TRAIN_DAYS."""
-    t = _table(txs, target, holidays, weather)
-    if t is None or len(t.days) - 1 < MIN_TRAIN_DAYS:
-        raise ValueError("not enough history to predict")
-    n = len(t.days) - 1  # index of target
-    fit = _fit(t.x[:n], t.y[:n])
-    row = t.x[n]
-    contrib = fit.contributions(row)
-    z = fit.ybar + float(contrib.sum())
-
-    residuals = [float(t.y[i]) - p for i, p in _walk_forward(t, max(MIN_TRAIN_DAYS, n - INTERVAL_DAYS), n - 1)]
-    q10, q90 = _spread(residuals)
-
-    groups: list[tuple[str, float, slice]] = []
-    col = 0
-    for name, width in GROUPS:
-        sl = slice(col, col + width)
-        groups.append((name, float(contrib[sl].sum()), sl))
-        col += width
-    ordered = sorted(groups, key=lambda g: (-abs(g[1]), g[0]))
-    cum = fit.ybar
-    reasons: list[Reason] = []
-    temp, rain = weather(target)
-    for name, c, _ in ordered:
-        before = _money(cum)
-        cum += c
-        effect = round(_money(cum) - before, 2)
-        reasons.append(
-            Reason(
-                feature=name,
-                label=_label(name, target, row, t.payday, target in holidays, temp, rain, effect),
-                effect=effect,
-            )
-        )
-    predicted = _money(z)
-    return DayPrediction(
-        predicted=predicted,
-        low=min(_money(z + q10), predicted),
-        high=max(_money(z + q90), predicted),
-        baseline=_money(fit.ybar),
-        reasons=reasons[:3],
-        days_to_payday=None if t.payday is None else _days_to_payday(target, t.payday),
-        trained_on_days=n,
-    )
+    """Prediction for `day`. Trains on every complete day before `day` (and before as_of)."""
+    full = _history(snapshot)
+    hist = {d: v for d, v in full.items() if d <= day}  # the row for `day` keeps its actual; training uses d < day
+    inp = _inputs(snapshot, holidays, weather, max(day, dates.parse(snapshot.as_of)))
+    ds = build_dataset(hist, inp, extra=[day])
+    i = ds.days.index(day)
+    alpha = choose_alpha(ds, i)
+    residuals = _walk_forward_log_errors(ds, range(max(MIN_TRAIN_DAYS, i - RESIDUAL_DAYS), i), alpha)
+    return _predict_row(ds, i, inp, alpha, residuals)
 
 
-def evaluate(
-    txs: Sequence[Transaction], as_of: date, holidays: frozenset[date], weather: Weather, n_days: int = BACKTEST_DAYS
-) -> Evaluation:
-    """Walk-forward backtest over the last `n_days` days before `as_of`. Raises ValueError without enough history."""
-    t = _table(txs, as_of - timedelta(days=1), holidays, weather)
-    if t is None or len(t.days) <= MIN_TRAIN_DAYS:
-        raise ValueError("not enough history to evaluate")
-    last = len(t.days) - 1
-    first = max(MIN_TRAIN_DAYS, last - n_days + 1)
-    preds = _walk_forward(t, first, last)
-    days: list[BacktestDay] = []
-    residuals: list[float] = []
-    covered = 0
-    abs_err = 0.0
-    base_err = 0.0
-    for i, z in preds:
-        q10, q90 = _spread(residuals[-INTERVAL_DAYS:])
-        predicted = _money(z)
-        actual = round(float(t.spend[i]), 2)
-        baseline = round(_weekday_means(t, i)[t.days[i].weekday()], 2)
-        low, high = min(_money(z + q10), predicted), max(_money(z + q90), predicted)
-        residuals.append(float(t.y[i]) - z)
-        covered += 1 if low <= actual <= high else 0
-        abs_err += abs(predicted - actual)
-        base_err += abs(baseline - actual)
-        days.append(
+# ---------- backtest ----------
+
+
+@dataclass(frozen=True)
+class Backtest:
+    days: tuple[BacktestDay, ...]
+    mae: float
+    baseline_mae: float
+    coverage: float
+    trained_on_days: int
+
+
+def backtest(
+    snapshot: FinanceSnapshot,
+    holidays: Collection[dates.date] = (),
+    weather: WeatherDays | None = None,
+    n_days: int = BACKTEST_DAYS,
+) -> Backtest:
+    """Walk-forward over the last `n_days` complete days. Each day trains on all days before it.
+    alpha is chosen once on the days before the window. The range uses residuals from earlier test days
+    (and from the RESIDUAL_DAYS before the window to start)."""
+    hist = _history(snapshot)
+    if not hist:
+        return Backtest((), 0.0, 0.0, 0.0, 0)
+    inp = _inputs(snapshot, holidays, weather, dates.parse(snapshot.as_of))
+    ds = build_dataset(hist, inp)
+    n = len(ds.days)
+    first = max(MIN_TRAIN_DAYS, n - n_days)
+    alpha = choose_alpha(ds, first)
+    residuals = _walk_forward_log_errors(ds, range(max(MIN_TRAIN_DAYS, first - RESIDUAL_DAYS), first), alpha)
+    out: list[BacktestDay] = []
+    for i in range(first, n):
+        p = _predict_row(ds, i, inp, alpha, residuals)
+        actual = float(ds.spend[i])
+        out.append(
             BacktestDay(
-                date=dates.iso(t.days[i]), predicted=predicted, low=low, high=high, actual=actual, baseline=baseline
+                date=dates.iso(ds.days[i]),
+                predicted=p.predicted,
+                low=p.low,
+                high=p.high,
+                actual=round(actual, 2),
+                baseline=round(weekday_baseline(ds, i, ds.days[i]), 2),
             )
         )
-    n = len(days)
-    return Evaluation(
-        days=days,
-        mae=round(abs_err / n, 2),
-        baseline_mae=round(base_err / n, 2),
-        coverage=round(covered / n, 3),
+        if p.trained_on_days >= MIN_TRAIN_DAYS:
+            residuals = [*residuals, float(ds.y[i]) - float(np.log1p(p.predicted))]
+    if not out:
+        return Backtest((), 0.0, 0.0, 0.0, len(hist))
+    mae = float(np.mean([abs(b.predicted - b.actual) for b in out]))
+    base = float(np.mean([abs(b.baseline - b.actual) for b in out]))
+    cov = float(np.mean([b.low <= b.actual <= b.high for b in out]))
+    return Backtest(tuple(out), round(mae, 2), round(base, 2), round(cov, 4), len(hist))
+
+
+def model_info(bt: Backtest) -> ModelInfo:
+    return ModelInfo(
+        name="ridge regression on log spend",
+        trained_on_days=bt.trained_on_days,
+        mae=bt.mae,
+        baseline_mae=bt.baseline_mae,
+        interval_coverage=bt.coverage,
     )
 
 
-def actual_spend(txs: Sequence[Transaction], day: date) -> float:
-    return round(daily_spend(txs).get(day, 0.0), 2)
+# ---------- responses ----------
 
 
-def guess_points(guess: float, actual: float) -> int:
-    """100 x max(0, 1 - |guess - actual| / max(actual, 10)), rounded."""
-    return round(100 * max(0.0, 1 - abs(guess - actual) / max(actual, 10.0)))
+def weather_summary(temp_max_c: float, rain_mm: float) -> str:
+    feel = "warm" if temp_max_c >= 20 else "mild" if temp_max_c >= 12 else "cold"
+    wet = "rain" if rain_mm >= 1.0 else "dry"
+    return f"{feel.capitalize()} and {wet}"
+
+
+def prediction_response(
+    snapshot: FinanceSnapshot,
+    day: dates.date,
+    holidays: Collection[dates.date] = (),
+    weather: WeatherDays | None = None,
+    weather_status: Status = "mock",
+    guess: GuessState | None = None,
+    bt: Backtest | None = None,
+) -> SpendPrediction:
+    """SpendPrediction for `day`. Pass `bt` to reuse a cached backtest for the model info."""
+    from lifeline_engine.money import finance_meta
+
+    p = predict_day(snapshot, day, holidays, weather)
+    w = (weather or {}).get(day)
+    info = model_info(bt if bt is not None else backtest(snapshot, holidays, weather))
+    return SpendPrediction(
+        meta=finance_meta(snapshot),
+        date=dates.iso(day),
+        predicted=p.predicted,
+        low=p.low,
+        high=p.high,
+        baseline=p.baseline,
+        reasons=list(p.reasons),
+        weather=None if w is None else Weather(
+            summary=weather_summary(w[0], w[1]), temp_max_c=w[0], rain_mm=w[1], status=weather_status
+        ),
+        is_bank_holiday=p.is_bank_holiday,
+        days_to_payday=p.days_to_payday,
+        guess=guess,
+        actual=p.actual,
+        model=info,
+    )
+
+
+def evaluation_response(
+    snapshot: FinanceSnapshot,
+    holidays: Collection[dates.date] = (),
+    weather: WeatherDays | None = None,
+    bt: Backtest | None = None,
+) -> PredictionEvaluation:
+    from lifeline_engine.money import finance_meta
+
+    b = bt if bt is not None else backtest(snapshot, holidays, weather)
+    return PredictionEvaluation(
+        meta=finance_meta(snapshot),
+        method=METHOD,
+        n_days=len(b.days),
+        mae=b.mae,
+        baseline_mae=b.baseline_mae,
+        baseline=BASELINE_TEXT,
+        interval_coverage=b.coverage,
+        days=list(b.days),
+    )
+
+
+# ---------- Guess my spend ----------
+
+
+def score_guess(guess: float, actual: float) -> int:
+    """points = round(100 * max(0, 1 - |guess - actual| / max(actual, 10))), rounding .5 up (half-up).
+    The raw value is first rounded to 9 decimals so float noise (72.4999999) does not change the result."""
+    raw = round(100 * max(0.0, 1 - abs(guess - actual) / max(actual, 10.0)), 9)
+    return int(math.floor(raw + 0.5))
 
 
 def beat_model(guess: float, predicted: float, actual: float) -> bool:
+    """True when the guess was strictly closer to the actual than the prediction."""
     return abs(guess - actual) < abs(predicted - actual)
 
 
-def streaks(points_by_day: Mapping[str, int | None], threshold: int = 70) -> tuple[int, int]:
-    """(current streak, best streak) of consecutive scored days with points >= threshold, by date order."""
-    scored = [p for _, p in sorted(points_by_day.items()) if p is not None]
-    best = run = 0
-    for p in scored:
-        run = run + 1 if p >= threshold else 0
+def score_day(day: GuessDay) -> GuessDay:
+    """Fill points and beat_model when the actual is known."""
+    if day.actual is None:
+        return day.model_copy(update={"points": None, "beat_model": None})
+    return day.model_copy(
+        update={"points": score_guess(day.guess, day.actual), "beat_model": beat_model(day.guess, day.predicted,
+                                                                                         day.actual)}
+    )
+
+
+@dataclass(frozen=True)
+class GuessTotals:
+    points_total: int
+    streak: int
+    best_streak: int
+
+
+def guess_totals(days: Sequence[GuessDay]) -> GuessTotals:
+    """Totals over scored days in date order. A streak counts consecutive scored days with points >= 70.
+    Unscored days (actual not known yet) do not break the streak. `streak` is the run ending at the latest
+    scored day."""
+    scored = sorted((d for d in days if d.points is not None), key=lambda d: d.date)
+    total = run = best = 0
+    for d in scored:
+        assert d.points is not None
+        total += d.points
+        run = run + 1 if d.points >= STREAK_POINTS else 0
         best = max(best, run)
-    return run, best
+    return GuessTotals(points_total=total, streak=run, best_streak=best)

@@ -16,12 +16,21 @@ from lifeline_data.base import Adapter, PayloadError, parse_number
 
 BOE_URL = "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp"
 # IUMB6VJ = instant-access deposits incl. bonuses (households). IUMCCTL = credit card rate (households).
+# IUMTLMV = revert-to-rate (standard variable rate) mortgage. IUMBV48 = 2-year (75% LTV) variable rate
+# mortgage (tracker). IUMBV24 = Lifetime Tracker mortgage (has suppressed ".." months; not a MacroKey).
 # One invalid code makes the IADB return an HTML error page for the whole request.
-BOE_SERIES = ("IUMBEDR", "IUMBV34", "IUMBV42", "IUMB6VJ", "IUMCCTL")
+BOE_SERIES = ("IUMBEDR", "IUMBV34", "IUMBV42", "IUMB6VJ", "IUMCCTL", "IUMTLMV", "IUMBV48", "IUMBV24")
+# Quoted-rate series where the IADB writes 0 for months before collection started.
+ZERO_IS_MISSING = frozenset({"IUMBV48", "IUMBV24"})
+# Cell values that mean "no value" (".." = suppressed or not available).
+MISSING_CELLS = frozenset({"", ".."})
 
 
 def parse_boe_csv(text: str) -> list[tuple[str, date, float]]:
-    """Parse IADB CSV (CSVF=TN). Returns (series_id, date, value). Blank cells are skipped."""
+    """Parse IADB CSV (CSVF=TN). Returns (series_id, date, value).
+
+    Blank and ".." cells are skipped. A 0 in a `ZERO_IS_MISSING` series is skipped.
+    """
     reader = csv.reader(io.StringIO(text.strip()))
     try:
         header = [h.strip() for h in next(reader)]
@@ -38,9 +47,12 @@ def parse_boe_csv(text: str) -> list[tuple[str, date, float]]:
         except ValueError as exc:
             raise PayloadError(f"boe: bad date {row[0]!r}") from exc
         for code, cell in zip(header[1:], row[1:], strict=False):
-            if cell.strip() == "":
+            if cell.strip() in MISSING_CELLS:
                 continue
-            out.append((code, day, parse_number(cell)))
+            value = parse_number(cell)
+            if value == 0 and code in ZERO_IS_MISSING:
+                continue
+            out.append((code, day, value))
     return out
 
 

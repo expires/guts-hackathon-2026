@@ -50,16 +50,11 @@ enum DeepLink: Equatable, Sendable {
     }
 }
 
-/// App tabs (ADR 0016). The game lives in Life.
-enum AppTab: String, Hashable, CaseIterable {
-    case money, life, you
-}
-
 /// Top-level navigation state and deep link handling. Glue only: Views never see it.
 @MainActor
 @Observable
 final class AppCoordinator {
-    var selectedTab: AppTab = .money
+    var selectedTab: AppTab = .launch
     /// Full-screen cover or sheet that any tab can request.
     var sheet: AppSheet?
     /// Increments for every connection return, so open screens can react with `.onChange`.

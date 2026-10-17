@@ -26,6 +26,7 @@ from lifeline_api.store import LifeStore, MemoryLifeStore, PostgresLifeStore
 from lifeline_contracts.brand import PRODUCT_NAME
 from lifeline_contracts.interfaces import DataHub
 from lifeline_data.hub import DataHub as DataHubImpl
+from lifeline_explain import api as explain_api
 
 log = logging.getLogger("lifeline_api")
 
@@ -66,6 +67,10 @@ def _hub(settings: Settings, redis: Any | None) -> DataHub:
 
 
 def build_state(settings: Settings) -> AppState:
+    if settings.is_test:
+        # Tests never call the network: the explain layer uses template text only.
+        os.environ["LLM_ENABLED"] = "0"
+        explain_api.set_explainer(None)
     redis = _redis_client(settings)
     fallback = MemoryBucket(settings.rate_limit_per_minute)
     limiter: Limiter = RedisBucket(redis, settings.rate_limit_per_minute, fallback) if redis is not None else fallback

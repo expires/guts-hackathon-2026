@@ -11,7 +11,7 @@ struct LifeMenuViewState: Equatable, Sendable {
     struct Item: Equatable, Sendable, Identifiable {
         var menu: Menu
         var title: String
-        var systemImage: String
+        var icon: LLIcon
         /// Enabled actions in this menu. 0 hides the badge.
         var count: Int
         var id: Menu { menu }

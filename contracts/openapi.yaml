@@ -220,8 +220,6 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/lives/{id}:
     get:
       operationId: getLife
@@ -365,8 +363,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       parameters:
       - *id001
       requestBody:
@@ -410,8 +406,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       parameters:
       - *id001
       requestBody:
@@ -469,8 +463,6 @@ paths:
                   $ref: '#/components/examples/Concepts'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/challenges:
     get:
       operationId: listChallenges
@@ -517,8 +509,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -546,8 +536,6 @@ paths:
                   $ref: '#/components/examples/Evaluation'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/rooms:
     post:
       operationId: createRoom
@@ -755,8 +743,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/spending:
     get:
       operationId: getFinanceSpending
@@ -779,8 +765,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       parameters:
       - &id002
         name: month
@@ -812,8 +796,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/bills:
     get:
       operationId: listBills
@@ -836,8 +818,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/budgets:
     get:
       operationId: listBudgets
@@ -860,8 +840,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       parameters:
       - *id002
     put:
@@ -889,8 +867,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -922,8 +898,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
     post:
       operationId: createGoal
       summary: Create a savings goal
@@ -949,8 +923,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -982,8 +954,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       parameters:
       - name: date
         in: query
@@ -1014,8 +984,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
     post:
       operationId: makeGuess
       summary: Guess today's spend before seeing the prediction (one guess per day)
@@ -1043,8 +1011,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1076,8 +1042,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/profile:
     get:
       operationId: getFinanceProfile
@@ -1100,8 +1064,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/investments:
     get:
       operationId: getInvestments
@@ -1124,8 +1086,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/habits:
     get:
       operationId: getHabits
@@ -1148,8 +1108,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/isa/periods:
     get:
       operationId: getIsaPeriods
@@ -1172,8 +1130,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/finance/isa/backtest:
     post:
       operationId: postIsaBacktest
@@ -1198,8 +1154,6 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1233,8 +1187,6 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1264,8 +1216,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/connections/trading212:
     post:
       operationId: connectTrading212
@@ -1300,8 +1250,6 @@ paths:
           $ref: '#/components/responses/GatewayTimeout'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1345,8 +1293,6 @@ paths:
           $ref: '#/components/responses/GatewayTimeout'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1388,8 +1334,6 @@ paths:
           $ref: '#/components/responses/GatewayTimeout'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/connections/{provider}:
     delete:
       operationId: disconnectProvider
@@ -1412,8 +1356,6 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       parameters:
       - name: provider
         in: path
@@ -1445,8 +1387,6 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /v1/next-move/test:
     post:
       operationId: testNextMove
@@ -1477,8 +1417,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1510,8 +1448,6 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
     post:
       operationId: addPlanItem
       summary: 'Do this: add a move to the plan'
@@ -1539,8 +1475,6 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
       requestBody:
         required: true
         content:
@@ -1645,10 +1579,16 @@ components:
           minLength: 1
           type: string
         params:
-          additionalProperties:
-            anyOf:
-            - type: number
-            - type: string
+          maxProperties: 10
+          patternProperties:
+            ^[A-Za-z0-9_]+$:
+              anyOf:
+              - type: number
+              - maxLength: 64
+                type: string
+          propertyNames:
+            maxLength: 32
+            minLength: 1
           type: object
       required:
       - tab
@@ -2117,6 +2057,9 @@ components:
       description: Input for a new life. Presets and random characters are also CharacterSpec.
       properties:
         id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
           type: string
         name:
           maxLength: 40
@@ -2139,6 +2082,9 @@ components:
           type: string
         region:
           description: Canonical region slug, see observation.REGIONS
+          maxLength: 40
+          minLength: 2
+          pattern: ^[a-z-]+$
           type: string
         town:
           maxLength: 60
@@ -2394,6 +2340,9 @@ components:
           type: integer
         preset_id:
           description: Required when mode=preset
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
           type: string
         character:
           description: Required when mode=self or god
@@ -2424,6 +2373,9 @@ components:
           minLength: 1
           type: string
         preset_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
           type: string
         start_year:
           maximum: 2026
@@ -2481,6 +2433,9 @@ components:
           minimum: 16
           type: integer
         region:
+          maxLength: 40
+          minLength: 2
+          pattern: ^[a-z-]+$
           type: string
         postcode:
           maxLength: 10
@@ -2539,6 +2494,9 @@ components:
           $ref: '#/components/schemas/DecisionProfile'
         life_id:
           description: Optional 'Play yourself' life that reached the present
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
           type: string
       required:
       - profile
@@ -4192,9 +4150,9 @@ components:
       type: object
     Reason:
       additionalProperties: false
-      description: 'One feature contribution. effect is in GBP vs the baseline day; the effects of all features sum to
+      description: 'One feature-group contribution in GBP: predicted minus the prediction with that group at its training
 
-        predicted - baseline.'
+        mean (ADR 0017). Effects are per group in a log model, so they need not sum exactly to predicted - baseline.'
       properties:
         feature:
           description: e.g. payday, weekend, rain, bank_holiday, recent_trend
@@ -4665,6 +4623,9 @@ components:
         option_ids:
           description: 'Default: all options of the move'
           items:
+            maxLength: 64
+            minLength: 1
+            pattern: ^[A-Za-z0-9_.:-]+$
             type: string
           maxItems: 4
           type: array
@@ -5948,6 +5909,72 @@ components:
               - 'No'
               - Same
               answer_index: 1
+        - id: fixed-vs-variable
+          title: Fixed or variable
+          emoji: 🔒
+          area: home
+          summary: A fix keeps your payment the same. A variable rate moves with Bank Rate.
+          lesson:
+            concept_id: fixed-vs-variable
+            title: Lock it or let it move
+            chart:
+              kind: line
+              title: Bank Rate at year end
+              x_label: Year
+              y_label: '%'
+              points:
+              - x: 2021.0
+                y: 0.25
+              - x: 2022.0
+                y: 3.5
+              - x: 2023.0
+                y: 5.25
+              source:
+                source: boe
+                series_id: IUMBEDR
+                status: live
+            sentences:
+            - A fixed rate costs a little more when rates fall but protects you when they rise.
+            - In 2022 Bank Rate rose from 0.25% to 3.5%, so variable payments jumped.
+            quiz:
+              question: Rates are about to rise fast. Which payment stays the same?
+              options:
+              - Fixed
+              - Variable
+              - Tracker
+              answer_index: 0
+            personal: Your deal ends in 165 days.
+        - id: subscriptions
+          title: Subscriptions
+          emoji: 📺
+          area: money
+          summary: Small monthly payments add up.
+          lesson:
+            concept_id: subscriptions
+            title: The quiet spend
+            chart:
+              kind: bar
+              title: Your subscriptions per month
+              x_label: Month
+              y_label: £
+              points:
+              - x: 1.0
+                y: 41.0
+              - x: 2.0
+                y: 44.0
+              - x: 3.0
+                y: 47.0
+            sentences:
+            - Each one looks small, but together they are a bill.
+            - Prices rise quietly, so check them once a year.
+            quiz:
+              question: You pay £13 a month for something you never use. What does it cost a year?
+              options:
+              - £13
+              - £156
+              - £52
+              answer_index: 1
+            personal: You spend £47 a month on 6 subscriptions.
     Challenges:
       value:
         challenges:

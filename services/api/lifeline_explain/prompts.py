@@ -30,10 +30,9 @@ MOVE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "headline": {"type": "string"},
-        "action": {"type": "string"},
         "evidence": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["headline", "action", "evidence"],
+    "required": ["headline", "evidence"],
     "additionalProperties": False,
 }
 
@@ -78,8 +77,8 @@ def move_prompt(*, kind: str, headline: str, action: str, evidence: list[str], f
     lines = "\n".join(f"EVIDENCE {i + 1}: {t}" for i, t in enumerate(evidence))
     return (
         "Rewrite the wording of this money move card. Keep each field short.\n"
-        "headline: one short sentence. action: a few words (under 8). evidence: the same number of items, "
+        "headline: one short sentence. evidence: the same number of items, "
         "in the same order, one sentence each.\n"
         f"MOVE KIND: {kind}\nFACTS: {_facts(facts)}\n"
-        f"HEADLINE: {headline}\nACTION: {action}\n{lines}"
+        f"ACTION (context only, do not change): {action}\nHEADLINE: {headline}\n{lines}"
     )

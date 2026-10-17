@@ -1,88 +1,72 @@
 import SwiftUI
 
-/// Tabs shown while a life is running (ADR 0009): Life, Job, Assets, People, Money.
-enum LifeTab: String, Hashable, CaseIterable {
-    case life, job, assets, people, money
-
-    var title: String {
-        switch self {
-        case .life: "Life"
-        case .job: "Job"
-        case .assets: "Assets"
-        case .people: "People"
-        case .money: "Money"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .life: "heart.text.square"
-        case .job: "briefcase"
-        case .assets: "house"
-        case .people: "person.2"
-        case .money: "sterlingsign.circle"
-        }
-    }
-}
-
 /// Sheets that the running life can open.
 enum LifeSheet: String, Identifiable {
     case activities, rewind, concepts, sources, summary, decision, store
+    // Life action menus (ADR 0016).
+    case job, assets, people, money
     var id: String { rawValue }
+
+    /// W7 screens with their own header show full screen. Menus and lists show as sheets.
+    var isFullScreen: Bool {
+        switch self {
+        case .rewind, .summary, .decision, .store: true
+        case .activities, .concepts, .sources, .job, .assets, .people, .money: false
+        }
+    }
 }
 
-/// Glue for a running life. Owns the tab bar and the event sheet, so an open event shows on any tab.
+/// Glue for a running life in the Life tab (ADR 0016). `LifeView` plus the action menu bar,
+/// attached with `.safeAreaInset`, so `LifeView` needs no edit. Owns the event sheet and the lesson.
 struct LifeShellScreen: View {
     let session: GameSession
-    @Environment(AppCoordinator.self) private var coordinator
-    @State private var selection: LifeTab = .life
     @State private var sheet: LifeSheet?
+    /// The open event shows full screen (handoff Life-Event) after the player taps it on the feed.
+    @State private var showsEvent = false
+    /// Decision to open Rewind on (from the lesson's "Rewind and try again"). Nil shows the picker.
+    @State private var rewindDecisionID: String?
 
     var body: some View {
-        @Bindable var session = session
-        TabView(selection: $selection) {
-            Tab(LifeTab.life.title, systemImage: LifeTab.life.systemImage, value: LifeTab.life) {
-                NavigationStack {
-                    LifeScreen(session: session) { route in sheet = Self.sheet(for: route) }
-                        .toolbar {
-                            // The game hides the app tab bar. This is the way back to Money and You.
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button("Back to Money", systemImage: "sterlingsign.circle") { coordinator.selectedTab = .money }
-                                    .labelStyle(.iconOnly)
-                                    .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
-                                    .accessibilityIdentifier("life.backToMoney")
-                            }
-                        }
+        NavigationStack {
+            LifeScreen(session: session) { route in
+                if route == .event {
+                    showsEvent = true
+                } else {
+                    sheet = Self.sheet(for: route)
                 }
             }
-            Tab(LifeTab.job.title, systemImage: LifeTab.job.systemImage, value: LifeTab.job) {
-                NavigationStack { JobTabScreen(session: session) }
-            }
-            Tab(LifeTab.assets.title, systemImage: LifeTab.assets.systemImage, value: LifeTab.assets) {
-                NavigationStack { AssetsTabScreen(session: session) }
-            }
-            Tab(LifeTab.people.title, systemImage: LifeTab.people.systemImage, value: LifeTab.people) {
-                NavigationStack { PeopleTabScreen(session: session) }
-            }
-            Tab(LifeTab.money.title, systemImage: LifeTab.money.systemImage, value: LifeTab.money) {
-                NavigationStack { MoneyTabScreen(session: session) }
-            }
         }
-        .sheet(isPresented: Binding(get: { session.activeEvent != nil && sheet == nil }, set: { _ in })) {
-            EventSheetScreen(session: session)
-                .interactiveDismissDisabled()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.hidden)
+        .fullScreenCover(isPresented: Binding(
+            get: { showsEvent && session.activeEvent != nil },
+            set: { if !$0 { showsEvent = false } }
+        )) {
+            EventSheetScreen(session: session) { showsEvent = false }
         }
-        .sheet(item: $sheet) { sheet in
+        .llCover(item: $sheet.only(\.isFullScreen)) { sheet in
+            content(for: sheet)
+        }
+        .llSheet(item: $sheet.only { !$0.isFullScreen }) { sheet in
             content(for: sheet)
         }
         .fullScreenCover(isPresented: Binding(
-            get: { session.pendingLesson != nil && session.activeEvent == nil && sheet == nil },
+            get: { session.pendingLesson != nil && !showsEvent && sheet == nil },
             set: { if !$0 { session.pendingLesson = nil } }
         )) {
             if let lesson = session.pendingLesson {
-                LessonScreen(lesson: lesson, isNewConcept: true) { session.pendingLesson = nil }
+                LessonScreen(
+                    lesson: lesson,
+                    isNewConcept: true,
+                    session: session,
+                    onRewind: {
+                        rewindDecisionID = session.life?.history.last { $0.decisionId != nil }?.decisionId
+                        session.pendingLesson = nil
+                        Task { @MainActor in
+                            // Wait for the lesson to close, then open Rewind.
+                            try? await Task.sleep(for: .milliseconds(450))
+                            sheet = .rewind
+                        }
+                    }
+                ) { session.pendingLesson = nil }
             }
         }
     }
@@ -95,6 +79,18 @@ struct LifeShellScreen: View {
         case .sources: .sources
         case .summary: .summary
         case .decision: .decision
+        case .event: .activities
+        case let .menu(menu): sheet(for: menu)
+        }
+    }
+
+    private static func sheet(for menu: LifeMenuViewState.Menu) -> LifeSheet {
+        switch menu {
+        case .job: .job
+        case .assets: .assets
+        case .people: .people
+        case .money: .money
+        case .activities: .activities
         }
     }
 
@@ -104,9 +100,11 @@ struct LifeShellScreen: View {
         switch sheet {
         case .activities:
             ActivitiesSheetScreen(session: session, onClose: close)
-                .presentationDetents([.medium, .large])
         case .rewind:
-            RewindScreen(session: session, onClose: close) { self.sheet = .store }
+            RewindScreen(session: session, decisionID: rewindDecisionID, onClose: {
+                rewindDecisionID = nil
+                close()
+            }) { self.sheet = .store }
         case .concepts:
             ConceptCollectionScreen(client: session.client, unlockedIDs: session.life?.conceptsUnlocked ?? [], onClose: close)
         case .sources:
@@ -127,6 +125,14 @@ struct LifeShellScreen: View {
             )
         case .store:
             StoreScreen(session: session, onClose: close)
+        case .job:
+            JobTabScreen(session: session, onClose: close)
+        case .assets:
+            AssetsTabScreen(session: session, onClose: close)
+        case .people:
+            PeopleTabScreen(session: session, onClose: close)
+        case .money:
+            MoneyTabScreen(session: session, onClose: close)
         }
     }
 }

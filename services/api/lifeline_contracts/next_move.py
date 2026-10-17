@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from lifeline_contracts.domain import CharacterSpec, SourceRef
+from lifeline_contracts.domain import CharacterSpec, IsoDate, ShortId, SourceRef
 from lifeline_contracts.finance import FinanceMeta, Point
 
 MoveKind = Literal[
@@ -64,7 +64,7 @@ class Move(_M):
     evidence: list[EvidencePoint] = Field(min_length=3, max_length=3)
     sources: list[SourceRef]
     options: list[MoveOption] = Field(min_length=1)
-    deadline: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    deadline: IsoDate | None = None
     days_left: int | None = Field(default=None, ge=0)
     testable: bool
     test_period: TestPeriod | None = None
@@ -90,7 +90,7 @@ class NextMoveResponse(_M):
 
 class TestMoveRequest(_M):
     move_id: str = Field(min_length=1, max_length=64)
-    option_ids: list[str] | None = Field(default=None, max_length=4, description="Default: all options of the move")
+    option_ids: list[ShortId] | None = Field(default=None, max_length=4, description="Default: all options of the move")
 
 
 class OptionOutcome(_M):

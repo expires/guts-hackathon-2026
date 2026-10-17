@@ -6,56 +6,45 @@ struct MoneyTabView: View {
     var actions: ActionTabActions = .noop
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Theme.Spacing.l) {
-                GlassCard {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                        row("Net worth", state.netWorth, bold: true)
-                        row("Pay per year", state.annualIncome)
-                        row("Costs per month", state.monthlyCosts)
-                    }
+        SheetContainer(title: "Finances", closeIdentifier: "menu.close", onClose: actions.onClose) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Net worth").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    Text(Money.format(state.netWorth)).font(.llHero).contentTransition(.numericText(value: state.netWorth))
                 }
-                GlassCard {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                        Text("You have").font(.headline)
-                        ForEach(state.have) { row($0.label, $0.value) }
-                    }
-                }
-                if !state.owe.isEmpty {
-                    GlassCard {
-                        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                            Text("You owe").font(.headline)
-                            ForEach(state.owe) { row($0.label, $0.value) }
-                            if let note = state.mortgageNote {
-                                Text(note).font(.footnote).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                if let outcome = state.outcome {
-                    OutcomeBanner(outcome: outcome, onDismiss: actions.onDismissOutcome)
-                }
-                SectionTitle(text: "What to do")
-                ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction)
+                Spacer()
             }
-            .padding(Theme.Spacing.l)
+            RowGroup(title: "Money I keep") {
+                ForEach(state.have) { row in
+                    ListRow(icon: icon(for: row.id), title: row.label, trailing: Money.format(row.value), showsChevron: false)
+                }
+            }
+            if !state.owe.isEmpty {
+                RowGroup(title: "Money I owe", shape: .cardAlt) {
+                    ForEach(state.owe) { row in
+                        ListRow(icon: icon(for: row.id), title: row.label, subtitle: row.id == "mortgage" ? state.mortgageNote : nil, trailing: Money.format(row.value), showsChevron: false)
+                    }
+                }
+            }
+            RowGroup(title: "Every year") {
+                ListRow(icon: .payRise, title: "Pay per year", trailing: Money.format(state.annualIncome), showsChevron: false)
+                ListRow(icon: .bills, title: "Costs per month", trailing: Money.format(state.monthlyCosts), showsChevron: false)
+            }
+            RowGroupTitle(text: "What you can do")
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
         }
-        .navigationTitle("Money")
     }
 
-    private func row(_ label: String, _ value: Double, bold: Bool = false) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(Money.format(value))
-                .monospacedDigit()
-                .foregroundStyle(value < 0 ? .red : .primary)
-                .contentTransition(.numericText(value: value))
+    private func icon(for id: String) -> LLIcon {
+        switch id {
+        case "home": .home
+        case "mortgage": .bank
+        case "debt": .card
+        case "studentLoan": .study
+        case "pension": .pension
+        case "investments", "crypto": .investment
+        default: .savings
         }
-        .font(bold ? .headline : .body)
-        .frame(minHeight: 32)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label), \(Money.spoken(value))")
     }
 }
 

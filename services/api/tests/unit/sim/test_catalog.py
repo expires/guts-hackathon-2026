@@ -26,7 +26,7 @@ def _check_concept(c: Concept) -> None:
 
 def test_concepts_without_macro() -> None:
     cs = api.concepts()
-    assert len(cs) >= 8
+    assert len(cs) >= 40
     assert len({c.id for c in cs}) == len(cs)
     for c in cs:
         _check_concept(c)
@@ -42,5 +42,6 @@ def test_concepts_with_macro_have_charts(macro: MacroTable) -> None:
 def test_challenges() -> None:
     cs = api.challenges()
     assert {"home-by-30", "survive-2008"} <= {c.id for c in cs}
+    assert len(cs) >= 6
     preset_ids = {p.id for p in api.presets()}
     assert all(c.character_id in preset_ids for c in cs)

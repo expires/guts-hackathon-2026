@@ -8,21 +8,15 @@ struct CharacterSelectView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                if state.usesSampleData {
-                    DemoDataBadge()
+                ScreenHeader(title: "Choose a life") {
+                    if state.usesSampleData { DemoDataBadge() }
                 }
-                Text(state.intro)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-
-                GlassEffectContainer(spacing: Theme.Spacing.m) {
-                    VStack(spacing: Theme.Spacing.m) {
-                        ForEach(state.cards) { card in
-                            CharacterCard(card: card) { actions.onSelect(card.id) }
-                        }
+                Text(state.intro).font(.llBody).foregroundStyle(Theme.Palette.muted)
+                VStack(spacing: Theme.Spacing.m) {
+                    ForEach(state.cards) { card in
+                        CharacterCard(card: card) { actions.onSelect(card.id) }
                     }
                 }
-
                 switch state.phase {
                 case let .loading(loading):
                     LoadingStateView(state: loading)
@@ -31,28 +25,28 @@ struct CharacterSelectView: View {
                 case .ready:
                     EmptyView()
                 }
-
+                FlowRow(spacing: Theme.Spacing.s) {
+                    Button("Play with friends", action: actions.onOpenRooms).buttonStyle(.text)
+                        .accessibilityIdentifier("characterSelect.rooms")
+                    Button("Extras (\(Brand.demoPaymentLabel))", action: actions.onOpenStore).buttonStyle(.text)
+                        .accessibilityIdentifier("characterSelect.store")
+                    Button("Data sources", action: actions.onOpenSources).buttonStyle(.text)
+                        .accessibilityIdentifier("characterSelect.sources")
+                }
                 Text(state.versionText)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.llLabel)
+                    .foregroundStyle(Theme.Palette.muted)
                     .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
                     .contentShape(.rect)
                     .onLongPressGesture(perform: actions.onVersionLongPress)
+                    .accessibilityAction(named: "Debug menu", actions.onVersionLongPress)
                     .accessibilityIdentifier("app.version")
             }
-            .padding(Theme.Spacing.l)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.vertical, Theme.Spacing.xl)
         }
-        .navigationTitle("Choose a life")
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu("More", systemImage: "ellipsis.circle") {
-                    Button("Play with friends", systemImage: "person.3", action: actions.onOpenRooms)
-                    Button("Extras (\(Brand.demoPaymentLabel))", systemImage: "bag", action: actions.onOpenStore)
-                    Button("Where our data comes from", systemImage: "chart.bar.doc.horizontal", action: actions.onOpenSources)
-                }
-                .accessibilityIdentifier("characterSelect.more")
-            }
-        }
+        .paperBackground()
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -64,38 +58,40 @@ struct CharacterCard: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .center, spacing: Theme.Spacing.l) {
-                Text(card.emoji)
+                LLIconImage(LLIcon.face(emoji: card.emoji), size: 48)
                     .font(.system(size: 44))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    HStack(spacing: Theme.Spacing.s) {
-                        Text(card.title).font(.headline)
-                        if let badge = card.badge {
-                            Text(badge)
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, Theme.Spacing.s)
-                                .padding(.vertical, 2)
-                                .background(.tint.opacity(0.15), in: .capsule)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: Theme.Spacing.s) {
+                            Text(card.title).font(.llBodyBold)
+                            if let badge = card.badge { Chip(text: badge, fill: Theme.Palette.money) }
+                        }
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text(card.title).font(.llBodyBold)
+                            if let badge = card.badge { Chip(text: badge, fill: Theme.Palette.money) }
                         }
                     }
                     Text(card.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.llBody)
+                        .foregroundStyle(Theme.Palette.muted)
                         .multilineTextAlignment(.leading)
                     if let detail = card.detail {
-                        Text(detail).font(.footnote.monospacedDigit())
+                        Text(detail).font(.llLabelBold)
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: card.isLocked ? "lock.fill" : "chevron.right")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
+                Group {
+                    if card.isLocked { LLIconImage(.lock) } else { Chevron() }
+                }
+                .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, minHeight: Theme.minTarget, alignment: .leading)
-            .padding(.vertical, Theme.Spacing.s)
-            .contentShape(.rect)
+            .padding(Theme.Spacing.l)
+            .foregroundStyle(Theme.Palette.ink)
+            .inkSurface(card.kind == .playYourself ? .hero : .card, hero: card.kind == .playYourself)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
         .accessibilityLabel([card.title, card.subtitle, card.detail, card.badge, card.isLocked ? "Locked" : nil].compactMap { $0 }.joined(separator: ". "))
         .accessibilityIdentifier("character.\(card.id)")
     }

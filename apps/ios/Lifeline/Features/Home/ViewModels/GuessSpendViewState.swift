@@ -43,6 +43,20 @@ struct GuessSpendViewState: Equatable, Sendable {
         var beatModel: Bool?
         /// "You beat the model. 96 points." Nil until the actual is known.
         var resultText: String?
+        /// "£12 – £72" (range, hero number).
+        var rangeShortText: String
+        /// Range bar scale, from 0 to `scaleMax` (pounds).
+        var scaleMax: Double
+        /// "£80".
+        var scaleMaxText: String
+        /// Positions on the bar, 0 to 1.
+        var lowFraction: Double
+        var highFraction: Double
+        var predictedFraction: Double
+        var guessFraction: Double
+        var isGuessInRange: Bool
+        /// "Your normal day is £24.10."
+        var baselineText: String
     }
 
     struct PastDay: Equatable, Sendable, Identifiable {
@@ -60,6 +74,10 @@ struct GuessSpendViewState: Equatable, Sendable {
     }
 
     var phase: LoadPhase
+    /// Starting value for the guess stepper: your last guess, else £20. Never the prediction.
+    var initialGuess: Double
+    /// "Streak 3".
+    var dayChip: String
     /// YYYY-MM-DD of the shown day.
     var date: String
     /// "Today, Sat 17 Oct" or "Fri 16 Oct".

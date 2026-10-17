@@ -33,8 +33,15 @@ def demo_subject(device_id: str) -> str:
 
 DEMO_SUBJECT = demo_subject(DEMO_DEVICE_ID)
 
-# Subjects pinned to a persona. Everything else is hashed.
-PINNED: dict[str, str] = {DEMO_SUBJECT: DEMO_PERSONA_ID, DEMO_DEVICE_ID: DEMO_PERSONA_ID}
+# Presenter devices. Each gets the demo persona, so a fresh device id (empty plan) still shows the
+# mortgage story.
+DEMO_DEVICE_IDS: tuple[str, ...] = tuple(f"demo-presenter-{n:02d}" for n in range(1, 6))
+
+# Subjects pinned to a persona (JWT subjects and raw device ids). Everything else is hashed.
+PINNED: dict[str, str] = {
+    **{demo_subject(d): DEMO_PERSONA_ID for d in DEMO_DEVICE_IDS},
+    **{d: DEMO_PERSONA_ID for d in DEMO_DEVICE_IDS},
+}
 
 
 @dataclass(frozen=True)
@@ -99,6 +106,7 @@ def fixture_snapshot(subject: str, as_of: date | None = None) -> FinanceSnapshot
 
 __all__ = [
     "DEMO_DEVICE_ID",
+    "DEMO_DEVICE_IDS",
     "DEMO_PERSONA_ID",
     "DEMO_SUBJECT",
     "FIXTURE_AS_OF",

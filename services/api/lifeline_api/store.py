@@ -35,7 +35,7 @@ class StoreUnavailable(ApiError):
     """The lives store cannot be reached. Rendered as 503 `store_unavailable`."""
 
     def __init__(self) -> None:
-        super().__init__(503, "store_unavailable", "Saved lives are unavailable right now. Try again shortly.",
+        super().__init__(503, "store_unavailable", "Saving is down. Try again in a minute.",
                          source="store")
 
 

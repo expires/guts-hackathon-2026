@@ -40,6 +40,7 @@ async def outcome_text(event: Event, outcome: Outcome) -> Outcome:
 
 
 async def move_text(move: Move) -> Move:
-    """Reword `headline`, `action` and each evidence `text` only (ADR 0018). Numbers, facts, options and
-    confidence_label are never changed. A field whose new wording fails the verifier keeps its original text."""
+    """Reword `headline` and each evidence `text` only (ADR 0018). `action` is never changed: it must match
+    the option label exactly. Numbers, facts, options and confidence_label are never changed.
+    A field whose new wording fails the verifier keeps its original text."""
     return await get_explainer().move_text(move)

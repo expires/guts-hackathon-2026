@@ -6,9 +6,10 @@ If you need a change, ask BOSS: the contract and this file change together.
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import date as _date
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 from lifeline_contracts.observation import Status
 
@@ -17,6 +18,28 @@ Area = Literal["work", "home", "money", "bills", "car", "health", "family", "pla
 Tab = Literal["job", "assets", "relationships", "activities", "money"]
 Housing = Literal["parents", "rent", "own", "mortgage"]
 Sex = Literal["female", "male"]
+
+
+# Bounded identifier types for request inputs (V6).
+ShortId = Annotated[str, StringConstraints(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")]
+RegionSlug = Annotated[str, StringConstraints(min_length=2, max_length=40, pattern=r"^[a-z-]+$")]
+ParamKey = Annotated[str, StringConstraints(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_]+$")]
+ParamText = Annotated[str, StringConstraints(max_length=64)]
+
+
+def _real_date(v: str) -> str:
+    _date.fromisoformat(v)  # raises ValueError -> 422 for impossible dates such as 2026-02-30
+    return v
+
+
+def _real_month(v: str) -> str:
+    _date.fromisoformat(v + "-01")
+    return v
+
+
+# Calendar-checked date strings (V1 Tier 1): the pattern documents the format, the validator rejects 2026-02-30.
+IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$"), AfterValidator(_real_date)]
+IsoMonth = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}$"), AfterValidator(_real_month)]
 
 
 class _M(BaseModel):
@@ -29,12 +52,12 @@ class _M(BaseModel):
 class CharacterSpec(_M):
     """Input for a new life. Presets and random characters are also CharacterSpec."""
 
-    id: str | None = None
+    id: ShortId | None = None
     name: str = Field(min_length=1, max_length=40)
     emoji: str = Field(default="🙂", max_length=8)
     sex: Sex = "female"
     occupation: str = Field(min_length=1, max_length=60, description="e.g. nurse, plumber, banker")
-    region: str = Field(description="Canonical region slug, see observation.REGIONS")
+    region: RegionSlug = Field(description="Canonical region slug, see observation.REGIONS")
     town: str = Field(max_length=60)
     postcode: str | None = Field(default=None, max_length=10)
     birth_year: int = Field(ge=1930, le=2026)
@@ -328,7 +351,7 @@ class Challenge(_M):
 
 class DecisionProfile(_M):
     age: int = Field(ge=16, le=100)
-    region: str
+    region: RegionSlug
     postcode: str | None = Field(default=None, max_length=10)
     annual_income: float = Field(ge=0, le=10_000_000)
     savings: float = Field(ge=0, le=100_000_000)

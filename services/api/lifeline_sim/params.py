@@ -10,6 +10,9 @@ PRESENT_YEAR = 2026
 MAX_AGE = 110
 MIN_START_AGE = 16
 MAX_EVENTS_PER_YEAR = 3
+# Cooldown: a template that fired in year Y cannot fire in Y+1 or Y+2, unless it is marked
+# `repeatable` (with a reason) or it is a focused "Test it" event inside the scenario period.
+EVENT_COOLDOWN_YEARS = 3
 
 # Income tax and National Insurance, 2025/26 rUK bands. Applied to every year (simplification).
 PERSONAL_ALLOWANCE = 12_570.0
@@ -78,8 +81,15 @@ TRACKER_MARGIN = 1.0
 TRACKER_DEAL_YEARS = 2
 
 # "Test it" scenarios (ADR 0018). A focused tag makes its templates fire (probability 1) whenever
-# the data gives them any chance, and puts them first when the year has more than MAX_EVENTS_PER_YEAR.
+# the data gives them any chance. Focused events come first and do not count toward MAX_EVENTS_PER_YEAR.
 FOCUS_PRIORITY_BOOST = 100
+# Tags whose events follow from a focused tag's choice (for example a tracker meets Bank Rate rises).
+# They keep their own odds but, like focused events, sit outside the yearly cap.
+FOCUS_RELATED: dict[str, tuple[str, ...]] = {
+    "mortgage_deal_end": ("mortgage_rate_change",),
+    "mortgage_rate_change": ("mortgage_deal_end",),
+    "energy_bill": ("energy_bill",),
+}
 
 # Mortality: Gompertz hazard q(age) = A * exp(B * age), scaled by health.
 GOMPERTZ_A = 2.5e-5

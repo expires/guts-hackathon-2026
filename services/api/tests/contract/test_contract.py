@@ -447,7 +447,12 @@ async def test_list_lives(client: httpx.AsyncClient, auth: dict[str, str]) -> No
 
 
 @pytest.mark.tier1
-async def test_guess_my_spend(client: httpx.AsyncClient, auth: dict[str, str]) -> None:
+async def test_guess_my_spend(client: httpx.AsyncClient) -> None:
+    # Fresh device per run: the stack store keeps guesses, and a guess is allowed once per day per user.
+    import uuid
+
+    tok = await client.post("/v1/auth/demo", json={"device_id": f"guess-{uuid.uuid4().hex[:12]}"})
+    auth = {"Authorization": f"Bearer {tok.json()['access_token']}"}
     pred = (await client.get("/v1/finance/prediction", headers=auth)).json()
     assert pred.get("guess") is None
     assert len(pred["reasons"]) <= 3 and pred["low"] <= pred["predicted"] <= pred["high"]

@@ -34,6 +34,12 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var balanceChart: ChartState
         var netWorthChart: ChartState
         var accounts: [Account]
+        /// Net worth values in date order, for the sparkline.
+        var netWorthSeries: [Double]
+        /// "Up £648 since Aug". Nil with fewer than 2 points.
+        var netWorthChangeText: String?
+        /// Month labels under the chart, for example ["Aug", "Sep", "Oct"].
+        var monthLabels: [String]
         /// "As of 17 Oct 2026".
         var asOfText: String
     }
@@ -51,6 +57,8 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var countText: String
         /// "Up 6% on last month". Nil when unknown.
         var changeText: String?
+        /// Life area for the colour: work, home, money, family, health or other.
+        var area: String
     }
 
     struct Spending: Equatable, Sendable {
@@ -71,6 +79,10 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var nextPaymentText: String?
         /// "Price went up from £10.99 to £12.99 on 28 Jun 2026".
         var priceRiseText: String?
+        /// "Up £2" chip. Nil without a price rise.
+        var priceRiseChip: String?
+        /// "£12.99".
+        var monthlyCostText: String
     }
 
     struct Subscriptions: Equatable, Sendable {
@@ -92,6 +104,10 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var status: Status
         /// "Due soon", "Paid".
         var statusText: String
+        /// "1 Nov".
+        var shortDateText: String
+        /// "Up £2" when a subscription with the same name had a price rise.
+        var priceRiseChip: String?
     }
 
     struct Bills: Equatable, Sendable {
@@ -113,6 +129,7 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var detailText: String
         /// "£22 over", "£86 left".
         var statusText: String
+        var area: String
     }
 
     struct Budgets: Equatable, Sendable {

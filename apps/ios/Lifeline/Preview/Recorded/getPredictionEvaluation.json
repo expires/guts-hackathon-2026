@@ -1,0 +1,736 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "method": "Ridge regression on log daily spend (weekday, payday, bank holiday, weather, last 7 days, month end)",
+  "n_days": 90,
+  "mae": 17.64,
+  "baseline_mae": 18.57,
+  "baseline": "Average spend for the same weekday",
+  "interval_coverage": 0.8111,
+  "days": [
+    {
+      "date": "2026-07-19",
+      "predicted": 3.85,
+      "low": 0.0,
+      "high": 46.74,
+      "actual": 0.0,
+      "baseline": 16.25
+    },
+    {
+      "date": "2026-07-20",
+      "predicted": 4.57,
+      "low": 0.0,
+      "high": 53.65,
+      "actual": 0.0,
+      "baseline": 12.51
+    },
+    {
+      "date": "2026-07-21",
+      "predicted": 6.86,
+      "low": 0.13,
+      "high": 75.97,
+      "actual": 15.49,
+      "baseline": 21.65
+    },
+    {
+      "date": "2026-07-22",
+      "predicted": 5.36,
+      "low": 0.0,
+      "high": 61.19,
+      "actual": 0.0,
+      "baseline": 17.77
+    },
+    {
+      "date": "2026-07-23",
+      "predicted": 5.45,
+      "low": 0.0,
+      "high": 62.01,
+      "actual": 63.39,
+      "baseline": 15.49
+    },
+    {
+      "date": "2026-07-24",
+      "predicted": 10.45,
+      "low": 0.66,
+      "high": 112.47,
+      "actual": 0.0,
+      "baseline": 27.08
+    },
+    {
+      "date": "2026-07-25",
+      "predicted": 10.95,
+      "low": 0.7,
+      "high": 117.27,
+      "actual": 42.42,
+      "baseline": 30.05
+    },
+    {
+      "date": "2026-07-26",
+      "predicted": 3.68,
+      "low": 0.0,
+      "high": 45.24,
+      "actual": 21.45,
+      "baseline": 15.85
+    },
+    {
+      "date": "2026-07-27",
+      "predicted": 3.82,
+      "low": 0.0,
+      "high": 46.51,
+      "actual": 2.86,
+      "baseline": 12.2
+    },
+    {
+      "date": "2026-07-28",
+      "predicted": 6.02,
+      "low": 0.0,
+      "high": 68.06,
+      "actual": 0.0,
+      "baseline": 21.5
+    },
+    {
+      "date": "2026-07-29",
+      "predicted": 4.51,
+      "low": 0.0,
+      "high": 53.08,
+      "actual": 57.38,
+      "baseline": 17.32
+    },
+    {
+      "date": "2026-07-30",
+      "predicted": 5.25,
+      "low": 0.0,
+      "high": 61.42,
+      "actual": 11.98,
+      "baseline": 16.68
+    },
+    {
+      "date": "2026-07-31",
+      "predicted": 19.92,
+      "low": 1.98,
+      "high": 207.47,
+      "actual": 36.63,
+      "baseline": 26.4
+    },
+    {
+      "date": "2026-08-01",
+      "predicted": 19.26,
+      "low": 1.89,
+      "high": 200.55,
+      "actual": 0.0,
+      "baseline": 30.35
+    },
+    {
+      "date": "2026-08-02",
+      "predicted": 6.73,
+      "low": 0.09,
+      "high": 75.74,
+      "actual": 51.86,
+      "baseline": 15.98
+    },
+    {
+      "date": "2026-08-03",
+      "predicted": 5.08,
+      "low": 0.0,
+      "high": 59.29,
+      "actual": 0.0,
+      "baseline": 11.97
+    },
+    {
+      "date": "2026-08-04",
+      "predicted": 7.44,
+      "low": 0.2,
+      "high": 82.47,
+      "actual": 36.83,
+      "baseline": 20.97
+    },
+    {
+      "date": "2026-08-05",
+      "predicted": 5.38,
+      "low": 0.0,
+      "high": 61.99,
+      "actual": 0.0,
+      "baseline": 18.3
+    },
+    {
+      "date": "2026-08-06",
+      "predicted": 6.31,
+      "low": 0.04,
+      "high": 71.08,
+      "actual": 33.83,
+      "baseline": 16.57
+    },
+    {
+      "date": "2026-08-07",
+      "predicted": 11.11,
+      "low": 0.72,
+      "high": 118.21,
+      "actual": 42.39,
+      "baseline": 26.65
+    },
+    {
+      "date": "2026-08-08",
+      "predicted": 12.59,
+      "low": 0.93,
+      "high": 132.52,
+      "actual": 70.02,
+      "baseline": 29.63
+    },
+    {
+      "date": "2026-08-09",
+      "predicted": 4.39,
+      "low": 0.0,
+      "high": 51.83,
+      "actual": 9.26,
+      "baseline": 16.84
+    },
+    {
+      "date": "2026-08-10",
+      "predicted": 4.28,
+      "low": 0.0,
+      "high": 50.72,
+      "actual": 30.98,
+      "baseline": 11.68
+    },
+    {
+      "date": "2026-08-11",
+      "predicted": 6.71,
+      "low": 0.1,
+      "high": 74.44,
+      "actual": 0.0,
+      "baseline": 21.35
+    },
+    {
+      "date": "2026-08-12",
+      "predicted": 5.36,
+      "low": 0.0,
+      "high": 61.16,
+      "actual": 4.32,
+      "baseline": 17.86
+    },
+    {
+      "date": "2026-08-13",
+      "predicted": 6.28,
+      "low": 0.03,
+      "high": 70.13,
+      "actual": 17.3,
+      "baseline": 16.98
+    },
+    {
+      "date": "2026-08-14",
+      "predicted": 10.63,
+      "low": 0.65,
+      "high": 112.48,
+      "actual": 30.59,
+      "baseline": 27.02
+    },
+    {
+      "date": "2026-08-15",
+      "predicted": 11.18,
+      "low": 0.73,
+      "high": 117.66,
+      "actual": 50.47,
+      "baseline": 30.57
+    },
+    {
+      "date": "2026-08-16",
+      "predicted": 4.19,
+      "low": 0.0,
+      "high": 49.49,
+      "actual": 12.09,
+      "baseline": 16.66
+    },
+    {
+      "date": "2026-08-17",
+      "predicted": 3.99,
+      "low": 0.0,
+      "high": 47.53,
+      "actual": 17.15,
+      "baseline": 12.13
+    },
+    {
+      "date": "2026-08-18",
+      "predicted": 6.04,
+      "low": 0.0,
+      "high": 67.41,
+      "actual": 0.0,
+      "baseline": 20.85
+    },
+    {
+      "date": "2026-08-19",
+      "predicted": 4.55,
+      "low": 0.0,
+      "high": 52.83,
+      "actual": 0.0,
+      "baseline": 17.55
+    },
+    {
+      "date": "2026-08-20",
+      "predicted": 5.46,
+      "low": 0.0,
+      "high": 61.63,
+      "actual": 0.0,
+      "baseline": 16.99
+    },
+    {
+      "date": "2026-08-21",
+      "predicted": 10.28,
+      "low": 0.6,
+      "high": 108.14,
+      "actual": 0.0,
+      "baseline": 27.11
+    },
+    {
+      "date": "2026-08-22",
+      "predicted": 12.28,
+      "low": 0.88,
+      "high": 127.2,
+      "actual": 14.7,
+      "baseline": 31.02
+    },
+    {
+      "date": "2026-08-23",
+      "predicted": 4.74,
+      "low": 0.0,
+      "high": 54.31,
+      "actual": 0.0,
+      "baseline": 16.56
+    },
+    {
+      "date": "2026-08-24",
+      "predicted": 4.73,
+      "low": 0.0,
+      "high": 54.16,
+      "actual": 0.0,
+      "baseline": 12.25
+    },
+    {
+      "date": "2026-08-25",
+      "predicted": 6.6,
+      "low": 0.08,
+      "high": 71.97,
+      "actual": 0.0,
+      "baseline": 20.38
+    },
+    {
+      "date": "2026-08-26",
+      "predicted": 4.9,
+      "low": 0.0,
+      "high": 55.61,
+      "actual": 0.0,
+      "baseline": 17.15
+    },
+    {
+      "date": "2026-08-27",
+      "predicted": 5.4,
+      "low": 0.0,
+      "high": 60.26,
+      "actual": 0.0,
+      "baseline": 16.6
+    },
+    {
+      "date": "2026-08-28",
+      "predicted": 18.02,
+      "low": 1.68,
+      "high": 180.78,
+      "actual": 5.84,
+      "baseline": 26.49
+    },
+    {
+      "date": "2026-08-29",
+      "predicted": 25.04,
+      "low": 2.68,
+      "high": 247.41,
+      "actual": 33.83,
+      "baseline": 30.66
+    },
+    {
+      "date": "2026-08-30",
+      "predicted": 9.49,
+      "low": 0.48,
+      "high": 97.49,
+      "actual": 13.5,
+      "baseline": 16.19
+    },
+    {
+      "date": "2026-08-31",
+      "predicted": 4.23,
+      "low": 0.0,
+      "high": 47.31,
+      "actual": 37.12,
+      "baseline": 11.97
+    },
+    {
+      "date": "2026-09-01",
+      "predicted": 7.34,
+      "low": 0.18,
+      "high": 74.79,
+      "actual": 0.0,
+      "baseline": 19.93
+    },
+    {
+      "date": "2026-09-02",
+      "predicted": 5.46,
+      "low": 0.0,
+      "high": 56.78,
+      "actual": 7.58,
+      "baseline": 16.77
+    },
+    {
+      "date": "2026-09-03",
+      "predicted": 6.43,
+      "low": 0.04,
+      "high": 64.35,
+      "actual": 164.12,
+      "baseline": 16.23
+    },
+    {
+      "date": "2026-09-04",
+      "predicted": 10.72,
+      "low": 0.64,
+      "high": 111.59,
+      "actual": 75.38,
+      "baseline": 26.03
+    },
+    {
+      "date": "2026-09-05",
+      "predicted": 13.14,
+      "low": 0.99,
+      "high": 134.63,
+      "actual": 40.33,
+      "baseline": 30.73
+    },
+    {
+      "date": "2026-09-06",
+      "predicted": 4.87,
+      "low": 0.0,
+      "high": 55.22,
+      "actual": 9.82,
+      "baseline": 16.13
+    },
+    {
+      "date": "2026-09-07",
+      "predicted": 4.77,
+      "low": 0.0,
+      "high": 54.09,
+      "actual": 26.74,
+      "baseline": 12.52
+    },
+    {
+      "date": "2026-09-08",
+      "predicted": 5.9,
+      "low": 0.0,
+      "high": 64.86,
+      "actual": 22.7,
+      "baseline": 19.49
+    },
+    {
+      "date": "2026-09-09",
+      "predicted": 4.87,
+      "low": 0.0,
+      "high": 54.08,
+      "actual": 24.66,
+      "baseline": 16.57
+    },
+    {
+      "date": "2026-09-10",
+      "predicted": 6.37,
+      "low": 0.04,
+      "high": 67.05,
+      "actual": 18.08,
+      "baseline": 19.45
+    },
+    {
+      "date": "2026-09-11",
+      "predicted": 10.87,
+      "low": 0.68,
+      "high": 106.81,
+      "actual": 0.0,
+      "baseline": 27.11
+    },
+    {
+      "date": "2026-09-12",
+      "predicted": 12.48,
+      "low": 0.88,
+      "high": 119.47,
+      "actual": 0.0,
+      "baseline": 30.93
+    },
+    {
+      "date": "2026-09-13",
+      "predicted": 4.37,
+      "low": 0.0,
+      "high": 46.24,
+      "actual": 0.0,
+      "baseline": 16.0
+    },
+    {
+      "date": "2026-09-14",
+      "predicted": 4.49,
+      "low": 0.0,
+      "high": 46.5,
+      "actual": 14.31,
+      "baseline": 12.82
+    },
+    {
+      "date": "2026-09-15",
+      "predicted": 5.37,
+      "low": 0.0,
+      "high": 53.21,
+      "actual": 4.16,
+      "baseline": 19.56
+    },
+    {
+      "date": "2026-09-16",
+      "predicted": 4.36,
+      "low": 0.0,
+      "high": 43.9,
+      "actual": 3.45,
+      "baseline": 16.74
+    },
+    {
+      "date": "2026-09-17",
+      "predicted": 5.45,
+      "low": 0.0,
+      "high": 52.17,
+      "actual": 40.61,
+      "baseline": 19.42
+    },
+    {
+      "date": "2026-09-18",
+      "predicted": 8.66,
+      "low": 0.34,
+      "high": 77.34,
+      "actual": 3.51,
+      "baseline": 26.53
+    },
+    {
+      "date": "2026-09-19",
+      "predicted": 10.35,
+      "low": 0.58,
+      "high": 90.85,
+      "actual": 43.12,
+      "baseline": 30.29
+    },
+    {
+      "date": "2026-09-20",
+      "predicted": 3.52,
+      "low": 0.0,
+      "high": 35.57,
+      "actual": 96.31,
+      "baseline": 15.66
+    },
+    {
+      "date": "2026-09-21",
+      "predicted": 3.85,
+      "low": 0.0,
+      "high": 43.04,
+      "actual": 0.0,
+      "baseline": 12.85
+    },
+    {
+      "date": "2026-09-22",
+      "predicted": 4.87,
+      "low": 0.0,
+      "high": 51.46,
+      "actual": 15.48,
+      "baseline": 19.24
+    },
+    {
+      "date": "2026-09-23",
+      "predicted": 3.71,
+      "low": 0.0,
+      "high": 40.46,
+      "actual": 0.0,
+      "baseline": 16.46
+    },
+    {
+      "date": "2026-09-24",
+      "predicted": 4.96,
+      "low": 0.0,
+      "high": 50.6,
+      "actual": 45.96,
+      "baseline": 19.86
+    },
+    {
+      "date": "2026-09-25",
+      "predicted": 7.5,
+      "low": 0.19,
+      "high": 71.34,
+      "actual": 0.0,
+      "baseline": 26.05
+    },
+    {
+      "date": "2026-09-26",
+      "predicted": 9.28,
+      "low": 0.41,
+      "high": 85.07,
+      "actual": 0.0,
+      "baseline": 30.55
+    },
+    {
+      "date": "2026-09-27",
+      "predicted": 3.26,
+      "low": 0.0,
+      "high": 34.13,
+      "actual": 45.19,
+      "baseline": 17.31
+    },
+    {
+      "date": "2026-09-28",
+      "predicted": 4.64,
+      "low": 0.0,
+      "high": 52.79,
+      "actual": 0.0,
+      "baseline": 12.59
+    },
+    {
+      "date": "2026-09-29",
+      "predicted": 5.62,
+      "low": 0.0,
+      "high": 61.14,
+      "actual": 15.4,
+      "baseline": 19.16
+    },
+    {
+      "date": "2026-09-30",
+      "predicted": 11.09,
+      "low": 0.61,
+      "high": 110.65,
+      "actual": 48.37,
+      "baseline": 16.13
+    },
+    {
+      "date": "2026-10-01",
+      "predicted": 11.16,
+      "low": 0.63,
+      "high": 109.5,
+      "actual": 23.63,
+      "baseline": 20.39
+    },
+    {
+      "date": "2026-10-02",
+      "predicted": 15.73,
+      "low": 1.25,
+      "high": 148.56,
+      "actual": 26.6,
+      "baseline": 25.52
+    },
+    {
+      "date": "2026-10-03",
+      "predicted": 14.15,
+      "low": 1.05,
+      "high": 132.25,
+      "actual": 15.06,
+      "baseline": 29.94
+    },
+    {
+      "date": "2026-10-04",
+      "predicted": 5.73,
+      "low": 0.0,
+      "high": 57.22,
+      "actual": 0.0,
+      "baseline": 17.87
+    },
+    {
+      "date": "2026-10-05",
+      "predicted": 5.4,
+      "low": 0.0,
+      "high": 53.48,
+      "actual": 0.0,
+      "baseline": 12.34
+    },
+    {
+      "date": "2026-10-06",
+      "predicted": 6.89,
+      "low": 0.08,
+      "high": 65.12,
+      "actual": 5.04,
+      "baseline": 19.09
+    },
+    {
+      "date": "2026-10-07",
+      "predicted": 5.25,
+      "low": 0.0,
+      "high": 50.49,
+      "actual": 57.3,
+      "baseline": 16.77
+    },
+    {
+      "date": "2026-10-08",
+      "predicted": 7.21,
+      "low": 0.14,
+      "high": 75.63,
+      "actual": 20.79,
+      "baseline": 20.46
+    },
+    {
+      "date": "2026-10-09",
+      "predicted": 10.22,
+      "low": 0.56,
+      "high": 102.16,
+      "actual": 6.54,
+      "baseline": 25.54
+    },
+    {
+      "date": "2026-10-10",
+      "predicted": 12.08,
+      "low": 0.82,
+      "high": 117.68,
+      "actual": 55.76,
+      "baseline": 29.65
+    },
+    {
+      "date": "2026-10-11",
+      "predicted": 4.73,
+      "low": 0.0,
+      "high": 50.25,
+      "actual": 0.0,
+      "baseline": 17.52
+    },
+    {
+      "date": "2026-10-12",
+      "predicted": 4.34,
+      "low": 0.0,
+      "high": 46.09,
+      "actual": 0.0,
+      "baseline": 12.1
+    },
+    {
+      "date": "2026-10-13",
+      "predicted": 6.08,
+      "low": 0.0,
+      "high": 60.58,
+      "actual": 21.74,
+      "baseline": 18.81
+    },
+    {
+      "date": "2026-10-14",
+      "predicted": 4.89,
+      "low": 0.0,
+      "high": 49.48,
+      "actual": 7.0,
+      "baseline": 17.57
+    },
+    {
+      "date": "2026-10-15",
+      "predicted": 6.73,
+      "low": 0.09,
+      "high": 64.35,
+      "actual": 0.0,
+      "baseline": 20.46
+    },
+    {
+      "date": "2026-10-16",
+      "predicted": 8.89,
+      "low": 0.36,
+      "high": 81.43,
+      "actual": 15.75,
+      "baseline": 25.17
+    }
+  ]
+}

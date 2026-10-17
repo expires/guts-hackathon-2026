@@ -7,23 +7,37 @@ struct GalleryView<Destination: View>: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(state.sections) { section in
-                    Section(section.title) {
-                        ForEach(section.entries) { entry in
-                            NavigationLink(value: entry) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(entry.title)
-                                    Text(entry.detail).font(.caption).foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                    ScreenHeader(title: state.title)
+                    ForEach(state.sections) { section in
+                        RowGroup(title: section.title) {
+                            ForEach(section.entries) { entry in
+                                NavigationLink(value: entry) {
+                                    HStack(spacing: Theme.Spacing.m) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.title).font(.llBodyBold)
+                                            Text(entry.detail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Chevron()
+                                    }
+                                    .foregroundStyle(Theme.Palette.ink)
+                                    .padding(.vertical, Theme.Spacing.s)
+                                    .frame(minHeight: Theme.minTarget, alignment: .leading)
+                                    .contentShape(.rect)
                                 }
-                                .frame(minHeight: Theme.minTarget, alignment: .leading)
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("gallery.\(entry.id)")
                             }
-                            .accessibilityIdentifier("gallery.\(entry.id)")
                         }
                     }
                 }
+                .padding(.horizontal, Theme.Spacing.margin)
+                .padding(.vertical, Theme.Spacing.xl)
             }
-            .navigationTitle(state.title)
+            .paperBackground()
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: GalleryViewState.Entry.self) { entry in
                 destination(entry.id)
                     .navigationTitle(entry.detail)

@@ -16,7 +16,7 @@ from lifeline_sim import params as p
 from lifeline_sim.index import IndexWeights, drawdown_fraction
 from lifeline_sim.macroview import MacroView
 from lifeline_sim.mortgage import monthly_payment
-from lifeline_sim.presets import preset_extras
+from lifeline_sim.presets import is_unedited_preset, preset_extras
 from lifeline_sim.rng import rng
 from lifeline_sim.setup import Setup
 from lifeline_sim.tax import net_pay
@@ -81,6 +81,15 @@ class SimState:
     last_graduated: bool = False
     pending: list[Event] = field(default_factory=list)
     focus_tags: tuple[str, ...] = ()  # scenario setup, see lifeline_sim.setup
+    focus_until: int | None = None  # focus applies up to this year (the scenario end year)
+    last_fired: dict[str, int] = field(default_factory=dict)  # template id -> last year it fired (cooldown)
+    # Running totals since the start year, for `api.scenario_cost` ("Test it", ADR 0018).
+    mortgage_paid: float = 0.0  # mortgage payments
+    card_interest_paid: float = 0.0  # interest charged on card debt
+    savings_interest: float = 0.0  # interest earned on savings
+    energy_paid: float = 0.0  # typical yearly energy bill (ENERGY_TARIFF) for each year lived
+    tag_cost: dict[str, float] = field(default_factory=dict)  # one-off costs of tagged event choices
+    tag_living: dict[str, float] = field(default_factory=dict)  # monthly living change from tagged choices
 
     def clone(self) -> SimState:
         return copy.deepcopy(self)
@@ -144,6 +153,13 @@ def initial_state(
     r = rng(seed, "init")
     retired = age >= p.STATE_PENSION_AGE
     employed = not retired and character.annual_income > 0
+    # V5: a preset's money values describe its base year. Other start years scale them with
+    # regional pay (income), CPI (cash, debts, pots) and regional house prices (home, mortgage).
+    pay_x = price_x = house_x = 1.0
+    if is_unedited_preset(character) and start_year != extras.base_year:
+        pay_x = _ratio(mv, MacroKey.MEDIAN_PAY, start_year, extras.base_year, region)
+        price_x = mv.price_level(start_year) / mv.price_level(extras.base_year)
+        house_x = _ratio(mv, MacroKey.HOUSE_PRICE, start_year, extras.base_year, region)
     s = SimState(
         seed=seed,
         mode=mode,
@@ -155,20 +171,20 @@ def initial_state(
         happiness=_clamp_stat(70 + r.randint(-6, 6)),
         health=_clamp_stat(92 - max(0, age - 35) * 0.8 + r.randint(-5, 5)),
         smarts=_clamp_stat(55 + extras.smarts_bonus + r.randint(-8, 8)),
-        savings=character.savings,
-        other_debt=character.debt,
-        income=character.annual_income,
+        savings=round(character.savings * price_x, 2),
+        other_debt=round(character.debt * price_x, 2),
+        income=round(character.annual_income * pay_x, 2),
         employed=employed,
         retired=retired,
         student=character.occupation.strip().lower() == "student" and age < p.GRADUATION_AGE,
         job_title=extras.job_title or character.occupation.capitalize(),
         years_in_role=extras.years_in_role,
         housing=character.housing,
-        property_value=character.property_value,
-        mortgage_balance=character.mortgage_balance,
-        student_loan=extras.student_loan,
-        pension=extras.pension,
-        investments=extras.investments,
+        property_value=round(character.property_value * house_x, 2),
+        mortgage_balance=round(character.mortgage_balance * house_x, 2),
+        student_loan=round(extras.student_loan * price_x, 2),
+        pension=round(extras.pension * price_x, 2),
+        investments=round(extras.investments * price_x, 2),
         has_car=extras.has_car if extras.has_car is not None else region != "london",
         has_partner=extras.has_partner,
         married=extras.married,
@@ -191,6 +207,7 @@ def initial_state(
             s.mortgage_rate = mv.value(key, struck, None, 4.5)
             s.mortgage_fixed_until = setup.deal_end_year
     s.focus_tags = setup.focus
+    s.focus_until = setup.focus_until
     net_monthly = net_pay(s.income, s.employed) / 12
     price = mv.price_level(start_year)
     s.living = max(p.MIN_LIVING_MONTHLY_2024 * price, net_monthly * p.LIVING_SHARE_OF_NET)
@@ -202,10 +219,16 @@ def initial_state(
     s.cash = round(net_monthly * p.STARTING_CASH_MONTHS)
     s.relationships = _initial_relationships(s)
     s.nw0 = s.net_worth
-    s.income0 = character.annual_income
+    s.income0 = s.income
     s.peak = s.nw0
     s.track_drawdown(w)
     return s
+
+
+def _ratio(mv: MacroView, key: MacroKey, year: int, base_year: int, region: str) -> float:
+    now = mv.value(key, year, region, 0.0)
+    base = mv.value(key, base_year, region, 0.0)
+    return now / base if now > 0 and base > 0 else 1.0
 
 
 def _initial_relationships(s: SimState) -> list[Relationship]:

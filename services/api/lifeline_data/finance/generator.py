@@ -16,7 +16,7 @@ import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from lifeline_contracts.finance import Account, FinanceSnapshot, Transaction
+from lifeline_contracts.finance import Account, AccountHolder, FinanceSnapshot, Transaction
 from lifeline_data.finance.personas import Persona, Shop
 from lifeline_data.prediction_inputs import fixture_holidays_for, is_working_day, mock_weather_day
 
@@ -244,6 +244,12 @@ def build_snapshot(p: Persona, as_of: date = FIXTURE_AS_OF) -> FinanceSnapshot:
         transactions=transactions,
         mortgage=p.mortgage,
         energy=p.energy,
+        region=p.region,
+        postcode=p.postcode,
+        holder=AccountHolder(
+            name=p.name, birth_year=p.birth_year, occupation=p.occupation, region=p.region, town=p.town,
+            postcode=p.postcode,
+        ),
     )
 
 

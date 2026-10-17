@@ -37,6 +37,8 @@
 - id: home.deal_ends
   area: home
   priority: 3
+  repeatable: true
+  repeat_reason: "A mortgage deal ends when its fix ends. A 2-year fix ends 2 years later, and a missed deal end would put the borrower on the standard rate with no choice."
   tags: [mortgage_deal_end]
   emoji: "📅"
   title: Your mortgage deal is ending
@@ -52,7 +54,7 @@
     rate_5y: mortgage_5y_fix
     svr: svr_rate
     bank_now: bank_rate
-    tracker_rate: bank_rate + tracker_margin
+    tracker_rate: tracker_now
     balance: round(mortgage_balance)
     years_left: mortgage_years_left
     pay_2y: round(balance * (rate_2y / 1200) / (1 - (1 + rate_2y / 1200) ** -(max(years_left, 1) * 12)))

@@ -1,4 +1,4 @@
-"""Next Move engine (ADR 0018): "What is my next money move?" Pure: no I/O, no clock, no global RNG.
+"""Next Move engine (ADR 0018, ADR 0020): "What is my next money move?" Pure: no I/O, no clock, no global RNG.
 
 Inputs: the user's FinanceSnapshot, the MacroTable, `today`, and a seed (used only by the emergency
 fund shock draw).
@@ -6,28 +6,33 @@ fund shock draw).
 Method for each candidate move:
 1. The move is a candidate only when the data supports it (see the `_<kind>` builders).
 2. Twins: the K_TWINS nearest people to the user's profile in the synthetic population (twins.py).
-   Periods: the K_PERIODS past start years whose macro state is most like today (periods.py), with
-   a full horizon of data that ended before today (no look-ahead).
+   Matched periods: the K_PERIODS past start years whose macro state is most like today (periods.py),
+   with a full horizon of data that ended before today (no look-ahead).
 3. Each (twin, period) pair is simulated: gain = GBP per year vs doing nothing. Today's quoted rates
    are known; the past period supplies how rates and prices then CHANGED (delta method).
-4. impact_per_year = mean gain for the user's own amounts over the periods. worst_case_per_year =
-   the worst period for the user. confidence = share of (twin, period) pairs where the move beat
-   doing nothing (mortgage: beat doing nothing AND the other fix length, see ADR request in the report).
+4. impact_per_year = mean gain for the user's own amounts over the matched periods.
+   worst_case_per_year = the minimum over the matched periods AND the kind's stress period (ADR 0020).
+   confidence = share of (twin, matched period) pairs where the move beat doing nothing. For a move with
+   several options (mortgage), confidence = share of (twin, period) pairs, stress period included, where the
+   recommended option was the best of the options (ADR 0023). Options are chosen by regret (ADR 0020).
 5. Rank: score = (impact + 0.5 * min(0, worst)) * confidence. Ties: nearer deadline, then kind order.
+6. Evidence (exactly 3): the user's situation, the matched periods, the stress period. Every number in
+   a text is a value in its facts.
 
 Labelled assumptions (no data source): VARIABLE_MARGIN (same as lifeline_sim.params), TRACKER_MARGIN,
-BEST_SAVINGS_*, SAFETY_MONTHS, SHOCK_*, CUT_* thresholds.
+BEST_SAVINGS_*, SAFETY_MONTHS, PAYDOWN_MONTHLY, SHOCK_*, CUT_* thresholds.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
+from numpy.typing import NDArray
 
 from lifeline_contracts.domain import DecisionProfile, SourceRef
-from lifeline_contracts.finance import FinanceSnapshot
+from lifeline_contracts.finance import Category, FinanceSnapshot
 from lifeline_contracts.investing import IsaBacktestRequest, ReturnSeries
 from lifeline_contracts.macro import MacroKey, MacroTable
 from lifeline_contracts.next_move import (
@@ -41,6 +46,7 @@ from lifeline_contracts.next_move import (
 )
 from lifeline_engine.decision import _twins as nearest_twins
 from lifeline_engine.decision import candidate_starts, mortgage_interest
+from lifeline_engine.finance import monthly_payment
 from lifeline_engine.macro_access import latest_year, source_ref, value_or
 from lifeline_engine.money import dates, finance_meta
 from lifeline_engine.money.categorise import label as category_label
@@ -58,6 +64,7 @@ from lifeline_engine.money.spending import by_category
 from lifeline_engine.money.text import digit_facts, gbp, money_value, pct, pct_value, unsupported_numbers
 from lifeline_engine.periods import similar_years
 from lifeline_engine.population import Person
+from lifeline_engine.wording import best_choice_label, confidence_label
 from lifeline_eval.isa_backtest import (
     NAMED_PERIODS,
     PERIOD_LABELS,
@@ -66,6 +73,8 @@ from lifeline_eval.isa_backtest import (
     period_drawdowns,
     weights_from_holdings,
 )
+
+FloatArray = NDArray[np.float64]
 
 K_TWINS = 20
 K_PERIODS = 5
@@ -83,18 +92,55 @@ BEST_SAVINGS_PREMIUM = 1.0  # best easy-access rate >= market average + 1.0
 MIN_SAVINGS = 1_000.0
 MIN_DEBT = 100.0
 SAFETY_MONTHS = 1.0  # keep one month of spending when savings pay off debt
+PAYDOWN_MONTHLY = 100.0  # extra card payment per month when there is no spare money (cut spending to fund it)
 EMERGENCY_MONTHS = 3
 SHOCK_COST = 1_500.0  # a typical unexpected bill (boiler, car)
 SHOCK_BASE_PROB = 0.2  # yearly chance of such a bill, plus the unemployment rate of the period
 CUT_MIN_GBP = 30.0
 CUT_MIN_SHARE = 0.2
 CUT_MIN_AVERAGE = 50.0  # ignore categories with a usual spend under £50 a month
-PAYDOWN_MONTHLY = 100.0  # extra card payment per month when there is no spare money (cut spending to fund it)
-CUT_CATEGORIES = ("eating_out", "shopping", "entertainment", "travel", "personal_care", "transport", "groceries")
+CUT_CATEGORIES: tuple[Category, ...] = (
+    "eating_out",
+    "shopping",
+    "entertainment",
+    "travel",
+    "personal_care",
+    "transport",
+    "groceries",
+)
 
-MORTGAGE_TEST = TestPeriod(start=2021, end=2023, label="2021-2023 rate shock")
-SAVINGS_TEST = TestPeriod(start=2008, end=2010, label="2008-2010 rate cuts")
-ENERGY_TEST = TestPeriod(start=2021, end=2023, label="2021-2023 energy price shock")
+
+@dataclass(frozen=True)
+class StressPeriod:
+    start: int
+    end: int
+    name: str
+
+    @property
+    def test_period(self) -> TestPeriod:
+        return TestPeriod(start=self.start, end=self.end, label=f"{self.start}-{self.end} {self.name} (stress test)")
+
+    def facts(self) -> dict[str, float]:
+        return {"stress_start": float(self.start), "stress_end": float(self.end)}
+
+    @property
+    def years(self) -> int:
+        return self.end - self.start + 1
+
+    @property
+    def text(self) -> str:
+        return f"the {self.start}-{self.end} {self.name}"
+
+
+# Standard stress period per move kind (ADR 0020).
+STRESS: dict[MoveKind, StressPeriod] = {
+    "fix_mortgage": StressPeriod(2021, 2023, "rate shock"),
+    "remortgage": StressPeriod(2021, 2023, "rate shock"),
+    "move_savings": StressPeriod(2009, 2011, "low-rate years"),
+    "switch_energy": StressPeriod(2021, 2023, "energy price shock"),
+    "pay_off_debt": StressPeriod(2008, 2010, "recession"),
+    "build_emergency_fund": StressPeriod(2008, 2010, "recession"),
+}
 
 KIND_ORDER: tuple[MoveKind, ...] = (
     "fix_mortgage",
@@ -138,25 +184,10 @@ OPTION_LABEL: dict[str, str] = {
     "save": "Build a safety net",
     "spread": "Spread your investments",
 }
-FIX_YEARS = {"fix_5y": 5, "fix_2y": 2}
+OPTION_NUMBERS: dict[str, dict[str, float]] = {"fix_5y": {"fix_years": 5.0}, "fix_2y": {"fix_years": 2.0}}
 
 
 # ---------- small helpers ----------
-
-
-def confidence_label(confidence: float) -> str:
-    """'7 in 10 twins in similar past periods did better'. Never '10 in 10' or '0 in 10'."""
-    tail = "twins in similar past periods did better"
-    n = int(round(confidence * 10))
-    if confidence >= 1.0:
-        return f"All {tail}"
-    if n >= 10:
-        return f"More than 9 in 10 {tail}"
-    if confidence <= 0.0:
-        return f"No {tail}"
-    if n == 0:
-        return f"Fewer than 1 in 10 {tail}"
-    return f"{n} in 10 {tail}"
 
 
 SURE_LABEL = "A sure saving. It does not depend on markets"
@@ -180,6 +211,16 @@ def _bank(macro: MacroTable, year: int) -> float:
 def _fix(macro: MacroTable, key: MacroKey, year: int) -> float:
     margin = 1.5 if key == MacroKey.MORTGAGE_2Y_FIX else 1.9
     return _v(macro, key, year, _bank(macro, year) + margin)
+
+
+def _svr(macro: MacroTable, year: int) -> float:
+    """Standard variable (revert-to) rate: BoE series, else Bank Rate + VARIABLE_MARGIN."""
+    return _v(macro, MacroKey.MORTGAGE_SVR, year, _bank(macro, year) + VARIABLE_MARGIN)
+
+
+def _tracker(macro: MacroTable, year: int) -> float:
+    """2-year tracker rate: BoE series, else Bank Rate + TRACKER_MARGIN."""
+    return _v(macro, MacroKey.MORTGAGE_TRACKER, year, _bank(macro, year) + TRACKER_MARGIN)
 
 
 def _savings_avg(macro: MacroTable, year: int) -> float:
@@ -211,6 +252,34 @@ def _slug(text: str) -> str:
     return "-".join("".join(c if c.isalnum() else " " for c in text.lower()).split())[:40] or "item"
 
 
+def period_spans(starts: Sequence[int], horizon: int) -> list[tuple[int, int]]:
+    """Windows [s, s + horizon - 1], merged when they overlap or touch. Sorted."""
+    spans: list[tuple[int, int]] = []
+    for s in sorted(starts):
+        e = s + horizon - 1
+        if spans and s <= spans[-1][1] + 1:
+            spans[-1] = (spans[-1][0], max(spans[-1][1], e))
+        else:
+            spans.append((s, e))
+    return spans
+
+
+def spans_text(starts: Sequence[int], horizon: int) -> tuple[str, dict[str, float]]:
+    """'2005-2011, 2017-2022' and the facts for those years."""
+    spans = period_spans(starts, horizon)
+    facts: dict[str, float] = {}
+    parts: list[str] = []
+    for i, (a, b) in enumerate(spans, 1):
+        facts[f"period_{i}_start"] = float(a)
+        facts[f"period_{i}_end"] = float(b)
+        parts.append(f"{a}-{b}" if b != a else f"{a}")
+    return ", ".join(parts), facts
+
+
+def _better(x: float, unit: str = "a year") -> str:
+    return f"saved {gbp(x)} {unit}" if x >= 0 else f"cost {gbp(x)} {unit} more"
+
+
 # ---------- context ----------
 
 
@@ -235,12 +304,14 @@ class Context:
 
     def matched_test_period(self) -> TestPeriod:
         starts = self.periods(3)
-        s = starts[0] if starts else MORTGAGE_TEST.start
+        s = starts[0] if starts else 2021
         return TestPeriod(start=s, end=s + 2, label=f"{s}-{s + 2}, the past period most like today")
 
-    @property
-    def n_twins(self) -> int:
-        return max(1, len(self.twins))
+    def grid(self, starts: Sequence[int], amount_of: Callable[[Person], float], default: float,
+             gain: Callable[[float, int], float]) -> FloatArray:
+        """gain(amount, start) for every (twin, period) pair. Shape (twins, periods)."""
+        amounts = [amount_of(p) for p in self.twins] or [default]
+        return np.array([[gain(a, s) for s in starts] for a in amounts], dtype=np.float64)
 
 
 @dataclass(frozen=True)
@@ -249,20 +320,8 @@ class Candidate:
     score: float
 
 
-def _score(impact: float, worst: float, confidence: float) -> float:
+def score(impact: float, worst: float, confidence: float) -> float:
     return (impact + 0.5 * min(0.0, worst)) * confidence
-
-
-def _grid(ctx: Context, starts: Sequence[int], amount_of: Callable[[Person], float], gain: Callable[[float, int], float]
-          ) -> np.ndarray:
-    """gain(amount, start) for every (twin, period) pair. Shape (twins, periods)."""
-    people = ctx.twins or []
-    amounts = [amount_of(p) for p in people] or [amount_of_default(ctx)]
-    return np.array([[gain(a, s) for s in starts] for a in amounts], dtype=np.float64)
-
-
-def amount_of_default(ctx: Context) -> float:
-    return 0.0
 
 
 def _move(
@@ -282,6 +341,8 @@ def _move(
     concept_id: str,
     deadline: str | None = None,
 ) -> Candidate:
+    # The recommended option's label is the action, word for word (V5).
+    options = [o.model_copy(update={"label": action}) if o.is_recommended else o for o in options]
     days_left = None
     if deadline is not None:
         days_left = max(0, (dates.parse(deadline) - ctx.today).days)
@@ -303,7 +364,7 @@ def _move(
         test_period=test_period,
         concept_id=concept_id,
     )
-    return Candidate(move=move, score=_score(impact, worst, confidence))
+    return Candidate(move=move, score=score(impact, worst, confidence))
 
 
 def _options(recommended: str, others: Sequence[str]) -> list[MoveOption]:
@@ -315,37 +376,66 @@ def _options(recommended: str, others: Sequence[str]) -> list[MoveOption]:
 
 
 def mortgage_paths(
-    macro: MacroTable, start: int, q2: float, q5: float, keep_now: float, bank_now: float, horizon: int
+    macro: MacroTable, start: int, q2: float, q5: float, keep_now: float, tracker_now: float, horizon: int
 ) -> dict[str, list[float]]:
     """Rate path (percent per year) for each option, from today's quotes plus the changes seen from `start`.
 
     - fix_2y: today's 2-year rate, then re-fix every 2 years at today's rate + the change in 2-year rates.
     - fix_5y: today's 5-year rate for 5 years, then re-fix the same way.
-    - tracker: today's Bank Rate + the change in Bank Rate, + TRACKER_MARGIN.
-    - keep: the rate you move to (standard variable or your current variable rate) + the change in Bank Rate.
+    - tracker: today's tracker rate + the change in tracker rates (BoE series, else Bank Rate + TRACKER_MARGIN).
+    - keep: the rate you move to (standard variable or your current variable rate) + the change in the
+      standard variable rate (BoE series, else Bank Rate + VARIABLE_MARGIN).
     """
 
     def d(key: MacroKey, t: int) -> float:
         return _fix(macro, key, start + t) - _fix(macro, key, start)
 
-    def db(t: int) -> float:
-        return _bank(macro, start + t) - _bank(macro, start)
+    def dt(t: int) -> float:
+        return _tracker(macro, start + t) - _tracker(macro, start)
+
+    def dv(t: int) -> float:
+        return _svr(macro, start + t) - _svr(macro, start)
 
     return {
         "fix_2y": [max(0.0, q2 + d(MacroKey.MORTGAGE_2Y_FIX, 2 * (t // 2))) for t in range(horizon)],
         "fix_5y": [max(0.0, q5 + d(MacroKey.MORTGAGE_5Y_FIX, 5 * (t // 5))) for t in range(horizon)],
-        "tracker": [max(0.0, bank_now + db(t)) + TRACKER_MARGIN for t in range(horizon)],
-        "keep": [max(0.0, keep_now + db(t)) for t in range(horizon)],
+        "tracker": [max(0.0, tracker_now + dt(t)) for t in range(horizon)],
+        "keep": [max(0.0, keep_now + dv(t)) for t in range(horizon)],
     }
+
+
+def choose_by_regret(
+    options: Sequence[str],
+    matched: Mapping[str, Sequence[float]],
+    stress: Mapping[str, float] | None = None,
+    weight: float = 0.5,
+) -> tuple[str, dict[str, float]]:
+    """ADR 0020 amendment. `matched[o]` = GBP/year vs doing nothing in each matched period; `stress[o]` = the same
+    in the stress period. regret(o, p) = best option's gain in p - o's gain in p.
+    score(o) = mean(matched[o]) - weight * max_p regret(o, p) over matched periods and the stress period.
+    `weight` is the regret weight lambda (0.5 by default; ADR 0020 Amendment 2 sets it from affordability).
+    Returns the highest-scoring option (ties: option order) and every score."""
+    columns: list[dict[str, float]] = [
+        {o: matched[o][i] for o in options} for i in range(min((len(matched[o]) for o in options), default=0))
+    ]
+    if stress:
+        columns.append({o: stress[o] for o in options})
+    scores: dict[str, float] = {}
+    for o in options:
+        expected = float(np.mean(matched[o])) if len(matched[o]) else 0.0
+        regret = max((max(col.values()) - col[o] for col in columns), default=0.0)
+        scores[o] = expected - weight * regret
+    best = sorted(options, key=lambda o: (-scores[o], options.index(o)))[0]
+    return best, scores
 
 
 @dataclass(frozen=True)
 class MortgageResult:
     best: str
-    runner_up: str
-    impact: dict[str, float]  # mean GBP/year vs keep, user's amounts
-    worst: dict[str, float]
-    confidence: float  # best beat keep and the runner-up
+    impact: dict[str, float]  # mean GBP/year vs keep over the matched periods, user's amounts
+    worst: dict[str, float]  # min over matched periods and stress
+    stress: dict[str, float]  # GBP/year vs keep in the stress period (empty when not given)
+    confidence: float  # share of (twin, period) pairs, stress included, where best was the best option
     pairs: int
 
 
@@ -358,35 +448,130 @@ def rank_mortgage(
     q2: float,
     q5: float,
     keep_now: float,
-    bank_now: float,
+    tracker_now: float,
+    stress_start: int | None = None,
     horizon: int = MORTGAGE_HORIZON,
     options: Sequence[str] = MORTGAGE_OPTIONS,
+    stress_horizon: int | None = None,
+    regret_weight: float = 0.5,
 ) -> MortgageResult:
-    paths = {s: mortgage_paths(macro, s, q2, q5, keep_now, bank_now, horizon) for s in starts}
+    """Matched periods use `horizon` years. The stress period uses `stress_horizon` years (default `horizon`),
+    so the card's stress figure covers the same years that Test it replays."""
+    s_h = stress_horizon or horizon
+    paths = {("m", s): mortgage_paths(macro, s, q2, q5, keep_now, tracker_now, horizon) for s in starts}
+    if stress_start is not None:
+        paths[("s", stress_start)] = mortgage_paths(macro, stress_start, q2, q5, keep_now, tracker_now, s_h)
+    years = {k: (horizon if k[0] == "m" else s_h) for k in paths}
 
-    def gains(balance: float) -> dict[str, list[float]]:
-        out: dict[str, list[float]] = {o: [] for o in options}
-        for s in starts:
-            keep_cost = mortgage_interest(balance, years_left, paths[s]["keep"])
-            for o in options:
-                out[o].append((keep_cost - mortgage_interest(balance, years_left, paths[s][o])) / horizon)
-        return out
+    def gain_at(balance: float, key: tuple[str, int], o: str) -> float:
+        keep_cost = mortgage_interest(balance, years_left, paths[key]["keep"])
+        return (keep_cost - mortgage_interest(balance, years_left, paths[key][o])) / years[key]
 
-    user = gains(user_balance)
+    def gain(balance: float, s: int, o: str) -> float:
+        return gain_at(balance, ("m", s), o)
+
+    user = {o: [gain(user_balance, s, o) for s in starts] for o in options}
+    stress = {o: gain_at(user_balance, ("s", stress_start), o) for o in options} if stress_start is not None else {}
     impact = {o: float(np.mean(user[o])) if user[o] else 0.0 for o in options}
-    worst = {o: float(min(user[o])) if user[o] else 0.0 for o in options}
-    order = sorted(options, key=lambda o: (-(impact[o] + 0.5 * min(0.0, worst[o])), options.index(o)))
-    best, runner = order[0], order[1] if len(order) > 1 else order[0]
-    wins = 0
-    total = 0
+    worst = {o: float(min([*user[o], *([stress[o]] if stress else [])], default=0.0)) for o in options}
+    best, _ = choose_by_regret(options, user, stress, regret_weight)
+    # ADR 0023: share of (twin, period) pairs, stress period included, where `best` was the best option.
+    wins = total = 0
     for b in balances:
-        g = gains(b)
-        for i in range(len(starts)):
+        for key in paths:
             total += 1
-            others = [g[o][i] for o in options if o != best]
-            if g[best][i] > 0 and all(g[best][i] > x for x in others):
+            g = {o: gain_at(b, key, o) for o in options}
+            if all(g[best] >= g[o] for o in options):
                 wins += 1
-    return MortgageResult(best, runner, impact, worst, wins / total if total else 0.0, total)
+    return MortgageResult(best, impact, worst, stress, wins / total if total else 0.0, total)
+
+
+AFFORD_STRESS_PP = 3.0  # ADR 0020 Amendment 2: lenders' affordability stress above the reversion rate
+AFFORD_COMFORTABLE = 0.30  # ratio at or below: regret weight 0.5
+AFFORD_STRETCHED = 0.45  # ratio at or above: regret weight 1.5
+WEIGHT_COMFORTABLE = 0.5
+WEIGHT_STRETCHED = 1.5
+
+
+def regret_weight(ratio: float | None) -> float:
+    """lambda = 0.5 at ratio <= 0.30, 1.5 at ratio >= 0.45, linear between. No detected income: 1.5 (cautious)."""
+    if ratio is None:
+        return WEIGHT_STRETCHED
+    if ratio <= AFFORD_COMFORTABLE:
+        return WEIGHT_COMFORTABLE
+    if ratio >= AFFORD_STRETCHED:
+        return WEIGHT_STRETCHED
+    share = (ratio - AFFORD_COMFORTABLE) / (AFFORD_STRETCHED - AFFORD_COMFORTABLE)
+    return WEIGHT_COMFORTABLE + share * (WEIGHT_STRETCHED - WEIGHT_COMFORTABLE)
+
+
+@dataclass(frozen=True)
+class Affordability:
+    stressed_payment: float  # GBP per month at reversion rate + 3.0 points
+    net_monthly_income: float | None
+    ratio: float | None
+    weight: float
+    text: str
+    facts: dict[str, float]
+
+
+def affordability(balance: float, years_left: int, reversion_rate: float, snapshot: FinanceSnapshot) -> Affordability:
+    """ADR 0020 Amendment 2. stressed_payment = monthly_payment(balance, reversion + 3.0, term);
+    ratio = stressed_payment / net monthly income from detected salary credits; lambda from regret_weight."""
+    stressed_rate = reversion_rate + AFFORD_STRESS_PP
+    pay = monthly_payment(balance, stressed_rate, years_left)
+    inc = detect_salary(snapshot.transactions)
+    net = inc.monthly_net if inc is not None and inc.monthly_net > 0 else None
+    ratio = pay / net if net is not None else None
+    weight = regret_weight(ratio)
+    facts: dict[str, float] = {
+        "stressed_rate": pct_value(stressed_rate),
+        "stressed_payment": money_value(pay),
+        "regret_weight": round(weight, 4),
+    }
+    text = ""
+    if ratio is not None and net is not None:
+        ratio_pct = float(round(ratio * 100))
+        facts |= {
+            "net_monthly_income": money_value(net),
+            "stressed_ratio_pct": ratio_pct,
+            "stressed_ratio": round(ratio, 4),
+        }
+        text = (
+            f" At {pct(stressed_rate)} your payment would be {gbp(pay)} a month, "
+            f"{ratio_pct:.0f}% of your take-home pay."
+        )
+    return Affordability(pay, net, ratio, weight, text, facts)
+
+
+def todays_rates_comparison(
+    balance: float, years_left: int, q2: float, q5: float, tracker: float
+) -> tuple[str, dict[str, float]]:
+    """Engine-computed comparison of TODAY's quoted rates (BoE IUMBV42 5-year, IUMBV34 2-year, IUMBV48 tracker):
+    yearly repayments from finance.monthly_payment on the user's balance and term. Not a forecast."""
+    pay = {k: monthly_payment(balance, r, years_left) * 12 for k, r in (("2y", q2), ("5y", q5), ("tr", tracker))}
+    d5 = pay["2y"] - pay["5y"]
+    dt = pay["2y"] - pay["tr"]
+
+    def rel(x: float) -> str:
+        return f"{gbp(x)} a year less than" if x >= 0 else f"{gbp(x)} a year more than"
+
+    text = (
+        f"At today's rates on {gbp(balance)} over {years_left} years, a 5-year fix ({pct(q5)}) costs {rel(d5)} "
+        f"a 2-year fix ({pct(q2)}), and a tracker ({pct(tracker)}) starts at {rel(dt)} the 2-year fix."
+    )
+    facts = {
+        "balance": money_value(balance),
+        "term_years": float(years_left),
+        "rate_5y": pct_value(q5),
+        "rate_2y": pct_value(q2),
+        "rate_tracker": pct_value(tracker),
+        "gap_5y_vs_2y": money_value(d5),
+        "gap_tracker_vs_2y": money_value(dt),
+        "years_5": 5.0,
+        "years_2": 2.0,
+    }
+    return text, facts
 
 
 def _mortgage(ctx: Context) -> Candidate | None:
@@ -396,8 +581,8 @@ def _mortgage(ctx: Context) -> Candidate | None:
     kind: MoveKind
     deadline: str | None = None
     days_left = 0
-    bank_now = _bank(ctx.macro, ctx.year)
-    svr = bank_now + VARIABLE_MARGIN
+    tracker_now = _tracker(ctx.macro, ctx.year)
+    svr = _svr(ctx.macro, ctx.year)
     q2 = _fix(ctx.macro, MacroKey.MORTGAGE_2Y_FIX, ctx.year)
     q5 = _fix(ctx.macro, MacroKey.MORTGAGE_5Y_FIX, ctx.year)
     if m.rate_type == "fixed" and m.fixed_until is not None:
@@ -417,69 +602,71 @@ def _mortgage(ctx: Context) -> Candidate | None:
     starts = ctx.periods(MORTGAGE_HORIZON)
     if not starts:
         return None
+    stress = STRESS[kind]
     balances = [p.mortgage_balance if p.mortgage_balance > 0 else m.balance for p in ctx.twins] or [m.balance]
-    r = rank_mortgage(ctx.macro, starts, balances, m.balance, m.years_left, q2, q5, keep_now, bank_now)
+    aff = affordability(m.balance, m.years_left, svr, ctx.snapshot)
+    r = rank_mortgage(
+        ctx.macro, starts, balances, m.balance, m.years_left, q2, q5, keep_now, tracker_now, stress_start=stress.start,
+        stress_horizon=stress.years, regret_weight=aff.weight,
+    )
     best = r.best
-    impact, worst = r.impact[best], r.worst[best]
+    impact, worst, stressed = r.impact[best], r.worst[best], r.stress[best]
     if impact <= 0:
         return None
 
     action = OPTION_LABEL[best]
+    cmp_text, cmp_facts = todays_rates_comparison(m.balance, m.years_left, q2, q5, tracker_now)
     if kind == "fix_mortgage":
         headline = f"Your deal ends in {days_left} days"
         e1 = _ev(
-            f"Your fixed rate of {pct(m.rate_pct)} ends in {days_left} days. "
-            f"Then you move to the standard rate of about {pct(svr)}.",
-            {"current_rate": pct_value(m.rate_pct), "days_left": float(days_left), "svr_rate": pct_value(svr)},
-            source_ref(ctx.macro, MacroKey.BANK_RATE, ctx.year),
+            f"Your fixed rate of {pct(m.rate_pct)} ends in {days_left} days. Then you move to about {pct(svr)}. "
+            f"{cmp_text}{aff.text}",
+            {"current_rate": pct_value(m.rate_pct), "days_left": float(days_left), "svr_rate": pct_value(svr),
+             **cmp_facts, **aff.facts},
+            source_ref(ctx.macro, MacroKey.MORTGAGE_5Y_FIX, ctx.year),
         )
     else:
         headline = f"You pay {pct(keep_now)} on your mortgage"
         e1 = _ev(
-            f"You pay {pct(keep_now)} on a {gbp(m.balance)} mortgage with no fixed deal.",
-            {"current_rate": pct_value(keep_now), "balance": money_value(m.balance)},
-            _bank_ref(ctx.snapshot),
+            f"You pay {pct(keep_now)} on your mortgage with no fixed deal. {cmp_text}{aff.text}",
+            {"current_rate": pct_value(keep_now), **cmp_facts, **aff.facts},
+            source_ref(ctx.macro, MacroKey.MORTGAGE_5Y_FIX, ctx.year),
         )
+    spans, span_facts = spans_text(starts, MORTGAGE_HORIZON)
+    names = OPTION_NUMBERS.get(best, {})
     e2 = _ev(
-        f"Today a 2-year fix is {pct(q2)} and a 5-year fix is {pct(q5)}.",
-        {"rate_2y": pct_value(q2), "rate_5y": pct_value(q5), "years_2": 2.0, "years_5": 5.0},
-        source_ref(ctx.macro, MacroKey.MORTGAGE_5Y_FIX, ctx.year),
+        f"We tested {len(ctx.twins) or 1} people like you in similar past periods ({spans}). "
+        f"“{action}” {_better(impact)} on average against doing nothing.",
+        {"twins": float(len(ctx.twins) or 1), "impact": money_value(impact), **span_facts, **names},
+        source_ref(ctx.macro, MacroKey.BANK_RATE, ctx.year),
     )
-    worst_txt = (
-        f"and {gbp(worst)} a year in the worst period"
-        if worst >= 0
-        else f"but cost {gbp(worst)} a year more in the worst period"
+    alt = max((o for o in MORTGAGE_OPTIONS if o != best), key=lambda o: (r.stress[o], o))
+    alt_names = {f"alt_{k}": v for k, v in OPTION_NUMBERS.get(alt, {}).items()}
+    s3 = (
+        f"In {stress.text}, “{action}” {_better(stressed)} against doing nothing for a mortgage like yours; "
+        f"“{OPTION_LABEL[alt]}” {_better(r.stress[alt])}. "
+        "Test it replays your whole life in those years, so its totals can differ"
     )
-    e3 = _ev(
-        f"We tested {len(ctx.twins) or 1} people like you in {len(starts)} similar past periods. "
-        f"“{action}” saved {gbp(impact)} a year on average against doing nothing, {worst_txt}.",
-        {
-            "twins": float(len(ctx.twins) or 1),
-            "periods": float(len(starts)),
-            "impact": money_value(impact),
-            "worst": money_value(worst),
-            **({"years": float(FIX_YEARS[best])} if best in FIX_YEARS else {}),
-        },
-    )
+    f3 = {
+        "stress": money_value(stressed),
+        "stress_alt": money_value(r.stress[alt]),
+        **stress.facts(),
+        **names,
+        **alt_names,
+    }
+    e3 = _ev(f"{s3}.", f3, source_ref(ctx.macro, MacroKey.BANK_RATE, stress.start))
     sources = [
-        *_refs(ctx.macro, ctx.year, [MacroKey.BANK_RATE, MacroKey.MORTGAGE_2Y_FIX, MacroKey.MORTGAGE_5Y_FIX]),
+        *_refs(
+            ctx.macro,
+            ctx.year,
+            [MacroKey.BANK_RATE, MacroKey.MORTGAGE_2Y_FIX, MacroKey.MORTGAGE_5Y_FIX, MacroKey.MORTGAGE_SVR,
+             MacroKey.MORTGAGE_TRACKER],
+        ),
         _bank_ref(ctx.snapshot),
     ]
     return _move(
-        ctx,
-        kind,
-        kind,
-        action,
-        headline,
-        impact,
-        worst,
-        r.confidence,
-        confidence_label(r.confidence),
-        [e1, e2, e3],
-        sources,
-        _options(best, [*MORTGAGE_OPTIONS, "keep"]),
-        MORTGAGE_TEST,
-        "interest-rates",
+        ctx, kind, kind, action, headline, impact, worst, r.confidence, best_choice_label(r.confidence),
+        [e1, e2, e3], sources, _options(best, [*MORTGAGE_OPTIONS, "keep"]), stress.test_period, "interest-rates",
         deadline,
     )
 
@@ -487,8 +674,9 @@ def _mortgage(ctx: Context) -> Candidate | None:
 # ---------- savings ----------
 
 
-def savings_gain(macro: MacroTable, start: int, amount: float, user_now: float, best_now: float, year: int,
-                 horizon: int = SAVINGS_HORIZON) -> float:
+def savings_gain(
+    macro: MacroTable, start: int, amount: float, user_now: float, best_now: float, horizon: int = SAVINGS_HORIZON
+) -> float:
     """GBP per year from moving `amount` to a best-buy account, with the rate changes seen from `start`."""
     total = 0.0
     for t in range(horizon):
@@ -510,37 +698,40 @@ def _savings(ctx: Context) -> Candidate | None:
     starts = ctx.periods(SAVINGS_HORIZON)
     if not starts:
         return None
-    user = [savings_gain(ctx.macro, s, amount, user_now, best_now, ctx.year) for s in starts]
-    impact, worst = float(np.mean(user)), float(min(user))
+    stress = STRESS["move_savings"]
+
+    def gain(a: float, s: int) -> float:
+        return savings_gain(ctx.macro, s, a, user_now, best_now)
+
+    user = [gain(amount, s) for s in starts]
+    stressed = gain(amount, stress.start)
+    impact, worst = float(np.mean(user)), float(min(*user, stressed))
     if impact <= 0:
         return None
-    grid = _grid(
-        ctx, starts, lambda p: p.savings if p.savings > 0 else amount,
-        lambda a, s: savings_gain(ctx.macro, s, a, user_now, best_now, ctx.year),
-    )
-    conf = float((grid > 0).mean())
+    conf = float((ctx.grid(starts, lambda p: p.savings if p.savings > 0 else amount, amount, gain) > 0).mean())
     rate_word = "earning about" if measured is not None else "probably earning about"
     e1 = _ev(
-        f"You have {gbp(amount)} in savings {rate_word} {pct(user_now)} a year.",
-        {"savings": money_value(amount), "rate": pct_value(user_now)},
-        _bank_ref(ctx.snapshot),
-    )
-    e2 = _ev(
+        f"You have {gbp(amount)} in savings {rate_word} {pct(user_now)} a year. "
         f"Easy-access accounts pay up to about {pct(best_now)} today.",
-        {"best_rate": pct_value(best_now)},
-        source_ref(ctx.macro, MacroKey.SAVINGS_RATE, ctx.year) or source_ref(ctx.macro, MacroKey.BANK_RATE, ctx.year),
+        {"savings": money_value(amount), "rate": pct_value(user_now), "best_rate": pct_value(best_now)},
+        source_ref(ctx.macro, MacroKey.SAVINGS_RATE, ctx.year) or _bank_ref(ctx.snapshot),
+    )
+    spans, span_facts = spans_text(starts, SAVINGS_HORIZON)
+    e2 = _ev(
+        f"In similar past periods ({spans}), moving earned {gbp(impact)} a year more on average.",
+        {"impact": money_value(impact), **span_facts},
     )
     e3 = _ev(
-        f"In {len(starts)} similar past periods, moving earned {gbp(impact)} a year more on average, "
-        f"and {gbp(worst)} a year {'more' if worst >= 0 else 'less'} in the worst period.",
-        {"periods": float(len(starts)), "impact": money_value(impact), "worst": money_value(worst)},
+        f"In {stress.text}, moving earned {gbp(stressed)} a year {'more' if stressed >= 0 else 'less'}.",
+        {"stress": money_value(stressed), **stress.facts()},
+        source_ref(ctx.macro, MacroKey.SAVINGS_RATE, stress.start),
     )
     return _move(
         ctx, "move_savings", "move_savings", "Move your savings to a better rate",
         f"Your savings could earn {gbp(impact)} more a year",
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.SAVINGS_RATE, MacroKey.BANK_RATE]), _bank_ref(ctx.snapshot)],
-        _options("switch", ["keep"]), SAVINGS_TEST, "compound-interest",
+        _options("switch", ["keep"]), stress.test_period, "compound-interest",
     )
 
 
@@ -560,42 +751,41 @@ def _energy(ctx: Context) -> Candidate | None:
     starts = ctx.periods(ONE_YEAR + 1)
     if not starts:
         return None
+    stress = STRESS["switch_energy"]
 
     def gain(amount: float, s: int) -> float:
+        """Fixing today's price for a year vs paying the next year's change seen after `s`."""
         return amount * _v(ctx.macro, MacroKey.ENERGY_PRICE_CHANGE, s + 1, 0.0) / 100
 
     user = [gain(annual, s) for s in starts]
-    impact, worst = float(np.mean(user)), float(min(user))
+    stressed = gain(annual, stress.start)
+    impact, worst = float(np.mean(user)), float(min(*user, stressed))
     if impact <= 0:
         return None
     rose = sum(1 for g in user if g > 0)
     conf = rose / len(user)
     cap = _v(ctx.macro, MacroKey.ENERGY_TARIFF, ctx.year, 0.0)
     if days is not None and days >= 0:
-        e1 = _ev(
-            f"You pay {gbp(e.monthly_cost)} a month for energy. Your fixed price ends in {days} days.",
-            {"monthly": money_value(e.monthly_cost), "days_left": float(days)},
-            _bank_ref(ctx.snapshot),
-        )
+        s1 = f"You pay {gbp(e.monthly_cost)} a month for energy. Your fixed price ends in {days} days."
+        f1 = {"monthly": money_value(e.monthly_cost), "days_left": float(days)}
     else:
-        e1 = _ev(
-            f"You pay {gbp(e.monthly_cost)} a month for energy on a price that can change.",
-            {"monthly": money_value(e.monthly_cost)},
-            _bank_ref(ctx.snapshot),
-        )
+        s1 = f"You pay {gbp(e.monthly_cost)} a month for energy on a price that can change."
+        f1 = {"monthly": money_value(e.monthly_cost)}
     if cap > 0:
-        e2 = _ev(
-            f"A typical home pays {gbp(cap)} a year under the price cap.",
-            {"typical": money_value(cap)},
-            source_ref(ctx.macro, MacroKey.ENERGY_TARIFF, ctx.year),
-        )
-    else:
-        e2 = _ev(f"That is about {gbp(annual)} a year.", {"annual": money_value(annual)})
-    e3 = _ev(
-        f"In {len(starts)} similar past periods, prices rose the next year in {rose} of them. "
-        f"Fixing saved {gbp(impact)} a year on average.",
-        {"periods": float(len(starts)), "rose": float(rose), "impact": money_value(impact)},
+        s1 += f" A typical home pays {gbp(cap)} a year under the price cap."
+        f1["typical"] = money_value(cap)
+    e1 = _ev(s1, f1, source_ref(ctx.macro, MacroKey.ENERGY_TARIFF, ctx.year) or _bank_ref(ctx.snapshot))
+    spans, span_facts = spans_text([s + 1 for s in starts], 1)
+    e2 = _ev(
+        f"In similar past years ({spans}), prices rose in {rose} of {len(starts)}. "
+        f"Fixing {_better(impact)} on average.",
+        {"rose": float(rose), "periods": float(len(starts)), "impact": money_value(impact), **span_facts},
         source_ref(ctx.macro, MacroKey.ENERGY_PRICE_CHANGE, ctx.year),
+    )
+    e3 = _ev(
+        f"In {stress.text}, fixing {_better(stressed)}.",
+        {"stress": money_value(stressed), **stress.facts()},
+        source_ref(ctx.macro, MacroKey.ENERGY_PRICE_CHANGE, stress.start + 1),
     )
     deadline = e.fixed_until if days is not None and days >= 0 else None
     return _move(
@@ -603,7 +793,7 @@ def _energy(ctx: Context) -> Candidate | None:
         "Your energy price can go up" if deadline is None else f"Your energy deal ends in {days} days",
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.ENERGY_TARIFF, MacroKey.ENERGY_PRICE_CHANGE]), _bank_ref(ctx.snapshot)],
-        _options("fix", ["keep"]), ENERGY_TEST, "inflation", deadline,
+        _options("fix", ["keep"]), stress.test_period, "inflation", deadline,
     )
 
 
@@ -618,7 +808,9 @@ def card_rate_pct(snapshot: FinanceSnapshot, today: dates.date) -> float | None:
     charged = -sum(
         t.amount
         for t in snapshot.transactions
-        if t.account_id in ids and t.amount < 0 and "interest" in t.description.lower()
+        if t.account_id in ids
+        and t.amount < 0
+        and "interest" in t.description.lower()
         and start < dates.parse(t.date) <= today
     )
     if debt <= 0 or charged <= 0:
@@ -636,7 +828,8 @@ def _debt(ctx: Context) -> Candidate | None:
     if debt < MIN_DEBT:
         return None
     spend = monthly_spend(ctx.snapshot, ctx.today)
-    spare = savings_total(ctx.snapshot) - SAFETY_MONTHS * spend
+    sav = savings_total(ctx.snapshot)
+    spare = sav - SAFETY_MONTHS * spend
     surplus = monthly_surplus(ctx.snapshot, ctx.today)
     from_savings = spare > 0
     if from_savings:
@@ -652,58 +845,63 @@ def _debt(ctx: Context) -> Candidate | None:
     starts = ctx.periods(ONE_YEAR + 1)
     if not starts:
         return None
+    stress = STRESS["pay_off_debt"]
 
     def gain(a: float, s: int) -> float:
         card = max(0.0, card_now + _card(ctx.macro, s + 1) - _card(ctx.macro, s))
-        sav = max(0.0, sav_now + _savings_avg(ctx.macro, s + 1) - _savings_avg(ctx.macro, s)) if from_savings else 0.0
-        return a * share * (card - sav) / 100
+        lost = max(0.0, sav_now + _savings_avg(ctx.macro, s + 1) - _savings_avg(ctx.macro, s)) if from_savings else 0.0
+        return a * share * (card - lost) / 100
 
     user = [gain(amount, s) for s in starts]
-    impact, worst = float(np.mean(user)), float(min(user))
+    stressed = gain(amount, stress.start)
+    impact, worst = float(np.mean(user)), float(min(*user, stressed))
     if impact <= 0:
         return None
-    grid = _grid(ctx, starts, lambda p: min(p.debt, amount) if p.debt > 0 else amount, gain)
-    conf = float((grid > 0).mean())
-    e1 = _ev(
-        f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year.",
-        {"debt": money_value(debt), "card_rate": pct_value(card_now)},
-        _bank_ref(ctx.snapshot) if measured is not None else source_ref(ctx.macro, MacroKey.CARD_RATE, ctx.year),
-    )
+    conf = float((ctx.grid(starts, lambda p: min(p.debt, amount) if p.debt > 0 else amount, amount, gain) > 0).mean())
     if from_savings:
-        e2 = _ev(
-            f"Your savings earn about {pct(sav_now)}. Paying {gbp(amount)} from savings still leaves "
-            f"{gbp(savings_total(ctx.snapshot) - amount)} for emergencies.",
-            {"savings_rate": pct_value(sav_now), "amount": money_value(amount),
-             "left": money_value(savings_total(ctx.snapshot) - amount)},
+        e1 = _ev(
+            f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year. Your savings earn about "
+            f"{pct(sav_now)}. Paying {gbp(amount)} from savings still leaves {gbp(sav - amount)}.",
+            {"debt": money_value(debt), "card_rate": pct_value(card_now), "savings_rate": pct_value(sav_now),
+             "amount": money_value(amount), "left": money_value(sav - amount)},
             _bank_ref(ctx.snapshot),
         )
         action = f"Pay off {gbp(amount)} of card debt from savings"
     elif surplus > 0:
-        e2 = _ev(
-            f"You have about {gbp(surplus)} a month left after spending. That clears {gbp(amount)} in a year.",
-            {"surplus": money_value(surplus), "amount": money_value(amount)},
+        e1 = _ev(
+            f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year. You have about "
+            f"{gbp(surplus)} a month left after spending. That clears {gbp(amount)} in a year.",
+            {"debt": money_value(debt), "card_rate": pct_value(card_now), "surplus": money_value(surplus),
+             "amount": money_value(amount)},
             _bank_ref(ctx.snapshot),
         )
         action = f"Put {gbp(surplus)} a month towards your card"
     else:
-        e2 = _ev(
-            f"You spend about {gbp(surplus)} a month more than you earn. Cutting {gbp(PAYDOWN_MONTHLY)} a month "
-            f"and paying it to the card clears {gbp(amount)} in a year.",
-            {"over": money_value(surplus), "cut": money_value(PAYDOWN_MONTHLY), "amount": money_value(amount)},
+        e1 = _ev(
+            f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year. You spend about "
+            f"{gbp(surplus)} a month more than you earn. Cutting {gbp(PAYDOWN_MONTHLY)} a month and paying it "
+            f"to the card clears {gbp(amount)} in a year.",
+            {"debt": money_value(debt), "card_rate": pct_value(card_now), "over": money_value(surplus),
+             "cut": money_value(PAYDOWN_MONTHLY), "amount": money_value(amount)},
             _bank_ref(ctx.snapshot),
         )
         action = f"Cut {gbp(PAYDOWN_MONTHLY)} a month and pay it to your card"
-    e3 = _ev(
-        f"This saves about {gbp(impact)} a year in interest, and {gbp(worst)} a year in the worst of "
-        f"{len(starts)} similar past periods.",
-        {"impact": money_value(impact), "worst": money_value(worst), "periods": float(len(starts))},
+    spans, span_facts = spans_text([s + 1 for s in starts], 1)
+    e2 = _ev(
+        f"In similar past years ({spans}), this {_better(impact)} in interest on average.",
+        {"impact": money_value(impact), **span_facts},
         source_ref(ctx.macro, MacroKey.CARD_RATE, ctx.year),
+    )
+    e3 = _ev(
+        f"In {stress.text}, it {_better(stressed)}.",
+        {"stress": money_value(stressed), **stress.facts()},
+        source_ref(ctx.macro, MacroKey.CARD_RATE, stress.start),
     )
     return _move(
         ctx, "pay_off_debt", "pay_off_debt", action, f"Your card costs you {gbp(impact)} a year",
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.CARD_RATE, MacroKey.SAVINGS_RATE]), _bank_ref(ctx.snapshot)],
-        _options("pay_off", ["keep"]), ctx.matched_test_period(), "debt",
+        _options("pay_off", ["keep"]), stress.test_period, "debt",
     )
 
 
@@ -722,43 +920,49 @@ def _emergency(ctx: Context) -> Candidate | None:
     starts = ctx.periods(ONE_YEAR + 1)
     if not starts:
         return None
-    rng = np.random.default_rng(ctx.seed)
+    stress = STRESS["build_emergency_fund"]
     shock = min(gap, SHOCK_COST)
 
     def prob(s: int) -> float:
         return min(1.0, SHOCK_BASE_PROB + _v(ctx.macro, MacroKey.UNEMPLOYMENT, s, 5.0) / 100)
 
-    def cost(s: int) -> float:
-        return shock * _card(ctx.macro, s) / 100
+    def expected(s: int) -> float:
+        """Expected card interest avoided in a year like `s`."""
+        return prob(s) * shock * _card(ctx.macro, s) / 100
 
-    user = [prob(s) * cost(s) for s in starts]
-    impact = float(np.mean(user))
-    hits = rng.random((ctx.n_twins, len(starts))) < np.array([prob(s) for s in starts])[None, :]
+    impact = float(np.mean([expected(s) for s in starts]))
+    stressed = expected(stress.start)
+    rng = np.random.default_rng(ctx.seed)
+    hits = rng.random((max(1, len(ctx.twins)), len(starts))) < np.array([prob(s) for s in starts])[None, :]
     conf = float(hits.mean())
     months = round(cash / spend, 1)
-    card_now = _card(ctx.macro, ctx.year)
     e1 = _ev(
-        f"Your cash and savings cover {months:g} months of spending.",
-        {"months": months, "cash": money_value(cash)},
+        f"Your cash and savings cover {months:g} months of spending. You spend about {gbp(spend)} a month, "
+        f"so {EMERGENCY_MONTHS} months is {gbp(target)}.",
+        {"months": months, "spend": money_value(spend), "months_target": float(EMERGENCY_MONTHS),
+         "target": money_value(target)},
         _bank_ref(ctx.snapshot),
     )
+    spans, span_facts = spans_text(starts, 1)
+    p_now = round(float(np.mean([prob(s) for s in starts])) * 100)
     e2 = _ev(
-        f"You spend about {gbp(spend)} a month, so {EMERGENCY_MONTHS} months is {gbp(target)}.",
-        {"spend": money_value(spend), "months_target": float(EMERGENCY_MONTHS), "target": money_value(target)},
-        _bank_ref(ctx.snapshot),
-    )
-    e3 = _ev(
-        f"A surprise bill of {gbp(shock)} on a card at {pct(card_now)} costs about "
-        f"{gbp(shock * card_now / 100)} a year in interest.",
-        {"shock": money_value(shock), "card_rate": pct_value(card_now), "cost": money_value(shock * card_now / 100)},
+        f"In similar past years ({spans}), about {p_now}% of people faced a surprise bill like {gbp(shock)}. "
+        f"Putting it on a card cost {gbp(impact)} a year on average.",
+        {"chance_pct": float(p_now), "shock": money_value(shock), "impact": money_value(impact), **span_facts},
         source_ref(ctx.macro, MacroKey.CARD_RATE, ctx.year),
+    )
+    p_stress = round(prob(stress.start) * 100)
+    e3 = _ev(
+        f"In {stress.text}, the chance rose to {p_stress}% and the expected cost to {gbp(stressed)} a year.",
+        {"stress_chance_pct": float(p_stress), "stress": money_value(stressed), **stress.facts()},
+        source_ref(ctx.macro, MacroKey.UNEMPLOYMENT, stress.start),
     )
     return _move(
         ctx, "build_emergency_fund", "build_emergency_fund", f"Build a safety net of {gbp(target)}",
         f"Your safety net covers {months:g} months",
-        impact, 0.0, conf, confidence_label(conf), [e1, e2, e3],
+        impact, min(0.0, stressed), conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.CARD_RATE, MacroKey.UNEMPLOYMENT]), _bank_ref(ctx.snapshot)],
-        _options("save", ["keep"]), ctx.matched_test_period(), "emergency-fund",
+        _options("save", ["keep"]), stress.test_period, "emergency-fund",
     )
 
 
@@ -789,10 +993,7 @@ def _subscription(ctx: Context) -> Candidate | None:
         {"monthly_total": money_value(total), "count": float(len(subs))},
         _bank_ref(ctx.snapshot),
     )
-    e3 = _ev(
-        f"Cancelling {s.merchant} saves {gbp(impact)} a year.",
-        {"impact": money_value(impact), **names},
-    )
+    e3 = _ev(f"Cancelling {s.merchant} saves {gbp(impact)} a year.", {"impact": money_value(impact), **names})
     return _move(
         ctx, "cancel_subscription", f"cancel_subscription-{_slug(s.merchant)}", f"Cancel {s.merchant}",
         f"{s.merchant} put its price up", impact, impact, 1.0, SURE_LABEL, [e1, e2, e3],
@@ -809,10 +1010,14 @@ def _budget(ctx: Context) -> Candidate | None:
     if not by_month[months[-1]]:
         return None
     last, before, history = months[-1], months[-4:-1], months[:-1]
-    best: tuple[float, str, float, float] | None = None
+
+    def spent_in(m: str, c: Category) -> float:
+        return by_month[m].get(c, (0.0, 0))[0]
+
+    best: tuple[float, Category, float, float] | None = None
     for c in CUT_CATEGORIES:
-        spent = by_month[last].get(c, (0.0, 0))[0]  # type: ignore[call-overload]
-        avg = float(np.mean([by_month[m].get(c, (0.0, 0))[0] for m in before]))  # type: ignore[call-overload]
+        spent = spent_in(last, c)
+        avg = float(np.mean([spent_in(m, c) for m in before]))
         excess = spent - avg
         big = avg >= CUT_MIN_AVERAGE and excess >= max(CUT_MIN_GBP, CUT_MIN_SHARE * avg)
         if big and (best is None or excess > best[0]):
@@ -821,10 +1026,14 @@ def _budget(ctx: Context) -> Candidate | None:
         return None
     excess, cat, spent, avg = best
     impact = excess * 12
-    under = len([m for m in history if by_month[m].get(cat, (0.0, 0))[0] <= avg])  # type: ignore[call-overload]
+    under = sum(1 for m in history if spent_in(m, cat) <= avg)
     conf = under / len(history)
-    name = category_label(cat).lower()  # type: ignore[arg-type]
-    e1 = _ev(f"You spent {gbp(spent)} on {name} last month.", {"spent": money_value(spent)}, _bank_ref(ctx.snapshot))
+    name = category_label(cat).lower()
+    e1 = _ev(
+        f"You spent {gbp(spent)} on {name} last month, {gbp(excess)} more than usual.",
+        {"spent": money_value(spent), "excess": money_value(excess)},
+        _bank_ref(ctx.snapshot),
+    )
     e2 = _ev(
         f"In the 3 months before, you spent {gbp(avg)} a month on average.",
         {"months": 3.0, "average": money_value(avg)},
@@ -1001,8 +1210,16 @@ def option_policy(move: Move, option_id: str) -> dict[str, str]:
         raise ValueError(f"unknown option {option_id} for move {move.id}")
     policy = {MOVE_TAG[move.kind]: option_id}
     if move.kind in ("fix_mortgage", "remortgage") and move.test_period is not None:
-        policy[POLICY_DEAL_END] = str(move.test_period.start + 1)
+        policy[POLICY_DEAL_END] = str(move.test_period.start)
     return policy
+
+
+def scenario_years(move: Move) -> tuple[int, int]:
+    """(start_year, end_year) for lifeline_sim.play_scenario so that events cover the whole test period.
+    The sim runs events from start_year + 1 to end_year, so start_year = test_period.start - 1."""
+    if move.test_period is None:
+        raise ValueError(f"move {move.id} has no test period")
+    return move.test_period.start - 1, move.test_period.end
 
 
 # ---------- backtest ----------
@@ -1022,25 +1239,49 @@ class BacktestRow:
 
 def mortgage_backtest_rows(macro: MacroTable, upto: int) -> list[BacktestRow]:
     """Walk-forward: for each past deal-end year Y with a full 5-year window of data, recommend with only the
-    periods that ended before Y, then compare with the option that was cheapest on the real path from Y."""
+    periods that ended before Y (the stress period counts only once it ended before Y), then compare with the
+    option that was cheapest on the real path from Y."""
     years = sorted(macro.years(MacroKey.BANK_RATE))
     if not years:
         return []
     last = min(years[-1], upto)
+    stress = STRESS["fix_mortgage"]
     rows: list[BacktestRow] = []
     for y in range(max(BACKTEST_FIRST_YEAR, years[0]), last - MORTGAGE_HORIZON + 2):
         pool = candidate_starts(macro, before=y, horizon=MORTGAGE_HORIZON)
         starts = [m.year for m in similar_years(macro, y, K_PERIODS, candidates=pool)]
         if not starts:
             continue
-        bank = _bank(macro, y)
+        svr, tracker = _svr(macro, y), _tracker(macro, y)
         q2, q5 = _fix(macro, MacroKey.MORTGAGE_2Y_FIX, y), _fix(macro, MacroKey.MORTGAGE_5Y_FIX, y)
-        bal = [BACKTEST_PROFILE_BALANCE]
-        rec = rank_mortgage(macro, starts, bal, bal[0], BACKTEST_YEARS_LEFT, q2, q5, bank + VARIABLE_MARGIN, bank)
-        real = rank_mortgage(macro, [y], bal, bal[0], BACKTEST_YEARS_LEFT, q2, q5, bank + VARIABLE_MARGIN, bank)
+        bal = BACKTEST_PROFILE_BALANCE
+        stress_start = stress.start if stress.end < y else None
+        rec = rank_mortgage(
+            macro, starts, [bal], bal, BACKTEST_YEARS_LEFT, q2, q5, svr, tracker, stress_start,
+            stress_horizon=stress.years,
+        )
+        real = rank_mortgage(macro, [y], [bal], bal, BACKTEST_YEARS_LEFT, q2, q5, svr, tracker)
         realised = max(MORTGAGE_OPTIONS, key=lambda o: (real.impact[o], -MORTGAGE_OPTIONS.index(o)))
         rows.append(BacktestRow(year=y, recommended=rec.best, realised_best=realised))
     return rows
+
+
+CONSTANT_RULE_TEXT: dict[str, str] = {
+    "fix_2y": "always fix for 2 years",
+    "fix_3y": "always fix for 3 years",
+    "fix_5y": "always fix for 5 years",
+    "tracker": "always take a tracker",
+}
+
+
+def best_constant_rule(realised: Sequence[str], options: Sequence[str]) -> tuple[str, float]:
+    """ADR 0023: the constant rule ('always take option o') with the highest hit rate. Ties: option order."""
+    n = len(realised)
+    if n == 0:
+        return options[0], 0.0
+    rates = {o: sum(r == o for r in realised) / n for o in options}
+    best = sorted(options, key=lambda o: (-rates[o], options.index(o)))[0]
+    return best, rates[best]
 
 
 def mortgage_backtest(macro: MacroTable, upto: int) -> NextMoveBacktest:
@@ -1048,14 +1289,16 @@ def mortgage_backtest(macro: MacroTable, upto: int) -> NextMoveBacktest:
     n = len(rows)
     first = rows[0].year if rows else BACKTEST_FIRST_YEAR
     lastrow = rows[-1].year if rows else BACKTEST_FIRST_YEAR
+    rule, rule_rate = best_constant_rule([r.realised_best for r in rows], MORTGAGE_OPTIONS)
     return NextMoveBacktest(
         method=(
             f"Walk-forward backtest over past deal-end years {first}-{lastrow}: the engine picks fix 2 years, "
             "fix 5 years or tracker using only earlier periods, then we check which was cheapest over the next "
-            "5 years on the real rate path."
+            f"5 years on the real rate path. Best constant rule: {CONSTANT_RULE_TEXT[rule]}, right in "
+            f"{rule_rate:.1%} of years."
         ),
         n=n,
         hit_rate=round(sum(r.recommended == r.realised_best for r in rows) / n, 4) if n else 0.0,
-        baseline="Always fix for 2 years",
+        baseline=f"Always fix for 2 years (best constant rule: {CONSTANT_RULE_TEXT[rule]}, {rule_rate:.1%})",
         baseline_hit_rate=round(sum(r.realised_best == BACKTEST_BASELINE for r in rows) / n, 4) if n else 0.0,
     )

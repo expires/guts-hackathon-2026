@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Assets menu</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F5F2EA; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: #FFFFFF; border-bottom: 3px solid #16181D">
+    <div aria-hidden="true" style="width: 48px; height: 48px; flex: none; box-sizing: border-box; border: 3px solid #16181D; border-radius: 18px 22px 17px 21px / 21px 17px 22px 18px; background: #A78BFA; display: flex; align-items: center; justify-content: center"><dc-import name="Icon" icon="face-priya" size="{{40}}" hint-size="40px,40px"></dc-import></div>
+    <div style="flex: 1; min-width: 0">
+      <div style="font-size: 17px; font-weight: 700">Priya Shah</div>
+      <div style="font-size: 13px; color: #4A4F59">Age 29 · Nurse · Leeds</div>
+    </div>
+    <div style="text-align: right">
+      <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; line-height: 1.1">£4,120</div>
+      <div style="font-size: 13px; color: #4A4F59">In the bank</div>
+    </div>
+  </header>
+
+  <div style="flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <a href="Life-Main.dc.html" aria-label="Close" style="width: 44px; height: 44px; flex: none; box-sizing: border-box; border: 3px solid #16181D; border-radius: 14px 18px 13px 17px; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M2 2 L14 14 M14 2 L2 14"></path></svg></a>
+      <h1 style="flex: 1; margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">Assets</h1>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Things I own</div>
+      <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 16px 20px 15px 19px / 19px 15px 20px 16px">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; border-bottom: 2px solid #DDD8CC; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="home" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">My home</div><div style="font-size: 13px; color: #4A4F59">2-bed terrace · bought for £225,000</div></div><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="car" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">Car</div><div style="font-size: 13px; color: #4A4F59">2014 hatchback · worth about £4,500</div></div><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Money I owe</div>
+      <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 20px 15px 19px 16px / 15px 20px 16px 19px">
+        <a href="Life-Event.dc.html" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; border-bottom: 2px solid #DDD8CC; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="bank" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">Mortgage</div><div style="font-size: 13px; color: #4A4F59">£180,000 over 25 years</div></div><span style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid #16181D; border-radius: 8px 11px 7px 10px; background: #FFA94D">Choose deal</span><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="card" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">Credit card</div><div style="font-size: 13px; color: #4A4F59">£0 · paid off every month</div></div><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A4F59">Money I keep</div>
+      <div style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 15px 19px 16px 20px / 20px 16px 19px 15px">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; border-bottom: 2px solid #DDD8CC; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="savings" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">Savings</div><div style="font-size: 13px; color: #4A4F59">£6,200 · easy-access account</div></div><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="pension" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">Pension</div><div style="font-size: 13px; color: #4A4F59">£18,400 · workplace pension</div></div><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+      </div>
+    </div>
+
+    <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 60px; background: #FFFFFF; border: 3px solid #16181D; border-radius: 19px 16px 20px 15px / 16px 20px 15px 19px; box-shadow: 4px 5px 0 #16181D; color: #16181D; text-decoration: none"><dc-import name="Icon" icon="cart" size="{{32}}" hint-size="32px,32px"></dc-import><div style="flex: 1"><div style="font-size: 17px; font-weight: 700">Buy something</div><div style="font-size: 13px; color: #4A4F59">Homes, cars, holidays</div></div><svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#16181D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2 L10 10 L2 18"></path></svg></a>
+  </div>
+
+  <nav aria-label="Tabs" style="height: 80px; flex: none; background: #FFFFFF; border-top: 3px solid #16181D; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center">
+    <a href="Money-Home.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-money" size="{{28}}" hint-size="28px,28px"></dc-import>Money</a>
+    <a href="Life-Main.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px; font-weight: 700"><dc-import name="Icon" icon="tab-life" size="{{28}}" active="{{true}}" hint-size="28px,28px"></dc-import>Life</a>
+    <a href="Play-Lobby.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-play" size="{{28}}" hint-size="28px,28px"></dc-import>Play</a>
+    <a href="You-Profile.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: #16181D; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-you" size="{{28}}" hint-size="28px,28px"></dc-import>You</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

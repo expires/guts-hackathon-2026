@@ -24,6 +24,7 @@ class PresetExtras:
     has_partner: bool = False
     married: bool = False
     children: int = 0
+    base_year: int = 2024  # the year the preset's money values describe
 
 
 _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
@@ -43,7 +44,14 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
             housing="rent",
             blurb="NHS nurse renting in Leeds.",
         ),
-        PresetExtras(job_title="Staff nurse", years_in_role=2, student_loan=18000.0, pension=4100.0, smarts_bonus=8),
+        PresetExtras(
+            job_title="Staff nurse",
+            years_in_role=2,
+            student_loan=18000.0,
+            pension=4100.0,
+            smarts_bonus=8,
+            base_year=2006,
+        ),
     ),
     (
         CharacterSpec(
@@ -70,6 +78,7 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
             investments=25000.0,
             smarts_bonus=12,
             has_partner=True,
+            base_year=2006,
         ),
     ),
     (
@@ -88,7 +97,9 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
             housing="rent",
             blurb="Second-year student with a weekend job.",
         ),
-        PresetExtras(job_title="Bar staff (part time)", student_loan=27000.0, smarts_bonus=10, has_car=False),
+        PresetExtras(
+            job_title="Bar staff (part time)", student_loan=27000.0, smarts_bonus=10, has_car=False, base_year=2024
+        ),
     ),
     (
         CharacterSpec(
@@ -106,7 +117,9 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
             housing="rent",
             blurb="Self-employed plumber with a van loan.",
         ),
-        PresetExtras(job_title="Plumber", years_in_role=8, pension=6000.0, has_car=True, has_partner=True),
+        PresetExtras(
+            job_title="Plumber", years_in_role=8, pension=6000.0, has_car=True, has_partner=True, base_year=2022
+        ),
     ),
     (
         CharacterSpec(
@@ -125,7 +138,7 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
             property_value=245000.0,
             blurb="Retired teaching assistant who owns her home.",
         ),
-        PresetExtras(job_title="Retired", pension=60000.0, married=True, has_partner=True, children=2),
+        PresetExtras(job_title="Retired", pension=60000.0, married=True, has_partner=True, children=2, base_year=2022),
     ),
     (
         CharacterSpec(
@@ -145,7 +158,14 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
             mortgage_balance=120000.0,
             blurb="Secondary teacher in Glasgow. Some data uses the UK average.",
         ),
-        PresetExtras(job_title="Maths teacher", years_in_role=6, student_loan=9000.0, pension=21000.0, smarts_bonus=10),
+        PresetExtras(
+            job_title="Maths teacher",
+            years_in_role=6,
+            student_loan=9000.0,
+            pension=21000.0,
+            smarts_bonus=10,
+            base_year=2022,
+        ),
     ),
 ]
 
@@ -162,6 +182,15 @@ def preset(preset_id: str) -> CharacterSpec | None:
         if c.id == preset_id:
             return c.model_copy()
     return None
+
+
+def is_unedited_preset(character: CharacterSpec) -> bool:
+    """True when the character is a preset with its money values unchanged."""
+    base = next((c for c, _ in _PRESETS if c.id is not None and c.id == character.id), None)
+    if base is None:
+        return False
+    fields = ("annual_income", "savings", "debt", "property_value", "mortgage_balance", "region", "housing")
+    return all(getattr(base, f) == getattr(character, f) for f in fields)
 
 
 def preset_extras(character_id: str | None) -> PresetExtras:

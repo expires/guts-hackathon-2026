@@ -91,7 +91,66 @@ final class NextMoveWhyViewModel {
             sources: move.sources.map(StateMapping.sourceChip),
             lessonPhase: lessonPhase,
             lesson: lesson.map { .init(title: $0.title, sentences: $0.sentences, personal: $0.personal) },
-            isSampleData: isSampleData
+            isSampleData: isSampleData,
+            confidence: move.confidence,
+            confidenceChip: String(NextMoveViewModel.confidenceWord(move.confidence).split(separator: " ").first ?? ""),
+            worstCaseText: "Worst past period: " + NextMoveViewModel.impactText(move.worstCasePerYear),
+            rates: rates(move),
+            ratesSourceText: sourcesLine(move.sources + move.evidence.compactMap(\.source))
         )
+    }
+
+    /// Rate bars from evidence facts: `rate_<option id>` (for example `rate_5y`, `rate_tracker`) and `<option id>_pct`.
+    /// `current_rate` is shown as the dashed reference bar ("Your rate now").
+    static func rates(_ move: Move) -> [NextMoveWhyViewState.RateBar] {
+        let recommended = move.options.first { $0.isRecommended == true }?.id
+        var bars: [NextMoveWhyViewState.RateBar] = []
+        func add(id: String, label: String, value: Double, optionID: String?, reference: Bool) {
+            guard !bars.contains(where: { $0.id == id }) else { return }
+            bars.append(.init(
+                id: id, label: label, value: value,
+                valueText: value.formatted(.number.precision(.fractionLength(2))) + "%",
+                fraction: 0, isHighlighted: optionID != nil && optionID == recommended, isReference: reference
+            ))
+        }
+        for point in move.evidence {
+            guard let facts = point.facts?.additionalProperties else { continue }
+            for option in move.options {
+                let candidates = ["rate_" + option.id, "rate_" + option.id.replacingOccurrences(of: "fix_", with: ""), option.id + "_pct"]
+                if let key = candidates.first(where: { facts[$0] != nil }), let value = facts[key] {
+                    add(id: key, label: option.label, value: value, optionID: option.id, reference: false)
+                }
+            }
+            if let current = facts["current_rate"] {
+                add(id: "current_rate", label: "Your rate now", value: current, optionID: nil, reference: true)
+            }
+            for key in facts.keys.sorted() where key.hasPrefix("bank_rate") {
+                if let value = facts[key] { add(id: key, label: "Bank Rate", value: value, optionID: nil, reference: true) }
+            }
+        }
+        let top = bars.map(\.value).max() ?? 1
+        return bars.map { var bar = $0; bar.fraction = top > 0 ? bar.value / top : 0; return bar }
+    }
+
+    /// One line for all sources, grouped by source with the worst status: "Bank of England · live".
+    static func sourcesLine(_ refs: [SourceRef]) -> String? {
+        var order: [String] = []
+        var worst: [String: DataStatus] = [:]
+        let rank: [DataStatus: Int] = [.live: 0, .cached: 1, .mock: 2]
+        for ref in refs {
+            let name = StateMapping.sourceName(ref.source)
+            let status = StateMapping.status(ref.status.rawValue)
+            if worst[name] == nil { order.append(name) }
+            if (rank[status] ?? 0) >= (rank[worst[name] ?? .live] ?? 0) { worst[name] = status }
+        }
+        guard !order.isEmpty else { return nil }
+        return order.map { "\($0) · \(worst[$0]!.label)" }.joined(separator: ", ")
+    }
+
+    /// "fix_5y" -> "5-year fix", "fix_2y" -> "2-year fix", "bank_rate" -> "Bank Rate".
+    static func rateLabel(_ id: String) -> String {
+        if id.hasPrefix("bank_rate") { return "Bank Rate" }
+        if id.hasPrefix("fix_"), let years = Int(id.dropFirst(4).dropLast()) { return "\(years)-year fix" }
+        return id.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }

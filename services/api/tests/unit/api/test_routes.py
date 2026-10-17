@@ -161,3 +161,53 @@ async def test_next_move_auth_and_validation(client: httpx.AsyncClient) -> None:
     for path in ("/v1/next-move/test", "/v1/plan"):
         r = await client.post(path, json={"bogus": 1}, headers=auth)
         assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+async def test_reads_survive_store_down(client: httpx.AsyncClient) -> None:
+    """V3 G2, G3, N3: next move and prediction work without the store; writes say saving is down."""
+    from lifeline_api.main import app
+    from lifeline_api.store import StoreUnavailable
+
+    auth = await _auth(client, "demo-presenter-01")
+
+    class DownStore:
+        def __getattr__(self, name: str) -> object:
+            async def fail(*_: object, **__: object) -> None:
+                raise StoreUnavailable()
+
+            return fail
+
+    real = app.state.lifeline.store
+    app.state.lifeline.store = DownStore()
+    try:
+        r = await client.get("/v1/next-move", headers=auth)
+        assert r.status_code == 200 and r.json()["top"]["id"]
+        r = await client.get("/v1/finance/prediction", headers=auth)
+        assert r.status_code == 200 and "guess" not in r.json()
+        r = await client.post("/v1/plan", json={"move_id": "fix_mortgage"}, headers=auth)
+        assert r.status_code == 503
+        assert r.json()["error"]["message"] == "Saving is down. Try again in a minute."
+    finally:
+        app.state.lifeline.store = real
+
+
+@pytest.mark.parametrize(
+    "path,params",
+    [
+        ("/v1/finance/spending", {"month": "2026-13"}),
+        ("/v1/finance/spending", {"month": "2026-00"}),
+        ("/v1/finance/budgets", {"month": "2026-13"}),
+        ("/v1/finance/prediction", {"date": "2026-02-30"}),
+        ("/v1/finance/prediction", {"date": "2026-13-01"}),
+    ],
+)
+async def test_impossible_calendar_values_are_422(client: httpx.AsyncClient, path: str, params: dict[str, str]) -> None:
+    """V3 N4."""
+    r = await client.get(path, params=params, headers=await _auth(client))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+async def test_guess_for_impossible_day_is_422(client: httpx.AsyncClient) -> None:
+    r = await client.post("/v1/finance/guesses", json={"date": "2026-02-30", "amount": 10},
+                          headers=await _auth(client))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"

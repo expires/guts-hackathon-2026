@@ -1,0 +1,183 @@
+{
+  "move_id": "fix_mortgage",
+  "period": {
+    "start": 2021,
+    "end": 2023,
+    "label": "2021-2023 rate shock (stress test)"
+  },
+  "character": {
+    "id": "self-homeowner-leeds",
+    "name": "Priya Shah",
+    "emoji": "🙂",
+    "sex": "female",
+    "occupation": "Nurse",
+    "region": "yorkshire-and-the-humber",
+    "town": "Leeds",
+    "postcode": "LS6 1AN",
+    "birth_year": 1986,
+    "annual_income": 33120.0,
+    "savings": 6850.42,
+    "debt": 0.0,
+    "housing": "mortgage",
+    "property_value": 240000.0,
+    "mortgage_balance": 180000.0,
+    "blurb": "Built from sample bank data."
+  },
+  "outcomes": [
+    {
+      "option_id": "tracker",
+      "label": "Take a tracker",
+      "is_recommended": true,
+      "life_id": "lf_e66e4a57c4f9bcaf",
+      "net_worth_path": [
+        {
+          "date": "2020-12-31",
+          "value": 68992.42
+        },
+        {
+          "date": "2021-12-31",
+          "value": 96952.71
+        },
+        {
+          "date": "2022-12-31",
+          "value": 129877.28
+        },
+        {
+          "date": "2023-12-31",
+          "value": 133299.52
+        }
+      ],
+      "end_net_worth": 133299.52,
+      "total_cost": 33245.46,
+      "missed_payments": 0,
+      "worst_year": 2023,
+      "worst_year_change": 3422.24,
+      "index": 98.62
+    },
+    {
+      "option_id": "fix_5y",
+      "label": "Fix for 5 years",
+      "is_recommended": false,
+      "life_id": "lf_a98fd18b2dcf20d4",
+      "net_worth_path": [
+        {
+          "date": "2020-12-31",
+          "value": 68992.42
+        },
+        {
+          "date": "2021-12-31",
+          "value": 96952.71
+        },
+        {
+          "date": "2022-12-31",
+          "value": 131551.61
+        },
+        {
+          "date": "2023-12-31",
+          "value": 137838.71
+        }
+      ],
+      "end_net_worth": 137838.71,
+      "total_cost": 26005.19,
+      "missed_payments": 0,
+      "worst_year": 2023,
+      "worst_year_change": 6287.1,
+      "index": 99.99
+    },
+    {
+      "option_id": "fix_2y",
+      "label": "Fix for 2 years",
+      "is_recommended": false,
+      "life_id": "lf_fbe1eecfea483f31",
+      "net_worth_path": [
+        {
+          "date": "2020-12-31",
+          "value": 68992.42
+        },
+        {
+          "date": "2021-12-31",
+          "value": 96952.71
+        },
+        {
+          "date": "2022-12-31",
+          "value": 131566.32
+        },
+        {
+          "date": "2023-12-31",
+          "value": 137866.35
+        }
+      ],
+      "end_net_worth": 137866.35,
+      "total_cost": 25965.9,
+      "missed_payments": 0,
+      "worst_year": 2023,
+      "worst_year_change": 6300.03,
+      "index": 100.0
+    },
+    {
+      "option_id": "keep",
+      "label": "Do nothing",
+      "is_recommended": false,
+      "life_id": "lf_8d9f21d2bdea5ab1",
+      "net_worth_path": [
+        {
+          "date": "2020-12-31",
+          "value": 68992.42
+        },
+        {
+          "date": "2021-12-31",
+          "value": 96952.71
+        },
+        {
+          "date": "2022-12-31",
+          "value": 128702.33
+        },
+        {
+          "date": "2023-12-31",
+          "value": 131168.25
+        }
+      ],
+      "end_net_worth": 131168.25,
+      "total_cost": 38943.62,
+      "missed_payments": 0,
+      "worst_year": 2023,
+      "worst_year_change": 2465.92,
+      "index": 97.97
+    }
+  ],
+  "summary": "In the 2021-2023 rate shock (stress test), “Take a tracker” cost £7,280 more than “Fix for 2 years”.",
+  "evidence_sentence": "In 8 of 10 similar cases this was the best choice.",
+  "sources": [
+    {
+      "source": "boe",
+      "series_id": "IUMBEDR",
+      "status": "live"
+    },
+    {
+      "source": "boe",
+      "series_id": "IUMBV34",
+      "status": "live"
+    },
+    {
+      "source": "boe",
+      "series_id": "IUMBV42",
+      "status": "live"
+    },
+    {
+      "source": "boe",
+      "series_id": "IUMTLMV",
+      "status": "live"
+    },
+    {
+      "source": "boe",
+      "series_id": "IUMBV48",
+      "status": "live"
+    },
+    {
+      "source": "bank:fixtures",
+      "series_id": "homeowner-leeds",
+      "status": "mock",
+      "note": "Sample data"
+    }
+  ]
+}

@@ -11,19 +11,20 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Request
 
 from lifeline_api import money
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError, not_found
+from lifeline_api.explain_bridge import explain_moves
 from lifeline_api.routes.lives import MAX_SEED, new_life_id
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
-from lifeline_api.store import LifeRecord, macro_hash
+from lifeline_api.store import LifeRecord, StoreUnavailable, macro_hash
 from lifeline_contracts.domain import CharacterSpec, Life
 from lifeline_contracts.finance import Point
 from lifeline_contracts.macro import MacroTable
@@ -36,9 +37,12 @@ from lifeline_contracts.next_move import (
     PlanResponse,
     TestMoveRequest,
     TestMoveResult,
+    TestPeriod,
 )
 from lifeline_engine import next_move as next_move_engine
 from lifeline_sim import api as sim_api
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["next-move"])
 
@@ -61,12 +65,18 @@ async def _compute(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
     snap = await money.snapshot(state, sub)
     table = await state.hub.macro_table()
     digest = macro_hash(table)
-    await state.store.put_macro(digest, table)
     resp = await call_pure(
         next_move_engine.next_move, snap, table, money.today(snap), subject_seed(sub), money.returns()
     )
     resp = resp.model_copy(update={"meta": money.meta(snap), "generated_at": _utc_now()})
-    await state.store.put_doc(sub, DOC_NEXT_MOVE, {"response": resp.model_dump(mode="json"), "macro_hash": digest})
+    resp = await explain_moves(resp)
+    try:
+        await state.store.put_macro(digest, table)
+        await state.store.put_doc(sub, DOC_NEXT_MOVE,
+                                  {"response": resp.model_dump(mode="json"), "macro_hash": digest})
+    except StoreUnavailable:
+        # The store is only a cache for this read. Test it and Do this recompute when they need it.
+        log.warning("next move not cached: store unavailable")
     return resp, digest
 
 
@@ -116,7 +126,11 @@ def shift_to_period(character: CharacterSpec, this_year: int, start_year: int) -
 
 
 def _year_end(life: Life) -> list[tuple[int, float]]:
-    """Net worth at the end of each year (the last history entry per year), in year order."""
+    """Net worth at the end of each year (the last history entry per year), in year order.
+
+    The first point is the setup year (test_period.start - 1, dated 31 December): the starting point on the
+    eve of the test period. The worst year is measured against it, so every test-period year counts.
+    """
     by_year: dict[int, float] = {}
     for h in life.history:
         by_year[h.year] = h.net_worth
@@ -131,7 +145,9 @@ def worst_year_of(path: list[tuple[int, float]], fallback_year: int) -> tuple[in
     return min(changes, key=lambda c: (c[1], c[0]))
 
 
-def outcome_from_life(option_id: str, label: str, is_recommended: bool, life: Life) -> OptionOutcome:
+def outcome_from_life(
+    option_id: str, label: str, is_recommended: bool, life: Life, total_cost: float
+) -> OptionOutcome:
     path = _year_end(life)
     points = [Point(date=f"{y}-12-31", value=round(v, 2)) for y, v in path]
     worst_year, worst_change = worst_year_of(path, life.year)
@@ -142,7 +158,7 @@ def outcome_from_life(option_id: str, label: str, is_recommended: bool, life: Li
         life_id=life.id,
         net_worth_path=points,
         end_net_worth=round(life.finances.net_worth, 2),
-        total_cost=round(scenario_cost(life), 2),
+        total_cost=round(total_cost, 2),
         missed_payments=life.index.missed_payments,
         worst_year=worst_year,
         worst_year_change=round(worst_change, 2),
@@ -150,29 +166,32 @@ def outcome_from_life(option_id: str, label: str, is_recommended: bool, life: Li
     )
 
 
-def scenario_cost(life: Life) -> float:
-    """GBP paid over the period. Uses the sim's own figure when it reports one."""
-    fn: Any = getattr(sim_api, "scenario_cost", None)
-    if fn is not None:
-        return float(fn(life))
-    return 0.0
-
-
 def _gbp(x: float) -> str:
     return f"£{abs(x):,.0f}"
 
 
-def summary_sentence(outcomes: list[OptionOutcome], end_year: int) -> str:
-    """Plain English. Every number comes from the outcomes."""
-    ranked = sorted(outcomes, key=lambda o: o.end_net_worth, reverse=True)
-    best, runner = ranked[0], ranked[1] if len(ranked) > 1 else None
-    if runner is None:
-        return f"“{best.label}” ended {end_year} with a net worth of {_gbp(best.end_net_worth)}."
-    gap = best.end_net_worth - runner.end_net_worth
-    if gap < 1:
-        return f"“{best.label}” and “{runner.label}” ended {end_year} level."
-    return (f"“{best.label}” left you {_gbp(gap)} better off by {end_year} "
-            f"than “{runner.label}”.")
+def summary_sentence(outcomes: list[OptionOutcome], period: TestPeriod) -> str:
+    """The recommended option vs the best other option, honestly, also when it loses.
+
+    Plain English. Every number comes from the outcomes. "Best" means the highest net worth at the end.
+    """
+    rec = next((o for o in outcomes if o.is_recommended), outcomes[0])
+    others = [o for o in outcomes if o is not rec]
+    end = period.end
+    if not others:
+        return f"\u201c{rec.label}\u201d ended {end} with a net worth of {_gbp(rec.end_net_worth)}."
+    other = max(others, key=lambda o: o.end_net_worth)
+    gap = rec.end_net_worth - other.end_net_worth
+    if abs(gap) < 1:
+        return f"\u201c{rec.label}\u201d and \u201c{other.label}\u201d ended {end} level."
+    if gap > 0:
+        return f"\u201c{rec.label}\u201d left you {_gbp(gap)} better off by {end} than \u201c{other.label}\u201d."
+    extra_cost = rec.total_cost - other.total_cost
+    if extra_cost >= 1:
+        return (f"In the {period.label}, \u201c{rec.label}\u201d cost {_gbp(extra_cost)} more "
+                f"than \u201c{other.label}\u201d.")
+    return (f"In the {period.label}, \u201c{rec.label}\u201d left you {_gbp(gap)} worse off by {end} "
+            f"than \u201c{other.label}\u201d.")
 
 
 def _evidence_sentence(move: Move) -> str:
@@ -182,12 +201,10 @@ def _evidence_sentence(move: Move) -> str:
 
 async def _play(state: AppState, sub: str, character: CharacterSpec, move: Move, option_id: str, seed: int,
                 table: MacroTable, digest: str) -> Life:
-    assert move.test_period is not None
+    start, end = next_move_engine.scenario_years(move)
     policy: dict[str, str] = await call_pure(next_move_engine.option_policy, move, option_id)
     life_id = new_life_id()
-    life: Life = await call_pure(
-        sim_api.play_scenario, life_id, character, move.test_period.start, move.test_period.end, policy, seed, table
-    )
+    life: Life = await call_pure(sim_api.play_scenario, life_id, character, start, end, policy, seed, table)
     await state.store.create(LifeRecord(id=life.id, owner=sub, life=life, macro_hash=digest))
     return life
 
@@ -214,20 +231,24 @@ async def test_next_move(body: TestMoveRequest, request: Request, sub: Subject) 
 
     snap = await money.snapshot(state, sub)
     _, character = await call_pure(money.engine_profile, sub, snap)
-    character = shift_to_period(character, money.today(snap).year, move.test_period.start)
+    # The sim runs events from start + 1, so start is the year before the test period (W2 scenario_years).
+    start, _ = next_move_engine.scenario_years(move)
+    character = shift_to_period(character, money.today(snap).year, start)
     seed = scenario_seed(sub, move.id)
     lives = await asyncio.gather(*(_play(state, sub, character, move, oid, seed, table, digest) for oid in wanted))
 
+    # Always pass the pinned table: the sim's fallback table is process-wide and unsafe across requests.
+    costs = await asyncio.gather(*(call_pure(sim_api.scenario_cost, life, table) for life in lives))
     outcomes = [
-        outcome_from_life(oid, by_id[oid].label, by_id[oid].is_recommended, life)
-        for oid, life in zip(wanted, lives, strict=True)
+        outcome_from_life(oid, by_id[oid].label, by_id[oid].is_recommended, life, cost)
+        for oid, life, cost in zip(wanted, lives, costs, strict=True)
     ]
     return TestMoveResult(
         move_id=move.id,
         period=move.test_period,
         character=character,
         outcomes=outcomes,
-        summary=summary_sentence(outcomes, move.test_period.end),
+        summary=summary_sentence(outcomes, move.test_period),
         evidence_sentence=_evidence_sentence(move),
         sources=move.sources,
     )

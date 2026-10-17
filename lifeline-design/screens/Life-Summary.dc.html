@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Life summary</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 20px; background: #F5F2EA; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; gap: 16px; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <div aria-hidden="true" style="width: 48px; height: 48px; flex: none; box-sizing: border-box; border: 3px solid #16181D; border-radius: 18px 22px 17px 21px / 21px 17px 22px 18px; background: #A78BFA; display: flex; align-items: center; justify-content: center"><dc-import name="Icon" icon="face-older-woman" size="{{40}}" hint-size="40px,40px"></dc-import></div>
+    <div style="flex: 1">
+      <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">Priya's life</h1>
+      <div style="font-size: 13px; color: #4A4F59">1992 – 2071 · lived to 79</div>
+    </div>
+    <span style="font-size: 13px; font-weight: 700; padding: 3px 10px; border: 2px solid #16181D; border-radius: 12px 16px 11px 15px / 15px 11px 16px 12px; background: #FFFFFF">Game result</span>
+  </div>
+
+  <section aria-label="INDEX score" style="background: #FFFFFF; border: 3px solid #16181D; border-radius: 22px 30px 20px 28px / 28px 20px 30px 22px; box-shadow: 6px 7px 0 #16181D; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 14px">
+      <div>
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em">INDEX</div>
+        <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1">124</div>
+      </div>
+      <div style="font-size: 17px; line-height: 1.35">24 points ahead of your autopilot twin.</div>
+    </div>
+    <svg width="100%" height="110" viewBox="0 0 330 110" fill="none" role="img" aria-label="Net worth by age. Your line ends above the autopilot twin line.">
+      <path d="M0 100 H330" stroke="#DDD8CC" stroke-width="1.5"></path>
+      <path d="M4 98 C60 94 100 86 140 76 C180 66 220 54 260 50 C290 48 310 56 322 62" stroke="#4A4F59" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round"></path>
+      <path d="M4 98 C50 95 80 92 110 84 C150 70 190 40 240 24 C280 14 305 18 322 26" stroke="#16181D" stroke-width="4" stroke-linecap="round"></path>
+      <text x="270" y="12" font-size="13" font-weight="700" fill="#16181D" font-family="Atkinson Hyperlegible, sans-serif">You</text>
+      <text x="250" y="74" font-size="13" fill="#4A4F59" font-family="Atkinson Hyperlegible, sans-serif">Autopilot</text>
+    </svg>
+    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4A4F59"><span>Age 18</span><span>Net worth by age</span><span>79</span></div>
+  </section>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div style="font-size: 17px; font-weight: 700">Ribbons · 4 earned</div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center"><svg width="48" height="56" viewBox="0 0 48 56" aria-hidden="true"><path d="M16 34 L10 54 L18 49 L22 55 L24 36 M32 34 L38 54 L30 49 L26 55 L24 36" fill="#FFA94D" stroke="#16181D" stroke-width="2.5" stroke-linejoin="round"></path><circle cx="24" cy="22" r="19" fill="#FFA94D" stroke="#16181D" stroke-width="3"></circle><circle cx="24" cy="22" r="10" fill="#FFFFFF" stroke="#16181D" stroke-width="2.5"></circle></svg><div style="font-size: 13px; line-height: 1.25">Rate shock survivor</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center"><svg width="48" height="56" viewBox="0 0 48 56" aria-hidden="true"><path d="M16 34 L10 54 L18 49 L22 55 L24 36 M32 34 L38 54 L30 49 L26 55 L24 36" fill="#3FB57A" stroke="#16181D" stroke-width="2.5" stroke-linejoin="round"></path><circle cx="24" cy="22" r="19" fill="#3FB57A" stroke="#16181D" stroke-width="3"></circle><circle cx="24" cy="22" r="10" fill="#FFFFFF" stroke="#16181D" stroke-width="2.5"></circle></svg><div style="font-size: 13px; line-height: 1.25">Debt free at 54</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center"><svg width="48" height="56" viewBox="0 0 48 56" aria-hidden="true"><path d="M16 34 L10 54 L18 49 L22 55 L24 36 M32 34 L38 54 L30 49 L26 55 L24 36" fill="#6C8EF5" stroke="#16181D" stroke-width="2.5" stroke-linejoin="round"></path><circle cx="24" cy="22" r="19" fill="#6C8EF5" stroke="#16181D" stroke-width="3"></circle><circle cx="24" cy="22" r="10" fill="#FFFFFF" stroke="#16181D" stroke-width="2.5"></circle></svg><div style="font-size: 13px; line-height: 1.25">Nurse for 38 years</div></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center"><svg width="48" height="56" viewBox="0 0 48 56" aria-hidden="true"><path d="M16 34 L10 54 L18 49 L22 55 L24 36 M32 34 L38 54 L30 49 L26 55 L24 36" fill="#A78BFA" stroke="#16181D" stroke-width="2.5" stroke-linejoin="round"></path><circle cx="24" cy="22" r="19" fill="#A78BFA" stroke="#16181D" stroke-width="3"></circle><circle cx="24" cy="22" r="10" fill="#FFFFFF" stroke="#16181D" stroke-width="2.5"></circle></svg><div style="font-size: 13px; line-height: 1.25">Family first</div></div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column">
+    <div style="font-size: 17px; font-weight: 700; padding-bottom: 4px">Big moments</div>
+    <div style="display: flex; align-items: center; gap: 10px; height: 40px; border-bottom: 2px solid #DDD8CC"><span style="width: 32px; font-size: 13px; font-weight: 700">29</span><span style="flex: 1; font-size: 17px">Fixed for 2 years</span><b style="font-size: 13px">−4</b></div>
+    <div style="display: flex; align-items: center; gap: 10px; height: 40px; border-bottom: 2px solid #DDD8CC"><span style="width: 32px; font-size: 13px; font-weight: 700">34</span><span style="flex: 1; font-size: 17px">Fixed for 5 years</span><b style="font-size: 13px">+3</b></div>
+    <div style="display: flex; align-items: center; gap: 10px; height: 40px"><span style="width: 32px; font-size: 13px; font-weight: 700">41</span><span style="flex: 1; font-size: 17px">Raised pension to 8%</span><b style="font-size: 13px">+11</b></div>
+  </div>
+
+  <div style="margin-top: auto; display: flex; gap: 8px">
+    <button type="button" style="flex: 1; height: 52px; border: 3px solid #16181D; border-radius: 14px 20px 12px 18px / 18px 12px 20px 14px; background: #16181D; color: #FFFFFF; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Share my life</button>
+    <button type="button" style="flex: 1; height: 52px; border: 3px solid #16181D; border-radius: 18px 12px 20px 14px / 14px 20px 12px 18px; background: #FFFFFF; color: #16181D; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Play again</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
