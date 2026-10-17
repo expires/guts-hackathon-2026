@@ -14,6 +14,8 @@ from typing import Literal
 
 from lifeline_contracts.finance import Account, AccountHolder, FinanceSnapshot, Transaction
 from lifeline_data.base import PayloadError, parse_number
+from lifeline_data.statements import pdf as pdf_reader
+from lifeline_data.statements.detect import detect_debts, detect_income, detect_is_student
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 20_000
@@ -24,7 +26,8 @@ Provider = Literal["monzo", "revolut", "pdf", "unknown"]
 ImportStatus = Literal["done", "partial", "failed"]
 
 PDF_WARNING = (
-    "PDF statements are not supported yet. Export a CSV from your bank app (Monzo or Revolut) and upload that."
+    "We could not read the transactions in this PDF. Export a CSV from your bank app (Monzo or Revolut) "
+    "and upload that."
 )
 
 # Header columns that identify each export. Matching is case-insensitive.
@@ -204,6 +207,45 @@ def _parse_revolut(rows: list[dict[str, str]], warn: _Warnings) -> ParsedStateme
     return out
 
 
+def _parse_pdf(content: bytes) -> ParsedStatement:
+    """Text PDF statement (see statements/pdf.py). Rows keep file order; the last row's balance is the closing
+    balance."""
+    rows, text = pdf_reader.extract_rows(content)
+    if not rows:
+        return _failed("pdf", PDF_WARNING)
+    is_monzo = "monzo" in text.lower()
+    account_id = "monzo_current" if is_monzo else "pdf_current"
+    out = ParsedStatement(provider="pdf", status="done")
+    warn = _Warnings()
+    for n, (day, desc_raw, amount_raw, _) in enumerate(rows[:MAX_ROWS], start=1):
+        out.rows_read += 1
+        try:
+            if abs(amount_raw) > MAX_AMOUNT:
+                raise PayloadError("amount out of range")
+            desc = text_cell(desc_raw, 200)
+            if not desc:
+                raise PayloadError("no description")
+            name = text_cell(desc.split(" - ")[0], 80)
+            out.transactions.append(Transaction(
+                id=_tx_id("pdf", n, day.isoformat(), amount_raw, desc), account_id=account_id,
+                date=day.isoformat(), amount=round(amount_raw, 2), description=desc, merchant=name or None,
+            ))
+        except (PayloadError, ValueError) as exc:
+            out.rows_rejected += 1
+            warn.add(f"Line {n} skipped: {clean(exc, 120)}.")
+    if len(rows) > MAX_ROWS:
+        return _failed("pdf", f"The file has more than {MAX_ROWS:,} rows.")
+    closing = next((b for *_, b in reversed(rows) if b is not None), None)
+    out.balance_known = closing is not None
+    out.accounts = [Account(id=account_id, name="Monzo Current Account" if is_monzo else "Current account",
+                            kind="current", provider="Monzo" if is_monzo else "PDF statement",
+                            balance=round(closing, 2) if closing is not None else 0.0)]
+    if closing is None and out.transactions:
+        warn.add("This statement does not show your balance. Add it on the next screen.")
+    out.warnings = warn.done()
+    return out
+
+
 _PARSERS: dict[str, tuple[set[str], Callable[[list[dict[str, str]], _Warnings], ParsedStatement]]] = {
     "monzo": (MONZO_REQUIRED, _parse_monzo),
     "revolut": (REVOLUT_REQUIRED, _parse_revolut),
@@ -220,7 +262,11 @@ def parse_statement(content: bytes, filename: str | None = None) -> ParsedStatem
         if len(content) > MAX_BYTES:
             return _failed("unknown", "The file is larger than 5 MB.")
         if content[:5] == b"%PDF-" or (filename or "").lower().endswith(".pdf"):
-            return _failed("pdf", PDF_WARNING)
+            parsed = _parse_pdf(content)
+            parsed.transactions.sort(key=lambda t: (t.date, t.id))
+            if parsed.status != "failed" and parsed.rows_rejected:
+                parsed.status = "partial"
+            return parsed
         if not content.strip():
             return _failed("unknown", "The file is empty.")
         text = _decode(content)
@@ -259,17 +305,23 @@ def to_snapshot(
     postcode: str | None = None,
     holder: AccountHolder | None = None,
 ) -> FinanceSnapshot:
-    """FinanceSnapshot from a parsed statement: status "live", source "statement"."""
+    """FinanceSnapshot from a parsed statement: status "live", source "statement".
+    Income sources, debts and student status come from `detect` (only what the statement shows)."""
     if parsed.status == "failed":
         raise ValueError("cannot build a snapshot from a failed import")
+    as_of = as_of or parsed.last_date or date.today().isoformat()
+    income = detect_income(parsed.transactions)
     return FinanceSnapshot(
         status="live",
         source="statement",
         persona=None,
-        as_of=as_of or parsed.last_date or date.today().isoformat(),
+        as_of=as_of,
         accounts=parsed.accounts,
         transactions=parsed.transactions,
         region=region,
         postcode=postcode,
         holder=holder,
+        is_student=detect_is_student(parsed.transactions, income),
+        income_sources=income,
+        debts=detect_debts(parsed.transactions, parsed.accounts, parsed.balance_known, date.fromisoformat(as_of)),
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -54,43 +55,71 @@ async def _context(state: Any, sub: str, body: ChatRequest, thread: dict[str, An
 @router.post("/v1/chat", response_model=ChatResponse, response_model_exclude_none=True)
 async def ask_penny(body: ChatRequest, request: Request, sub: Subject) -> ChatResponse:
     state, thread, life, user_mid = await _open(request, sub, body)
-    ctx, digest = await _context(state, sub, body, thread, life, user_mid)
-    resp = await penny.answer(body, ctx)
-    await chat_service.store_tool_lives(state, sub, ctx, digest)
+    try:
+        ctx, digest = await _context(state, sub, body, thread, life, user_mid)
+    except Exception as exc:
+        log.warning("chat: context failed (%s)", type(exc).__name__)
+        resp = chat_service.unavailable_response(thread, user_mid)
+    else:
+        resp = await penny.answer(body, ctx)
+        await chat_service.store_tool_lives(state, sub, ctx, digest)
     chat_service.add_penny_message(thread, resp)
     await chat_service.save_thread(state, sub, thread)
     return resp
 
 
+KEEPALIVE_SECONDS = 2.0
+
+
 @router.post("/v1/chat/stream")
 async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) -> StreamingResponse:
-    """Server-Sent Events: `data: <ChatStreamEvent JSON>` per event. Order: reaction, tool_step*,
-    verifying?, bubble+, done. The reaction goes out first, before the tool context is built, so it arrives
-    within a second. The thread is stored when `done` arrives. POST /v1/chat is the fallback."""
+    """Server-Sent Events: `data: <ChatStreamEvent JSON>` per event. Order: reaction, keepalive*, tool_step*,
+    verifying?, bubble+, done (ADR 0051).
+
+    The reaction goes out first, before the tool context is built, so it arrives within a second. While the
+    context is built a `keepalive` goes out every 2 s. If the context cannot be built: `error` with code
+    "unavailable", then `done` with "Penny is unavailable right now. Try again." The thread is stored on `done`.
+    POST /v1/chat is the fallback.
+    """
     state, thread, life, user_mid = await _open(request, sub, body)
     t0 = time.monotonic()
+    seq = 0
 
-    def own(type_: str, seq: int, **kw: Any) -> str:
+    def own(type_: str, **kw: Any) -> str:
+        nonlocal seq
         ev = ChatStreamEvent(type=type_, seq=seq, elapsed_ms=int((time.monotonic() - t0) * 1000), **kw)
+        seq += 1
         return f"data: {ev.model_dump_json(exclude_none=True)}\n\n"
 
+    async def finish(resp: ChatResponse) -> None:
+        chat_service.add_penny_message(thread, resp)
+        await chat_service.save_thread(state, sub, thread)
+
     async def events() -> AsyncIterator[str]:
-        yield own("reaction", 0, reaction=penny.quick_reaction(body))
+        nonlocal seq
+        yield own("reaction", reaction=penny.quick_reaction(body))
+        task = asyncio.ensure_future(_context(state, sub, body, thread, life, user_mid))
+        while True:
+            done, _ = await asyncio.wait({task}, timeout=KEEPALIVE_SECONDS)
+            if done:
+                break
+            yield own("keepalive")
         try:
-            ctx, digest = await _context(state, sub, body, thread, life, user_mid)
+            ctx, digest = task.result()
         except Exception as exc:
             log.warning("chat stream: context failed (%s)", type(exc).__name__)
-            yield own("error", 1, error_code="unavailable")
+            resp = chat_service.unavailable_response(thread, user_mid)
+            yield own("error", error_code="unavailable")
+            await finish(resp)
+            yield own("done", response=resp)
             return
-        seq = 1
         ev: ChatStreamEvent
         async for ev in penny.answer_stream(body, ctx):
             if ev.type == "reaction":
                 continue  # already sent
             if ev.type == "done" and ev.response is not None:
                 await chat_service.store_tool_lives(state, sub, ctx, digest)
-                chat_service.add_penny_message(thread, ev.response)
-                await chat_service.save_thread(state, sub, thread)
+                await finish(ev.response)
             ev = ev.model_copy(update={"seq": seq, "elapsed_ms": int((time.monotonic() - t0) * 1000)})
             seq += 1
             yield f"data: {ev.model_dump_json(exclude_none=True)}\n\n"

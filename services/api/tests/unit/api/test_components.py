@@ -240,3 +240,29 @@ def test_tokens_are_redacted_from_logs() -> None:
     record = logging.LogRecord("uvicorn.error", logging.INFO, __file__, 1, '%s - "WebSocket %s" [accepted]', args, None)
     assert RedactTokens().filter(record)
     assert "eyJ" not in record.getMessage() and "token=[redacted]" in record.getMessage()
+
+
+@pytest.mark.parametrize(
+    "raw,want",
+    [
+        ("Ana", "Ana"),
+        ("  Ana   Bell  ", "Ana Bell"),
+        ("evil‮gnp.exe", "evilgnp.exe"),
+        ("Flat 4 <b>£</b>", "Flat 4 b£/b"),
+        ("Zero​width⁦x", "Zerowidthx"),
+        ("Ａｎａ", "Ana"),
+        ("‮​  ", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_clean_name(raw: str | None, want: str | None) -> None:
+    from lifeline_api.names import clean_name
+
+    assert clean_name(raw, 24) == want
+
+
+def test_clean_name_length() -> None:
+    from lifeline_api.names import clean_name
+
+    assert clean_name("x" * 100, 24) == "x" * 24

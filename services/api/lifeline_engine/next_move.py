@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -44,17 +45,22 @@ from lifeline_contracts.next_move import (
     TestPeriod,
     TradeOff,
 )
+from lifeline_engine import preconditions as pre
+from lifeline_engine import rules as facts_table
+from lifeline_engine import student as stu
 from lifeline_engine import trade_offs
 from lifeline_engine.decision import _twins as nearest_twins
 from lifeline_engine.decision import candidate_starts, mortgage_interest
 from lifeline_engine.finance import monthly_payment
-from lifeline_engine.investments import Holding, concentration, spread_score
 from lifeline_engine.macro_access import latest_year, source_ref, value_or
 from lifeline_engine.money import dates, finance_meta
 from lifeline_engine.money.categorise import label as category_label
 from lifeline_engine.money.profile import (
+    costs_word,
     debt_total,
+    full_data_months,
     full_months_before,
+    known_monthly_costs,
     liquid,
     monthly_spend,
     profile,
@@ -66,7 +72,8 @@ from lifeline_engine.money.spending import by_category
 from lifeline_engine.money.text import clean_name, gbp, money_value, pct, pct_value, unsupported_numbers
 from lifeline_engine.periods import similar_years
 from lifeline_engine.population import Person
-from lifeline_engine.wording import best_choice_label, confidence_label
+from lifeline_engine.wording import best_choice_label, confidence_label, with_sample
+from lifeline_engine.wording import confidence_level as level_of
 
 FloatArray = NDArray[np.float64]
 
@@ -146,7 +153,9 @@ KIND_ORDER: tuple[MoveKind, ...] = (
     "cancel_subscription",
     "switch_subscription",
     "cut_budget",
-    "spread_investments",
+    "weekly_budget",
+    "lifetime_isa",
+    "keep_cash",
 )
 
 # Sim template tag per move kind (lifeline_sim templates, ADR 0018). Every option of a move uses the same tag.
@@ -175,7 +184,9 @@ OPTION_LABEL: dict[str, str] = {
     "cancel": "Cancel it",
     "cut": "Cut back",
     "save": "Build a safety net",
-    "spread": "Spread your investments",
+    "budget": "Keep to a weekly budget",
+    "open_lisa": "Open a Lifetime ISA",
+    "hold": "Keep it as cash",
 }
 OPTION_NUMBERS: dict[str, dict[str, float]] = {"fix_5y": {"fix_years": 5.0}, "fix_2y": {"fix_years": 2.0}}
 
@@ -183,7 +194,7 @@ OPTION_NUMBERS: dict[str, dict[str, float]] = {"fix_5y": {"fix_years": 5.0}, "fi
 # ---------- small helpers ----------
 
 
-SURE_LABEL = "A sure saving. It does not depend on markets"
+SURE_LABEL = "Based on your own numbers"  # arithmetic moves: level "high", no sample (ADR 0053)
 
 
 def _ev(text: str, facts: dict[str, float], source: SourceRef | None = None) -> EvidencePoint:
@@ -285,7 +296,6 @@ class Context:
     profile: DecisionProfile
     seed: int
     twins: list[Person] = field(default_factory=list)
-    holdings: list[Holding] = field(default_factory=list)
     _periods: dict[int, list[int]] = field(default_factory=dict)
 
     def periods(self, horizon: int) -> list[int]:
@@ -335,7 +345,19 @@ def _move(
     trade_off: TradeOff,
     deadline: str | None = None,
     cover_months: float | None = None,
+    sample_size: int | None = None,
+    sample_unit: str = "",
+    deterministic: bool = False,
+    weeks: tuple[float, float] | None = None,
+    shortfall: float | None = None,
+    level: Literal["low", "medium", "high"] | None = None,
+    no_level: bool = False,
 ) -> Candidate:
+    """`sample_size`: matched cases behind `confidence` (ADR 0053 bug 4). `deterministic`: the gain is arithmetic
+    on the user's own data, not a sampled outcome. `weeks`: (weeks until the next money, safe weekly spend) for a
+    weekly budget, shown as weeks of cover."""
+    if not pre.met(kind, ctx.snapshot, ctx.today) and impact > 0:
+        raise ValueError(f"precondition for {kind} does not hold")
     # The recommended option's label is the action, word for word (V5).
     options = [o.model_copy(update={"label": action}) if o.is_recommended else o for o in options]
     days_left = None
@@ -349,7 +371,9 @@ def _move(
         impact_per_year=round(impact, 2),
         worst_case_per_year=round(worst, 2),
         confidence=round(min(1.0, max(0.0, confidence)), 4),
-        confidence_label=confidence_text,
+        sample_size=sample_size,
+        confidence_level=None if no_level else level or level_of(confidence, sample_size, deterministic),
+        confidence_label=with_sample(confidence_text, sample_size, sample_unit),
         evidence=evidence,
         sources=sources,
         options=options,
@@ -358,7 +382,12 @@ def _move(
         testable=test_period is not None,
         test_period=test_period,
         concept_id=concept_id,
-        gain_kind="gbp_per_year" if cover_months is None else "months_of_cover",
+        gain_kind=(
+            "weeks_of_cover" if weeks is not None else "gbp_per_year" if cover_months is None else "months_of_cover"
+        ),
+        cover_weeks=None if weeks is None else round(weeks[0], 1),
+        safe_weekly_spend=None if weeks is None else round(weeks[1], 2),
+        shortfall=None if shortfall is None else round(shortfall, 2),
         cover_months=None if cover_months is None else round(cover_months, 1),
         trade_off=trade_off,
     )
@@ -574,7 +603,7 @@ def todays_rates_comparison(
 
 def _mortgage(ctx: Context) -> Candidate | None:
     m = ctx.snapshot.mortgage
-    if m is None or m.balance <= 0 or m.years_left <= 0:
+    if m is None or not (pre.fix_mortgage(ctx.snapshot, ctx.today) or pre.remortgage(ctx.snapshot, ctx.today)):
         return None
     kind: MoveKind
     deadline: str | None = None
@@ -675,7 +704,7 @@ def _mortgage(ctx: Context) -> Candidate | None:
     return _move(
         ctx, kind, kind, action, headline, impact, worst, r.confidence, best_choice_label(r.confidence),
         [e1, e2, e3], sources, _options(best, [*MORTGAGE_OPTIONS, "keep"]), stress.test_period, "interest-rates",
-        trade, deadline,
+        trade, deadline, sample_size=len(starts) + 1, sample_unit="past periods",
     )
 
 
@@ -695,9 +724,9 @@ def savings_gain(
 
 
 def _savings(ctx: Context) -> Candidate | None:
-    amount = savings_total(ctx.snapshot)
-    if amount < MIN_SAVINGS:
+    if not pre.move_savings(ctx.snapshot, ctx.today):
         return None
+    amount = savings_total(ctx.snapshot)
     measured = savings_rate_pct(ctx.snapshot, ctx.today)
     user_now = measured if measured is not None else _savings_avg(ctx.macro, ctx.year)
     best_now = _best_savings(ctx.macro, ctx.year)
@@ -716,11 +745,20 @@ def _savings(ctx: Context) -> Candidate | None:
     impact, worst = float(np.mean(user)), float(min(*user, stressed))
     if impact <= 0:
         return None
-    conf = float((ctx.grid(starts, lambda p: p.savings if p.savings > 0 else amount, amount, gain) > 0).mean())
-    rate_word = "earning about" if measured is not None else "probably earning about"
+    g_sav = ctx.grid(starts, lambda p: p.savings if p.savings > 0 else amount, amount, gain)
+    conf = float((g_sav > 0).mean())
+    if measured is not None:
+        s1 = (
+            f"You have {gbp(amount)} in savings earning about {pct(user_now)} a year. "
+            f"Easy-access accounts pay up to about {pct(best_now)} today."
+        )
+    else:  # ADR 0053 bug 6: the user's rate is unknown, so compare with the UK average and say so
+        s1 = (
+            f"You have {gbp(amount)} in savings. We do not know their rate, so we use the UK average of "
+            f"{pct(user_now)}. Easy-access accounts pay up to about {pct(best_now)} today."
+        )
     e1 = _ev(
-        f"You have {gbp(amount)} in savings {rate_word} {pct(user_now)} a year. "
-        f"Easy-access accounts pay up to about {pct(best_now)} today.",
+        s1,
         {"savings": money_value(amount), "rate": pct_value(user_now), "best_rate": pct_value(best_now)},
         source_ref(ctx.macro, MacroKey.SAVINGS_RATE, ctx.year) or _bank_ref(ctx.snapshot),
     )
@@ -740,7 +778,8 @@ def _savings(ctx: Context) -> Candidate | None:
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.SAVINGS_RATE, MacroKey.BANK_RATE]), _bank_ref(ctx.snapshot)],
         _options("switch", ["keep"]), stress.test_period, "compound-interest",
-        trade_offs.move_savings(best_now, biggest_savings_fall(ctx.macro, ctx.year)),
+        trade_offs.move_savings(best_now, biggest_savings_fall(ctx.macro, ctx.year)), sample_size=len(starts),
+        sample_unit="past periods",
     )
 
 
@@ -763,13 +802,9 @@ def biggest_savings_fall(macro: MacroTable, upto: int) -> tuple[int, float, floa
 
 def _energy(ctx: Context) -> Candidate | None:
     e = ctx.snapshot.energy
-    if e is None or e.monthly_cost <= 0:
+    if e is None or not pre.switch_energy(ctx.snapshot, ctx.today):
         return None
-    days: int | None = None
-    if e.fixed_until is not None:
-        days = (dates.parse(e.fixed_until) - ctx.today).days
-        if days > ENERGY_WINDOW_DAYS:
-            return None
+    days = pre.energy_days_left(ctx.snapshot, ctx.today)
     annual = e.monthly_cost * 12
     starts = ctx.periods(ONE_YEAR + 1)
     if not starts:
@@ -814,10 +849,11 @@ def _energy(ctx: Context) -> Candidate | None:
     return _move(
         ctx, "switch_energy", "switch_energy", "Fix your energy price",
         "Your energy price can go up" if deadline is None else f"Your energy deal ends in {days} days",
-        impact, worst, conf, confidence_label(conf), [e1, e2, e3],
+        impact, worst, conf, f"Prices rose in {rose} of {len(user)} similar past years", [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.ENERGY_TARIFF, MacroKey.ENERGY_PRICE_CHANGE]), _bank_ref(ctx.snapshot)],
         _options("fix", ["keep"]), stress.test_period, "inflation",
         trade_offs.switch_energy(e.monthly_cost, sum(1 for g in user if g < 0), len(user)), deadline,
+        sample_size=len(user), sample_unit="past years",
     )
 
 
@@ -825,7 +861,12 @@ def _energy(ctx: Context) -> Candidate | None:
 
 
 def card_rate_pct(snapshot: FinanceSnapshot, today: dates.date) -> float | None:
-    """Rate on cards and loans from interest charged in the last year. None without charges."""
+    """Rate on expensive debt: the balance-weighted entered `rate_pct` of entered debts (ADR 0049) when every
+    expensive one has a rate, else interest charged in the last year / debt. None without either."""
+    entered = [d for d in stu.from_snapshot(snapshot, today).debts if d.expensive > 0] if snapshot.debts else []
+    if entered and all(d.rate_pct is not None for d in entered):
+        total = sum(d.expensive for d in entered)
+        return round(sum(d.expensive * (d.rate_pct or 0.0) for d in entered) / total, 2)
     ids = {a.id for a in snapshot.accounts if a.kind in ("credit", "loan")}
     debt = debt_total(snapshot)
     start = dates.add_days(today, -365)
@@ -847,25 +888,53 @@ def monthly_surplus(snapshot: FinanceSnapshot, today: dates.date) -> float:
     return round((inc.monthly_net if inc else 0.0) - monthly_spend(snapshot, today), 2)
 
 
+DEBT_DEBT = {"card": "card debt", "overdraft": "your overdraft", "bnpl": "your buy now, pay later plan",
+             "loan": "your loan"}
+DEBT_NOUN = {"card": "card", "overdraft": "overdraft", "bnpl": "buy now, pay later plan", "loan": "loan"}
+DEBT_ORDER = ("card", "overdraft", "bnpl", "loan")
+
+
+@dataclass(frozen=True)
+class DebtWords:
+    where: str  # "on your overdraft"
+    target: str  # "your overdraft"
+    debt: str  # "your overdraft" / "card debt"
+    subject: str  # "Your overdraft costs you"
+
+
+def debt_words(debts: Sequence[stu.Debt]) -> DebtWords:
+    """Words from the kinds of expensive debt present, so an overdraft is never called a card (F-V2-3)."""
+    kinds = [k for k in DEBT_ORDER if any(d.kind == k and d.expensive > 0 for d in debts)]
+    if len(kinds) == 1:
+        k = kinds[0]
+        noun = DEBT_NOUN[k]
+        return DebtWords(f"on your {noun}", f"your {noun}", DEBT_DEBT[k], f"Your {noun} costs you")
+    names = " and ".join(f"{DEBT_NOUN[k]}s" if k in ("card", "loan") else DEBT_NOUN[k] for k in kinds) or "debts"
+    return DebtWords(f"on your {names}", "your debts", "your debts", "Your debts cost you")
+
+
 def _debt(ctx: Context) -> Candidate | None:
-    debt = debt_total(ctx.snapshot)
-    if debt < MIN_DEBT:
+    if not pre.pay_off_debt(ctx.snapshot, ctx.today):
         return None
-    spend = monthly_spend(ctx.snapshot, ctx.today)
+    debt = pre.expensive_debt(ctx.snapshot, ctx.today)
+    costs = known_monthly_costs(ctx.snapshot, ctx.today)
+    spend = costs or 0.0
     sav = savings_total(ctx.snapshot)
-    spare = sav - SAFETY_MONTHS * spend
-    surplus = monthly_surplus(ctx.snapshot, ctx.today)
-    from_savings = spare > 0
+    inc = detect_salary(ctx.snapshot.transactions)
+    surplus = monthly_surplus(ctx.snapshot, ctx.today) if inc is not None and costs is not None else None
+    # Pay from savings only when costs are known, so one month of costs stays in savings.
+    from_savings = costs is not None and sav - SAFETY_MONTHS * costs > 0
     if from_savings:
-        amount = min(debt, spare)  # capped at the debt
+        amount = min(debt, sav - SAFETY_MONTHS * spend)  # capped at the debt
         share = 1.0
     else:
-        monthly = surplus if surplus > 0 else PAYDOWN_MONTHLY
+        monthly = surplus if surplus is not None and surplus > 0 else PAYDOWN_MONTHLY
         amount = min(debt, 12 * monthly)
         share = 0.5  # paid down over the year: about half the amount is cleared on average
     measured = card_rate_pct(ctx.snapshot, ctx.today)
     card_now = measured if measured is not None else _card(ctx.macro, ctx.year)
-    sav_now = savings_rate_pct(ctx.snapshot, ctx.today) or _savings_avg(ctx.macro, ctx.year)
+    sav_measured = savings_rate_pct(ctx.snapshot, ctx.today)
+    sav_now = sav_measured if sav_measured is not None else _savings_avg(ctx.macro, ctx.year)
     starts = ctx.periods(ONE_YEAR + 1)
     if not starts:
         return None
@@ -881,35 +950,51 @@ def _debt(ctx: Context) -> Candidate | None:
     impact, worst = float(np.mean(user)), float(min(*user, stressed))
     if impact <= 0:
         return None
-    conf = float((ctx.grid(starts, lambda p: min(p.debt, amount) if p.debt > 0 else amount, amount, gain) > 0).mean())
+    g_debt = ctx.grid(starts, lambda p: min(p.debt, amount) if p.debt > 0 else amount, amount, gain)
+    conf = float((g_debt > 0).mean())
+    # ADR 0053 bugs 3 and 6: a rate we did not measure is called the UK average, never "your" rate.
+    words = debt_words(stu.from_snapshot(ctx.snapshot, ctx.today).debts)
+    owe = (
+        f"You owe {gbp(debt)} {words.where} at about {pct(card_now)} a year."
+        if measured is not None
+        else f"You owe {gbp(debt)} {words.where}. We do not know the rate, so we use the UK average card rate of "
+        f"{pct(card_now)} a year."
+    )
+    base = {"debt": money_value(debt), "card_rate": pct_value(card_now)}
     if from_savings:
+        sav_text = (
+            f"Your savings earn about {pct(sav_now)}." if sav_measured is not None
+            else f"Savings earn about {pct(sav_now)} on average."
+        )
         e1 = _ev(
-            f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year. Your savings earn about "
-            f"{pct(sav_now)}. Paying {gbp(amount)} from savings still leaves {gbp(sav - amount)}.",
-            {"debt": money_value(debt), "card_rate": pct_value(card_now), "savings_rate": pct_value(sav_now),
-             "amount": money_value(amount), "left": money_value(sav - amount)},
+            f"{owe} {sav_text} Paying {gbp(amount)} from savings still leaves {gbp(sav - amount)}.",
+            {**base, "savings_rate": pct_value(sav_now), "amount": money_value(amount),
+             "left": money_value(sav - amount)},
             _bank_ref(ctx.snapshot),
         )
-        action = f"Pay off {gbp(amount)} of card debt from savings"
-    elif surplus > 0:
+        action = f"Pay off {gbp(amount)} of {words.debt} from savings"
+    elif surplus is not None and surplus > 0:
         e1 = _ev(
-            f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year. You have about "
-            f"{gbp(surplus)} a month left after spending. That clears {gbp(amount)} in a year.",
-            {"debt": money_value(debt), "card_rate": pct_value(card_now), "surplus": money_value(surplus),
-             "amount": money_value(amount)},
+            f"{owe} You have about {gbp(surplus)} a month left after spending. That clears {gbp(amount)} in a year.",
+            {**base, "surplus": money_value(surplus), "amount": money_value(amount)},
             _bank_ref(ctx.snapshot),
         )
-        action = f"Put {gbp(surplus)} a month towards your card"
-    else:
+        action = f"Put {gbp(surplus)} a month towards {words.target}"
+    elif surplus is not None:
         e1 = _ev(
-            f"You owe {gbp(debt)} on cards and loans at about {pct(card_now)} a year. You spend about "
-            f"{gbp(surplus)} a month more than you earn. Cutting {gbp(PAYDOWN_MONTHLY)} a month and paying it "
-            f"to the card clears {gbp(amount)} in a year.",
-            {"debt": money_value(debt), "card_rate": pct_value(card_now), "over": money_value(surplus),
-             "cut": money_value(PAYDOWN_MONTHLY), "amount": money_value(amount)},
+            f"{owe} You spend about {gbp(surplus)} a month more than you earn. Cutting {gbp(PAYDOWN_MONTHLY)} a "
+            f"month and paying it to {words.target} clears {gbp(amount)} in a year.",
+            {**base, "over": money_value(surplus), "cut": money_value(PAYDOWN_MONTHLY), "amount": money_value(amount)},
             _bank_ref(ctx.snapshot),
         )
-        action = f"Cut {gbp(PAYDOWN_MONTHLY)} a month and pay it to your card"
+        action = f"Cut {gbp(PAYDOWN_MONTHLY)} a month and pay it to {words.target}"
+    else:  # income or costs unknown: no claim about what is left over
+        e1 = _ev(
+            f"{owe} Paying {gbp(PAYDOWN_MONTHLY)} a month extra to {words.target} clears {gbp(amount)} in a year.",
+            {**base, "cut": money_value(PAYDOWN_MONTHLY), "amount": money_value(amount)},
+            _bank_ref(ctx.snapshot),
+        )
+        action = f"Pay {gbp(PAYDOWN_MONTHLY)} a month extra to {words.target}"
     spans, span_facts = spans_text([s + 1 for s in starts], 1)
     e2 = _ev(
         f"In similar past years ({spans}), this {_better(impact)} in interest on average.",
@@ -922,41 +1007,42 @@ def _debt(ctx: Context) -> Candidate | None:
         source_ref(ctx.macro, MacroKey.CARD_RATE, stress.start),
     )
     return _move(
-        ctx, "pay_off_debt", "pay_off_debt", action, f"Your card costs you {gbp(impact)} a year",
+        ctx, "pay_off_debt", "pay_off_debt", action, f"{words.subject} {gbp(impact)} a year",
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.CARD_RATE, MacroKey.SAVINGS_RATE]), _bank_ref(ctx.snapshot)],
         _options("pay_off", ["keep"]), stress.test_period, "debt",
-        _debt_trade_off(ctx, from_savings, surplus, amount, sav, spend, sav_now, card_now),
+        _debt_trade_off(ctx, from_savings, surplus or 0.0, amount, sav, spend, sav_now, card_now, words.target),
+        sample_size=len(starts), sample_unit="past years",
     )
 
 
 def _debt_trade_off(
     ctx: Context, from_savings: bool, surplus: float, amount: float, sav: float, spend: float, sav_now: float,
-    card_now: float,
+    card_now: float, target: str,
 ) -> TradeOff:
     cash = max(0.0, liquid(ctx.snapshot))
+    word = costs_word(ctx.snapshot, ctx.today)
+    known = savings_rate_pct(ctx.snapshot, ctx.today) is not None
     if from_savings:
         left = sav - amount
-        months = round(max(0.0, cash - amount) / spend, 1) if spend > 0 else 0.0
-        return trade_offs.pay_off_debt("savings", amount, 0.0, left, months, sav_now, card_now)
+        months = round(max(0.0, cash - amount) / spend, 1) if spend > 0 else None
+        return trade_offs.pay_off_debt("savings", amount, 0.0, left, months, sav_now, card_now, known, word, target)
     monthly = surplus if surplus > 0 else PAYDOWN_MONTHLY
-    months = round(cash / spend, 1) if spend > 0 else 0.0
+    months = round(cash / spend, 1) if spend > 0 else None
     return trade_offs.pay_off_debt("surplus" if surplus > 0 else "cut", amount, monthly, sav, months, sav_now,
-                                   card_now)
+                                   card_now, known, word, target)
 
 
 # ---------- emergency fund ----------
 
 
 def _emergency(ctx: Context) -> Candidate | None:
-    spend = monthly_spend(ctx.snapshot, ctx.today)
-    if spend <= 0:
+    spend = known_monthly_costs(ctx.snapshot, ctx.today)
+    if spend is None or not pre.build_emergency_fund(ctx.snapshot, ctx.today):
         return None
     cash = max(0.0, liquid(ctx.snapshot))
     target = EMERGENCY_MONTHS * spend
     gap = target - cash
-    if gap <= 0:
-        return None
     starts = ctx.periods(ONE_YEAR + 1)
     if not starts:
         return None
@@ -976,8 +1062,10 @@ def _emergency(ctx: Context) -> Candidate | None:
     hits = rng.random((max(1, len(ctx.twins)), len(starts))) < np.array([prob(s) for s in starts])[None, :]
     conf = float(hits.mean())
     months = round(cash / spend, 1)
+    word = costs_word(ctx.snapshot, ctx.today)
+    verb = "You spend about" if word == "spending" else "Your regular costs are"
     e1 = _ev(
-        f"Your cash and savings cover {months:g} months of spending. You spend about {gbp(spend)} a month, "
+        f"Your cash and savings cover {months:g} months of {word}. {verb} {gbp(spend)} a month, "
         f"so {EMERGENCY_MONTHS} months is {gbp(target)}.",
         {"months": months, "spend": money_value(spend), "months_target": float(EMERGENCY_MONTHS),
          "target": money_value(target)},
@@ -1003,7 +1091,8 @@ def _emergency(ctx: Context) -> Candidate | None:
         impact, min(0.0, stressed), conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.CARD_RATE, MacroKey.UNEMPLOYMENT]), _bank_ref(ctx.snapshot)],
         _options("save", ["keep"]), stress.test_period, "emergency-fund",
-        _emergency_trade_off(ctx, gap), cover_months=float(EMERGENCY_MONTHS),
+        _emergency_trade_off(ctx, gap), cover_months=float(EMERGENCY_MONTHS), sample_size=len(starts),
+        sample_unit="past years",
     )
 
 
@@ -1016,11 +1105,12 @@ def stock_history(macro: MacroTable, upto: int) -> tuple[float, int, int] | None
 
 
 def _emergency_trade_off(ctx: Context, amount: float) -> TradeOff:
-    sav_now = savings_rate_pct(ctx.snapshot, ctx.today) or _savings_avg(ctx.macro, ctx.year)
+    measured = savings_rate_pct(ctx.snapshot, ctx.today)
+    sav_now = measured if measured is not None else _savings_avg(ctx.macro, ctx.year)
     hist = stock_history(ctx.macro, ctx.year)
     if hist is None:
-        return trade_offs.emergency_fund(amount, sav_now, None, None, None)
-    return trade_offs.emergency_fund(amount, sav_now, *hist)
+        return trade_offs.emergency_fund(amount, sav_now, None, None, None, measured is not None)
+    return trade_offs.emergency_fund(amount, sav_now, *hist, measured is not None)
 
 
 # ---------- subscriptions ----------
@@ -1030,10 +1120,10 @@ _PER = {"weekly": "a week", "monthly": "a month", "quarterly": "a quarter", "yea
 
 
 def _subscription(ctx: Context) -> Candidate | None:
+    if not pre.cancel_subscription(ctx.snapshot, ctx.today):
+        return None
     subs = detect_subscriptions(ctx.snapshot.transactions, ctx.today)
     risen = [s for s in subs if s.price_rise is not None]
-    if not risen:
-        return None
     s = max(risen, key=lambda x: (x.monthly_cost, x.id))
     assert s.price_rise is not None
     impact = s.monthly_cost * 12
@@ -1056,7 +1146,7 @@ def _subscription(ctx: Context) -> Candidate | None:
         ctx, "cancel_subscription", f"cancel_subscription-{_slug(name)}", f"Cancel {name}",
         f"{name} put its price up", impact, impact, 1.0, SURE_LABEL, [e1, e2, e3],
         [_bank_ref(ctx.snapshot)], _options("cancel", ["keep"]), ctx.matched_test_period(), "budgeting",
-        trade_offs.cancel_subscription(name, s.amount, _PER[s.cadence], s.price_rise.to_amount),
+        trade_offs.cancel_subscription(name, s.amount, _PER[s.cadence], s.price_rise.to_amount), deterministic=True,
     )
 
 
@@ -1064,11 +1154,20 @@ def _subscription(ctx: Context) -> Candidate | None:
 
 
 def _budget(ctx: Context) -> Candidate | None:
-    months = full_months_before(ctx.today, 7)
+    """W-R-2: one window for every number: the last up to 6 full months with data (last month included).
+    The usual amount is the average of the up to 3 months with data before last month."""
+    if not pre.cut_budget(ctx.snapshot, ctx.today):
+        return None
+    months = full_months_before(ctx.today, 6)
     by_month = {m: by_category(ctx.snapshot.transactions, m) for m in months}
     if not by_month[months[-1]]:
         return None
-    last, before, history = months[-1], months[-4:-1], months[:-1]
+    window = [m for m in full_data_months(ctx.snapshot, months) if by_month[m]]  # whole months only
+    if not window or window[-1] != months[-1]:
+        return None
+    last, before = window[-1], window[:-1][-3:]
+    if not before:
+        return None
 
     def spent_in(m: str, c: Category) -> float:
         return by_month[m].get(c, (0.0, 0))[0]
@@ -1084,73 +1183,229 @@ def _budget(ctx: Context) -> Candidate | None:
     if best is None:
         return None
     excess, cat, spent, avg = best
-    impact = excess * 12
-    under = sum(1 for m in history if spent_in(m, cat) <= avg)
-    conf = under / len(history)
+    n = len(window)
+    mean_excess = float(np.mean([max(0.0, spent_in(m, cat) - avg) for m in window]))
+    impact = mean_excess * 12
+    under = sum(1 for m in window if spent_in(m, cat) <= avg)
+    conf = under / n
     name = category_label(cat).lower()
     e1 = _ev(
         f"You spent {gbp(spent)} on {name} last month, {gbp(excess)} more than usual.",
         {"spent": money_value(spent), "excess": money_value(excess)},
         _bank_ref(ctx.snapshot),
     )
+    span = "the month before" if len(before) == 1 else f"the {len(before)} months before"
     e2 = _ev(
-        f"In the 3 months before, you spent {gbp(avg)} a month on average.",
-        {"months": 3.0, "average": money_value(avg)},
+        f"In {span}, you spent {gbp(avg)} a month{'' if len(before) == 1 else ' on average'}.",
+        {"months": float(len(before)), "average": money_value(avg)},
         _bank_ref(ctx.snapshot),
     )
     e3 = _ev(
-        f"Going back to {gbp(avg)} a month saves {gbp(impact)} a year. "
-        f"You spent that or less in {under} of the last {len(history)} months.",
-        {"average": money_value(avg), "impact": money_value(impact), "under": float(under),
-         "history": float(len(history))},
+        f"Over the last {n} months you went over {gbp(avg)} by {gbp(mean_excess)} a month on average, about "
+        f"{gbp(impact)} a year. You spent {gbp(avg)} or less in {under} of those {n} months.",
+        {"window": float(n), "average": money_value(avg), "mean_excess": money_value(mean_excess),
+         "impact": money_value(impact), "under": float(under)},
     )
     return _move(
         ctx, "cut_budget", f"cut_budget-{cat}", f"Cut {name} to {gbp(avg)} a month",
         f"You spent {gbp(excess)} more than usual on {name}", impact, 0.0, conf,
-        f"You spent this little in {under} of the last {len(history)} months",
+        f"You spent this little in {under} of the last {n} months",
         [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("cut", ["keep"]), ctx.matched_test_period(), "budgeting",
-        trade_offs.cut_budget(name, excess, avg, len(history) - under, len(history)),
+        trade_offs.cut_budget(name, excess, avg, n - under, n), sample_size=n, sample_unit="months",
     )
 
 
-# ---------- investments ----------
+# ---------- student moves (ADR 0046) ----------
+
+PAYMENT_WORDS: dict[str, str] = {
+    "maintenance_loan": "student loan payment",
+    "scholarship": "scholarship payment",
+    "bursary": "bursary payment",
+    "grant": "grant payment",
+    "family": "money from family",
+    "part_time_job": "pay",
+    "salary": "pay",
+}
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 
 
-def _spread(ctx: Context) -> Candidate | None:
-    """spread_investments: one ISA holding is more than CONCENTRATION_LIMIT_PCT of the value (investments.py)."""
-    from lifeline_engine.investments import CONCENTRATION_LIMIT_PCT, SPREAD_HORIZON
+def day_text(d: dates.date) -> tuple[str, dict[str, float]]:
+    """'12 November' and its fact. The year is not shown."""
+    return f"{d.day} {MONTHS[d.month - 1]}", {"day_of_month": float(d.day)}
 
-    c = concentration(ctx.holdings)
-    if c is None:
+
+MIN_WEEKLY = 1.0  # GBP a week; below this there is no weekly amount to keep to, so the move frames the shortfall
+
+
+def _weekly_budget(ctx: Context) -> Candidate | None:
+    if not pre.weekly_budget(ctx.snapshot, ctx.today):
         return None
-    sc = spread_score(c.moved)
-    name = clean_name(c.name, "your largest holding")
-    single = trade_offs.TYPICAL["single_share_swing_pct"].low
-    broad = trade_offs.TYPICAL["broad_fund_swing_pct"].low
+    wb = stu.weekly_budget(ctx.snapshot, stu.from_snapshot(ctx.snapshot, ctx.today), ctx.today,
+                           max(0.0, liquid(ctx.snapshot)))
+    assert wb is not None
+    when, when_facts = day_text(wb.next_date)
+    what = PAYMENT_WORDS.get(wb.next_kind, "next payment")
+    weeks_left = round(wb.weeks_left, 1)
+    covered = round(wb.weeks_covered, 1)
+    # F-R-1: the plain shortfall before the next payment, never annualised. It is only a ranking key here;
+    # the card shows `shortfall`, `cover_weeks` and `safe_weekly_spend` (gain_kind weeks_of_cover).
+    impact = wb.short_by
+    balance = liquid(ctx.snapshot)
+    have = f"You are {gbp(balance)} overdrawn" if balance < 0 else f"You have {gbp(wb.cash)}"
     e1 = _ev(
-        f"{name} is {c.share_pct:g}% of your ISA's {gbp(c.total)}.",
-        {"share_pct": c.share_pct, "total": money_value(c.total)},
+        f"{have} until your {what} on {when}, in {wb.days_left} days. "
+        f"Regular bills before then: {gbp(wb.bills_before)}.",
+        {"cash": money_value(balance if balance < 0 else wb.cash), "days_left": float(wb.days_left),
+         "bills": money_value(wb.bills_before), **when_facts},
+        _bank_ref(ctx.snapshot),
+    )
+    need = wb.weekly_pace * wb.weeks_left
+    if wb.safe_weekly >= MIN_WEEKLY:
+        s2 = (
+            f"You usually spend about {gbp(wb.weekly_pace)} a week (middle of the last {wb.weeks_seen} weeks). At that "
+        "pace your "
+            f"money lasts {covered:g} of the {weeks_left:g} weeks, and you are {gbp(wb.short_by)} short."
+        )
+    else:
+        s2 = (
+            f"You usually spend about {gbp(wb.weekly_pace)} a week (middle of the last {wb.weeks_seen} weeks), so the "
+            f"{wb.days_left} days until then need about {gbp(need)}. With bills, you are {gbp(wb.short_by)} short."
+        )
+    e2 = _ev(
+        s2,
+        {"pace": money_value(wb.weekly_pace), "weeks_seen": float(wb.weeks_seen), "covered": covered,
+         "weeks_left": weeks_left, "short": money_value(wb.short_by), "days_left": float(wb.days_left),
+         "need": money_value(need)},
+        _bank_ref(ctx.snapshot),
+    )
+    headline = f"You will be {gbp(wb.short_by)} short before {when}"
+    if wb.safe_weekly >= MIN_WEEKLY:
+        action = f"Spend up to {gbp(wb.safe_weekly)} a week until {when}"
+        e3 = _ev(
+            f"Spending up to {gbp(wb.safe_weekly)} a week makes it last. You kept to that in {wb.weeks_within} of "
+            f"the last {wb.weeks_seen} weeks.",
+            {"safe": money_value(wb.safe_weekly), "within": float(wb.weeks_within),
+             "weeks_seen": float(wb.weeks_seen)},
+        )
+        trade = trade_offs.weekly_budget(wb.safe_weekly, wb.weekly_pace, wb.bills_before, when, when_facts)
+    else:  # F-V2-2: bills alone take the cash; say how much is missing and what to do first
+        action = f"Plan for {gbp(wb.short_by)} you are missing before {when}"
+        e3 = _ev(
+            "Pay rent and bills first. Then ask family, or your university's hardship fund or student support, "
+            "before you use an overdraft or a card.",
+            {},
+        )
+        trade = trade_offs.shortfall(wb.short_by, wb.bills_before, when, when_facts)
+    over = wb.weeks_seen - wb.weeks_within
+    conf = over / wb.weeks_seen if wb.weeks_seen else 0.0
+    # W-R-1: a projection of usual spending, so "medium", never "high".
+    label = (
+        f"Your spending was above the safe amount in {over} of the last {wb.weeks_seen} weeks. "
+        "A projection of your usual spending"
+    )
+    return _move(
+        ctx, "weekly_budget", "weekly_budget", action, headline, impact, 0.0, conf, label,
+        [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("budget", ["keep"]), None, "budgeting",
+        trade, dates.iso(wb.next_date), weeks=(wb.weeks_left, wb.safe_weekly), shortfall=wb.short_by,
+        level="medium",
+    )
+
+
+def _rule(fact_id: str) -> SourceRef:
+    f = facts_table.get(fact_id)
+    src = "govuk" if f.url.startswith("https://www.gov.uk/") else "official"
+    return SourceRef(source=src, series_id=f.url, status="cached", note=f"{f.label} ({f.tax_year})")
+
+
+def _lifetime_isa(ctx: Context) -> Candidate | None:
+    if not pre.lifetime_isa(ctx.snapshot, ctx.today):
+        return None
+    room = pre.lisa_room(ctx.snapshot, ctx.today)
+    costs = known_monthly_costs(ctx.snapshot, ctx.today)
+    assert costs is not None
+    sav = savings_total(ctx.snapshot)
+    bonus = stu.lisa_bonus(room)
+    loss = stu.lisa_withdrawal_loss(room)
+    rate = facts_table.get("lisa_bonus_rate").value
+    cap = facts_table.get("lisa_allowance").value
+    max_bonus = facts_table.get("lisa_bonus_max").value
+    charge = facts_table.get("lisa_withdrawal_charge").value
+    house = facts_table.get("lisa_first_home_price_limit").value
+    free_age = facts_table.get("lisa_penalty_free_age").value
+    e1 = _ev(
+        f"You have {gbp(sav)} in savings. After keeping {EMERGENCY_MONTHS} months of "
+        f"{costs_word(ctx.snapshot, ctx.today)} "
+        f"({gbp(EMERGENCY_MONTHS * costs)}), {gbp(room)} could go into a Lifetime ISA.",
+        {"savings": money_value(sav), "months": float(EMERGENCY_MONTHS),
+         "kept": money_value(EMERGENCY_MONTHS * costs), "room": money_value(room)},
         _bank_ref(ctx.snapshot),
     )
     e2 = _ev(
-        f"One company's shares usually swing about {single:g}% a year. A broad fund swings about {broad:g}%.",
-        {"single_pct": single, "broad_pct": broad},
-        trade_offs.typical_ref("single_share_swing_pct"),
+        f"The government adds {rate:g}% to what you pay in, up to {gbp(max_bonus)} a year on {gbp(cap)}. "
+        f"On {gbp(room)} that is {gbp(bonus)}.",
+        {"rate": rate, "max_bonus": money_value(max_bonus), "cap": money_value(cap), "room": money_value(room),
+         "bonus": money_value(bonus)},
+        _rule("lisa_bonus_rate"),
     )
     e3 = _ev(
-        f"Moving {gbp(c.moved)} into a broad fund brings it to {CONCENTRATION_LIMIT_PCT:g}% and adds about "
-        f"{gbp(sc.impact_per_year)} a year to the typical result.",
-        {"moved": money_value(c.moved), "limit_pct": CONCENTRATION_LIMIT_PCT,
-         "impact": money_value(sc.impact_per_year)},
+        f"It is for a first home costing up to {gbp(house)}, or for after age {free_age:g}. You must be 18 to 39 to "
+        "open one.",
+        {"house": money_value(house), "free_age": free_age, "min_age": 18.0, "max_age": 39.0},
+        _rule("lisa_first_home_price_limit"),
     )
-    n = int(round(sc.confidence * 10))
     return _move(
-        ctx, "spread_investments", f"spread_investments-{_slug(name)}", "Spread your investments",
-        f"{name} is {c.share_pct:g}% of your ISA", sc.impact_per_year, sc.worst_case_per_year, sc.confidence,
-        f"Spreading did better in about {n} of 10 likely {SPREAD_HORIZON}-year results",
-        [e1, e2, e3], [_bank_ref(ctx.snapshot), trade_offs.typical_ref("single_share_swing_pct")],
-        _options("spread", ["keep"]), None, "diversification",
-        trade_offs.spread_investments(name, c.share_pct, c.moved, CONCENTRATION_LIMIT_PCT),
+        ctx, "lifetime_isa", "lifetime_isa", f"Put {gbp(room)} in a Lifetime ISA",
+        f"Get a {gbp(bonus)} government bonus", bonus, -loss, 1.0, SURE_LABEL,
+        [e1, e2, e3], [_bank_ref(ctx.snapshot), _rule("lisa_bonus_rate"), _rule("lisa_withdrawal_charge")],
+        _options("open_lisa", ["keep"]), None, "deposit",
+        trade_offs.lifetime_isa(room, bonus, loss, charge, house, free_age), deterministic=True,
+    )
+
+
+KEEP_CASH_YEARS = 20
+
+
+def _keep_cash(ctx: Context) -> Candidate | None:
+    if not pre.keep_cash(ctx.snapshot, ctx.today):
+        return None
+    cpi_ref = source_ref(ctx.macro, MacroKey.CPI_INFLATION, ctx.year)
+    if cpi_ref is None:
+        return None  # inflation is the trade-off: no CPI, no move
+    sav = savings_total(ctx.snapshot)
+    rate = savings_rate_pct(ctx.snapshot, ctx.today)
+    assert rate is not None
+    cpi = ctx.macro.value(MacroKey.CPI_INFLATION, ctx.year)
+    best_now = _best_savings(ctx.macro, ctx.year)
+    interest = sav * rate / 100
+    # W-V2-1: keeping cash is the "do nothing" choice; its gain is only the interest ABOVE the best easy-access
+    # alternative. When another account pays more, move_savings is the better move and keep_cash is not offered.
+    impact = sav * (rate - best_now) / 100
+    if impact <= 0:
+        return None
+    worst = sav * min(0.0, rate - cpi) / 100
+    years = [y for y in ctx.macro.years(MacroKey.CPI_INFLATION) if ctx.year - KEEP_CASH_YEARS < y <= ctx.year]
+    beat = sum(1 for y in years if _savings_avg(ctx.macro, y) >= ctx.macro.value(MacroKey.CPI_INFLATION, y))
+    conf = beat / len(years) if years else 0.0
+    e1 = _ev(
+        f"Your {gbp(sav)} in savings earns about {pct(rate)} a year: {gbp(interest)}. That is {gbp(impact)} more "
+        f"than the best easy-access rate of about {pct(best_now)}.",
+        {"savings": money_value(sav), "rate": pct_value(rate), "interest": money_value(interest),
+         "impact": money_value(impact), "best_rate": pct_value(best_now)},
+        _bank_ref(ctx.snapshot),
+    )
+    e2 = _ev(f"Prices rose {pct(cpi)} in {ctx.year}.", {"cpi": pct_value(cpi), "year": float(ctx.year)}, cpi_ref)
+    e3 = _ev(
+        f"Average savings rates beat price rises in {beat} of the last {len(years)} years.",
+        {"beat": float(beat), "years": float(len(years))},
+        source_ref(ctx.macro, MacroKey.SAVINGS_RATE, ctx.year),
+    )
+    return _move(
+        ctx, "keep_cash", "keep_cash", "Keep your savings where they are",
+        f"Your savings earn {gbp(impact)} a year more than elsewhere",
+        impact, worst, conf, f"Cash beat price rises in {beat} of the last {len(years)} years",
+        [e1, e2, e3], [_bank_ref(ctx.snapshot), cpi_ref], _options("hold", []), None, "inflation",
+        trade_offs.keep_cash(sav, rate, cpi, ctx.year), sample_size=len(years), sample_unit="years",
     )
 
 
@@ -1158,12 +1413,19 @@ def _spread(ctx: Context) -> Candidate | None:
 
 
 def _fallback(ctx: Context) -> Candidate:
-    spend = monthly_spend(ctx.snapshot, ctx.today)
+    """Shown when no move's precondition holds. Months of cover only with known costs (ADR 0053 bug 5)."""
+    costs = known_monthly_costs(ctx.snapshot, ctx.today)
     cash = max(0.0, liquid(ctx.snapshot))
-    months = round(cash / spend, 1) if spend > 0 else 0.0
+    months = round(cash / costs, 1) if costs is not None else None
     sav = savings_total(ctx.snapshot)
+    e1 = (
+        _ev(f"Your cash and savings cover {months:g} months of {costs_word(ctx.snapshot, ctx.today)}.",
+            {"months": months}, _bank_ref(ctx.snapshot))
+        if months is not None
+        else _ev("Add your monthly costs to see how long your cash would last.", {})
+    )
     evidence = [
-        _ev(f"Your cash and savings cover {months:g} months of spending.", {"months": months}, _bank_ref(ctx.snapshot)),
+        e1,
         _ev(f"You have {gbp(sav)} in savings.", {"savings": money_value(sav)}, _bank_ref(ctx.snapshot)),
         _ev("We found no bill, rate or debt that needs action now.", {}),
     ]
@@ -1171,7 +1433,7 @@ def _fallback(ctx: Context) -> Candidate:
         ctx, "build_emergency_fund", "build_emergency_fund", "Keep your safety net topped up",
         "Nothing urgent this month", 0.0, 0.0, 0.0, "Nothing urgent. Your money looks on track",
         evidence, [_bank_ref(ctx.snapshot)], _options("save", ["keep"]), None, "emergency-fund",
-        _emergency_trade_off(ctx, cash), cover_months=months,
+        _emergency_trade_off(ctx, cash), cover_months=months, no_level=True,
     )
 
 
@@ -1183,38 +1445,35 @@ BUILDERS: tuple[Callable[[Context], Candidate | None], ...] = (
     _emergency,
     _subscription,
     _budget,
-    _spread,
+    _weekly_budget,
+    _lifetime_isa,
+    _keep_cash,
 )
 
 
 def candidates(ctx: Context) -> list[Candidate]:
     out = [c for c in (b(ctx) for b in BUILDERS) if c is not None and c.move.impact_per_year > 0]
 
-    def key(c: Candidate) -> tuple[float, int, int]:
+    def key(c: Candidate) -> tuple[int, float, int, int]:
+        """Urgent first (F-V2-2, F-R-1): money running short before the next payment beats every yearly gain.
+        Then score, nearer deadline, kind order."""
+        urgent = 0 if c.move.kind == "weekly_budget" and (c.move.shortfall or 0) > 0 else 1
         days = c.move.days_left if c.move.days_left is not None else 10**6
-        return (-round(c.score, 6), days, KIND_ORDER.index(c.move.kind))
+        return (urgent, -round(c.score, 6), days, KIND_ORDER.index(c.move.kind))
 
     return sorted(out, key=key)
 
 
-def build_context(
-    snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0,
-    holdings: Sequence[Holding] | None = None,
-) -> Context:
+def build_context(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> Context:
     year = min(today.year, latest_year(macro))
     prof, _ = profile(snapshot, today)
     twins = nearest_twins(prof, macro, year)[:K_TWINS]
-    return Context(snapshot=snapshot, macro=macro, today=today, year=year, profile=prof, seed=seed, twins=twins,
-                   holdings=list(holdings or []))
+    return Context(snapshot=snapshot, macro=macro, today=today, year=year, profile=prof, seed=seed, twins=twins)
 
 
-def next_move(
-    snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0,
-    holdings: Sequence[Holding] | None = None,
-) -> NextMoveResponse:
-    """ONE top move and up to 2 runners-up. `generated_at` is a placeholder: the API sets server time.
-    `holdings`: ISA holdings (FinanceSnapshot has no holdings field yet); empty means no spread_investments move."""
-    ctx = build_context(snapshot, macro, today, seed, holdings)
+def next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> NextMoveResponse:
+    """ONE top move and up to 2 runners-up. `generated_at` is a placeholder: the API sets server time."""
+    ctx = build_context(snapshot, macro, today, seed)
     ranked = candidates(ctx)
     if not ranked:
         ranked = [_fallback(ctx)]

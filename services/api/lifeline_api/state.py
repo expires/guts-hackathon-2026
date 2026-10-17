@@ -39,6 +39,10 @@ class AppState:
     auth_limiter: Limiter | None = None
     # Subject -> epoch ms. Tokens issued before it are rejected (account deleted). Redis + Postgres hold it too.
     revoked_before_local: dict[str, int] = field(default_factory=dict)
+    # At most 2 statement or sample parses at once per process (V6 V2-F1); others wait up to 5 s.
+    parse_slots: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(2))
+    warming: bool = False  # True while the startup warm-up (macro table, chat stack) runs
+    games: set[asyncio.Task[Any]] = field(default_factory=set)  # running room game drivers
     memo: dict[tuple[str, ...], Any] = field(default_factory=dict)
 
 

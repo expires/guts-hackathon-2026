@@ -2,24 +2,15 @@
 
 from __future__ import annotations
 
-import math
 from datetime import date
-from typing import get_args
 
 import pytest
 
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.next_move import Move, MoveKind, NextMoveResponse, TradeOff
 from lifeline_engine import trade_offs as to
-from lifeline_engine.investments import (
-    CONCENTRATION_LIMIT_PCT,
-    Holding,
-    concentration,
-    own_risk,
-    spread_score,
-)
 from lifeline_engine.money.text import unsupported_numbers
-from lifeline_engine.next_move import build_context, candidates, next_move, option_policy
+from lifeline_engine.next_move import build_context, candidates, next_move
 
 from .finance_builders import homeowner
 from .test_next_move import _overspender, _renter
@@ -73,12 +64,22 @@ def _built(kind: MoveKind) -> TradeOff:
             return to.emergency_fund(4950, 1.5, 8.77, 1990, 2026)
         case "cut_budget":
             return to.cut_budget("groceries", 165, 402, 2, 6)
-        case "spread_investments":
-            return to.spread_investments("Nvidia", 62.0, 4400, 40.0)
+        case "weekly_budget":
+            return to.weekly_budget(60.0, 95.0, 120.0, "12 November", {"day_of_month": 12.0})
+        case "lifetime_isa":
+            return to.lifetime_isa(1000.0, 250.0, 62.5, 25.0, 450_000.0, 60.0)
+        case "keep_cash":
+            return to.keep_cash(2000.0, 1.5, 3.8, 2026)
     raise AssertionError(kind)
 
 
-@pytest.mark.parametrize("kind", get_args(MoveKind))
+OFFERED: tuple[MoveKind, ...] = (
+    "fix_mortgage", "remortgage", "move_savings", "cancel_subscription", "switch_subscription", "switch_energy",
+    "pay_off_debt", "build_emergency_fund", "cut_budget", "weekly_budget", "lifetime_isa", "keep_cash",
+)
+
+
+@pytest.mark.parametrize("kind", OFFERED)
 def test_trade_off_per_kind(kind: MoveKind) -> None:
     t = check(_built(kind))
     assert t.summary and not t.summary[0].islower()
@@ -136,6 +137,8 @@ def test_every_candidate_has_trade_off(macro: MacroTable) -> None:
             seen.add(c.move.kind)
             if c.move.kind == "build_emergency_fund":
                 assert c.move.gain_kind == "months_of_cover" and c.move.cover_months == 3.0
+            elif c.move.kind == "weekly_budget":
+                assert c.move.gain_kind == "weeks_of_cover" and c.move.cover_weeks is not None
             else:
                 assert c.move.gain_kind == "gbp_per_year" and c.move.cover_months is None
         for m in _moves(next_move(snap, macro, TODAY)):
@@ -151,7 +154,9 @@ def test_fallback_has_trade_off_and_cover(macro: MacroTable) -> None:
     accounts = [Account(id="cur", name="Current", kind="current", provider="B", balance=30_000.0)]
     r = next_move(snapshot(monthly("2025-11-28", 11, 3000.0, "ACME SALARY"), accounts), macro, TODAY)
     check(r.top.trade_off)
-    assert r.top.gain_kind == "months_of_cover" and r.top.cover_months is not None
+    # No costs known (income only): no months of cover, never a huge number (ADR 0053 bug 5).
+    assert r.top.gain_kind == "gbp_per_year" and r.top.cover_months is None
+    assert r.top.evidence[0].text == "Add your monthly costs to see how long your cash would last."
 
 
 def test_demo_top_trade_off(macro: MacroTable) -> None:
@@ -161,47 +166,3 @@ def test_demo_top_trade_off(macro: MacroTable) -> None:
         assert t.summary.startswith("Fixed until")
     else:
         assert t.summary == "Your payment goes up if Bank Rate goes up"
-
-
-# ---------- spread_investments ----------
-
-
-def test_concentration_hand_case() -> None:
-    # Total £10,000; largest £6,200 = 62%. Move 6,200 - 0.4 * 10,000 = £2,200.
-    c = concentration([Holding("Nvidia", 6200), Holding("VWRL", 3000), Holding("Cash", 800)])
-    assert c is not None
-    assert (c.name, c.share_pct, c.total) == ("Nvidia", 62.0, 10_000)
-    assert c.moved == pytest.approx(2200)
-    assert concentration([Holding("A", 4000), Holding("B", 6000), Holding("C", 5000)]) is None  # 40% exactly
-    assert concentration([Holding("A", 500)]) is None  # under MIN_ISA_VALUE
-    assert concentration([]) is None
-
-
-def test_spread_score_hand_case() -> None:
-    # D^2 = 0.35^2 - 0.15^2 = 0.1; impact = 2200 * 0.1 / 2 = £110 a year.
-    d = own_risk()
-    assert d * d == pytest.approx(0.1)
-    s = spread_score(2200)
-    assert s.impact_per_year == pytest.approx(110.0)
-    assert s.worst_case_per_year == pytest.approx(-2200 * 1.28 * math.sqrt(0.1))
-    # P = Phi(sqrt(0.1) * sqrt(5) / 2) = Phi(0.3536) ~ 0.638
-    assert s.confidence == pytest.approx(0.638, abs=1e-3)
-
-
-def test_spread_move_from_holdings(macro: MacroTable) -> None:
-    holdings = [Holding("NVIDIA 2", 6200), Holding("Vanguard FTSE All-World", 3000), Holding("Cash", 800)]
-    ctx = build_context(homeowner(), macro, TODAY, holdings=holdings)
-    moves = [c.move for c in candidates(ctx) if c.move.kind == "spread_investments"]
-    assert len(moves) == 1
-    m = moves[0]
-    check(m.trade_off)
-    assert m.trade_off is not None and len(m.trade_off.summary) <= 90
-    assert m.headline == "NVIDIA is 62% of your ISA"  # digits stripped from the untrusted name
-    assert m.concept_id == "diversification" and not m.testable
-    assert f"{CONCENTRATION_LIMIT_PCT:g}%" in m.evidence[2].text
-    for e in m.evidence:
-        assert unsupported_numbers(e.text, e.facts) == []
-    with pytest.raises(ValueError):
-        option_policy(m, "spread")
-    # No holdings: no spread move.
-    assert all(c.move.kind != "spread_investments" for c in candidates(build_context(homeowner(), macro, TODAY)))

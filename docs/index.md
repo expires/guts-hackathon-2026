@@ -117,3 +117,13 @@ The twin has no penalties, so both forms give the same value. Amira beat her twi
 - The Index never rises when missed payments or drawdown rise.
 - Floor: the Index is never below 0.
 - No upper cap. A player far ahead of the twin can score well above 100.
+
+## Student paths and Quick Life (ADR 0052, ADR 0059)
+
+The Index works the same way on student path lives. The twin plays the same path, seed and start year with every default choice.
+
+- Path lives start from `lifeline_sim.paths`: university, apprenticeship, job at 18, gap year, master's.
+- Stage pay = a fixed share of regional median full-time pay (MacroTable `median_pay`, Nomis ASHE). The shares are game assumptions.
+- Student loan repayment uses `lifeline_engine.rules`: 9% of pay above the plan threshold (6% above the postgraduate threshold). Plan by course start year in England: Plan 1 before 2012, Plan 2 from 2012 to 2022, Plan 5 from 2023. A year before 2026 uses the 2026/27 threshold in that year's prices (CPI).
+- Quick Life: ages 18 to 25 in 5 or 6 AGE taps (each tap is 1 or 2 years), with 2 or 3 student events. The taps and events depend only on the seed and the start year, so a room plays the same life.
+- The Quick Life summary card also shows a habit score (`lifeline_sim.habits`). It uses the same six ratio names and targets as the real-money score in `lifeline_engine.habits`, computed from game money only. It does not change the Index.

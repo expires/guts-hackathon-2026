@@ -115,6 +115,8 @@ def apply_choice(s: SimState, event: Event, choice_id: str, w: IndexWeights) -> 
         s.tag_cost[tag] = s.tag_cost.get(tag, 0.0) - deltas.money
         if isinstance(living, float | int) and living:
             s.tag_living[tag] = s.tag_living.get(tag, 0.0) + float(living)
+    if lt is not None and "want" in lt.t.tags and s.path_id is not None and deltas.money < 0:
+        s.want_spend += -deltas.money  # habit score ledger: one-off spending on wants
     s.pending = [e for e in s.pending if e.id != event.id]
     s.track_drawdown(w)
     return res, deltas

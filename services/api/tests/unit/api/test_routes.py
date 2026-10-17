@@ -351,3 +351,15 @@ async def test_reads_have_a_larger_budget_than_writes(monkeypatch: pytest.Monkey
         assert writes == [201, 201, 429], "writes keep the smaller budget"
         r = await c.post("/v1/finance/goals", json=body, headers=auth)
         assert r.status_code == 429 and int(r.headers["retry-after"]) >= 1
+
+
+async def test_health_reports_warming_without_failing(client: httpx.AsyncClient) -> None:
+    from lifeline_api.main import app
+
+    assert (await client.get("/v1/health")).json()["warming"] is False
+    app.state.lifeline.warming = True
+    try:
+        r = await client.get("/v1/health")
+        assert r.status_code == 200 and r.json()["warming"] is True and r.json()["status"] == "ok"
+    finally:
+        app.state.lifeline.warming = False

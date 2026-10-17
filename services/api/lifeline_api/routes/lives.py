@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request
 
-from lifeline_api import challenges
+from lifeline_api import challenges, macro
 from lifeline_api.auth import OptionalSubject, Subject
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.explain_bridge import explain_new_events, explain_outcome
@@ -43,6 +43,7 @@ router = APIRouter(tags=["lives"])
 LIFE_ID_PATTERN = r"^lf_[a-z0-9]{6,32}$"
 LifeId = Annotated[str, Path(pattern=LIFE_ID_PATTERN)]
 MAX_SEED = 2**31 - 1
+PATH_PRESET_PREFIX = "path-"
 
 
 def new_life_id() -> str:
@@ -58,7 +59,7 @@ async def _current_macro(state: AppState, *, persist: bool) -> tuple[MacroTable,
 
     Read-only routes pass persist=False, so they keep working while Postgres is down.
     """
-    table = await state.hub.macro_table()
+    table = await macro.table(state)
     digest = macro_hash(table)
     if persist:
         await state.store.put_macro(digest, table)  # StoreUnavailable -> 503 store_unavailable
@@ -106,7 +107,8 @@ async def list_characters(
 ) -> CharactersResponse:
     state = get_state(request)
     table, _ = await _current_macro(state, persist=False)
-    presets = await _presets()
+    # Student starts only (ADR 0052). Old preset ids still load through sim_api.presets().
+    presets = await call_pure(sim_api.offered_presets, table)
     random_char = await _random_character(new_seed() if seed is None else seed, table)
     return CharactersResponse(presets=presets, random=random_char)
 
@@ -136,7 +138,25 @@ async def list_lives(request: Request, sub: Subject) -> LivesResponse:
 async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -> Life:
     state = get_state(request)
     seed = new_seed() if body.seed is None else body.seed
+    start_year = body.start_year
+    if body.room_code is not None:
+        # In a room the server owns the seed (and the start year the host picked), so everyone gets the same life.
+        room = await state.rooms.get(body.room_code)
+        if room is None or room.player_of(sub) is None:
+            raise not_found("Room not found")
+        seed = room.seed
+        start_year = (room.options or {}).get("start_year") or room.start_year or start_year
     table, digest = await _current_macro(state, persist=True)
+
+    path_id = body.path_id
+    if path_id is None and body.mode == "preset" and (body.preset_id or "").startswith(PATH_PRESET_PREFIX):
+        path_id = (body.preset_id or "").removeprefix(PATH_PRESET_PREFIX)  # offered path characters (W3)
+    if path_id is not None:
+        # Student path (ADR 0052): Same Life and Quick Life. The account name names the character.
+        acct = await state.store.get_doc(sub, "account") or {}
+        life = await call_pure(sim_api.new_path_life, new_life_id(), path_id, start_year, seed, table,
+                               quick=body.quick, mode=body.mode, name=acct.get("display_name"))
+        return await _store_new(state, sub, body, life, digest)
 
     character: CharacterSpec
     if body.mode == "preset":
@@ -154,12 +174,15 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
             raise ApiError(422, "validation_error", f"character: required when mode is {body.mode}")
         character = body.character
 
-    life_id = new_life_id()
-    life = await call_pure(sim_api.new_life, life_id, character, body.mode, body.start_year, seed, table)
+    life = await call_pure(sim_api.new_life, new_life_id(), character, body.mode, start_year, seed, table)
+    return await _store_new(state, sub, body, life, digest)
+
+
+async def _store_new(state: AppState, sub: str, body: CreateLifeRequest, life: Life, digest: str) -> Life:
     if body.room_code is not None and life.room_code != body.room_code:
         life = life.model_copy(update={"room_code": body.room_code})
     life, _ = await explain_new_events(None, life)
-    await state.store.create(LifeRecord(id=life_id, owner=sub, life=life, macro_hash=digest))
+    await state.store.create(LifeRecord(id=life.id, owner=sub, life=life, macro_hash=digest))
     await _after_write(state, sub, life)
     return life
 
@@ -249,5 +272,7 @@ async def rewind_life(id: LifeId, body: RewindRequest, request: Request, sub: Su
 
 @router.get("/v1/lives/{id}/summary", response_model=LifeSummary, response_model_exclude_none=True)
 async def get_life_summary(id: LifeId, request: Request, sub: Subject) -> LifeSummary:  # noqa: A002
-    rec = await _load_readable(get_state(request), id, sub)
-    return await call_pure(sim_api.summary, rec.life)
+    state = get_state(request)
+    rec = await _load_readable(state, id, sub)
+    table = await state.store.get_macro(rec.macro_hash)  # the life's pinned table, for the habit score
+    return await call_pure(sim_api.summary, rec.life, table)

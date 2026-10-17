@@ -33,6 +33,7 @@ from lifeline_contracts.finance import (
     GuessesResponse,
     GuessRequest,
     GuessState,
+    HabitScore,
     PredictionEvaluation,
     SavingsGoal,
     SpendingResponse,
@@ -42,6 +43,7 @@ from lifeline_contracts.finance import (
 )
 from lifeline_contracts.next_move import FinanceHome
 from lifeline_engine import money as money_engine
+from lifeline_engine.habits import habit_score
 from lifeline_engine.money import predict
 
 log = logging.getLogger(__name__)
@@ -74,6 +76,12 @@ DOC_BUDGETS = "budgets"
 DOC_GOALS = "goals"
 
 
+async def _bills(snap: FinanceSnapshot) -> BillsResponse:
+    resp = await call_pure(money_engine.bills_response, snap, money.today(snap))
+    items = money.without_guessed_dates_bills(snap, resp.items)
+    return resp.model_copy(update={"items": items, "total_next_30_days": round(sum(b.amount for b in items), 2)})
+
+
 async def _snap(request: Request, sub: str) -> tuple[AppState, FinanceSnapshot]:
     state = get_state(request)
     return state, await money.snapshot(state, sub)
@@ -82,7 +90,7 @@ async def _snap(request: Request, sub: str) -> tuple[AppState, FinanceSnapshot]:
 @router.get("/v1/finance/overview", response_model=FinanceOverview, response_model_exclude_none=True)
 async def get_finance_overview(request: Request, sub: Subject) -> FinanceOverview:
     _, snap = await _snap(request, sub)
-    return await call_pure(money_engine.overview, snap)
+    return await call_pure(money.overview, snap)
 
 
 @router.get("/v1/finance/spending", response_model=SpendingResponse, response_model_exclude_none=True)
@@ -94,13 +102,14 @@ async def get_finance_spending(request: Request, sub: Subject, month: Month = No
 @router.get("/v1/finance/subscriptions", response_model=SubscriptionsResponse, response_model_exclude_none=True)
 async def list_subscriptions(request: Request, sub: Subject) -> SubscriptionsResponse:
     _, snap = await _snap(request, sub)
-    return await call_pure(money_engine.subscriptions_response, snap, money.today(snap))
+    resp = await call_pure(money_engine.subscriptions_response, snap, money.today(snap))
+    return resp.model_copy(update={"items": money.without_guessed_dates_subs(snap, resp.items)})
 
 
 @router.get("/v1/finance/bills", response_model=BillsResponse, response_model_exclude_none=True)
 async def list_bills(request: Request, sub: Subject) -> BillsResponse:
     _, snap = await _snap(request, sub)
-    return await call_pure(money_engine.bills_response, snap, money.today(snap))
+    return await _bills(snap)
 
 
 async def _limits(state: AppState, sub: str) -> dict[Category, float]:
@@ -153,7 +162,8 @@ async def create_goal(body: CreateGoalRequest, request: Request, sub: Subject) -
 @router.get("/v1/finance/profile", response_model=FinanceProfile, response_model_exclude_none=True)
 async def get_finance_profile(request: Request, sub: Subject) -> FinanceProfile:
     state, snap = await _snap(request, sub)
-    return await call_pure(money_engine.finance_profile, snap, money.today(snap), money.hints(state, sub, snap))
+    prof = await call_pure(money_engine.finance_profile, snap, money.today(snap), money.hints(state, sub, snap))
+    return await money.with_onboarding(state, sub, prof, snap)
 
 
 # Spend prediction (ADR 0017). The evaluation route is registered before /prediction on purpose.
@@ -198,6 +208,7 @@ async def _prediction(state: AppState, sub: str, inp: prediction.Inputs, day: da
         predict.prediction_response, inp.snap, day, inp.holidays, inp.weather,
         inp.weather_status.get(day, "mock"), None, bt,
     )
+    pred = money.without_guessed_payday(inp.snap, pred)
     if guess is not None:
         pred = pred.model_copy(update={"guess": _guess_state(guess, pred.actual)})
     return pred
@@ -283,8 +294,8 @@ async def get_finance_home(request: Request, sub: Subject) -> Any:
     if snap is None:
         empty = FinanceHome(has_data=False, connect_prompt=CONNECT_PROMPT)
         return JSONResponse(empty.model_dump(mode="json", include={"has_data", "connect_prompt"}))
-    overview = await call_pure(money_engine.overview, snap)
-    bills = await call_pure(money_engine.bills_response, snap, money.today(snap))
+    overview = await call_pure(money.overview, snap)
+    bills = await _bills(snap)
 
     next_move = None
     try:
@@ -317,3 +328,10 @@ async def get_finance_home(request: Request, sub: Subject) -> Any:
         coming_up=bills.items[:HOME_BILLS],
         coming_up_more=len(bills.items) > HOME_BILLS,
     )
+
+
+@router.get("/v1/habits", tags=["finance"], response_model=HabitScore, response_model_exclude_none=True)
+async def get_habits(request: Request, sub: Subject) -> HabitScore:
+    """Habit scores, ratios only (0-100), from the engine. 409 no_finance_data without the user's data."""
+    _, snap = await _snap(request, sub)
+    return await call_pure(habit_score, snap, money.today(snap))

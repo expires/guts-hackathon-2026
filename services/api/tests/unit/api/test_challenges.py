@@ -78,7 +78,9 @@ async def test_challenges_route_and_latching(monkeypatch: pytest.MonkeyPatch) ->
     async with app.router.lifespan_context(app), httpx.AsyncClient(transport=transport, base_url="http://t") as c:
         listed = (await c.get("/v1/challenges")).json()["challenges"]
         assert len(listed) >= 2
-        survive = next(ch for ch in listed if ch["goal"]["type"] == "no_missed_payments_until")
+        # Old character challenges are no longer listed, but lives that play them are still scored.
+        survive = next(ch.model_dump() for ch in sim_api.challenges()
+                       if ch.goal["type"] == "no_missed_payments_until")
         auth_r = await c.post("/v1/auth/demo", json={"device_id": "challenge-device-01"})
         auth = {"Authorization": f"Bearer {auth_r.json()['access_token']}"}
         life = (await c.post("/v1/lives", json={"mode": "preset", "preset_id": survive["character_id"],
@@ -99,6 +101,5 @@ async def test_challenges_route_and_latching(monkeypatch: pytest.MonkeyPatch) ->
         assert entry["status"] in ("won", "lost")
         assert entry["status"] == ("won" if life["index"]["missed_payments"] == 0 else "lost")
         body = (await c.get("/v1/challenges", headers=auth)).json()
-        mine = [p for p in body["progress"] if p["life_id"] == life["id"]]
-        assert any(p["challenge_id"] == survive["id"] and p["status"] == entry["status"] for p in mine)
+        assert not [p for p in body["progress"] if p.get("life_id") == life["id"]], "only offered challenges listed"
         assert (await c.get("/v1/challenges")).json().get("progress", []) == [], "no progress without a token"

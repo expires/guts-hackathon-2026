@@ -1,0 +1,558 @@
+# Student money events (ADR 0052). Schema: lifeline_sim/events/schema.py
+#
+# They fire only on student path lives (`on_path`), so lives without a path draw exactly as before.
+# Tags:
+# - quick: Quick Life may pick it. stage_study / stage_work / stage_any: the path stage it fits.
+#   Quick Life checks the stage tag, the age and year range and data presence, never `when`
+#   (so earlier choices do not change which events a room meets).
+# - want: money spent on a want; counts as discretionary spending in the Quick Life habit score.
+# - want_weekly effects: change to weekly spending on wants (2024 pounds) for the rest of the life.
+# - The default choice of every quick event is neutral (no change or a small one), ADR 0061.
+# - subscription: a monthly subscription; counts in the habit score's subscription creep.
+# Fixed costs are 2024 pounds scaled by `price_level` (ONS CPI). Railcard and Lifetime ISA numbers come
+# from lifeline_engine.rules (rule.railcard_16_25_price_1y, rule.railcard_16_25_discount,
+# rule.lisa_bonus_rate, rule.lisa_allowance).
+
+- id: money.student_overdraft
+  area: money
+  tags: [quick, stage_study, want]
+  emoji: "🏦"
+  title: A 0% student overdraft
+  text: "Your bank gives students a 0% overdraft of £{limit:,.0f}. Friends are booking a £{trip:,.0f} trip on theirs."
+  concept_id: debt
+  eligible:
+    age: [18, 24]
+    when: is_student
+  probability: on_path * 0.15
+  facts:
+    limit: round(1500 * price_level)
+    trip: round(600 * price_level)
+  choices:
+    - id: leave
+      label: Leave it for now
+      emoji: "🤷"
+      hint: No change
+      default: true
+      text: "You have not decided. The overdraft is there if you need it."
+      good: false
+      effects: { }
+    - id: keep
+      label: Keep it for emergencies and budget
+      emoji: "🛟"
+      hint: No new debt
+      text: "You left the overdraft alone. It is there if something breaks."
+      good: true
+      effects: { happiness: -1, want_weekly: -35 }
+    - id: trip
+      label: Book the trip
+      emoji: "✈️"
+      hint: "£{trip:,.0f} of overdraft to pay back"
+      text: "Great trip. You now owe £{trip:,.0f} on the overdraft, and it is only 0% while you study."
+      good: false
+      effects: { other_debt: trip, happiness: 6, want_weekly: 45 }
+
+- id: money.bnpl_trainers
+  area: money
+  tags: [quick, stage_any, want]
+  emoji: "👟"
+  title: Pay in 3?
+  text: "New trainers cost £{cost:,.0f}. The checkout offers pay in 3 with a £{late_fee:,.0f} fee if a payment is late."
+  concept_id: credit-cards
+  eligible:
+    age: [18, 25]
+  probability: on_path * 0.12
+  facts:
+    cost: round(120 * price_level)
+    late_fee: round(12 * price_level)
+    late_total: cost + late_fee
+    cheap: round(cost * 0.5)
+  choices:
+    - id: cheaper
+      label: Buy a cheaper pair now
+      emoji: "🏷️"
+      hint: "About £{cheap:,.0f}"
+      default: true
+      text: "You paid £{cheap:,.0f} for a cheaper pair."
+      good: false
+      effects: { cash: -cheap }
+    - id: skip
+      label: Skip them
+      emoji: "🙅"
+      hint: Keep your money
+      text: "You kept your old trainers and your money."
+      good: true
+      effects: { happiness: -1, want_weekly: -35 }
+    - id: pay_later
+      label: Pay in 3
+      emoji: "🧾"
+      hint: "£{cost:,.0f} over 3 months"
+      branches:
+        - p: 0.7
+          text: "You paid all 3 on time. £{cost:,.0f} spent, no fees."
+          good: false
+          effects: { cash: -cost, happiness: 3, want_weekly: 45 }
+        - text: "One payment bounced. The trainers cost £{late_total:,.0f} with the fee."
+          good: false
+          effects: { cash: -late_total, happiness: 1, want_weekly: 45 }
+
+- id: bills.student_house_energy
+  area: bills
+  tags: [quick, stage_study]
+  emoji: "🔥"
+  title: The house energy bill
+  text: "Energy prices changed {energy_pct:.1f}% this year. Your share of the student house bill is about £{share:,.0f}."
+  concept_id: energy-bills
+  eligible:
+    age: [18, 24]
+    when: is_student
+  probability: on_path * 0.12
+  facts:
+    energy_pct: energy_price_change
+    share: round(450 * price_level * (1 + energy_price_change / 100))
+    saving: round(share * 0.15)
+    extra: round(share * 0.25)
+  choices:
+    - id: as_billed
+      label: Pay your share as billed
+      emoji: "🧾"
+      hint: "About £{share:,.0f}"
+      default: true
+      text: "You paid your share of about £{share:,.0f}."
+      good: false
+      effects: { }
+    - id: ignore
+      label: Leave the heating on
+      emoji: "🌡️"
+      hint: "About £{extra:,.0f} more"
+      text: "The bill came in £{extra:,.0f} higher than your share."
+      good: false
+      effects: { cash: -extra, happiness: 2, want_weekly: 20 }
+    - id: cut
+      label: Agree a house plan
+      emoji: "🧦"
+      hint: "Save about £{saving:,.0f}"
+      text: "Timers and jumpers saved you about £{saving:,.0f}."
+      good: true
+      effects: { cash: saving, happiness: -1, want_weekly: -35 }
+
+- id: study.term_budget
+  area: study
+  tags: [quick, stage_study, want]
+  emoji: "📆"
+  title: Make your money last the term
+  text: "Your maintenance loan instalment of £{instalment:,.0f} has landed. It has to last about 13 weeks."
+  concept_id: budgeting
+  eligible:
+    age: [18, 24]
+    when: is_student
+  probability: on_path * 0.15
+  facts:
+    instalment: round(10000 * price_level / 3)
+    weekly: round(instalment / 13)
+    kept: round(instalment * 0.08)
+    overspend: round(instalment * 0.15)
+    small: round(instalment * 0.04)
+  choices:
+    - id: rough
+      label: A rough plan in your head
+      emoji: "🧠"
+      hint: "Might go over a little"
+      default: true
+      text: "Your rough plan mostly worked. You went about £{small:,.0f} over."
+      good: false
+      effects: { cash: -small }
+    - id: freestyle
+      label: Spend as it comes
+      emoji: "🛍️"
+      hint: "Often runs out early"
+      text: "The money ran out in week 10. You spent £{overspend:,.0f} more than planned."
+      good: false
+      effects: { cash: -overspend, happiness: 2, want_weekly: 45 }
+    - id: weekly
+      label: Set a weekly budget
+      emoji: "🗓️"
+      hint: "Keep about £{kept:,.0f}"
+      text: "You stuck to £{weekly:,.0f} a week and had £{kept:,.0f} left at the end of term."
+      good: true
+      effects: { savings: kept, happiness: -1, smarts: 1, want_weekly: -35 }
+
+- id: bills.railcard
+  area: bills
+  tags: [quick, stage_any]
+  emoji: "🚆"
+  title: A 16-25 Railcard?
+  text: "You spend about £{fares:,.0f} a year on train fares. A 16-25 Railcard costs £35 and takes a third off most fares."
+  concept_id: budgeting
+  eligible:
+    age: [18, 25]
+  probability: on_path * 0.1
+  facts:
+    fares: round(300 * price_level)
+    card: 35
+    saving: round(fares / 3 - card)
+  choices:
+    - id: as_now
+      label: Buy tickets as you go
+      emoji: "🎟️"
+      hint: No card
+      default: true
+      text: "You bought tickets as you went, at full price."
+      good: false
+      effects: { }
+    - id: skip
+      label: Take taxis when trains are dear
+      emoji: "🚕"
+      hint: Costs more each week
+      text: "Taxis add up. Your weekly spending went up."
+      good: false
+      effects: { happiness: 0, want_weekly: 20 }
+    - id: buy
+      label: Buy the Railcard
+      emoji: "💳"
+      hint: "Save about £{saving:,.0f} a year"
+      text: "The card paid for itself. You saved about £{saving:,.0f} this year."
+      good: saving > 0
+      effects: { cash: saving, want_weekly: -35 }
+
+- id: money.festival_ticket
+  area: money
+  tags: [quick, stage_any, want]
+  emoji: "🎪"
+  title: Festival tickets
+  text: "Tickets for a summer festival cost £{ticket:,.0f}. You do not have the cash right now."
+  concept_id: credit-cards
+  eligible:
+    age: [18, 25]
+  probability: on_path * 0.1
+  facts:
+    ticket: round(280 * price_level)
+    card_cost: round(ticket * (1 + (bank_rate + 18) / 100))
+    day: round(ticket * 0.4)
+  choices:
+    - id: day
+      label: Go for one day
+      emoji: "🎟️"
+      hint: "About £{day:,.0f}"
+      default: true
+      text: "You went for one day for about £{day:,.0f}."
+      good: false
+      effects: { cash: -day, happiness: 3 }
+    - id: card
+      label: Put it on a card
+      emoji: "💳"
+      hint: "About £{card_cost:,.0f} with a year of interest"
+      text: "Best weekend of the year. It costs about £{card_cost:,.0f} once the card interest is in."
+      good: false
+      effects: { other_debt: card_cost, happiness: 6, want_weekly: 45 }
+    - id: save_up
+      label: Save up for next year
+      emoji: "🐷"
+      hint: No debt
+      text: "You skipped it and started a pot for next year."
+      good: true
+      effects: { happiness: -3, want_weekly: -35 }
+
+- id: money.safety_fund
+  area: money
+  tags: [quick, stage_any]
+  emoji: "🛟"
+  title: A 1 month safety fund
+  text: "One month of your costs is about £{month:,.0f}. A standing order could build that up in savings."
+  concept_id: emergency-fund
+  eligible:
+    age: [18, 25]
+  probability: on_path * 0.12
+  facts:
+    month: round(max(monthly_costs, 300 * price_level))
+    interest: round(month * best_savings_rate / 100)
+    part: round(month * 0.25)
+  choices:
+    - id: little
+      label: Save a little when you can
+      emoji: "🪙"
+      hint: "About £{part:,.0f}"
+      default: true
+      text: "You moved about £{part:,.0f} into savings."
+      good: false
+      effects: { cash: -part, savings: part }
+    - id: later
+      label: Spend the spare money
+      emoji: "🛍️"
+      hint: Nothing set aside
+      text: "You spent the spare money. One surprise bill would go on a card."
+      good: false
+      effects: { happiness: 0, want_weekly: 20 }
+    - id: save
+      label: Set up the standing order
+      emoji: "🏦"
+      hint: "£{month:,.0f} into savings"
+      text: "You built a £{month:,.0f} safety fund. It earns about £{interest:,.0f} a year in interest."
+      good: true
+      effects: { cash: -month, savings: month, happiness: 2, want_weekly: -35 }
+
+- id: money.lifetime_isa
+  area: money
+  tags: [quick, stage_any]
+  emoji: "🏠"
+  title: A Lifetime ISA?
+  text: "A Lifetime ISA adds a 25% government bonus to what you pay in, up to £4,000 a year. You could put in £{amount:,.0f}."
+  concept_id: compound-interest
+  eligible:
+    age: [18, 25]
+    years: [2017, 2200]
+  probability: on_path * 0.1
+  facts:
+    amount: round(clamp(liquid * 0.5, 200, 4000))
+    bonus: round(amount * 0.25)
+  choices:
+    - id: not_now
+      label: Not now
+      emoji: "⏳"
+      hint: No change
+      default: true
+      text: "You left it for now. No bonus this year."
+      good: false
+      effects: { }
+    - id: skip
+      label: Spend the money instead
+      emoji: "🛍️"
+      hint: No bonus
+      text: "You spent the money. No bonus."
+      good: false
+      effects: { happiness: 0, want_weekly: 20 }
+    - id: open
+      label: Pay in now
+      emoji: "🎁"
+      hint: "£{bonus:,.0f} bonus"
+      text: "You paid in £{amount:,.0f} and the government added £{bonus:,.0f}. It is for a first home or age 60."
+      good: true
+      effects: { cash: -amount, savings: amount + bonus, happiness: 2, want_weekly: -35 }
+
+- id: work.exam_term_shifts
+  area: work
+  tags: [stage_study]
+  emoji: "📚"
+  title: Extra shifts in exam term
+  text: "Your boss offers extra shifts worth £{extra:,.0f} during exam term."
+  concept_id: human-capital
+  eligible:
+    age: [18, 24]
+    when: is_student
+  probability: on_path * 0.12
+  facts:
+    extra: round(max(income, 3000 * price_level) * 0.15)
+  choices:
+    - id: revise
+      label: Say no and revise
+      emoji: "📖"
+      hint: Grades first
+      default: true
+      text: "You turned the shifts down and your exams went well."
+      good: true
+      effects: { smarts: 4, happiness: -1 }
+    - id: shifts
+      label: Take the shifts
+      emoji: "💷"
+      hint: "+£{extra:,.0f}"
+      branches:
+        - p: 0.5
+          text: "You earned £{extra:,.0f} and still passed well."
+          good: true
+          effects: { cash: extra, happiness: -2 }
+        - text: "You earned £{extra:,.0f} but your grades slipped."
+          good: false
+          effects: { cash: extra, smarts: -5, happiness: -3 }
+
+- id: money.streaming_bundle
+  area: money
+  tags: [quick, stage_any, want, subscription]
+  emoji: "📺"
+  title: Another subscription
+  text: "A streaming and music bundle costs £{monthly:,.0f} a month. That is £{yearly:,.0f} a year."
+  concept_id: subscriptions
+  eligible:
+    age: [18, 25]
+  probability: on_path * 0.12
+  facts:
+    monthly: round(18 * price_level)
+    yearly: monthly * 12
+  choices:
+    - id: keep_one
+      label: Keep the one you have
+      emoji: "📱"
+      hint: No change
+      default: true
+      text: "You kept the subscription you already had."
+      good: false
+      effects: { }
+    - id: sign_up
+      label: Sign up
+      emoji: "✅"
+      hint: "£{yearly:,.0f} a year"
+      text: "You signed up. £{monthly:,.0f} now leaves every month."
+      good: false
+      effects: { living: monthly, happiness: 2, want_weekly: 35 }
+    - id: share
+      label: Share a friend's plan
+      emoji: "🤝"
+      hint: Most of the fun, little cost
+      text: "You use a friend's plan and pay nothing extra."
+      good: true
+      effects: { happiness: 1, want_weekly: -30 }
+
+- id: money.pension_opt_out
+  area: money
+  tags: [quick, stage_work]
+  emoji: "🧓"
+  title: Your first workplace pension
+  text: "Your payslip shows £{you_pay:,.0f} a year going into a pension, and your employer adds £{employer:,.0f}."
+  concept_id: pensions
+  eligible:
+    age: [18, 25]
+    when: employed and not is_student
+  probability: on_path * 0.12
+  facts:
+    you_pay: round(income * 0.05)
+    employer: round(income * 0.03)
+    take_home: round(you_pay * 0.8)
+    lost: you_pay + employer
+    extra_in: round(income * 0.01)
+  choices:
+    - id: stay
+      label: Stay in
+      emoji: "📈"
+      hint: Keep the free money
+      default: true
+      text: "You stayed in. Your employer adds £{employer:,.0f} a year for free."
+      good: true
+      effects: { happiness: 0 }
+    - id: pay_more
+      label: Pay in 1% more
+      emoji: "🌱"
+      hint: "About £{extra_in:,.0f} a year more"
+      text: "You pay in about £{extra_in:,.0f} more a year and spend a little less."
+      good: true
+      effects: { cash: -extra_in, pension: extra_in, want_weekly: -25 }
+    - id: opt_out
+      label: Opt out for more pay now
+      emoji: "💷"
+      hint: "+£{take_home:,.0f} pay, -£{lost:,.0f} pension"
+      text: "You got £{take_home:,.0f} more take-home pay and gave up £{lost:,.0f} of pension this year."
+      good: false
+      effects: { cash: take_home, pension: -lost, happiness: 2, want_weekly: 40 }
+
+- id: work.city_job_offer
+  area: work
+  tags: [quick, stage_work]
+  emoji: "🏙️"
+  title: A job in a bigger city
+  text: "A firm offers you £{pay_gain:,.0f} a year more, but rent there is about £{rent_new:,.0f} a month."
+  concept_id: regional-pay
+  eligible:
+    age: [20, 25]
+    when: employed and not is_student
+  probability: on_path * 0.1
+  facts:
+    pay_gain: round(income * 0.2)
+    rent_new: round(house_price * 0.045 / 12 * 1.3)
+    rent_change: rent_new - rent
+    take_home_gain: round(pay_gain * 0.67)
+  choices:
+    - id: not_yet
+      label: Say not yet
+      emoji: "🤔"
+      hint: No change
+      default: true
+      text: "You said not yet. Nothing changes for now."
+      good: false
+      effects: { }
+    - id: stay
+      label: Stay and keep costs low
+      emoji: "🏡"
+      hint: Spend less
+      text: "You stayed put and cut back on going out."
+      good: false
+      effects: { happiness: 1, want_weekly: -25 }
+    - id: move
+      label: Take the job
+      emoji: "📦"
+      hint: "+£{pay_gain:,.0f} pay, rent £{rent_new:,.0f} a month"
+      text: "You moved for £{pay_gain:,.0f} more pay and £{rent_new:,.0f} a month rent."
+      good: take_home_gain > 12 * rent_change
+      effects: { income: pay_gain, set_housing: rent, rent: rent_change, happiness: 3, want_weekly: 45 }
+
+- id: money.clear_klarna
+  area: money
+  tags: [quick, stage_work, want]
+  emoji: "🧹"
+  title: Clear the pay-later plans
+  text: "You owe £{owed:,.0f} across 3 pay-later plans. Each late payment costs about £{fee:,.0f}."
+  concept_id: debt
+  eligible:
+    age: [18, 25]
+  probability: on_path * 0.1
+  facts:
+    owed: round(300 * price_level)
+    fee: round(12 * price_level)
+    rolled: owed + 3 * fee
+    part: round(owed / 3)
+  choices:
+    - id: next_one
+      label: Pay the next instalment
+      emoji: "📅"
+      hint: "£{part:,.0f} now"
+      default: true
+      text: "You paid the next £{part:,.0f}. The rest is still to pay."
+      good: false
+      effects: { cash: -part }
+    - id: roll
+      label: Keep rolling them
+      emoji: "🔁"
+      hint: "About £{rolled:,.0f} by the end"
+      text: "You missed a few dates. The plans grew to £{rolled:,.0f}."
+      good: false
+      effects: { cash: -rolled, want_weekly: 40 }
+    - id: clear
+      label: Clear them all now
+      emoji: "✅"
+      hint: "Pay £{owed:,.0f} once"
+      text: "You paid £{owed:,.0f} and closed all 3 plans."
+      good: true
+      effects: { cash: -owed, happiness: 3, want_weekly: -35 }
+
+- id: work.ask_for_raise
+  area: work
+  tags: [stage_work]
+  emoji: "🗣️"
+  title: Ask for a raise?
+  text: "Typical full-time pay here is £{median:,.0f}. You earn £{pay:,.0f}."
+  concept_id: negotiation
+  eligible:
+    age: [19, 25]
+    when: employed and not is_student
+  probability: on_path * 0.1
+  facts:
+    median: round(median_pay)
+    pay: round(income)
+    raise_amount: round(max(income * 0.05, 0))
+  choices:
+    - id: wait
+      label: Wait for the yearly review
+      emoji: "⏳"
+      hint: No change now
+      default: true
+      text: "You waited. Pay moves with the yearly review."
+      good: false
+      effects: { happiness: 0 }
+    - id: ask
+      label: Ask, with local pay data
+      emoji: "📊"
+      hint: "Could be +£{raise_amount:,.0f} a year"
+      branches:
+        - p: 0.55
+          text: "It worked. Your pay rose £{raise_amount:,.0f} a year."
+          good: true
+          effects: { income: raise_amount, happiness: 4 }
+        - text: "Not this year, but your boss knows you want to grow."
+          good: false
+          effects: { happiness: -1 }

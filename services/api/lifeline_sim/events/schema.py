@@ -23,7 +23,8 @@ from lifeline_sim.expr import Expr
 # Effect targets. Additive targets add the value. `set_*` targets replace a field.
 ASSET_TARGETS = ("cash", "savings", "investments", "crypto", "pension", "property_value")
 DEBT_TARGETS = ("other_debt", "student_loan", "mortgage_balance")
-FLOW_TARGETS = ("income", "rent", "living")  # income: gross per year; rent, living: per month
+# income: gross per year; rent, living: per month; want_weekly: weekly spending on wants (2024 pounds, path lives)
+FLOW_TARGETS = ("income", "rent", "living", "want_weekly")
 STAT_TARGETS = ("happiness", "health", "smarts")
 COUNT_TARGETS = ("children",)
 SET_TARGETS = (

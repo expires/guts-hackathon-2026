@@ -66,6 +66,15 @@ class ChatRequest(_M):
     context: ChatContext | None = None
 
 
+ChatMode = Literal["checked", "general"]
+"""checked = an engine tool was used, every personal number verified ("Checked with your data").
+general = no engine tool ("General answer"); must not state the user's own numbers (ADR 0051)."""
+
+DISCLAIMER = (
+    "Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions."
+)
+
+
 class ChatBubble(_M):
     id: str
     kind: Literal["answer", "caveat", "question", "general_knowledge"]
@@ -113,6 +122,12 @@ class ToolCall(_M):
         "news_search",
         "rate_decision_dates",
         "facts_table",
+        "boe_rates",
+        "web_search",
+        "user_balance",
+        "habit_score",
+        "inflation",
+        "fx_convert",
     ]
     ok: bool
     duration_ms: int = Field(ge=0)
@@ -123,11 +138,17 @@ class ChatResponse(_M):
     message_id: str
     reply_to: str = Field(description="The user's message id this answer group attaches to")
     reaction: Reaction
-    bubbles: list[ChatBubble] = Field(min_length=1, max_length=4)
+    mode: ChatMode = "checked"
+    bubbles: list[ChatBubble] = Field(min_length=1, max_length=2, description="Voice: usually one bubble, two at most")
     highlights: list[Highlight] = Field(default_factory=list)
     facts: list[ChatFact] = Field(default_factory=list)
     sources: list[ChatSource] = Field(default_factory=list)
     follow_up_question: str | None = Field(default=None, max_length=300)
+    suggestions: list[str] = Field(
+        default_factory=list,
+        max_length=2,
+        description="Follow-up chips, e.g. 'Next move', 'Summary'. Never a lone 'Yes'.",
+    )
     confidence: float = Field(ge=0, le=1)
     tool_calls: list[ToolCall] = Field(default_factory=list, max_length=5)
     verified: bool = Field(description="True when every number passed the verifier; False means template summary")
@@ -137,7 +158,9 @@ class ChatResponse(_M):
         max_length=3,
         description="In-app destinations, e.g. the out-of-scope reply links to the Next Move",
     )
-    disclaimer: Literal["Not financial advice"] = "Not financial advice"
+    disclaimer: Literal[
+        "Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions."
+    ] = "Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions."
 
 
 class ChatThreadSummary(_M):
@@ -185,7 +208,7 @@ class BubbleEvent(_M):
 class ChatStreamEvent(_M):
     """One Server-Sent Event from POST /v1/chat/stream. Order: reaction, tool_step*, verifying?, bubble+, done."""
 
-    type: Literal["reaction", "tool_step", "verifying", "bubble", "done", "error"]
+    type: Literal["reaction", "tool_step", "verifying", "bubble", "done", "error", "keepalive"]
     seq: int = Field(ge=0)
     elapsed_ms: int = Field(ge=0)
     reaction: Reaction | None = None

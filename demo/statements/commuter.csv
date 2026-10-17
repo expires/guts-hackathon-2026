@@ -1,0 +1,78 @@
+Transaction ID,Date,Time,Type,Name,Emoji,Category,Amount,Currency,Local amount,Local currency,Notes and #tags,Address,Receipt,Description,Category split,Money Out,Money In
+tx_0000d0ca485ddb72e69649,17/07/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_000069fca287a7423aed25,18/07/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000895a6f2b4fbc30717f,19/07/2026,04:10:00,Card payment,Amazon Prime,📦,Shopping,-4.49,GBP,-4.49,GBP,,,,AMAZON PRIME STUDENT,,-4.49,
+tx_0000cc136d8ffd7386f830,22/07/2026,16:36:00,Card payment,Northern,🚆,Transport,-6.20,GBP,-6.20,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-6.20,
+tx_0000305f5d7e144ee56db0,24/07/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_0000284e8131095d61f003,25/07/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000344522e92c7b7b8b86,26/07/2026,11:36:42,Card payment,Greggs,🥐,Eating out,-2.31,GBP,-2.31,GBP,,,,GREGGS MANCHESTER PICC,,-2.31,
+tx_000085fe5d4b19d8e8759a,31/07/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_00006b8828bd83e1484893,01/08/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000395df0d7328b2d6427,02/08/2026,10:13:59,Card payment,Boots,💊,Personal care,-3.87,GBP,-3.87,GBP,,,,BOOTS BOLTON,,-3.87,
+tx_0000cd0133473bb595e2b0,03/08/2026,04:10:00,Card payment,Spotify,🎵,Entertainment,-5.99,GBP,-5.99,GBP,,,,SPOTIFY STUDENT,,-5.99,
+tx_00005511245f884c427424,07/08/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_000016f866a49d50b9e7f7,08/08/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000da48ae4235e03cc44f,14/08/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_00000c51924c453b79a322,15/08/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_00002c24215635f60ad8da,16/08/2026,18:08:34,Card payment,Greggs,🥐,Eating out,-2.88,GBP,-2.88,GBP,,,,GREGGS MANCHESTER PICC,,-2.88,
+tx_00009576ff441479fcf66b,17/08/2026,08:34:03,Card payment,Greggs,🥐,Eating out,-2.80,GBP,-2.80,GBP,,,,GREGGS MANCHESTER PICC,,-2.80,
+tx_00009a96a27ce645394d9d,19/08/2026,04:10:00,Card payment,Amazon Prime,📦,Shopping,-4.49,GBP,-4.49,GBP,,,,AMAZON PRIME STUDENT,,-4.49,
+tx_0000f756823f953dd86492,19/08/2026,14:32:09,Card payment,Greggs,🥐,Eating out,-2.66,GBP,-2.66,GBP,,,,GREGGS MANCHESTER PICC,,-2.66,
+tx_0000dbeb79108be90c0428,21/08/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_000002a9df5acb7b96f678,22/08/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000e3d844fabca33a8b8a,22/08/2026,16:12:12,Card payment,Northern,🚆,Transport,-6.20,GBP,-6.20,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-6.20,
+tx_0000670a00e4b6ca7ba53d,25/08/2026,13:10:48,Card payment,Greggs,🥐,Eating out,-3.94,GBP,-3.94,GBP,,,,GREGGS MANCHESTER PICC,,-3.94,
+tx_00002baf43509fe9431cc1,28/08/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_0000e94c04f7c78066f4b4,29/08/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000839ba44b4241e17b2c,30/08/2026,14:04:20,Card payment,Primark,👕,Shopping,-16.47,GBP,-16.47,GBP,,,,PRIMARK BOLTON,,-16.47,
+tx_0000c6822c6b2194f85c1c,31/08/2026,16:43:28,Card payment,Northern,🚆,Transport,-6.20,GBP,-6.20,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-6.20,
+tx_0000ff550958367b5730b2,01/09/2026,12:00:12,Card payment,Greggs,🥐,Eating out,-2.77,GBP,-2.77,GBP,,,,GREGGS MANCHESTER PICC,,-2.77,
+tx_00002c3ba521d38601cc48,03/09/2026,04:10:00,Card payment,Spotify,🎵,Entertainment,-5.99,GBP,-5.99,GBP,,,,SPOTIFY STUDENT,,-5.99,
+tx_0000031d3e7afb989bc55b,04/09/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_00000e7a76d9be8c97560c,05/09/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_00007242b38e47ec710a53,10/09/2026,20:06:26,Card payment,Northern,🚆,Transport,-6.20,GBP,-6.20,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-6.20,
+tx_00004e52742a72e88154e2,11/09/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_00002fc7841553a9afd940,12/09/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000e90332a811e6f4e725,14/09/2026,12:00:00,Card payment,16-25 Railcard,🎫,Transport,-35.00,GBP,-35.00,GBP,,,,RAILCARD.CO.UK 16-25 RAILCARD,,-35.00,
+tx_0000c600e7f5061b110fa4,17/09/2026,07:33:03,Card payment,Greggs,🥐,Eating out,-2.72,GBP,-2.72,GBP,,,,GREGGS MANCHESTER PICC,,-2.72,
+tx_0000a130e0933994731b09,18/09/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_000089825d907147f80e82,19/09/2026,04:10:00,Card payment,Amazon Prime,📦,Shopping,-4.49,GBP,-4.49,GBP,,,,AMAZON PRIME STUDENT,,-4.49,
+tx_0000a137d9ea6f3f1e1243,19/09/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_000088b46fc152e420bdf1,21/09/2026,08:21:44,Card payment,Boots,💊,Personal care,-4.33,GBP,-4.33,GBP,,,,BOOTS BOLTON,,-4.33,
+tx_00009c35c291980363e2d8,21/09/2026,16:56:27,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000ef17a0b4cd390ebceb,22/09/2026,09:13:53,Card payment,Greggs,🥐,Eating out,-2.52,GBP,-2.52,GBP,,,,GREGGS MANCHESTER PICC,,-2.52,
+tx_00002d134054ae80d2d068,22/09/2026,12:20:21,Card payment,Boots,💊,Personal care,-9.72,GBP,-9.72,GBP,,,,BOOTS BOLTON,,-9.72,
+tx_000086a82a902cf2eae711,22/09/2026,17:43:01,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000877965c2b6e3fdb3b5,22/09/2026,20:36:13,Card payment,Tesco,🛒,Eating out,-3.85,GBP,-3.85,GBP,,,,TESCO EXPRESS OXFORD RD,,-3.85,
+tx_00004b81cd47393c2f1c91,23/09/2026,19:21:33,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000976e090b13760d6e2e,24/09/2026,14:20:20,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_00007cd6ffcc4a6ffa3692,25/09/2026,08:43:57,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_00008feeb1968f4369fb78,25/09/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_00005bc9008f716d7422cb,26/09/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000d969efd7b23295a82a,26/09/2026,20:18:20,Card payment,Greggs,🥐,Eating out,-1.55,GBP,-1.55,GBP,,,,GREGGS MANCHESTER PICC,,-1.55,
+tx_00007eff9943d9d820944e,27/09/2026,18:23:56,Card payment,Greggs,🥐,Eating out,-3.15,GBP,-3.15,GBP,,,,GREGGS MANCHESTER PICC,,-3.15,
+tx_00002e2cd13b9ecdf853ee,28/09/2026,08:20:35,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000487b7f9849a04da9cc,30/09/2026,12:35:28,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_00008dbd392480d6fb9326,30/09/2026,22:19:50,Card payment,Tesco,🛒,Eating out,-3.85,GBP,-3.85,GBP,,,,TESCO EXPRESS OXFORD RD,,-3.85,
+tx_0000371547ad7b652d1717,02/10/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_0000af948665775d984d55,02/10/2026,21:59:06,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_000079ed0d6d0931a2b137,03/10/2026,04:10:00,Card payment,Spotify,🎵,Entertainment,-5.99,GBP,-5.99,GBP,,,,SPOTIFY STUDENT,,-5.99,
+tx_00007fd129d60fe96ac867,03/10/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_0000c292c6efe2af6631f1,03/10/2026,13:09:25,Card payment,Manchester Students' Union,☕,Eating out,-2.56,GBP,-2.56,GBP,,,,MANCHESTER SU CAFE,,-2.56,
+tx_0000839a0efc32baa190a8,05/10/2026,06:00:00,Bacs (Direct Credit),University of Manchester,,Income,1000.00,GBP,1000.00,GBP,,,,ACCESS GRANT TERM 1,,,1000.00
+tx_00006f44839e44c8cbc9a1,05/10/2026,08:00:00,Pot transfer,House deposit,,Savings,-400.00,GBP,-400.00,GBP,,,,Moved to House deposit pot,,-400.00,
+tx_00001b670f2ea5bb815c2e,05/10/2026,11:00:37,Card payment,Manchester Students' Union,☕,Eating out,-1.81,GBP,-1.81,GBP,,,,MANCHESTER SU CAFE,,-1.81,
+tx_0000a61afaf02bcfc73f8e,07/10/2026,13:14:58,Card payment,Tesco,🛒,Eating out,-3.85,GBP,-3.85,GBP,,,,TESCO EXPRESS OXFORD RD,,-3.85,
+tx_0000d4c1860287ac65d67b,07/10/2026,20:15:53,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_00004453686a047a8f0828,08/10/2026,18:12:20,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000824da2ad36c3948772,09/10/2026,12:22:38,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000c7df587638efe7590e,09/10/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00
+tx_0000c8396194388511a1f9,10/10/2026,08:00:00,Pot transfer,House deposit,,Savings,-25.00,GBP,-25.00,GBP,,,,Moved to House deposit pot,,-25.00,
+tx_000052a8f6c495b7768bbb,12/10/2026,09:06:42,Card payment,Greggs,🥐,Eating out,-2.78,GBP,-2.78,GBP,,,,GREGGS MANCHESTER PICC,,-2.78,
+tx_00006f7093fe474147c723,12/10/2026,13:48:56,Card payment,Manchester Students' Union,☕,Eating out,-3.05,GBP,-3.05,GBP,,,,MANCHESTER SU CAFE,,-3.05,
+tx_00003c3c3c304234247f66,12/10/2026,18:17:24,Card payment,Tesco,🛒,Eating out,-3.85,GBP,-3.85,GBP,,,,TESCO EXPRESS OXFORD RD,,-3.85,
+tx_0000a426aef51a4242d0d8,13/10/2026,21:35:34,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_000065684b231b9486914f,14/10/2026,10:42:27,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_000029da7cce93180e9239,15/10/2026,20:09:50,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000fc7189c27656a2d9d0,16/10/2026,08:35:00,Card payment,Northern,🚆,Transport,-4.10,GBP,-4.10,GBP,,,,NORTHERN TRAINS BOLTON-MANCHESTER,,-4.10,
+tx_0000f44f167ab9d8d4703c,16/10/2026,17:30:00,Faster payment,S Patel,,Income,40.00,GBP,40.00,GBP,,,,Mum - train money,,,40.00

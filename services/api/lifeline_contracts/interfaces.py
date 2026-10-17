@@ -48,6 +48,14 @@ class DataHub(Protocol):
         """Money tab data for one user (ADR 0016). None in live mode without user data (ADR 0027). Never raises."""
         ...
 
+    async def fx_rate(self, base: str, quote: str) -> tuple[float, date] | None:
+        """Quote units per 1 base and the ECB reference date (Frankfurter). None when no real rate (ADR 0060)."""
+        ...
+
+    async def cpi(self) -> tuple[float, date] | None:
+        """Latest ONS CPI annual rate (%) and its month. None when no real value (ADR 0060)."""
+        ...
+
     async def bank_holidays(self, region: str | None) -> set[date]:
         """gov.uk bank holidays for the region's division (ADR 0017). Never raises."""
         ...

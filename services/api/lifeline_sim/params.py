@@ -6,6 +6,8 @@ so each number in the game traces to data or to a rule here.
 
 from __future__ import annotations
 
+from lifeline_engine import rules
+
 PRESENT_YEAR = 2026
 MAX_AGE = 110
 MIN_START_AGE = 16
@@ -32,9 +34,26 @@ PENSION_DRAWDOWN = 0.04  # minimum yearly drawdown in retirement; the gilt yield
 PENSION_ACCESS_AGE = 57  # UK normal minimum pension age from 2028
 PENSION_STOCK_SHARE = 0.6  # rest follows the 10-year gilt yield
 
-# Student loan, Plan 2.
-STUDENT_LOAN_RATE = 0.09
-STUDENT_LOAN_THRESHOLD = 27_295.0
+# Student loan for lives without a path loan plan: Plan 2 from the rules table (lifeline_engine.rules, 2026/27,
+# official URL and checked date there). Applied to every year, as before.
+STUDENT_LOAN_RATE = float(rules.get("student_loan_rate_plan2").value) / 100
+STUDENT_LOAN_THRESHOLD = float(rules.get("student_loan_plan2_threshold").value)
+
+# Student path lives (ADR 0052): monthly living costs, 2024 pounds, scaled by CPI and by the regional cost
+# factor (regional / UK median pay, Nomis ASHE, clamped to PATH_REGION_FACTOR_RANGE). Game assumptions for a
+# typical young adult's budget. Rent comes from regional house prices (GROSS_RENT_YIELD x SHARED_RENT_SHARE).
+PATH_ESSENTIALS_AT_HOME_2024 = 575.0  # board paid to parents 350, travel 100, phone 25, clothes, toiletries, other 100
+PATH_ESSENTIALS_STUDENT_2024 = 420.0  # food 180, travel 50, phone 25, bills 60, course 30, clothes and other 75
+PATH_ESSENTIALS_WORKER_2024 = 700.0  # food 250, travel 130, phone 30, bills and council tax 150, other 140
+PATH_REGION_FACTOR_RANGE = (0.85, 1.25)
+SHARED_RENT_SHARE = 0.6  # a room in a shared house or flat, as share of the rent for a whole home
+# Weekly spending on wants (eating out, going out, shopping, fun), 2024 pounds. Event choices raise or lower it.
+PATH_WANTS_WEEKLY_STUDENT_2024 = 35.0
+PATH_WANTS_WEEKLY_WORKER_2024 = 90.0  # includes holidays and gifts spread over the year
+PATH_WANTS_MIN_WEEKLY_2024 = 15.0  # choices never cut wants below this
+# Quick Life credit limit (ADR 0061): card and pay-later debt stops here; spending beyond it is missed payments.
+QUICK_CREDIT_LIMIT_2024 = 2_500.0  # typical first credit card limit for 18 to 25, 2024 pounds, scaled by CPI
+QUICK_CREDIT_LIMIT_MAX = 3_000.0
 
 # Students: maintenance loan while studying, a graduate job at GRADUATION_AGE.
 GRADUATION_AGE = 22

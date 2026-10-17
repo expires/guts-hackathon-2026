@@ -14,10 +14,11 @@ import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Request
 
-from lifeline_api import money
+from lifeline_api import macro, money
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.explain_bridge import explain_moves
@@ -60,14 +61,38 @@ def subject_seed(sub: str) -> int:
     return int.from_bytes(digest[:8], "big") % (MAX_SEED + 1)
 
 
-async def _compute(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
-    """Fresh next move. Pins the macro table so Test it replays with the same numbers."""
+REWORD_BUDGET_SECONDS = 2.0
+
+
+async def _compute(state: AppState, sub: str, *, reword: bool = True,
+                   fresh_only: bool = False) -> tuple[NextMoveResponse, str]:
+    """The next move. Pins the macro table so Test it replays with the same numbers.
+
+    Never waits for a cold MacroTable build or a slow LLM (V1 O1): it uses the last good table (labelled
+    cached) and engine wording when needed, answers, and finishes the stored move in the background.
+    """
     snap = await money.snapshot(state, sub)
-    table = await state.hub.macro_table()
+    if fresh_only:
+        table, fresh = await macro.table(state), True
+    else:
+        table, fresh = await macro.table_fast(state)
     digest = macro_hash(table)
     resp = await call_pure(next_move_engine.next_move, snap, table, money.today(snap), subject_seed(sub))
     resp = resp.model_copy(update={"meta": money.meta(snap), "generated_at": _utc_now()})
-    resp = await explain_moves(resp)
+    reworded = False
+    if reword:  # the LLM may only reword text
+        try:
+            resp = await asyncio.wait_for(explain_moves(resp), timeout=REWORD_BUDGET_SECONDS)
+            reworded = True
+        except TimeoutError:
+            pass
+    await _store(state, sub, resp, table, digest)
+    if not fresh or (reword and not reworded):
+        _finish_later(state, sub, reword=reword)
+    return resp, digest
+
+
+async def _store(state: AppState, sub: str, resp: NextMoveResponse, table: Any, digest: str) -> None:
     try:
         await state.store.put_macro(digest, table)
         await state.store.put_doc(sub, DOC_NEXT_MOVE,
@@ -75,7 +100,33 @@ async def _compute(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
     except StoreUnavailable:
         # The store is only a cache for this read. Test it and Do this recompute when they need it.
         log.warning("next move not cached: store unavailable")
-    return resp, digest
+
+
+def _finish_later(state: AppState, sub: str, *, reword: bool) -> None:
+    """Recompute with the fresh table and the LLM wording once they are ready, and store it."""
+    key = ("next-move-finish", sub)
+    if key in state.memo and not state.memo[key].done():
+        return
+
+    async def run() -> None:
+        snap = await money.snapshot(state, sub)
+        table = await macro.table(state)
+        resp = await call_pure(next_move_engine.next_move, snap, table, money.today(snap), subject_seed(sub))
+        resp = resp.model_copy(update={"meta": money.meta(snap), "generated_at": _utc_now()})
+        if reword:
+            resp = await explain_moves(resp)
+        await _store(state, sub, resp, table, macro_hash(table))
+
+    task = asyncio.ensure_future(run())
+    state.memo[key] = task
+    state.games.add(task)
+
+    def done(t: asyncio.Future[Any]) -> None:
+        state.games.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            log.info("background next move failed: %s", type(t.exception()).__name__)
+
+    task.add_done_callback(done)
 
 
 async def _latest(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
@@ -223,7 +274,7 @@ async def test_next_move(body: TestMoveRequest, request: Request, sub: Subject) 
     table = await state.store.get_macro(digest)
     if table is None:
         # The pinned table is gone (store reset). Pin the current table instead.
-        table = await state.hub.macro_table()
+        table = await macro.table(state)
         digest = macro_hash(table)
         await state.store.put_macro(digest, table)
 

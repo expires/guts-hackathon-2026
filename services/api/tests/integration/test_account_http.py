@@ -341,3 +341,23 @@ async def test_me_bank_name_from_connections(client: httpx.AsyncClient, monkeypa
 
     monkeypatch.setattr(app.state.lifeline.hub, "connections", connections, raising=False)
     assert (await client.get("/v1/me", headers=auth)).json()["bank_name"] == "Monzo"
+
+
+
+async def test_statement_keeps_entered_student_fields(live: httpx.AsyncClient) -> None:
+    from lifeline_api.main import app
+
+    auth = await sign_in(live, "merge-device-02")
+    sub = (await live.get("/v1/me", headers=auth)).json()["id"]
+    entered = {"postcode": "LS6 1AN", "housing": "parents", "monthly_take_home": 500, "is_student": True, "age": 20,
+               "student_loan_plan": "plan_5", "regular_costs": [{"name": "Phone", "monthly_amount": 15}],
+               "income_sources": [{"id": "ml", "kind": "maintenance_loan", "amount": 1500, "schedule": "termly",
+                                   "next_date": "2027-01-12"}]}
+    assert (await live.put("/v1/finance/manual", json=entered, headers=auth)).status_code == 200
+    content = (FIXTURES / "statement_monzo_sample.csv").read_bytes()
+    r = await live.post("/v1/finance/statements", files={"file": ("m.csv", content, "text/csv")}, headers=auth)
+    assert r.status_code == 201
+    snap = await app.state.lifeline.hub.get_user_snapshot(sub)
+    assert snap.age == 20 and snap.is_student is True and snap.housing == "parents"
+    assert snap.student_loan_plan == "plan_5" and snap.monthly_costs == 15
+    assert any(s.kind == "maintenance_loan" for s in snap.income_sources)

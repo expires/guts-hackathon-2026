@@ -1,0 +1,474 @@
+{
+  "samples": [
+    {
+      "id": "scholarship",
+      "title": "Scholarship student",
+      "description": "Scholarship and bursary of about £420 a month. Halls paid by the scholarship. No debt, steady habits.",
+      "funding": [
+        "scholarship",
+        "bursary"
+      ],
+      "months": 3,
+      "team": false,
+      "hints": {
+        "is_student": true,
+        "age": 19,
+        "housing": "rent",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "scholarship_living",
+            "kind": "scholarship",
+            "amount": 280.0,
+            "schedule": "monthly",
+            "next_date": "2026-11-02",
+            "dates": [
+              "2026-08-03",
+              "2026-09-01",
+              "2026-10-01",
+              "2026-11-02"
+            ]
+          },
+          {
+            "id": "bursary_monthly",
+            "kind": "bursary",
+            "amount": 140.0,
+            "schedule": "monthly",
+            "next_date": "2026-11-16",
+            "dates": [
+              "2026-08-17",
+              "2026-09-15",
+              "2026-10-15",
+              "2026-11-16"
+            ]
+          }
+        ],
+        "debts": [],
+        "monthly_costs": 15.99,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 919.16
+          },
+          {
+            "id": "monzo_savings",
+            "name": "Monzo Pots",
+            "kind": "savings",
+            "provider": "Monzo",
+            "balance": 330.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "rich",
+      "title": "Rich student",
+      "description": "About £2,000 a month from parents. Rents a city flat, many subscriptions, Klarna for clothes.",
+      "funding": [
+        "family"
+      ],
+      "months": 3,
+      "team": false,
+      "hints": {
+        "is_student": true,
+        "age": 20,
+        "housing": "rent",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "family_allowance",
+            "kind": "family",
+            "amount": 2000.0,
+            "schedule": "monthly",
+            "next_date": "2026-11-02",
+            "dates": [
+              "2026-08-03",
+              "2026-09-01",
+              "2026-10-01",
+              "2026-11-02"
+            ]
+          }
+        ],
+        "debts": [
+          {
+            "id": "bnpl_klarna",
+            "kind": "bnpl",
+            "balance": 138.0,
+            "rate_pct": 0.0,
+            "free_limit": null,
+            "due_date": "2026-10-20"
+          }
+        ],
+        "monthly_costs": 1018.4,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 882.81
+          }
+        ]
+      }
+    },
+    {
+      "id": "working",
+      "title": "Working student",
+      "description": "Maintenance loan plus weekly bar shifts with pay that changes. Often in the overdraft.",
+      "funding": [
+        "maintenance_loan",
+        "part_time_job"
+      ],
+      "months": 3,
+      "team": false,
+      "hints": {
+        "is_student": true,
+        "age": 21,
+        "housing": "rent",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "maintenance_loan_slc",
+            "kind": "maintenance_loan",
+            "amount": 1638.0,
+            "schedule": "termly",
+            "next_date": "2027-01-18",
+            "dates": [
+              "2026-09-28",
+              "2027-01-18",
+              "2027-04-26"
+            ]
+          },
+          {
+            "id": "part_time_jdw",
+            "kind": "part_time_job",
+            "amount": 100.0,
+            "schedule": "weekly",
+            "next_date": "2026-10-23",
+            "dates": [
+              "2026-09-25",
+              "2026-10-02",
+              "2026-10-09",
+              "2026-10-16"
+            ]
+          }
+        ],
+        "debts": [
+          {
+            "id": "overdraft",
+            "kind": "overdraft",
+            "balance": 371.03,
+            "rate_pct": 39.0,
+            "free_limit": 0.0,
+            "due_date": null
+          }
+        ],
+        "monthly_costs": 517.98,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": -371.03
+          }
+        ]
+      }
+    },
+    {
+      "id": "commuter",
+      "title": "Commuter student",
+      "description": "Lives with family and takes the train in with a 16-25 Railcard. Grant plus family help. Saving for a deposit.",
+      "funding": [
+        "grant",
+        "family"
+      ],
+      "months": 3,
+      "team": false,
+      "hints": {
+        "is_student": true,
+        "age": 19,
+        "housing": "parents",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "grant_access",
+            "kind": "grant",
+            "amount": 1000.0,
+            "schedule": "termly",
+            "next_date": "2027-02-01",
+            "dates": [
+              "2026-10-05",
+              "2027-02-01",
+              "2027-04-26"
+            ]
+          },
+          {
+            "id": "family_mum",
+            "kind": "family",
+            "amount": 40.0,
+            "schedule": "weekly",
+            "next_date": "2026-10-23",
+            "dates": [
+              "2026-09-25",
+              "2026-10-02",
+              "2026-10-09",
+              "2026-10-16"
+            ]
+          }
+        ],
+        "debts": [],
+        "monthly_costs": 81.49,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 1004.97
+          },
+          {
+            "id": "monzo_savings",
+            "name": "Monzo Pots",
+            "kind": "savings",
+            "provider": "Monzo",
+            "balance": 1545.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "team1",
+      "title": "Fresher in halls",
+      "description": "First year in halls. Maintenance loan and weekly cafe shifts. Freshers' spending is high.",
+      "funding": [
+        "maintenance_loan",
+        "part_time_job"
+      ],
+      "months": 3,
+      "team": true,
+      "hints": {
+        "is_student": true,
+        "age": 18,
+        "housing": "rent",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "maintenance_loan_slc",
+            "kind": "maintenance_loan",
+            "amount": 3450.0,
+            "schedule": "termly",
+            "next_date": "2027-01-18",
+            "dates": [
+              "2026-09-28",
+              "2027-01-18",
+              "2027-04-26"
+            ]
+          },
+          {
+            "id": "part_time_cafe",
+            "kind": "part_time_job",
+            "amount": 118.0,
+            "schedule": "weekly",
+            "next_date": "2026-10-23",
+            "dates": [
+              "2026-09-25",
+              "2026-10-02",
+              "2026-10-09",
+              "2026-10-16"
+            ]
+          }
+        ],
+        "debts": [],
+        "monthly_costs": 793.81,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 2126.71
+          }
+        ]
+      }
+    },
+    {
+      "id": "team2",
+      "title": "Graduate, first job",
+      "description": "Graduated last year. Monthly salary, rent and bills, saves into an emergency pot. Repaying a Plan 2 loan.",
+      "funding": [
+        "salary"
+      ],
+      "months": 3,
+      "team": true,
+      "hints": {
+        "is_student": false,
+        "age": 23,
+        "housing": "rent",
+        "student_loan_plan": "plan_2",
+        "income_sources": [
+          {
+            "id": "salary_northwind",
+            "kind": "salary",
+            "amount": 2145.6,
+            "schedule": "monthly",
+            "next_date": "2026-10-30",
+            "dates": [
+              "2026-07-31",
+              "2026-08-28",
+              "2026-09-25",
+              "2026-10-30"
+            ]
+          }
+        ],
+        "debts": [],
+        "monthly_costs": 992.97,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 2769.61
+          },
+          {
+            "id": "monzo_savings",
+            "name": "Monzo Pots",
+            "kind": "savings",
+            "provider": "Monzo",
+            "balance": 2400.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "team3",
+      "title": "Placement year",
+      "description": "Year in industry. Monthly placement salary plus a university bursary. Saves for final year.",
+      "funding": [
+        "salary",
+        "bursary"
+      ],
+      "months": 3,
+      "team": true,
+      "hints": {
+        "is_student": true,
+        "age": 21,
+        "housing": "rent",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "salary_placement",
+            "kind": "salary",
+            "amount": 1640.0,
+            "schedule": "monthly",
+            "next_date": "2026-10-30",
+            "dates": [
+              "2026-07-31",
+              "2026-08-28",
+              "2026-09-30",
+              "2026-10-30"
+            ]
+          },
+          {
+            "id": "bursary_placement",
+            "kind": "bursary",
+            "amount": 500.0,
+            "schedule": "termly",
+            "next_date": "2027-02-05",
+            "dates": [
+              "2026-10-09",
+              "2027-02-05"
+            ]
+          }
+        ],
+        "debts": [],
+        "monthly_costs": 792.62,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 2659.44
+          },
+          {
+            "id": "monzo_savings",
+            "name": "Monzo Pots",
+            "kind": "savings",
+            "provider": "Monzo",
+            "balance": 1050.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "team4",
+      "title": "Delivery rider",
+      "description": "Rides for Deliveroo with pay that changes each week, gets rent help from family, and uses Klarna.",
+      "funding": [
+        "part_time_job",
+        "family"
+      ],
+      "months": 3,
+      "team": true,
+      "hints": {
+        "is_student": true,
+        "age": 20,
+        "housing": "rent",
+        "student_loan_plan": "plan_5",
+        "income_sources": [
+          {
+            "id": "gig_deliveroo",
+            "kind": "part_time_job",
+            "amount": 110.0,
+            "schedule": "weekly",
+            "next_date": "2026-10-20",
+            "dates": [
+              "2026-09-21",
+              "2026-09-28",
+              "2026-10-05",
+              "2026-10-12"
+            ]
+          },
+          {
+            "id": "family_dad",
+            "kind": "family",
+            "amount": 300.0,
+            "schedule": "monthly",
+            "next_date": "2026-10-28",
+            "dates": [
+              "2026-07-28",
+              "2026-08-28",
+              "2026-09-28",
+              "2026-10-28"
+            ]
+          }
+        ],
+        "debts": [
+          {
+            "id": "bnpl_klarna",
+            "kind": "bnpl",
+            "balance": 149.66,
+            "rate_pct": 0.0,
+            "free_limit": null,
+            "due_date": "2026-10-25"
+          }
+        ],
+        "monthly_costs": 478.96,
+        "accounts": [
+          {
+            "id": "monzo_current",
+            "name": "Monzo Current Account",
+            "kind": "current",
+            "provider": "Monzo",
+            "balance": 422.94
+          }
+        ]
+      }
+    }
+  ]
+}

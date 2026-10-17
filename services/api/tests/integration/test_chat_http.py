@@ -135,3 +135,121 @@ async def test_news_and_rate_decisions(client: httpx.AsyncClient) -> None:
     assert r.status_code == 422
     r = await client.get("/v1/rate-decisions", headers=auth)
     assert r.status_code == 200 and r.json()["status"] != "mock"
+
+
+async def _stream(client: httpx.AsyncClient, auth: dict[str, str], message: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    async with client.stream("POST", "/v1/chat/stream", json={"message": message}, headers=auth) as r:
+        assert r.status_code == 200
+        async for line in r.aiter_lines():
+            if line.startswith("data:"):
+                events.append(json.loads(line[5:].strip()))
+    return events
+
+
+async def test_stream_keepalive_while_context_builds(client: httpx.AsyncClient,
+                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from lifeline_api import chat_service
+
+    real = chat_service.build_context
+
+    async def slow(*args: Any, **kw: Any) -> Any:
+        await asyncio.sleep(2.3)
+        return await real(*args, **kw)
+
+    monkeypatch.setattr(chat_service, "build_context", slow)
+    events = await _stream(client, await sign_in(client, "chat-device-0010"), "Why?")
+    types = [e["type"] for e in events]
+    assert types[0] == "reaction" and types[1] == "keepalive" and types[-1] == "done"
+    assert [e["seq"] for e in events] == list(range(len(events)))
+
+
+async def test_context_failure_is_unavailable_then_done(client: httpx.AsyncClient,
+                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    from lifeline_api import chat_service
+    from lifeline_explain.prompts import UNAVAILABLE_TEXT
+
+    async def broken(*args: Any, **kw: Any) -> Any:
+        raise RuntimeError("macro table down")
+
+    monkeypatch.setattr(chat_service, "build_context", broken)
+    auth = await sign_in(client, "chat-device-0011")
+    events = await _stream(client, auth, "Why?")
+    assert [e["type"] for e in events] == ["reaction", "error", "done"]
+    assert events[1]["error_code"] == "unavailable"
+    assert events[2]["response"]["bubbles"][0]["text"] == UNAVAILABLE_TEXT
+    r = await client.post("/v1/chat", json={"message": "Why?"}, headers=auth)
+    assert r.status_code == 200 and r.json()["bubbles"][0]["text"] == UNAVAILABLE_TEXT
+    threads = (await client.get("/v1/chat/threads", headers=auth)).json()["threads"]
+    assert len(threads) == 2, "the unavailable answer is stored like any other"
+
+
+async def test_tools_get_boe_series(client: httpx.AsyncClient) -> None:
+    await client.post("/v1/chat", json={"message": "What is the bank rate?"},
+                      headers=await sign_in(client, "chat-device-0012"))
+    assert SEEN[-1].tools.series is not None, "boe_rates needs hub.series"
+
+
+async def test_penny_down_uses_no_next_move_and_max_two_bubbles(client: httpx.AsyncClient,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real Penny with the LLM off (test mode): template answer, contract-sized, no next_move tool call."""
+    from lifeline_api.routes import chat as chat_routes
+    from lifeline_explain import chat as real_penny
+
+    monkeypatch.setattr(chat_routes.penny, "answer", real_penny.Penny.answer.__get__(real_penny.get_penny()))
+    monkeypatch.setattr(chat_routes.penny, "answer_stream",
+                        real_penny.Penny.answer_stream.__get__(real_penny.get_penny()))
+    auth = await sign_in(client, "chat-device-0013")
+    body = (await client.post("/v1/chat", json={"message": "Can I afford a night out?"}, headers=auth)).json()
+    assert 1 <= len(body["bubbles"]) <= 2
+    names = {t["name"] for t in body.get("tool_calls", [])}
+    assert "next_move" not in names
+    allowed = {"next_move", "test_move", "finance_summary", "spend_prediction", "cash_flow_projection",
+               "life_replay", "event_choices", "news_search", "rate_decision_dates", "facts_table",
+               "boe_rates", "web_search"}
+    assert names <= allowed
+    events = await _stream(client, auth, "What is the bank rate?")
+    done = events[-1]["response"]
+    assert len(done["bubbles"]) <= 2 and "next_move" not in {t["name"] for t in done.get("tool_calls", [])}
+
+
+async def test_million_yuan_uses_fx_convert(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ADR 0060: the chat tools get hub.fx_rate and hub.cpi; a currency question calls fx_convert."""
+    from datetime import date
+
+    from lifeline_api.main import app
+    from lifeline_api.routes import chat as chat_routes
+    from lifeline_explain import chat as real_penny
+    from lifeline_explain.chat_llm import LLMStep, ToolUse
+
+    class Scripted:
+        def __init__(self) -> None:
+            self.steps = [
+                LLMStep(stop_reason="tool_use", tool_uses=[ToolUse(id="tu1", name="fx_convert", input={
+                    "amount": 1_000_000, "from_currency": "CNY", "to_currency": "GBP"})]),
+                LLMStep(stop_reason="end_turn", text=json.dumps({
+                    "reaction": "brain", "out_of_scope": False, "summary_available": False,
+                    "bubbles": [{"kind": "answer", "text": "I converted it at today's reference rate."}]})),
+            ]
+
+        async def step(self, system: str, messages: Any, tools: Any, schema: Any) -> LLMStep:
+            return self.steps.pop(0)
+
+    async def fx_rate(base: str, quote: str) -> tuple[float, date] | None:
+        return (0.1052, date(2026, 10, 16)) if (base, quote) == ("CNY", "GBP") else None
+
+    async def cpi() -> tuple[float, date] | None:
+        return (3.8, date(2026, 9, 1))
+
+    hub = app.state.lifeline.hub
+    monkeypatch.setattr(hub, "fx_rate", fx_rate)
+    monkeypatch.setattr(hub, "cpi", cpi)
+    penny_obj = real_penny.Penny(llm=Scripted())
+    monkeypatch.setattr(chat_routes.penny, "answer", penny_obj.answer)
+    auth = await sign_in(client, "chat-device-0020")
+    r = await client.post("/v1/chat", json={"message": "How much is 1 million yuan in pounds?"}, headers=auth)
+    assert r.status_code == 200, r.text
+    names = [t["name"] for t in r.json()["tool_calls"]]
+    assert "fx_convert" in names, r.json()

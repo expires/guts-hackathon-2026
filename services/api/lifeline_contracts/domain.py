@@ -320,6 +320,22 @@ class KeyMoment(_M):
     text: str
 
 
+class HabitComponents(_M):
+    """Ratios of the user's own amounts, 0-100. No amounts, so they may be shared (ADR 0052 privacy rule)."""
+
+    savings_rate: int | None = Field(default=None, ge=0, le=100)
+    months_of_cover: int | None = Field(default=None, ge=0, le=100)
+    spend_stability: int | None = Field(default=None, ge=0, le=100)
+    discretionary_share: int | None = Field(default=None, ge=0, le=100)
+    subscription_creep: int | None = Field(default=None, ge=0, le=100)
+    debt_pressure: int | None = Field(default=None, ge=0, le=100)
+
+
+class HabitScore(_M):
+    components: HabitComponents
+    overall: int | None = Field(default=None, ge=0, le=100)
+
+
 class LifeSummary(_M):
     life_id: str
     name: str
@@ -333,6 +349,7 @@ class LifeSummary(_M):
     ribbons: list[Ribbon]
     key_moments: list[KeyMoment]
     concepts_unlocked: int
+    habit_score: HabitScore | None = Field(default=None, description="Quick Life: from the game ledger (ADR 0059)")
     timeline: list[YearLog]
 
 
@@ -344,6 +361,9 @@ class Challenge(_M):
     character_id: str
     start_year: int
     goal: dict[str, float | str]
+    scope: Literal["you", "life"] = Field(
+        default="life", description="'you' = scored on the user's own data (ratios, no £); 'life' = a game life"
+    )
 
 
 # ---------- decision and evaluation ----------

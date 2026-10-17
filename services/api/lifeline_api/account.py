@@ -83,6 +83,18 @@ async def me(state: AppState, sub: str) -> Me:
     )
 
 
+async def _leave_rooms(state: AppState, sub: str) -> None:
+    from lifeline_api.routes.rooms import leave_all_rooms  # routes import this module
+
+    try:
+        await leave_all_rooms(state, sub)
+    except Exception as exc:
+        log.warning("rooms not cleared on reset: %s", type(exc).__name__)
+    from lifeline_api.routes.circles import leave_all
+
+    await leave_all(state, sub)
+
+
 async def erase(state: AppState, sub: str, *, keep_account: bool) -> int:
     """Delete every record of the user: money data, lives, plan, goals, budgets, guesses, threads, health.
 
@@ -96,6 +108,7 @@ async def erase(state: AppState, sub: str, *, keep_account: bool) -> int:
     except Exception as exc:
         log.warning("user snapshot delete failed: %s", type(exc).__name__)
         raise StoreUnavailable() from exc
+    await _leave_rooms(state, sub)
     if keep_account:
         deleted = await state.store.delete_owner(sub, keep=(DOC_ACCOUNT, DOC_REVOKED_BEFORE))
         await ensure(state, sub)

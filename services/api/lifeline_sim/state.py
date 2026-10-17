@@ -16,7 +16,9 @@ from lifeline_sim import params as p
 from lifeline_sim.index import IndexWeights, drawdown_fraction
 from lifeline_sim.macroview import MacroView
 from lifeline_sim.mortgage import monthly_payment
+from lifeline_sim.paths import LoanPlan, path_living, start_path
 from lifeline_sim.presets import is_unedited_preset, preset_extras
+from lifeline_sim.quick import plan as quick_plan
 from lifeline_sim.rng import rng
 from lifeline_sim.setup import Setup
 from lifeline_sim.tax import net_pay
@@ -91,6 +93,22 @@ class SimState:
     energy_paid: float = 0.0  # typical yearly energy bill (ENERGY_TARIFF) for each year lived
     tag_cost: dict[str, float] = field(default_factory=dict)  # one-off costs of tagged event choices
     tag_living: dict[str, float] = field(default_factory=dict)  # monthly living change from tagged choices
+    # Student paths and Quick Life (ADR 0052). See lifeline_sim.paths and lifeline_sim.quick.
+    path_id: str | None = None
+    quick: bool = False
+    quick_stops: tuple[int, ...] = ()
+    quick_event_years: tuple[int, ...] = ()
+    quick_end_year: int | None = None
+    loan_plan: LoanPlan | None = None  # student loan plan from the rules table; None = legacy Plan 2 constants
+    study_kind: str | None = None  # "ug" or "pg" while studying on a path
+    pg_loan: float = 0.0  # postgraduate loan balance (repaid at its own rate and threshold)
+    last_loan_repaid: float = 0.0  # student and postgraduate loan repaid this year
+    # Game ledger for the habit score (path lives): (year, take-home money, spending, wants spending,
+    # missed payments in months).
+    ledger: list[tuple[int, float, float, float, int]] = field(default_factory=list)
+    want_adj: float = 0.0  # change to weekly wants spending from choices, 2024 pounds (path lives)
+    living_adj: float = 0.0  # monthly living change from choices (path lives rebuild living each year)
+    want_spend: float = 0.0  # one-off spending on wants (choices of templates tagged "want") not yet in the ledger
 
     def clone(self) -> SimState:
         return copy.deepcopy(self)
@@ -107,6 +125,7 @@ class SimState:
             - self.mortgage_balance
             - self.other_debt
             - self.student_loan
+            - self.pg_loan
         )
 
     @property
@@ -209,14 +228,24 @@ def initial_state(
             s.mortgage_fixed_until = setup.deal_end_year
     s.focus_tags = setup.focus
     s.focus_until = setup.focus_until
+    if setup.path is not None:
+        start_path(s, setup.path, mv)
+        if setup.quick:
+            qp = quick_plan(seed, start_year)
+            s.quick = True
+            s.quick_stops = qp.stops
+            s.quick_event_years = qp.event_years
+            s.quick_end_year = qp.end_year
     net_monthly = net_pay(s.income, s.employed) / 12
     price = mv.price_level(start_year)
     s.living = max(p.MIN_LIVING_MONTHLY_2024 * price, net_monthly * p.LIVING_SHARE_OF_NET)
     if s.housing == "parents":
         s.living *= 0.6
-    if s.housing == "rent":
+    if s.housing == "rent" and not (setup.path is not None and s.rent > 0):
         house_price = mv.value(MacroKey.HOUSE_PRICE, start_year, region, 200_000.0)
         s.rent = round(house_price * p.GROSS_RENT_YIELD / 12 * (p.STUDENT_RENT_SHARE if s.student else 1.0))
+    if setup.path is not None:
+        s.living, _ = path_living(s, mv)
     s.cash = round(net_monthly * p.STARTING_CASH_MONTHS)
     s.relationships = _initial_relationships(s)
     s.nw0 = s.net_worth

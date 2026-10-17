@@ -213,7 +213,7 @@ def test_revolut_csv():
 @pytest.mark.parametrize(
     ("content", "name", "provider", "needle"),
     [
-        (b"%PDF-1.7\n...", "statement.pdf", "pdf", "PDF statements are not supported"),
+        (b"%PDF-1.7\n...", "statement.pdf", "pdf", "could not read the transactions in this PDF"),
         (b"", "x.csv", "unknown", "empty"),
         (b"a,b,c\n1,2,3\n", "x.csv", "unknown", "Monzo or Revolut"),
         (b"\xff\xfe\x00bad", "x.csv", "unknown", "UTF-8"),

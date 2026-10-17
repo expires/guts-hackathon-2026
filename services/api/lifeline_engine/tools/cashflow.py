@@ -33,7 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_engine.finance import monthly_payment
 from lifeline_engine.money import dates
-from lifeline_engine.money.profile import liquid, monthly_spend
+from lifeline_engine.money.profile import MIN_KNOWN_COSTS, liquid, monthly_spend
 from lifeline_engine.money.recurring import detect_salary, detect_subscriptions
 
 MAX_MONTHS = 60
@@ -93,8 +93,9 @@ class Projection:
 
 
 def months_of_cover(cash: float, monthly_outgoings: float) -> float | None:
-    """Cash / monthly outgoings, 1 decimal. None when there is no spending (shared by every tool)."""
-    if monthly_outgoings <= 0:
+    """Cash / monthly outgoings, 1 decimal. None when costs are not known: outgoings under MIN_KNOWN_COSTS
+    (ADR 0053 bug 5; shared by every tool)."""
+    if monthly_outgoings < MIN_KNOWN_COSTS:
         return None
     return round(max(0.0, cash) / monthly_outgoings, 1)
 

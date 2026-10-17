@@ -54,7 +54,7 @@ def _finances(s: SimState) -> Finances:
         mortgage_rate=round(s.mortgage_rate, 2) if s.mortgage_rate is not None and s.mortgage_balance > 0 else None,
         mortgage_fixed_until=s.mortgage_fixed_until if s.mortgage_balance > 0 else None,
         other_debt=round(s.other_debt, 2),
-        student_loan=round(s.student_loan, 2),
+        student_loan=round(s.student_loan + s.pg_loan, 2),
         annual_income=round(s.income, 2),
         monthly_costs=round(s.monthly_costs, 2),
         net_worth=round(s.net_worth, 2),

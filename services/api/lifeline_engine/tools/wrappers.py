@@ -91,7 +91,8 @@ class _Facts:
 
 
 _SKIP_KEYS = frozenset({"id", "kind", "concept_id", "fact_prefix", "life_id", "move_id", "option_id", "date",
-                        "due_date", "as_of", "data_status", "status", "feature", "fact_id", "question"})
+                        "due_date", "as_of", "data_status", "status", "feature", "fact_id", "question", "url",
+                        "checked"})
 # Untrusted text (ADR 0034, V6 T2-F1): never a source of facts. Engine text that embeds a payee name uses
 # money.text.clean_name, so it carries no number from the name.
 UNTRUSTED_KEYS = frozenset({"merchant", "name", "names", "description", "payee", "headline_news", "standfirst",
@@ -339,7 +340,8 @@ def tool_finance_summary(snapshot: FinanceSnapshot, today: dates.date | None = N
     cash = liquid(snapshot)
     fx.add("finance.balance", ov.balance, "gbp", "Cash in current and savings accounts", ref)
     fx.add("finance.net_worth", ov.net_worth, "gbp", "Net worth", ref)
-    fx.add("finance.monthly_income", inc.monthly_net if inc else 0.0, "gbp_per_month", "Take-home pay a month", ref)
+    if inc is not None:  # ADR 0053 bug 3: no income figure without detected income
+        fx.add("finance.monthly_income", inc.monthly_net, "gbp_per_month", "Take-home pay a month", ref)
     fx.add("finance.monthly_spend", spend, "gbp_per_month", "Average spending a month (last 3 months)", ref)
     fx.add("finance.subscriptions_total", subs.monthly_total, "gbp_per_month", "Subscriptions a month", ref)
     fx.add("finance.subscriptions_count", subs.count, "count", "Number of subscriptions", ref)
@@ -459,9 +461,11 @@ def tool_facts_table(inp: FactsTableInput) -> ToolResult:
     fx = _Facts()
     rows = facts_table.lookup(inp.ids, inp.topic)
     for f in rows:
-        ref = SourceRef(source="govuk", series_id=f.url, status="cached", note=f"{f.tax_year}, checked {f.as_of}")
+        src = "govuk" if f.url.startswith("https://www.gov.uk/") else "official"
+        ref = SourceRef(source=src, series_id=f.url, status="cached", note=f"{f.tax_year}, checked {f.checked}")
         fx.add(f.id, f.value, f.unit, f"{f.label} ({f.tax_year})", ref)
-    return fx.done({"tax_year": facts_table.TAX_YEAR, "ids": [f.id for f in rows]}, prefix="rule")
+    entries = [{"id": f.id, "url": f.url, "checked": f.checked} for f in rows]  # ADR 0058
+    return fx.done({"tax_year": facts_table.TAX_YEAR, "ids": [f.id for f in rows], "entries": entries}, prefix="rule")
 
 
 # ---------- registry for the chat loop (W5) ----------
@@ -484,7 +488,8 @@ TOOL_DESCRIPTIONS: dict[ToolName, str] = {
     "cash_flow_projection": "Month-by-month balance with optional what-ifs: job_loss, rate_rise, one_off_cost, "
     "cancel subscriptions. Returns months of cover, lowest balance and the month money runs out.",
     "life_replay": "Replay the user's life through a past period (1990-2026) with default choices.",
-    "facts_table": "Official UK rule numbers for 2026/27 (ISA, income tax, National Insurance, student loans).",
+    "facts_table": "Official UK rule numbers for 2026/27 (ISA and Lifetime ISA, income tax, National Insurance, "
+    "student loans, maintenance loan schedule, council tax for students, 16-25 Railcard).",
 }
 
 

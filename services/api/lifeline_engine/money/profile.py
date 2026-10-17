@@ -34,6 +34,7 @@ SAVINGS_KINDS = ("savings", "isa")
 DEBT_KINDS = ("credit", "loan")
 HISTORY_WEEKS = 52
 EMERGENCY_MONTHS = 3
+MIN_KNOWN_COSTS = 50.0  # GBP a month; below this, costs are not entered (ADR 0053 bug 5)
 
 TOWN_REGION: dict[str, tuple[str, str]] = {
     "leeds": ("yorkshire-and-the-humber", "Leeds"),
@@ -188,13 +189,49 @@ def full_months_before(today: dates.date, n: int) -> list[str]:
     return [dates.prev_month(cur, k) for k in range(n, 0, -1)]
 
 
+def full_data_months(s: FinanceSnapshot, months: Sequence[str]) -> list[str]:
+    """Months fully covered by the data: after the first transaction's month, or that month when the first
+    transaction is on day 1 to 3. A statement that starts on 17 July does not count July (a part month makes
+    usual spending look low). One rule for every monthly figure (months of cover, budgets, habits)."""
+    if not s.transactions:
+        return []
+    first = min(t.date for t in s.transactions)
+    start_month = first[:7] if int(first[8:10]) <= 3 else None
+    return [m for m in months if m > first[:7] or m == start_month]
+
+
 def monthly_spend(snapshot: FinanceSnapshot, today: dates.date, months: int = 3) -> float:
-    """Average spending over the last `months` complete months that have data."""
-    ms = [m for m in full_months_before(today, months) if any(t.date[:7] == m for t in snapshot.transactions)]
+    """Average spending over the last `months` complete months that the data covers in full (full_data_months)
+    and that have transactions."""
+    ms = [m for m in full_data_months(snapshot, full_months_before(today, months))
+          if any(t.date[:7] == m for t in snapshot.transactions)]
     if not ms:
         return 0.0
     totals = monthly_totals(snapshot.transactions, ms)
     return round(sum(totals.values()) / len(ms), 2)
+
+
+def known_monthly_costs(snapshot: FinanceSnapshot, today: dates.date) -> float | None:
+    """Monthly costs when known (ADR 0057): MEASURED average spending over the last 3 complete months with data,
+    when it is at least MIN_KNOWN_COSTS. Else the entered `monthly_costs` (regular costs, ADR 0049) when above 0.
+    None otherwise, so months of cover is never computed from missing costs (ADR 0053 bug 5)."""
+    spend = monthly_spend(snapshot, today)
+    if spend >= MIN_KNOWN_COSTS:
+        return spend
+    if snapshot.monthly_costs is not None and snapshot.monthly_costs > 0:
+        return snapshot.monthly_costs
+    return None
+
+
+def costs_word(snapshot: FinanceSnapshot, today: dates.date) -> str:
+    """What known_monthly_costs measures, for the text: 'spending' (measured) or 'regular costs' (entered)."""
+    return "spending" if monthly_spend(snapshot, today) >= MIN_KNOWN_COSTS else "regular costs"
+
+
+def months_of_cover(snapshot: FinanceSnapshot, today: dates.date) -> float | None:
+    """Cash / known monthly costs, 1 decimal. None when costs are not known."""
+    costs = known_monthly_costs(snapshot, today)
+    return None if costs is None else round(max(0.0, liquid(snapshot)) / costs, 1)
 
 
 def monthly_rent(txs: Sequence[Transaction], today: dates.date) -> float | None:
@@ -349,15 +386,15 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
                 },
             )
         )
-    spend = monthly_spend(snapshot, today)
+    spend = known_monthly_costs(snapshot, today)
     cash = liquid(snapshot)
-    if spend > 0:
+    if spend is not None:
         months = round(max(0.0, cash) / spend, 1)
         out.append(
             PersonalFact(
                 id="emergency_months",
                 concept_id="emergency-fund",
-                text=f"Your cash and savings cover {months:g} months of spending.",
+                text=f"Your cash and savings cover {months:g} months of {costs_word(snapshot, today)}.",
                 facts={"months": months, "liquid": money_value(cash), "monthly_spend": money_value(spend)},
             )
         )
@@ -383,7 +420,7 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
         out.append(PersonalFact(id="mortgage_rate", concept_id="interest-rates", text=text, facts=facts))
     interest = interest_earned(snapshot, today)
     sav = savings_total(snapshot)
-    if sav > 0:
+    if sav > 0 and interest > 0:  # ADR 0053 bug 6: only with a known (measured) rate
         out.append(
             PersonalFact(
                 id="savings_interest",
@@ -412,7 +449,10 @@ def interest_earned(snapshot: FinanceSnapshot, today: dates.date) -> float:
 
 
 def savings_rate_pct(snapshot: FinanceSnapshot, today: dates.date) -> float | None:
-    """Rate the user's savings earn, from interest credits over the last year. None without credits."""
+    """Rate the user's savings earn: the entered `savings_rate_pct` (ADR 0049), else interest credits over the last
+    year / savings. None when neither is known (ADR 0053 bug 6)."""
+    if snapshot.savings_rate_pct is not None:
+        return snapshot.savings_rate_pct
     sav = savings_total(snapshot)
     earned = interest_earned(snapshot, today)
     if sav <= 0 or earned <= 0:
@@ -435,8 +475,12 @@ __all__ = [
     "debt_total",
     "gross_from_net",
     "interest_earned",
+    "costs_word",
+    "full_data_months",
+    "known_monthly_costs",
     "liquid",
     "monthly_spend",
+    "months_of_cover",
     "net_worth",
     "net_worth_history",
     "personal_facts",

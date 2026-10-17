@@ -1,5 +1,6 @@
 # Lifeline. BOSS-owned. Run `make help`.
 SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
 API := services/api
 IOS := apps/ios
 UV := uv run --project $(API) --directory $(API)
@@ -56,13 +57,13 @@ ios-gen: ## Generate the Xcode project with XcodeGen
 	cp contracts/openapi.yaml $(IOS)/Lifeline/Networking/openapi.yaml && cd $(IOS) && xcodegen generate --quiet
 
 ios-build: ios-gen ## Build the iOS app for the simulator
-	cd $(IOS) && ../../tools/with-ios-lock.sh xcodebuild -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(IOS_DD) -skipPackagePluginValidation -skipMacroValidation build | tail -20
+	cd $(IOS) && ../../tools/with-ios-lock.sh xcodebuild -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(IOS_DD) -skipPackagePluginValidation -skipMacroValidation build 2>&1 | tee $(IOS_DD)/../last-build.log | grep -E "error:|FAILED|SUCCEEDED|Test run with|✘|Executed" | tail -60
 
 ios-test: ios-gen ## Swift Testing + UI tests on the simulator
-	cd $(IOS) && ../../tools/with-ios-lock.sh xcodebuild -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(IOS_DD) -skipPackagePluginValidation -skipMacroValidation test | tail -40
+	cd $(IOS) && ../../tools/with-ios-lock.sh xcodebuild -project Lifeline.xcodeproj -scheme Lifeline -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(IOS_DD) -skipPackagePluginValidation -skipMacroValidation test 2>&1 | tee $(IOS_DD)/../last-test.log | grep -E "error:|FAILED|SUCCEEDED|Test run with|✘|Executed" | tail -60
 
 ios-playground: ios-gen ## Build the Playground scheme (Mock config) for the simulator
-	cd $(IOS) && ../../tools/with-ios-lock.sh xcodebuild -project Lifeline.xcodeproj -scheme Playground -configuration Mock -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(IOS_DD) -skipPackagePluginValidation -skipMacroValidation build | tail -20
+	cd $(IOS) && ../../tools/with-ios-lock.sh xcodebuild -project Lifeline.xcodeproj -scheme Playground -configuration Mock -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(IOS_DD) -skipPackagePluginValidation -skipMacroValidation build 2>&1 | tee $(IOS_DD)/../last-playground.log | grep -E "error:|FAILED|SUCCEEDED|Test run with|✘|Executed" | tail -60
 
 ios-record-mock: ## Record real API responses for the iOS Mock config (stack must be up)
 	cd $(API) && uv run python ../../tools/record_mock.py

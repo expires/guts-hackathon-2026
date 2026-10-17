@@ -13,6 +13,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from lifeline_contracts.domain import CharacterSpec, DecisionProfile, IsoDate, IsoMonth
+from lifeline_contracts.domain import HabitComponents as HabitComponents  # re-export (ADR 0059)
+from lifeline_contracts.domain import HabitScore as HabitScore  # re-export
 from lifeline_contracts.observation import Status
 
 AccountKind = Literal["current", "savings", "credit", "isa", "pension", "mortgage", "loan"]
@@ -96,6 +98,33 @@ class AccountHolder(_M):
     postcode: str | None = Field(default=None, max_length=10)
 
 
+IncomeKind = Literal[
+    "maintenance_loan", "scholarship", "bursary", "grant", "family", "part_time_job", "salary", "other"
+]
+IncomeSchedule = Literal["weekly", "monthly", "termly", "yearly", "one_off"]
+StudentLoanPlan = Literal["plan_1", "plan_2", "plan_4", "plan_5", "postgraduate", "none"]
+
+
+class IncomeSource(_M):
+    """One way money arrives (ADR 0049). `dates` holds known payment dates, e.g. 3 loan instalments."""
+
+    id: str
+    kind: IncomeKind
+    amount: float = Field(ge=0, le=1_000_000, description="GBP per payment")
+    schedule: IncomeSchedule
+    next_date: IsoDate | None = None
+    dates: list[IsoDate] = Field(default_factory=list, max_length=60)
+
+
+class DebtItem(_M):
+    id: str
+    kind: Literal["card", "overdraft", "bnpl", "loan"]
+    balance: float = Field(ge=0, le=10_000_000)
+    rate_pct: float | None = Field(default=None, ge=0, le=100)
+    free_limit: float | None = Field(default=None, ge=0, description="Interest-free overdraft limit")
+    due_date: IsoDate | None = None
+
+
 class FinanceSnapshot(_M):
     """Everything the insight code needs. Produced by lifeline_data, consumed by lifeline_engine.money."""
 
@@ -110,6 +139,14 @@ class FinanceSnapshot(_M):
     mortgage: MortgageDetails | None = None
     energy: EnergyDetails | None = None
     holder: AccountHolder | None = Field(default=None, description="Bank identity data or fixture persona")
+    is_student: bool | None = None
+    housing: Literal["rent", "own", "mortgage", "parents"] | None = None
+    age: int | None = Field(default=None, ge=16, le=100)
+    student_loan_plan: StudentLoanPlan | None = None
+    income_sources: list[IncomeSource] = Field(default_factory=list, max_length=20)
+    debts: list[DebtItem] = Field(default_factory=list, max_length=20)
+    monthly_costs: float | None = Field(default=None, ge=0, description="Entered regular costs per month")
+    savings_rate_pct: float | None = Field(default=None, ge=0, le=20, description="Entered rate, so interest is known")
 
 
 # ---------- API responses ----------
@@ -127,10 +164,19 @@ class Point(_M):
     value: float
 
 
+class AmountPart(_M):
+    """One line of a shown total, so Why? can show the calculation (ADR 0053, bug 2)."""
+
+    label: str = Field(max_length=80, description="e.g. 'Current account you entered'")
+    amount: float
+
+
 class FinanceOverview(_M):
     meta: FinanceMeta
     balance: float = Field(description="Sum of current and savings accounts")
     net_worth: float
+    balance_parts: list[AmountPart] = Field(default_factory=list, description="Entered data only")
+    net_worth_parts: list[AmountPart] = Field(default_factory=list, description="Entered data only")
     accounts: list[Account]
     balance_history: list[Point]
     net_worth_history: list[Point]
@@ -259,6 +305,7 @@ class FinanceProfile(_M):
     profile: DecisionProfile
     character: CharacterSpec
     personal_facts: list[PersonalFact]
+    is_student: bool | None = Field(default=None, description="As entered at onboarding (ADR 0049)")
 
 
 class LifeListItem(_M):

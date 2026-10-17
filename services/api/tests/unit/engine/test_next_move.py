@@ -109,6 +109,9 @@ def test_deterministic(macro: MacroTable) -> None:
 def test_option_policy_same_tag_key_for_every_option(macro: MacroTable) -> None:
     for snap in (homeowner(), _renter(), _overspender()):
         for m in _all_moves(next_move(snap, macro, TODAY)):
+            if m.kind not in MOVE_TAG:  # student moves are not replayed in the sim (no test period)
+                assert not m.testable
+                continue
             keys = [set(option_policy(m, o.id)) for o in m.options]
             assert all(k == keys[0] for k in keys)
             assert MOVE_TAG[m.kind] in keys[0]
@@ -279,7 +282,9 @@ def test_best_choice_label(share: float, text: str) -> None:
 
 def test_mortgage_confidence_is_best_choice_share(macro: MacroTable) -> None:
     top = next_move(homeowner(), macro, TODAY).top
-    assert top.confidence_label.endswith("similar cases this was the best choice")
+    assert top.sample_size is not None and top.sample_size > 0
+    assert top.sample_size == 6  # 5 matched periods + the stress period; twins in one period are not independent
+    assert top.confidence_label.endswith("similar cases this was the best choice (sample: 6 past periods)")
     assert 0 < top.confidence <= 1
 
 

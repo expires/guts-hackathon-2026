@@ -116,9 +116,9 @@ def test_find_trade_offs_in_next_move_and_test_move_results() -> None:
     assert find_trade_offs({"top": {"id": "x", "trade_off": {"summary": "s", "points": []}}}) == []
 
 
-def test_prompt_v4_states_trade_off() -> None:
-    assert prompts.PENNY_PROMPT_VERSION == "penny-v4"
-    assert prompts.PENNY_SYSTEM.startswith("[penny-v4]")
+def test_prompt_states_trade_off() -> None:
+    assert prompts.PENNY_PROMPT_VERSION == "penny-v5"
+    assert prompts.PENNY_SYSTEM.startswith("[penny-v5]")
     assert '"What you give up:"' in prompts.PENNY_SYSTEM
     assert "do not make one up" in prompts.PENNY_SYSTEM
 
@@ -140,7 +140,8 @@ async def test_answer_quoting_trade_off_numbers_passes() -> None:
     assert r.verified and r.reaction == "brain"
     used = {h.fact_id for h in r.highlights}
     assert {"tf_fix_mortgage_erc", "tf_fix_mortgage_erc_pct", "tf_fix_mortgage_fixed_rate"} <= used
-    assert "tf_fix_mortgage_fixed_until" in used
+    assert "tf_fix_mortgage_fixed_until" not in used  # a year is checked, never highlighted (ADR 0051)
+    assert "tf_fix_mortgage_fixed_until" in {x.id for x in r.facts}
     # The trade-off reached the model inside the tool result, with its facts.
     payload = json.loads(llm.requests[1]["messages"][-1]["content"][0]["content"])
     assert "trade_off" in payload["result"]["top"]

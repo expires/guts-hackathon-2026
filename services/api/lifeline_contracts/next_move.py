@@ -27,7 +27,11 @@ MoveKind = Literal[
     "build_emergency_fund",
     "cut_budget",
     "spread_investments",
+    "weekly_budget",
+    "lifetime_isa",
+    "keep_cash",
 ]
+# spread_investments is deprecated (Trading212 cut, ADR 0046); the engine no longer offers it.
 
 
 class _M(BaseModel):
@@ -71,6 +75,10 @@ class Move(_M):
     impact_per_year: float = Field(description="Expected GBP per year vs doing nothing; positive is better")
     worst_case_per_year: float = Field(description="GBP per year in the worst matched period; can be negative")
     confidence: float = Field(ge=0, le=1)
+    sample_size: int | None = Field(default=None, ge=0, description="Matched cases behind the confidence (ADR 0053)")
+    confidence_level: Literal["low", "medium", "high"] | None = Field(
+        default=None, description="'high' only with a sufficient, relevant sample"
+    )
     confidence_label: str = Field(description="e.g. '7 in 10 twins in similar past periods did better'")
     evidence: list[EvidencePoint] = Field(min_length=3, max_length=3)
     sources: list[SourceRef]
@@ -80,9 +88,14 @@ class Move(_M):
     testable: bool
     test_period: TestPeriod | None = None
     concept_id: str | None = Field(default=None, description="Lesson for the 'Why?' button")
-    gain_kind: Literal["gbp_per_year", "months_of_cover"] = Field(
+    gain_kind: Literal["gbp_per_year", "months_of_cover", "weeks_of_cover"] = Field(
         default="gbp_per_year", description="Gain as £ a year (impact_per_year) or months of cover (cover_months)"
     )
+    cover_weeks: float | None = Field(default=None, ge=0, description="Weeks until the next money arrives")
+    shortfall: float | None = Field(
+        default=None, ge=0, description="GBP missing before the next money arrives (weeks_of_cover moves)"
+    )
+    safe_weekly_spend: float | None = Field(default=None, ge=0, description="GBP a week that lasts until then")
     cover_months: float | None = Field(default=None, ge=0, description="Months of costs covered after the move")
     trade_off: TradeOff | None = Field(
         default=None, description="What you give up. Always set by the engine (ADR 0042)"

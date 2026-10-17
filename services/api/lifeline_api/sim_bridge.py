@@ -5,6 +5,7 @@ Sim and engine functions are synchronous and CPU bound, so they run in a worker 
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 from anyio import to_thread
@@ -21,11 +22,16 @@ SIM_STATUS: dict[str, int] = {
     "invalid_choice": 422,
     "invalid_action": 422,
     "invalid_input": 422,
+    "finished": 409,  # AGE after the last Quick Life tap
 }
 
 
+# Messages the API words itself, by sim error code.
+SIM_MESSAGES: dict[str, str] = {"finished": "This Quick Life is over"}
+
+
 def sim_error_to_api(exc: SimError) -> ApiError:
-    return ApiError(SIM_STATUS.get(exc.code, 409), exc.code, exc.message, source="sim")
+    return ApiError(SIM_STATUS.get(exc.code, 409), exc.code, SIM_MESSAGES.get(exc.code, exc.message), source="sim")
 
 
 # MacroTable.get raises KeyError with these prefixes when real data has a gap (ADR 0027, live mode).
@@ -53,3 +59,20 @@ async def call_pure[**P, T](fn: Callable[P, T], *args: P.args, **kwargs: P.kwarg
             raise gap from exc
 
     return await to_thread.run_sync(run)
+
+
+PARSE_WAIT_SECONDS = 5.0
+
+
+async def call_parse[**P, T](slots: asyncio.Semaphore, fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    """Run a statement parse in a worker thread, at most `slots` at once. Waiting longer than 5 s answers
+    503 with Retry-After, so a burst of hostile uploads cannot queue without end."""
+    try:
+        await asyncio.wait_for(slots.acquire(), timeout=PARSE_WAIT_SECONDS)
+    except TimeoutError as exc:
+        raise ApiError(503, "busy", "Too many statements are being read right now. Try again shortly.",
+                       source="statements", headers={"Retry-After": "5"}) from exc
+    try:
+        return await to_thread.run_sync(lambda: fn(*args, **kwargs))
+    finally:
+        slots.release()

@@ -4,6 +4,12 @@ Usage (stack running):  cd services/api && uv run python ../../tools/record_mock
 Writes apps/ios/Lifeline/Preview/Recorded/<operationId>.json (one real response per endpoint)
 plus manifest.json. MockClient serves these, so the phone shows engine output, not contract examples.
 Device id defaults to demo-presenter-03 (pinned to the demo persona; plan stays empty).
+
+--bundled (ADR 0060): instead writes fixed content to apps/ios/Lifeline/Resources/Bundled/bundled-<key>.json
+(characters, student paths, concepts and lessons, challenges, sample students). Sources are not bundled:
+their live/cached status must come from the server. The app seeds its
+disk cache from these files on first launch. Each file holds the value the iOS client method returns
+(for list endpoints the inner array), so `DiskCache` decodes it directly.
 """
 
 from __future__ import annotations
@@ -20,6 +26,16 @@ import httpx
 BASE = os.environ.get("LIFELINE_BASE_URL", "http://localhost:8000")
 DEVICE = os.environ.get("DEMO_DEVICE_ID", "demo-presenter-03")
 OUT = Path(__file__).resolve().parents[1] / "apps" / "ios" / "Lifeline" / "Preview" / "Recorded"
+BUNDLED = Path(__file__).resolve().parents[1] / "apps" / "ios" / "Lifeline" / "Resources" / "Bundled"
+
+# key (CachedOps.<x>.key in DiskCache.swift) -> (path, field to unwrap or None for the whole body)
+BUNDLED_OPS: dict[str, tuple[str, str | None]] = {
+    "listCharacters": ("/v1/characters", None),
+    "listPaths": ("/v1/paths", "paths"),
+    "listConcepts": ("/v1/concepts", "concepts"),
+    "listChallenges": ("/v1/challenges", "challenges"),
+    "listSamples": ("/v1/samples", "samples"),
+}
 
 
 def call(c: httpx.Client, method: str, path: str, **kw: Any) -> httpx.Response:
@@ -31,7 +47,29 @@ def call(c: httpx.Client, method: str, path: str, **kw: Any) -> httpx.Response:
     return r
 
 
+def record_bundled() -> int:
+    BUNDLED.mkdir(parents=True, exist_ok=True)
+    failed = 0
+    with httpx.Client(base_url=BASE, timeout=180) as c:
+        tok = call(c, "POST", "/v1/auth/demo", json={"device_id": DEVICE}).json()["access_token"]
+        c.headers["Authorization"] = f"Bearer {tok}"
+        for key, (path, field) in BUNDLED_OPS.items():
+            r = call(c, "GET", path)
+            if r.status_code >= 400:
+                print(f"skip {key}: {r.status_code}", file=sys.stderr)
+                failed += 1
+                continue
+            body = r.json()
+            value = body[field] if field else body
+            (BUNDLED / f"bundled-{key}.json").write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+            print(f"ok   {key}")
+    print(f"wrote {BUNDLED}")
+    return 1 if failed else 0
+
+
 def main() -> int:
+    if "--bundled" in sys.argv[1:]:
+        return record_bundled()
     OUT.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, Any] = {"base": BASE, "device_id": DEVICE, "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "files": {}}
     with httpx.Client(base_url=BASE, timeout=180) as c:

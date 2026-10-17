@@ -18,6 +18,15 @@ from lifeline_contracts.domain import (
     Tab,
 )
 from lifeline_contracts.observation import SourceStatus, Status
+from lifeline_contracts.play import (
+    DecisionPrompt,
+    DecisionReveal,
+    GameOptions,
+    PlayerScore,
+    QuizQuestion,
+    QuizReveal,
+    RoomGame,
+)
 
 
 class _M(BaseModel):
@@ -40,6 +49,7 @@ class Health(_M):
     product: str
     time: str
     checks: dict[str, Literal["ok", "down", "skipped"]]
+    warming: bool = Field(default=False, description="True while the macro table and engine context build after start")
 
 
 class SourcesResponse(_M):
@@ -58,6 +68,8 @@ class CreateLifeRequest(_M):
     character: CharacterSpec | None = Field(default=None, description="Required when mode=self or god")
     seed: int | None = Field(default=None, ge=0, le=2**31 - 1, description="Omit for a random seed")
     room_code: str | None = Field(default=None, pattern=r"^[A-Z0-9]{6}$")
+    path_id: ShortId | None = Field(default=None, description="Student start path (ADR 0052)")
+    quick: bool = Field(default=False, description="Quick Life: ages 18 to 25, 2 or 3 events with choices")
 
 
 class ChoiceRequest(_M):
@@ -81,7 +93,7 @@ class ConceptsResponse(_M):
 
 class ChallengeProgress(_M):
     challenge_id: str
-    life_id: str
+    life_id: str | None = Field(default=None, description="Set for life challenges; None for scope 'you'")
     status: Literal["in_progress", "won", "lost"]
     detail: str | None = Field(default=None, max_length=200)
 
@@ -100,10 +112,13 @@ RoomMode = Literal["duel", "group", "class"]
 
 
 class CreateRoomRequest(_M):
-    mode: RoomMode
-    host_name: str = Field(min_length=1, max_length=24)
-    preset_id: ShortId
-    start_year: int = Field(ge=1990, le=2026)
+    """Lobby first (ADR 0052): an empty body opens a lobby; the host picks the game later.
+    Names come from the account; host_name is only a fallback."""
+
+    mode: RoomMode | None = Field(default=None, description="Omit: 2 players = duel, more = group at start")
+    host_name: str | None = Field(default=None, min_length=1, max_length=24)
+    preset_id: ShortId | None = None
+    start_year: int | None = Field(default=None, ge=1990, le=2026)
 
 
 class Player(_M):
@@ -124,8 +139,10 @@ class Room(_M):
     code: str = Field(pattern=r"^[A-Z0-9]{6}$")
     mode: RoomMode
     seed: int
-    preset_id: str
-    start_year: int
+    preset_id: str | None = None
+    start_year: int | None = None
+    game: RoomGame | None = Field(default=None, description="Picked by the host in the lobby")
+    options: GameOptions | None = None
     max_players: int = Field(ge=2, le=8)
     players: list[Player]
     join_url: str
@@ -179,7 +196,7 @@ class Token(_M):
 
 
 class WsClientMessage(_M):
-    type: Literal["join", "ready", "progress", "finish", "start", "leave", "ping"]
+    type: Literal["join", "ready", "progress", "finish", "start", "leave", "ping", "pick_game", "answer"]
     player_id: str | None = Field(default=None, max_length=64, description="Resume token after a reconnect")
     name: str | None = Field(default=None, max_length=24)
     life_id: str | None = None
@@ -187,11 +204,34 @@ class WsClientMessage(_M):
     year: int | None = None
     net_worth: float | None = None
     index: float | None = None
+    game: RoomGame | None = Field(default=None, description="pick_game (host only)")
+    options: GameOptions | None = Field(default=None, description="pick_game (host only)")
+    question_id: str | None = Field(default=None, max_length=64, description="answer: quiz question or decision prompt")
+    choice_id: str | None = Field(default=None, max_length=64, description="answer")
 
 
 class WsServerMessage(_M):
-    type: Literal["roster", "rival", "started", "finished", "error", "pong", "welcome"]
+    type: Literal[
+        "roster",
+        "rival",
+        "started",
+        "finished",
+        "error",
+        "pong",
+        "welcome",
+        "game_picked",
+        "question",
+        "quiz_reveal",
+        "decision",
+        "decision_reveal",
+        "ranking",
+    ]
     you: Player | None = Field(default=None, description="Sent with 'welcome': your player id for reconnects")
     room: Room | None = None
     player: Player | None = None
     error: ErrorBody | None = None
+    question: QuizQuestion | None = None
+    quiz_reveal: QuizReveal | None = None
+    decision: DecisionPrompt | None = None
+    decision_reveal: DecisionReveal | None = None
+    ranking: list[PlayerScore] | None = None

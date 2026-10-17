@@ -27,6 +27,7 @@ from lifeline_sim.index import IndexWeights
 from lifeline_sim.macroview import PAY_GROWTH, SVR_RATE, TRACKER_NOW, MacroView
 from lifeline_sim.mortgage import monthly_payment, remaining_balance
 from lifeline_sim.occupations import occupation, public_pay_cap
+from lifeline_sim.paths import add_study_year_loans, apply_stage, path_living, pg_repayment, repayment, stage_starts
 from lifeline_sim.rng import uniform
 from lifeline_sim.state import SimState
 from lifeline_sim.tax import income_tax, national_insurance
@@ -105,8 +106,11 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     cpi = need(MacroKey.CPI_INFLATION.value)
     bank = need(MacroKey.BANK_RATE.value)
 
-    # 1-2. Work, retirement, pay growth
-    if s.age >= p.STATE_PENSION_AGE and (s.employed or (s.income <= 0 and not s.student)):
+    # 1-2. Work, retirement, pay growth. A path life (ADR 0052) enters a new stage at its start age.
+    stage = stage_starts(s.path_id, s.age) if s.path_id is not None else None
+    if stage is not None:
+        apply_stage(s, stage, mv)
+    elif s.age >= p.STATE_PENSION_AGE and (s.employed or (s.income <= 0 and not s.student)):
         # State pension starts. Living costs drop only for people who stop work now.
         if s.employed:
             s.living *= p.RETIRED_LIVING_SHARE
@@ -119,7 +123,7 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         else:
             s.data_gaps.setdefault(y, []).append(MacroKey.MEDIAN_PAY.value)
             s.income = round(p.FULL_STATE_PENSION_2024 * m["price_level"])
-    elif s.student and s.age >= p.GRADUATION_AGE:
+    elif s.student and s.path_id is None and s.age >= p.GRADUATION_AGE:
         s.student = False
         s.employed = True
         s.last_graduated = True
@@ -161,11 +165,23 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     pension_in = s.income * p.PENSION_EMPLOYEE if s.employed else 0.0
     employer_in = s.income * p.PENSION_EMPLOYER if s.employed else 0.0
     sl_repay = 0.0
-    if s.student_loan > 0 and s.employed:
+    pg_repay = 0.0
+    if s.loan_plan is not None:
+        # Path lives: rules table (lifeline_engine.rules), 9% above the plan threshold; PG loan 6%.
+        if s.student_loan > 0 and s.employed:
+            sl_repay = min(s.student_loan, repayment(s.loan_plan, gross, y, mv))
+        if s.pg_loan > 0 and s.employed:
+            pg_repay = min(s.pg_loan, pg_repayment(gross, y, mv))
+    elif s.student_loan > 0 and s.employed:
         sl_repay = min(s.student_loan, p.STUDENT_LOAN_RATE * max(0.0, gross - p.STUDENT_LOAN_THRESHOLD))
-    maintenance = p.MAINTENANCE_LOAN_2024 * m["price_level"] if s.student else 0.0
-    s.student_loan += maintenance
-    net = gross + drawdown + maintenance - tax - ni - pension_in - sl_repay
+    if s.path_id is not None:
+        maintenance = add_study_year_loans(s, mv) if s.student else 0.0
+    else:
+        maintenance = p.MAINTENANCE_LOAN_2024 * m["price_level"] if s.student else 0.0
+        s.student_loan += maintenance
+    net = gross + drawdown + maintenance - tax - ni - pension_in - sl_repay - pg_repay
+    s.last_loan_repaid = sl_repay + pg_repay
+    s.pg_loan = (s.pg_loan - pg_repay) * (1 + max(0.0, cpi) / 100 if cpi is not None else 1.0)
     s.pension += pension_in + employer_in
     s.student_loan = (s.student_loan - sl_repay) * (1 + max(0.0, cpi) / 100 if cpi is not None else 1.0)
 
@@ -206,6 +222,10 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
     cap = max(floor, (p.LIVING_MAX_SHARE_OF_NET * net - housing) / 12)
     grown = s.living * (1 + cpi / 100) if cpi is not None else s.living
     s.living = max(floor, min(grown, cap))
+    path_wants = 0.0
+    if s.path_id is not None:
+        # Path lives (ADR 0052): essentials by housing and region, plus wants that choices raise or lower.
+        s.living, path_wants = path_living(s, mv)
     costs = housing + 12 * s.living
 
     # 5. Cash flow and missed payments. A shortfall draws on savings, shares, crypto and
@@ -251,6 +271,16 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         s.other_debt = 0.0
         s.last_bankrupt = True
         s.happiness = _clamp_stat(s.happiness - 15)
+    if s.quick:
+        # Quick Life (ADR 0061): card debt stops at a young adult's credit limit. Spending beyond it is
+        # recorded as missed payments (Index and habit penalty), not as more debt.
+        limit = min(p.QUICK_CREDIT_LIMIT_MAX, p.QUICK_CREDIT_LIMIT_2024 * m["price_level"])
+        if s.other_debt > limit:
+            over = s.other_debt - limit
+            s.other_debt = limit
+            capped = min(12, max(missed, math.ceil(over / max(monthly, 1.0))))
+            s.missed += capped - missed
+            missed = capped
     excess = s.cash - p.CASH_BUFFER_MONTHS * monthly
     if excess > 0:
         s.cash -= excess
@@ -295,6 +325,11 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
         mood += 1
     s.happiness = _clamp_stat(s.happiness + mood)
 
+    if s.path_id is not None:
+        wants = 12 * path_wants + s.want_spend
+        s.ledger.append((y, round(net, 2), round(costs + s.want_spend, 2), round(wants, 2), missed))
+        s.want_spend = 0.0
+
     s.last_bonus = bonus
     s.last_bonus_net = bonus * (net / gross) if gross > 0 else 0.0
     s.last_net_income = net
@@ -304,7 +339,7 @@ def step_year(s: SimState, mv: MacroView, w: IndexWeights) -> None:
 
     # Death
     hazard = p.GOMPERTZ_A * math.exp(p.GOMPERTZ_B * s.age) * (0.6 + (100 - s.health) / 100)
-    if s.age >= p.MAX_AGE or s.health <= 0 or uniform(s.seed, y, "death") < hazard:
+    if not s.quick and (s.age >= p.MAX_AGE or s.health <= 0 or uniform(s.seed, y, "death") < hazard):
         s.alive = False
         s.cause_of_death = "Old age" if s.age >= 75 else ("Poor health" if s.health <= 20 else "Illness")
         s.pending = []

@@ -25,6 +25,7 @@ from lifeline_contracts import chat as CH  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
 from lifeline_contracts import next_move as N  # noqa: E402
+from lifeline_contracts import play as PL  # noqa: E402
 from lifeline_contracts.observation import Observation, SourceStatus  # noqa: E402
 
 MODELS: list[type[BaseModel]] = [
@@ -85,6 +86,17 @@ MODELS: list[type[BaseModel]] = [
     N.FinanceHome,
     AC.Me,
     AC.ImportResult,
+    AC.SamplesResponse,
+    PL.PathsResponse,
+    PL.Circle,
+    PL.CirclesResponse,
+    PL.CreateCircleRequest,
+    PL.JoinCircleRequest,
+    PL.QuizQuestion,
+    PL.QuizReveal,
+    PL.DecisionPrompt,
+    PL.DecisionReveal,
+    F.HabitScore,
     AC.ManualFinanceInput,
     AC.ReversePostcode,
     AC.HealthSignal,
@@ -506,6 +518,7 @@ def examples() -> dict[str, Any]:
             generated_at=NOW,
         ),
         "CreateRoom": A.CreateRoomRequest(mode="duel", host_name="Ash", preset_id="nurse-leeds", start_year=2021),
+        "CreateLobby": A.CreateRoomRequest(),
         "Room": room,
         "BankAuthLink": A.BankAuthLink(
             url="https://auth.truelayer-sandbox.com/?response_type=code&state=abc",
@@ -525,6 +538,7 @@ def examples() -> dict[str, Any]:
         **next_move_examples(),
         **account_examples(),
         **chat_examples(),
+        **play_examples(),
     }
 
 
@@ -536,24 +550,25 @@ def chat_examples() -> dict[str, Any]:
         message_id="msg_2",
         reply_to="msg_1",
         reaction="brain",
+        mode="checked",
         bubbles=[
             CH.ChatBubble(
-                id="b1",
-                kind="answer",
-                text="Yes, for about 4 months. Your savings cover your bills and mortgage until April.",
+                id="b1", kind="answer", text="Yes, up to £35 this week. That still leaves enough for rent on Friday."
             ),
-            CH.ChatBubble(
-                id="b2", kind="caveat", text="This assumes your bills stay the same and you spend nothing extra."
-            ),
-            CH.ChatBubble(id="b3", kind="question", text="Do you want me to add a holiday in June?"),
         ],
-        highlights=[CH.Highlight(bubble_id="b1", start=15, length=8, fact_id="f_cover", source_id="s_you")],
-        facts=[CH.ChatFact(id="f_cover", value=4, unit="months", label="Months of cover", source_id="s_you")],
+        highlights=[CH.Highlight(bubble_id="b1", start=11, length=3, fact_id="f_week", source_id="s_you")],
+        facts=[CH.ChatFact(id="f_week", value=35, unit="gbp", label="Left to spend this week", source_id="s_you")],
         sources=[
-            CH.ChatSource(id="s_you", group="your_data", label="Your accounts", ref=you, updated_at=NOW),
-            CH.ChatSource(id="s_boe", group="live_sources", label="Bank of England · live", ref=boe, updated_at=NOW),
+            CH.ChatSource(id="s_you", group="your_data", label="Your statement", ref=you, updated_at=NOW),
+            CH.ChatSource(
+                id="s_boe",
+                group="live_sources",
+                label="Bank of England · savings rates · live",
+                ref=boe,
+                updated_at=NOW,
+            ),
         ],
-        follow_up_question="Do you want me to add a holiday in June?",
+        suggestions=["Next move", "Summary"],
         confidence=0.8,
         tool_calls=[CH.ToolCall(name="cash_flow_projection", ok=True, duration_ms=120)],
         verified=True,
@@ -595,6 +610,63 @@ def chat_examples() -> dict[str, Any]:
     }
 
 
+def play_examples() -> dict[str, Any]:
+    habits = F.HabitScore(
+        components=F.HabitComponents(
+            savings_rate=70,
+            months_of_cover=45,
+            spend_stability=80,
+            discretionary_share=60,
+            subscription_creep=90,
+            debt_pressure=100,
+        ),
+        overall=74,
+    )
+    return {
+        "Paths": PL.PathsResponse(
+            paths=[
+                PL.StudentPath(
+                    id="uni",
+                    title="University",
+                    description="3-year degree with a maintenance loan",
+                    start_age=18,
+                    quick=True,
+                ),
+                PL.StudentPath(
+                    id="apprentice",
+                    title="Apprenticeship",
+                    description="Earn while you learn",
+                    start_age=18,
+                    quick=True,
+                ),
+            ]
+        ),
+        "Circles": PL.CirclesResponse(
+            circles=[
+                PL.Circle(
+                    id="c_flat",
+                    name="Flat 4B",
+                    code="Q7K2PZ",
+                    members=[
+                        PL.CircleMember(id="u1", name="Sam", habits=habits, improvement=9, rank=1, is_you=True),
+                        PL.CircleMember(id="u2", name="Jo", habits=habits, improvement=4, rank=2),
+                    ],
+                    recap="Sam saved a bigger share of money this week. Jo cut one subscription.",
+                    recap_week="2026-W42",
+                )
+            ]
+        ),
+        "Circle": PL.Circle(
+            id="c_flat",
+            name="Flat 4B",
+            code="Q7K2PZ",
+            members=[PL.CircleMember(id="u1", name="Sam", habits=habits, improvement=0, rank=1, is_you=True)],
+        ),
+        "CreateCircle": PL.CreateCircleRequest(name="Flat 4B"),
+        "JoinCircle": PL.JoinCircleRequest(code="Q7K2PZ"),
+    }
+
+
 def account_examples() -> dict[str, Any]:
     stages = [
         AC.ImportStage(name="read", label="Reading your statement", done=True),
@@ -611,7 +683,38 @@ def account_examples() -> dict[str, Any]:
         description="Pret A Manger",
         merchant="Pret A Manger",
     )
+    samples = AC.SamplesResponse(
+        samples=[
+            AC.SampleStatement(
+                id="scholarship",
+                title="Scholarship student",
+                description="Scholarship and bursary, about £420 a month, no debt",
+                funding=["scholarship", "bursary"],
+                months=3,
+            ),
+            AC.SampleStatement(
+                id="working",
+                title="Working student",
+                description="Maintenance loan and part-time pay, uses an overdraft",
+                funding=["maintenance_loan", "part_time_job"],
+                months=3,
+            ),
+        ]
+    )
+    habits = F.HabitScore(
+        components=F.HabitComponents(
+            savings_rate=72,
+            months_of_cover=40,
+            spend_stability=81,
+            discretionary_share=63,
+            subscription_creep=90,
+            debt_pressure=100,
+        ),
+        overall=74,
+    )
     return {
+        "Samples": samples,
+        "HabitScore": habits,
         "Me": AC.Me(
             id="usr_8f3a2c",
             display_name="Priya",
@@ -1173,6 +1276,14 @@ TIER2_OPS = {
     "resetDemo",
     "signOut",
     "importStatement",
+    "listSamples",
+    "importSample",
+    "getHabits",
+    "leaveCircle",
+    "joinCircle",
+    "createCircle",
+    "listCircles",
+    "listPaths",
     "setManualFinance",
     "logPayment",
     "reversePostcode",
@@ -1601,6 +1712,76 @@ def account_paths() -> dict[str, Any]:
         },
         "/v1/auth/logout": {
             "post": op("signOut", "Revoke the current token", "auth", {**NO_CONTENT, **errs("401", "429")})
+        },
+        "/v1/paths": {
+            "get": op(
+                "listPaths",
+                "Student start paths for Play solo and Quick Life (ADR 0052)",
+                "lives",
+                {**ok("PathsResponse", "Paths"), **errs("401", "429")},
+            )
+        },
+        "/v1/circles": {
+            "get": op(
+                "listCircles",
+                "My Circles: habit ratios only, never amounts (ADR 0052)",
+                "circles",
+                {**ok("CirclesResponse", "Circles"), **errs("401", "429", "503")},
+            ),
+            "post": op(
+                "createCircle",
+                "Create a Circle",
+                "circles",
+                {**ok("Circle", "Circle", "Created", "201"), **errs(*STD)},
+                requestBody=body("CreateCircleRequest", "CreateCircle"),
+            ),
+        },
+        "/v1/circles/join": {
+            "post": op(
+                "joinCircle",
+                "Join a Circle by code",
+                "circles",
+                {**ok("Circle", "Circle"), **errs("401", "404", "422", "429", "503")},
+                requestBody=body("JoinCircleRequest", "JoinCircle"),
+            ),
+        },
+        "/v1/circles/{circle_id}/leave": {
+            "post": op(
+                "leaveCircle",
+                "Leave a Circle",
+                "circles",
+                {**NO_CONTENT, **errs("401", "404", "429", "503")},
+                parameters=[
+                    {"name": "circle_id", "in": "path", "required": True, "schema": {"type": "string", "maxLength": 40}}
+                ],
+            ),
+        },
+        "/v1/samples": {
+            "get": op(
+                "listSamples",
+                "Built-in sample student statements (ADR 0047)",
+                "account",
+                {**ok("SamplesResponse", "Samples"), **errs("401", "429")},
+            )
+        },
+        "/v1/samples/{sample_id}/import": {
+            "post": op(
+                "importSample",
+                "Import a sample statement into this account; data is labelled Sample data",
+                "account",
+                {**ok("ImportResult", "ImportResult", "Imported", "201"), **errs("401", "404", "429", "503")},
+                parameters=[
+                    {"name": "sample_id", "in": "path", "required": True, "schema": {"type": "string", "maxLength": 40}}
+                ],
+            )
+        },
+        "/v1/habits": {
+            "get": op(
+                "getHabits",
+                "This user's habit score: ratios 0-100, no amounts (ADR 0052)",
+                "finance",
+                {**ok("HabitScore", "HabitScore"), **errs("401", "409", "429", "503")},
+            )
         },
         "/v1/finance/statements": {
             "post": op(

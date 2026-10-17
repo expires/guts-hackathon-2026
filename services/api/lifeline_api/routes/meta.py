@@ -35,7 +35,11 @@ async def get_health(request: Request) -> Health:
         else:
             checks["redis"] = "skipped"
     status: Literal["ok", "degraded"] = "degraded" if "down" in checks.values() else "ok"
+    extra: dict[str, bool] = {}
+    if "warming" in Health.model_fields:  # readiness, never a failed health check (V1)
+        extra["warming"] = state.warming
     return Health(
+        **extra,
         status=status,
         version=state.settings.version,
         product=PRODUCT_NAME,

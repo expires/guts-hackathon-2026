@@ -58,6 +58,14 @@ TIER2 = {
     "resetDemo",
     "signOut",
     "importStatement",
+    "listSamples",
+    "importSample",
+    "getHabits",
+    "leaveCircle",
+    "joinCircle",
+    "createCircle",
+    "listCircles",
+    "listPaths",
     "setManualFinance",
     "logPayment",
     "reversePostcode",
@@ -147,7 +155,9 @@ async def test_characters(client: httpx.AsyncClient, auth: dict[str, str]) -> No
     r = await client.get("/v1/characters", params={"seed": 7}, headers=auth)
     validate("GET", "/v1/characters", r.status_code, r.json())
     ids = {c["id"] for c in r.json()["presets"]}
-    assert {"nurse-leeds", "banker-london"} <= ids
+    # Direction V2 (ADR 0052, 0061): student path characters are offered; old presets are not.
+    assert {"path-uni", "path-apprentice", "path-job18", "path-gap_year", "path-masters"} <= ids
+    assert not ids & {"nurse-leeds", "banker-london", "plumber", "retired"}, "old presets must not be offered"
     r2 = await client.get("/v1/characters", params={"seed": 7}, headers=auth)
     assert r2.json()["random"] == r.json()["random"], "random character must be deterministic per seed"
 
@@ -294,6 +304,7 @@ async def test_rooms_http(client: httpx.AsyncClient, auth: dict[str, str]) -> No
 
 
 @pytest.mark.tier2
+@pytest.mark.skip(reason="Bank connections are cut in Direction V2 (ADR 0046); routes stay until cleanup")
 async def test_bank_flow(client: httpx.AsyncClient, auth: dict[str, str]) -> None:
     r = await client.get("/v1/bank/auth-link", headers=auth)
     validate("GET", "/v1/bank/auth-link", r.status_code, r.json())
@@ -311,7 +322,9 @@ async def test_bank_flow(client: httpx.AsyncClient, auth: dict[str, str]) -> Non
 
 
 @pytest.mark.tier2
-async def test_purchase_demo(client: httpx.AsyncClient, auth: dict[str, str]) -> None:
+async def test_purchase_demo(client: httpx.AsyncClient) -> None:
+    # Fresh account: a saved rewind pass must not leak into later stack runs of test_actions_and_rewind.
+    auth = await fresh_auth(client)
     r = await client.post(
         "/v1/purchases/verify", json={"product_id": "lifeline.rewindpass", "demo": True}, headers=auth
     )
@@ -383,7 +396,9 @@ async def test_later_tier_ops_answer_inside_contract(
         body = {"decision_id": "ev-1900-1"}
     if op_id == "chooseLife":
         return
-    r = await client.request(method, concrete, json=body, params=params, headers=auth)
+    # A demo purchase saves an entitlement; use a fresh account so it never leaks into later stack runs.
+    headers = await fresh_auth(client) if op_id == "verifyPurchase" else auth
+    r = await client.request(method, concrete, json=body, params=params, headers=headers)
     validate(method, path, r.status_code, r.json())
     if r.status_code >= 400:
         assert is_error(r.json())
@@ -647,10 +662,15 @@ async def test_ask_penny_stream_order(client: httpx.AsyncClient) -> None:
                 events.append(_json.loads(line[5:].strip()))
     types = [e["type"] for e in events]
     assert types[0] == "reaction" and types[-1] == "done"
-    assert all(t in ("tool_step", "verifying", "bubble") for t in types[1:-1])
+    # ADR 0051: keepalive while waiting; an error is followed by done with the unavailable reply.
+    assert all(t in ("tool_step", "verifying", "bubble", "keepalive", "error") for t in types[1:-1])
+    done = events[-1]["response"]
+    assert len(done["bubbles"]) <= 2
+    if "error" in types:
+        assert "bubble" not in types and done["verified"] is False
+        return
     last_step = max((i for i, t in enumerate(types) if t == "tool_step"), default=0)
     assert types.index("bubble") > last_step
-    done = events[-1]["response"]
     streamed = [e["bubble"]["bubble"]["id"] for e in events if e["type"] == "bubble"]
     assert streamed == [b["id"] for b in done["bubbles"]]
 
@@ -664,3 +684,41 @@ async def test_finance_home_empty_is_not_an_error(client: httpx.AsyncClient) -> 
     body = r.json()
     if not body["has_data"]:
         assert body.get("connect_prompt") and "next_move" not in body and "prediction" not in body
+
+
+FORBIDDEN_SHARED_KEYS = {"balance", "amount", "income", "merchant", "description", "transactions", "accounts"}
+
+
+def _walk(node: Any, path: str = "") -> list[tuple[str, Any]]:
+    if isinstance(node, dict):
+        return [p for k, v in node.items() for p in _walk(v, f"{path}.{k}")] + [(f"{path}.{k}", None) for k in node]
+    if isinstance(node, list):
+        return [p for i, v in enumerate(node) for p in _walk(v, f"{path}[{i}]")]
+    return [(path, node)]
+
+
+async def test_shared_payloads_never_carry_personal_money(client: httpx.AsyncClient) -> None:
+    """ADR 0052 privacy rule: habits and rooms share ratios only, never the user's amounts or merchants."""
+    auth = await fresh_auth(client)
+    imp = await client.post("/v1/samples/rich/import", headers=auth)
+    assert imp.status_code == 201, imp.text
+    overview = (await client.get("/v1/finance/overview", headers=auth)).json()
+    personal = {round(abs(float(v)), 2) for p, v in _walk(overview) if isinstance(v, int | float) and abs(v) >= 1}
+    merchants = {
+        str(v).lower()
+        for p, v in _walk((await client.get("/v1/finance/spending", headers=auth)).json())
+        if p.endswith("merchant") and isinstance(v, str)
+    }
+    ex = spec()["components"]["examples"]["CreateRoom"]["value"]
+    room = await client.post("/v1/rooms", json=ex, headers=auth)
+    circle = await client.post("/v1/circles", json={"name": "Flat 4B"}, headers=auth)
+    circles = await client.get("/v1/circles", headers=auth)
+    shared = [(await client.get("/v1/habits", headers=auth)).json(), room.json(), circle.json(), circles.json()]
+    for payload in shared:
+        for path, value in _walk(payload):
+            key = path.rsplit(".", 1)[-1].split("[")[0]
+            assert key not in FORBIDDEN_SHARED_KEYS, f"forbidden key shared: {path}"
+            if isinstance(value, float) and abs(value) >= 1:
+                assert round(abs(value), 2) not in personal, f"personal amount shared at {path}: {value}"
+            if isinstance(value, str):
+                assert value.lower() not in merchants, f"merchant shared at {path}"

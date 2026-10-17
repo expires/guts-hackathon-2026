@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import secrets
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from lifeline_api import account, money, onboarding
+from lifeline_api import account, money, onboarding, samples
 from lifeline_api.auth import Subject, _bearer, revoke
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.routes.next_move import _compute as compute_next_move
-from lifeline_api.sim_bridge import call_pure
-from lifeline_api.state import get_state
+from lifeline_api.sim_bridge import call_parse, call_pure
+from lifeline_api.state import AppState, get_state
 from lifeline_contracts.account import (
     HealthSignal,
     HealthSignalStored,
@@ -26,12 +29,16 @@ from lifeline_contracts.account import (
     ManualFinanceInput,
     Me,
     ReversePostcode,
+    SamplesResponse,
 )
-from lifeline_contracts.finance import FinanceProfile
+from lifeline_contracts.finance import FinanceProfile, FinanceSnapshot
 from lifeline_data import statements
 from lifeline_engine import money as money_engine
 
+log = logging.getLogger(__name__)
+
 router = APIRouter()
+
 
 DOC_HEALTH = "health"
 
@@ -98,9 +105,9 @@ async def import_statement(request: Request, sub: Subject) -> ImportResult:
     if not isinstance(upload, StarletteUploadFile):
         raise ApiError(422, "validation_error", "file: required")
     content = await upload.read(statements.MAX_BYTES + 1)
-    parsed = await call_pure(statements.parse_statement, content, upload.filename)
-
     state = get_state(request)
+    parsed = await call_parse(state.parse_slots, statements.parse_statement, content, upload.filename)
+
     stages = {name: False for name in STAGE_LABELS}
     stages["read"] = parsed.status != "failed"
     if parsed.status == "failed":
@@ -111,17 +118,46 @@ async def import_statement(request: Request, sub: Subject) -> ImportResult:
         stmt = await call_pure(statements.to_snapshot, parsed, region=None, postcode=None, holder=None)
         snap = onboarding.merge_statement(previous, stmt)
         await money.save_snapshot(state, sub, snap)
+    return await _finish_import(state, sub, parsed, snap, stages)
+
+
+async def _finish_import(state: AppState, sub: str, parsed: Any, snap: FinanceSnapshot,
+                         stages: dict[str, bool]) -> ImportResult:
+    """The stages after the data is saved: profile and next move, as the import screen shows them."""
     stages["categorise"] = True
     stages["find_bills"] = True
     try:
         await call_pure(money_engine.finance_profile, snap, money.today(snap), None)
         stages["build_profile"] = True
-        await compute_next_move(state, sub)
-        stages["next_move"] = True
+        stages["next_move"] = await _next_move_within_budget(state, sub)
     except ApiError as exc:
         parsed.warnings.append(f"{STAGE_LABELS['next_move'] if stages['build_profile'] else 'Profile'}: "
                                f"{exc.message}")
     return _import_result(parsed, stages)
+
+
+NEXT_MOVE_BUDGET_SECONDS = 4.0
+
+
+async def _next_move_within_budget(state: AppState, sub: str) -> bool:
+    """The import never waits long for live data (V1): the next move is computed in the background and
+    stored; if it is not ready within the budget the stage stays open and GET /v1/next-move finishes it."""
+    task = asyncio.ensure_future(compute_next_move(state, sub, reword=False))
+    building = state.memo.get(("macro-build",))
+    budget = 0.2 if building is not None and not building.done() else NEXT_MOVE_BUDGET_SECONDS  # cold start
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=budget)
+        return True
+    except TimeoutError:
+        state.games.add(task)  # keep a reference; it stores the move when done
+
+        def done(t: asyncio.Future[Any]) -> None:
+            state.games.discard(t)
+            if not t.cancelled() and t.exception() is not None:
+                log.info("background next move failed: %s", type(t.exception()).__name__)
+
+        task.add_done_callback(done)
+        return False
 
 
 STAGE_LABELS = {
@@ -158,7 +194,9 @@ async def set_manual_finance(body: ManualFinanceInput, request: Request, sub: Su
     async with state.subject_locks[f"{sub}:money"]:
         snap = onboarding.merge_manual(await money.stored_snapshot(state, sub), snap)
         await money.save_snapshot(state, sub, snap)
-    return await call_pure(money_engine.finance_profile, snap, money.today(snap), None)
+        await money.save_onboarding(state, sub, is_student=body.is_student, housing=body.housing, age=body.age)
+    prof = await call_pure(money_engine.finance_profile, snap, money.today(snap), None)
+    return await money.with_onboarding(state, sub, prof, snap)
 
 
 @router.post("/v1/finance/transactions", tags=["finance"], status_code=201, response_model=LoggedPayment,
@@ -207,3 +245,40 @@ async def reverse_postcode(
     if hit is None:
         raise not_found("No postcode near this location")
     return ReversePostcode.model_validate(hit)
+
+
+# ---------- sample statements (ADR 0047) ----------
+
+
+@router.get("/v1/samples", tags=["finance"], response_model=SamplesResponse, response_model_exclude_none=True)
+async def list_samples(sub: Subject) -> SamplesResponse:
+    """The built-in student statements. Team profiles have team=true (hidden from the judge picker)."""
+    return samples.listing()
+
+
+@router.post("/v1/samples/{sample_id}/import", tags=["finance"], status_code=201, response_model=ImportResult,
+             response_model_exclude_none=True)
+async def import_sample(sample_id: str, request: Request, sub: Subject) -> ImportResult:
+    """Import a sample through the statement pipeline (W1's parser). It replaces the user's data and is labelled
+    "Sample data". Student facts (income dates, loan plan, debts, age, housing) come from the sample's hints."""
+    hint = samples.hints(sample_id)  # only ids from the index reach the file system
+    state = get_state(request)
+    try:
+        snap = await call_parse(state.parse_slots, samples.load, sample_id) if hint is not None else None
+    except samples.SampleWithoutBalance as exc:
+        raise ApiError(503, "sample_unavailable", "This sample cannot be read right now.",
+                       source="statements") from exc
+    if hint is None or snap is None:
+        raise not_found(f"Unknown sample {sample_id}")
+    async with state.subject_locks[f"{sub}:money"]:
+        await money.save_snapshot(state, sub, snap)
+        await money.save_onboarding(state, sub, is_student=hint.get("is_student"),
+                                    housing=hint.get("housing") or "rent", age=hint.get("age"))
+    days = [t.date for t in snap.transactions]
+    parsed = SimpleNamespace(
+        status="done", provider="monzo", transactions=snap.transactions, warnings=[],
+        first_date=min(days, default=None), last_date=max(days, default=None),
+        months_covered=samples.months_covered(snap),
+    )
+    stages = {name: name == "read" for name in STAGE_LABELS}
+    return await _finish_import(state, sub, parsed, snap, stages)

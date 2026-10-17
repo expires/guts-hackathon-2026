@@ -10,6 +10,7 @@ Any unmatched number rejects the whole text. The caller then serves the template
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -71,7 +72,7 @@ _NUMBER_RE = re.compile(
 )
 _UNIT_WORD = r"(?:per\s*cent|percent|pounds?|quid|years?|months?|weeks?|days?)"
 _ONE_RE = re.compile(rf"\b(?P<word>one|none)\s+(?={_UNIT_WORD}\b)", re.IGNORECASE)
-_AFTER_RE = re.compile(r"^\s*(?P<u>per\s*cent|percent|pounds?|quid|days?|weeks?|months?|years?)\b", re.IGNORECASE)
+_AFTER_RE = re.compile(r"^\s*(?P<u>per\s*cent|percent|pounds?|quid|gbp|days?|weeks?|months?|years?)\b", re.IGNORECASE)
 _WORD_RE = re.compile(rf"\b(?P<word>{'|'.join(sorted(_WORDS, key=len, reverse=True))})\b", re.IGNORECASE)
 
 _SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6, "bn": 1e9, "billion": 1e9}
@@ -97,7 +98,7 @@ def _kind(text: str, start: int, end: int, is_percent: bool) -> str | None:
     if is_percent:
         return "percent"
     before = text[:start].rstrip(" -\u2212")
-    if before.endswith("\u00a3"):
+    if before.endswith("\u00a3") or before[-3:].lower() == "gbp":  # V6 V2-F4: "GBP 138" is money
         return "gbp"
     m = _AFTER_RE.match(text[end:])
     if not m:
@@ -105,7 +106,7 @@ def _kind(text: str, start: int, end: int, is_percent: bool) -> str | None:
     u = m.group("u").lower().replace(" ", "")
     if u in {"percent"}:
         return "percent"
-    if u.startswith(("pound", "quid")):
+    if u.startswith(("pound", "quid", "gbp")):
         return "gbp"
     return u if u.endswith("s") else u + "s"
 
@@ -143,8 +144,9 @@ def extract_numbers(text: str) -> list[Found]:
         is_percent = suffix in {"%", "per cent", "percent"} or suffix.replace(" ", "") == "percent"
         scale_key = suffix.replace(" ", "")
         if scale_key in _SCALE:
+            # "£0.1k" is written to the nearest 100: precision moves with the scale (V6 V2-F4).
             value *= _SCALE[scale_key]
-            decimals = 0
+            decimals -= round(math.log10(_SCALE[scale_key]))
         raw = m.group(0).rstrip()
         end = m.start() + len(raw)
         kind = _kind(text, m.start(), end, is_percent)

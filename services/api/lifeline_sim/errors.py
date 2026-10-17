@@ -5,7 +5,14 @@ from __future__ import annotations
 from typing import Literal
 
 SimErrorCode = Literal[
-    "not_found", "pending_events", "dead", "payment_required", "invalid_choice", "invalid_action", "invalid_input"
+    "not_found",
+    "pending_events",
+    "dead",
+    "payment_required",
+    "invalid_choice",
+    "invalid_action",
+    "invalid_input",
+    "finished",
 ]
 
 

@@ -4,36 +4,40 @@ This document states where Penny uses a large language model (LLM), what stays d
 
 ## How Penny uses AI
 
-This section is also shown in the app (You tab) and in the README. Source: `services/api/lifeline_explain/ai_disclosure.json`. A unit test keeps the two in step.
+This section is also shown in the app (You tab) and in the README. Source: `services/api/lifeline_explain/ai_disclosure.json`. A unit test keeps the two in step. ADR 0043, amended by ADR 0054 and ADR 0058.
 
 ### Where AI is used
 
-- An AI model (Claude, from Anthropic) rewords the text of game events and their outcomes.
-- It rewords the headline and the evidence lines on the Next Move card.
-- It writes the wording of Ask Penny answers. Penny gets every number from the engine's tools.
+- An AI model (Claude Opus, from Anthropic) rewords the text of game events, their outcomes and the Next Move card.
+- Ask Penny uses a faster model (Claude Sonnet, from Anthropic) to write chat answers.
+- Ask Penny gives two kinds of answer. Checked with your data: Penny used the app's tools. General answer: Penny works like a normal assistant and can search the web.
 - Lessons are fixed text. AI does not write them.
 - The app never calls the AI model. Only our server calls it.
 
 ### What stays deterministic
 
-- Every number comes from your data, a public data source or the engine. AI never makes a number.
-- The engine ranks the moves and picks your Next Move. AI does not choose it.
+- The engine calculates and ranks the options and picks your Next Move. AI explains it. AI never makes the decision.
+- Every number about your money comes from your data, a public data source or the engine.
 - The engine writes the trade-off of each move (What you give up). Penny can only say it in other words.
 - The game engine decides every event, outcome and money change. The same seed gives the same game.
 
 ### How output is checked
 
-- A number verifier checks every number in AI text against the engine's facts. It also checks the unit: a money fact needs a £ sign and a percent fact needs a % sign. Code: services/api/lifeline_explain/verifier.py.
+- Checked with your data: a number verifier checks every number against the facts from the app's tools. It also checks the unit: a money fact needs a £ sign and a percent fact needs a % sign. Code: services/api/lifeline_explain/verifier.py.
+- General answer: Penny must not state your own money numbers. If she does, the app blocks the answer and Penny tries again with the app's tools. Web sources are shown under the answer.
+- Rules questions (tax, student loans, ISAs, Railcard and similar): Penny uses the app's facts table first and shows the official page and the date it was checked. If the rule is not there, she searches official sites only, such as gov.uk, and quotes a number only if the official page states it. If no official page states it, she says so and gives no number.
+- Penny must not say she has no live data. The app has live Bank of England rates, and a test checks this rule.
+- Safety: Penny does not pick shares or crypto and does not give regulated advice. If you sound in distress, she replies kindly and points to your university hardship fund, student support and Samaritans (116 123).
+- Prompt injection tests put hostile text in statements, news headlines and user messages. The model gets this text fenced as data, and the system prompt treats web pages as data too. The tests check that hostile text cannot change a rule or add a number.
+- Golden tests for both answer modes, safety and live rates: services/api/tests/unit/explain/test_chat.py and services/api/tests/unit/explain/test_chat_v2.py, services/api/tests/unit/explain/test_chat_v6_direction.py and services/api/tests/unit/explain/test_official_sources.py.
 - Verifier tests: services/api/tests/unit/explain/test_explain.py and services/api/tests/unit/explain/test_trade_off.py.
-- Golden tests ask Penny 30 fixed questions with a fake AI model and check each answer: services/api/tests/unit/explain/test_chat.py.
-- Prompt injection tests put hostile text in news headlines, merchant names and user messages. The model gets this text fenced as data. The tests check that it cannot change a rule or add a number. Same file: test_chat.py.
 
 ### What happens when AI fails
 
 - No AI key, an AI error or a failed check: events, outcomes and the Next Move card show the engine's template text. The template text is complete and correct.
-- If an Ask Penny answer fails the number check, Penny gets one rewrite. If it fails again, Penny shows a summary of the tool facts, marked as not checked.
-- If the AI model is off, Penny shows the facts of your Next Move.
-- By default, each AI call stops after 12 seconds and an Ask Penny answer stops after 24 seconds. Then the fallback text shows.
+- If a checked answer fails the number check, Penny gets one rewrite. If it fails again, Penny shows a summary of the tool facts, marked as not checked.
+- If the AI model is off, times out or fails before any tool runs, the chat shows: Penny is unavailable right now. Try again.
+- By default, each AI call stops after 12 seconds and an Ask Penny answer stops after 24 seconds.
 - A number that fails the check is never shown.
 
 ## Where AI is used
@@ -44,10 +48,11 @@ The LLM rewrites wording only. It never decides an outcome, a number, a ranking 
 |---|---|---|
 | Game event text | `lifeline_explain.api.event_text(event)` | `Event.text` |
 | Choice outcome text | `lifeline_explain.api.outcome_text(event, outcome)` | `Outcome.text` |
-| Ask Penny chat answers (ADR 0031) | `lifeline_explain.chat.answer(request, ctx)` | Bubble wording only. Every number comes from a tool fact. |
+| Ask Penny chat answers (ADR 0031, 0051) | `lifeline_explain.chat.answer(request, ctx)` | Bubble wording. Checked mode: every number comes from a tool fact. General mode: no personal numbers. |
 | Next Move card wording (ADR 0018) | `lifeline_explain.api.move_text(move)` | `Move.headline`, `EvidencePoint.text` (never `Move.action`: it must match the option label) |
 
-- Model: `claude-opus-5-5` (ADR 0007). Set by the `LLM_MODEL` environment variable.
+- Rewording model: `claude-opus-5-5` (ADR 0007). Set by the `LLM_MODEL` environment variable.
+- Chat model: `claude-sonnet-5-5` (ADR 0051). Set by the `CHAT_MODEL` environment variable.
 - Provider: Anthropic Messages API, through the official `anthropic` Python SDK.
 - The iOS app never calls the LLM. Only the backend calls it.
 
@@ -111,7 +116,20 @@ The verifier fails closed. A false rejection costs only the LLM wording. The pla
 
 ## Ask Penny (ADR 0031, 0033, 0034)
 
-Penny answers chat questions through engine tools. The LLM chooses which tool to call and writes the wording. It never produces a number.
+Penny answers chat questions in two modes (ADR 0051). The LLM chooses which tool to call and writes the wording.
+
+### Two modes (ADR 0051)
+- `mode: "checked"` ("Checked with your data"): at least one app tool ran (engine, `boe_rates`, `facts_table`, news, rate dates). Every number must match a tool fact from this turn.
+- `mode: "general"` ("General answer"): no app tool ran. Claude answers like a normal assistant with a student-focused prompt and Anthropic's server web search tool (`web_search_20260209`, at most 2 searches). Web results become sources in the `general_knowledge` group with their URL.
+- A general answer must not state the user's own money numbers. The service compares each `£` number with the user's personal facts (`EngineToolSet.personal_facts()`: the `finance_summary` money facts). A match blocks the answer, and the model gets one retry that tells it to call an app tool. A percent next to a rate word with no web search is blocked the same way. A second failure gives the template.
+- Rules questions (ADR 0058, `lifeline_explain/official.py`): facts table first, with each source's official URL and "checked <date>". Otherwise web search with `allowed_domains` set to the official domains; results from other domains are ignored; a rule number counts only if it appears in the cited official text (`web.N` facts), else one retry, then the answer without that number, or "I could not find an official source" with no number. Facts-table answers are `checked`; web-only answers are `general`, with the official page and "retrieved <date>" as the source.
+- V6 fixes: distress and pick checks normalise text (NFKC, no zero-width characters) and also run on the model's answer; a general answer that names a buy or sell of an asset gets the fixed refusal; in general mode "GBP", bare numbers next to money words and rounded forms ("about £140", "£0.1k") count as the user's money, and "your balance is £X" claims are blocked unless a tool backs them.
+- A general answer that says Penny lacks live or current data is blocked the same way. The retry tells the model to call `boe_rates` (live Bank of England rates: Bank Rate, savings, mortgages, credit cards).
+- Fixed replies before any LLM call: distress (kind reply, university hardship fund, student support, Samaritans 116 123) and stock, fund or crypto picks or regulated advice (polite refusal).
+- Speed (V1, first bubble under 3 s): the system prompt is static and sent with `cache_control`. Before the first model call the service runs `finance_summary` and `next_move` (and `facts_table` for rules questions) and sends their facts as APP DATA, so a personal question needs one model call; those tools are not offered again unless the user challenges the answer, and they count as tool calls only when the answer uses them. Chat calls run without thinking, effort low, `max_tokens` 700. The first bubble streams as soon as its JSON is complete and it passes every check on its own; a failing second bubble is dropped instead of a rewrite. Tool calls in one model step run in parallel.
+- Tools (ADR 0060): next_move, test_move, finance_summary, user_balance, cash_flow_projection, spend_prediction, habit_score, facts_table, boe_rates, inflation (ONS CPI), fx_convert (Frankfurter, ECB reference rates), news and rate dates, official web search. Each real call streams a plain step label such as "Checking exchange rates…".
+- Penny never asks the user for rates, conversions, public dates or public facts. An answer that asks for one is blocked and retried with an instruction to use the tool.
+- Suggestion chips answer Penny's follow-up question; no question means no chips.
 
 ### Loop
 1. The service builds the prompt: the versioned system prompt (`prompts.PENNY_PROMPT_VERSION`), earlier turns, what the app knows, the screen context and the user message.
@@ -140,26 +158,28 @@ Penny answers chat questions through engine tools. The LLM chooses which tool to
 - News results carry no facts. Penny cannot cite a headline as a source for a number.
 - Trade-offs (ADR 0042): the engine writes each move's `trade_off`. The numbers in its points become facts with ids `tf_<move_id>_<key>`, so Penny may quote them. The system prompt (`penny-v4`) tells Penny to state the trade-off ("What you give up:") when she explains or recommends a move. Any other trade-off number fails the verifier.
 - Matching uses the same rules as the event verifier above.
-- A general-knowledge bubble may hold no number at all.
+- In checked mode, a general-knowledge bubble may hold no number at all.
 - Verifier failure: the service asks the model for one rewrite. A second failure gives a template summary of the tool facts with `verified: false`.
 - An unparseable answer, a refusal, a timeout or an error also gives the template summary.
-- With no LLM, the service calls `next_move` and returns the template summary.
+- With no LLM, or when the LLM fails before any tool ran, the response says "Penny is unavailable right now. Try again." with `verified: false`.
 - An unverified number is never sent.
 
 ### Response rules applied by code
-- Highlights map each number in a bubble to a fact id and a source id.
+- Highlights map money and rate numbers (units `gbp`, `gbp_per_month`, `gbp_per_year`, `percent`) to a fact id and a source id. Years, dates and counts are checked but never highlighted.
+- Source labels use human names, for example "Bank of England · savings rates · live". They never show series codes (`lifeline_explain/source_names.py`).
 - Sources are grouped as `your_data` (bank data, the sim), `live_sources` (BoE, ONS, Guardian and others) and `general_knowledge` (GOV.UK facts table, concept answers).
-- The output keeps at most 4 bubbles and 3 sentences per bubble. If the model wrote more, `summary_available` is set to true.
+- The output keeps at most 2 bubbles and 3 sentences per bubble. If the model wrote more, `summary_available` is set to true.
+- `suggestions` keeps at most 2 follow-up chips of 40 characters or less. Lone answers such as "Yes" and chips with numbers are dropped.
 - The output keeps at most one follow-up question.
 - The service removes markdown, emoji, exclamation marks and em dashes.
-- The service removes "not financial advice" sentences. The text appears only in `disclaimer`.
+- The service removes "not financial advice" sentences. The disclaimer appears only in `disclaimer`: "Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions."
 - A challenge ("are you sure?") with no tool call gets one nudge to call the tool again. The first bubble starts with "Fair".
 - Out of scope: the service sends a fixed reply with reaction `shrug`, no facts and no sources.
 - `verified: false` always sets the reaction to `question`.
 - Penny does not reveal her instructions (system prompt rule). A bubble that repeats 6 or more consecutive words of the system prompt is replaced with a fixed reply.
 
 ### Streaming (ADR 0031 amendment)
-- `answer_stream` emits events in this order: `reaction` (a keyword heuristic, before any LLM call), then `tool_step` for each real tool call as it starts, then `verifying`, then `bubble` events, then `done`.
+- `answer_stream` emits events in this order: `reaction` (a keyword heuristic, before any LLM call), then `tool_step` for each real tool call (a server web search is reported after the model call that ran it), `keepalive` every 2 seconds while waiting, then `verifying`, then `bubble` events, then `done`.
 - The stream emits a `bubble` only for a verified answer, and only after a per-bubble check that each of its numbers matches a fact.
-- On failure, the stream emits `error`, then `done` with the template summary. It emits no `bubble` events.
+- When Penny is unavailable, the stream emits `error`, then `done` with the fixed reply. It emits no `bubble` events. The client falls back to `POST /v1/chat`, then shows "Penny is unavailable right now. Try again."
 - Step labels contain only engine values and validated integers, never untrusted text.

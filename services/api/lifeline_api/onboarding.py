@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import date, timedelta
+from typing import Literal
 
 from lifeline_api.errors import ApiError
 from lifeline_contracts.account import FinanceInput, HealthSignal, LogPaymentRequest, ManualFinanceInput
@@ -18,6 +19,13 @@ from lifeline_engine.finance import monthly_payment
 USER_ENTERED = "user_entered"
 LOGGED_BY_APP = "app_intent"
 MANUAL_HISTORY_MONTHS = 6
+UNENTERED_CURRENT = "Current account (balance not entered)"
+DEBT_ACCOUNTS: dict[str, tuple[Literal["current", "credit", "loan"], str]] = {
+    "card": ("credit", "Credit card (entered by you)"),
+    "overdraft": ("current", "Overdraft (entered by you)"),
+    "bnpl": ("credit", "Buy now, pay later (entered by you)"),
+    "loan": ("loan", "Loan (entered by you)"),
+}
 CURRENT_ACCOUNT_ID = "acc_current"
 
 
@@ -52,8 +60,10 @@ def _require(value: object, field: str) -> None:
 
 def manual_snapshot(body: ManualFinanceInput, today: date) -> FinanceSnapshot:
     txs: list[Transaction] = []
-    for d in _month_days(today, MANUAL_HISTORY_MONTHS, 25):
-        txs.append(_tx(d, body.monthly_take_home, "Salary", "Salary"))
+    if body.monthly_take_home > 0:
+        label = "Monthly income" if body.is_student else "Salary"
+        for d in _month_days(today, MANUAL_HISTORY_MONTHS, 25):
+            txs.append(_tx(d, body.monthly_take_home, label, label))
     if body.housing == "rent" and body.monthly_rent:
         for d in _month_days(today, MANUAL_HISTORY_MONTHS, 1):
             txs.append(_tx(d, -body.monthly_rent, "Rent", "Rent"))
@@ -63,9 +73,9 @@ def manual_snapshot(body: ManualFinanceInput, today: date) -> FinanceSnapshot:
         for d in _month_days(today, MANUAL_HISTORY_MONTHS, 2 + i % 26):
             txs.append(_tx(d, -cost.monthly_amount, cost.name, cost.name))
 
+    # The balance of the current account is not asked for: it stays 0 and is never shown as a part (ADR 0053).
     accounts = [
-        Account(id=CURRENT_ACCOUNT_ID, name="Current account (entered by you)", kind="current", provider="manual",
-                balance=0.0),
+        Account(id=CURRENT_ACCOUNT_ID, name=UNENTERED_CURRENT, kind="current", provider="manual", balance=0.0),
     ]
     if body.savings:
         accounts.append(Account(id="acc_savings", name="Savings (entered by you)", kind="savings", provider="manual",
@@ -94,9 +104,24 @@ def manual_snapshot(body: ManualFinanceInput, today: date) -> FinanceSnapshot:
         for d in _month_days(today, MANUAL_HISTORY_MONTHS, 1):
             txs.append(_tx(d, -payment, "Mortgage payment", "Mortgage"))
 
+    for debt in body.debts:
+        if debt.balance <= 0:
+            continue
+        kind, name = DEBT_ACCOUNTS[debt.kind]
+        accounts.append(Account(id=f"acc_debt_{debt.id}"[:40], name=name, kind=kind, provider="manual",
+                                balance=-round(debt.balance, 2)))
+
+    monthly_costs = sum(c.monthly_amount for c in body.regular_costs)
+    if body.housing == "rent" and body.monthly_rent:
+        monthly_costs += body.monthly_rent
     txs.sort(key=lambda t: (t.date, t.id))
-    return FinanceSnapshot(status="live", source="manual", as_of=today.isoformat(), accounts=accounts,
-                           transactions=txs, mortgage=mortgage)
+    return FinanceSnapshot(
+        status="live", source="manual", as_of=today.isoformat(), accounts=accounts, transactions=txs,
+        mortgage=mortgage, housing=body.housing, is_student=body.is_student, age=body.age,
+        student_loan_plan=body.student_loan_plan,
+        income_sources=list(body.income_sources), debts=list(body.debts),
+        monthly_costs=round(monthly_costs, 2) if (body.regular_costs or body.monthly_rent) else None,
+    )
 
 
 def with_holder(snap: FinanceSnapshot, body: ManualFinanceInput, place: dict[str, str] | None,
@@ -105,8 +130,12 @@ def with_holder(snap: FinanceSnapshot, body: ManualFinanceInput, place: dict[str
     region = None if place is None else place.get("region")
     postcode = ((place or {}).get("postcode") or body.postcode.upper().strip())[:10]
     holder = None
-    if body.birth_year is not None:
-        holder = AccountHolder(name=(name or "You")[:40], birth_year=body.birth_year, region=region,
+    birth_year = body.birth_year
+    if birth_year is None and body.age is not None:
+        birth_year = date.fromisoformat(snap.as_of).year - body.age
+    if birth_year is not None:
+        holder = AccountHolder(name=(name or "You")[:40], birth_year=birth_year, region=region,
+                               occupation="student" if body.is_student else None,
                                town=None if place is None else place.get("town"), postcode=postcode)
     return snap.model_copy(update={"region": region, "postcode": postcode, "holder": holder})
 
@@ -200,7 +229,29 @@ def merge_statement(prev: FinanceSnapshot | None, stmt: FinanceSnapshot) -> Fina
         "mortgage": prev.mortgage, "energy": prev.energy,
         "holder": stmt.holder or prev.holder, "region": stmt.region or prev.region,
         "postcode": stmt.postcode or prev.postcode,
+        **_kept_entered_fields(prev, stmt),
     })
+
+
+ENTERED_FIELDS = ("age", "is_student", "housing", "student_loan_plan", "monthly_costs", "savings_rate_pct")
+ENTERED_LISTS = ("income_sources", "debts")
+
+
+def _kept_entered_fields(prev: FinanceSnapshot, new: FinanceSnapshot) -> dict[str, object]:
+    """What the user entered stays when the statement leaves it empty, and entered income sources and debts of
+    a kind the statement did not find are kept."""
+    out: dict[str, object] = {}
+    for name in ENTERED_FIELDS:
+        if getattr(new, name) is None and getattr(prev, name) is not None:
+            out[name] = getattr(prev, name)
+    for name in ENTERED_LISTS:
+        # Keep entered items of a kind the statement did not find (a loan instalment that has not arrived yet).
+        found = list(getattr(new, name))
+        kinds = {item.kind for item in found}
+        kept = [item for item in getattr(prev, name) if item.kind not in kinds]
+        if kept:
+            out[name] = (found + kept)[:20]
+    return out
 
 
 def merge_manual(prev: FinanceSnapshot | None, manual: FinanceSnapshot) -> FinanceSnapshot:
@@ -218,6 +269,8 @@ def merge_manual(prev: FinanceSnapshot | None, manual: FinanceSnapshot) -> Finan
             "mortgage": manual.mortgage, "holder": manual.holder or prev.holder,
             "region": manual.region or prev.region, "postcode": manual.postcode or prev.postcode,
             "as_of": max(prev.as_of, manual.as_of),
+            # What the user just entered wins; a field left empty keeps what the statement found.
+            **{f: getattr(manual, f) for f in (*ENTERED_FIELDS, *ENTERED_LISTS) if getattr(manual, f)},
         })
     return manual.model_copy(update={
         "transactions": sorted([*manual.transactions, *logs], key=lambda t: (t.date, t.id)),
@@ -230,6 +283,8 @@ def inputs_of(snap: FinanceSnapshot | None) -> list[FinanceInput]:
     if snap is None:
         return []
     out: list[FinanceInput] = []
+    if snap.source == "sample":
+        out.append("sample")
     if snap.source == "statement":
         out.append("statement")
     if snap.source in ("truelayer", "monzo", "bank"):
@@ -240,3 +295,19 @@ def inputs_of(snap: FinanceSnapshot | None) -> list[FinanceInput]:
     if any(_is_logged(t) for t in snap.transactions):
         out.append("app_intent")
     return out
+
+
+# ---------- what we know vs what we would be guessing (ADR 0053 bug 3) ----------
+
+
+def payday_known(snap: FinanceSnapshot) -> bool:
+    """True when an income date is known: an entered income source with dates, or real income credits
+    (statement or bank). Synthesised manual-entry rows sit on a day we chose, so they do not count."""
+    if any(src.next_date or src.dates for src in snap.income_sources):
+        return True
+    return any(t.amount > 0 and not _is_synthetic(t) and not _is_logged(t) for t in snap.transactions)
+
+
+def synthetic_merchants(snap: FinanceSnapshot) -> set[str]:
+    """Names of costs we spread over days we chose. Their due dates are not known."""
+    return {(t.merchant or "").lower() for t in snap.transactions if _is_synthetic(t)}

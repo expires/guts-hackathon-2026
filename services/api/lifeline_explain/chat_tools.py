@@ -28,9 +28,21 @@ ToolName = Literal[
     "news_search",
     "rate_decision_dates",
     "facts_table",
+    "boe_rates",
+    "web_search",
+    "user_balance",
+    "habit_score",
+    "inflation",
+    "fx_convert",
 ]
 TOOL_NAMES: frozenset[str] = frozenset(get_args(ToolName))
-assert frozenset(get_args(ToolCall.model_fields["name"].annotation)) == TOOL_NAMES
+# Names the ChatResponse contract accepts in `tool_calls` (BOSS adds the ADR 0060 names; until then the extra tools
+# run and stream their steps but are left out of `tool_calls`).
+CONTRACT_TOOL_NAMES: frozenset[str] = frozenset(get_args(ToolCall.model_fields["name"].annotation))
+assert CONTRACT_TOOL_NAMES <= TOOL_NAMES
+# web_search is Anthropic's server tool (ADR 0051): it runs inside the model call, never through a ToolSet.
+SERVER_TOOL_NAMES: frozenset[str] = frozenset({"web_search"})
+CLIENT_TOOL_NAMES: frozenset[str] = TOOL_NAMES - SERVER_TOOL_NAMES
 
 
 def source_key(ref: SourceRef) -> str:
@@ -113,7 +125,8 @@ class ChatToolContext:
     `tools`: usually `lifeline_explain.chat_engine_tools.EngineToolSet` (snapshot, macro, today, seed, stored
     NextMoveResponse, news and rate callables, life and event for event_choices).
     After `answer` returns, `outputs` holds (tool name, ToolOutput) for every successful call this turn.
-    `ToolOutput.raw` is the original engine ToolResult; store its `lives` (test_move, life_replay)."""
+    `ToolOutput.raw` is the original engine ToolResult; store its `lives` (test_move, life_replay).
+    A ToolSet may also offer `personal_facts() -> list[ChatFact]` and `step_label(name, args) -> str | None`."""
 
     tools: ToolSet
     thread_id: str | None = None
@@ -122,6 +135,9 @@ class ChatToolContext:
     known: dict[str, str] = field(default_factory=dict)  # what the app already knows, e.g. {"name": "Sam"}
     request_context: ChatContext | None = None
     outputs: list[tuple[str, ToolOutput]] = field(default_factory=list)
+    # The user's own numbers (ADR 0051). A general answer that states one is blocked. None: ask the ToolSet
+    # (`personal_facts()`, e.g. EngineToolSet); a ToolSet without it means no personal numbers are known.
+    personal_facts: Sequence[ChatFact] | None = None
 
 
 # ---------- adapter ----------

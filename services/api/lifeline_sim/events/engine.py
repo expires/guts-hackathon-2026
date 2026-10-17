@@ -40,7 +40,8 @@ from lifeline_sim.events.schema import (
 from lifeline_sim.expr import Expr
 from lifeline_sim.macroview import PRICE_LEVEL, SOFT_SOURCES, MacroView, macro_names
 from lifeline_sim.occupations import occupation, public_pay_cap
-from lifeline_sim.rng import uniform
+from lifeline_sim.paths import stage_at
+from lifeline_sim.rng import rng, uniform
 from lifeline_sim.state import SimState
 
 TEMPLATE_PACKAGE = "lifeline_sim.events.templates"
@@ -54,7 +55,7 @@ STATE_VARS = (
     "married", "children", "is_renter", "is_owner", "has_mortgage", "on_variable", "bonus", "bonus_net",
     "occ_redundancy_mult", "occ_redundancy_stock", "occ_bonus_share", "public_sector", "pay_cap_active",
     "variable_rate", "on_tracker", "tracker_margin", "tracker_deal_years", "variable_margin",
-    "energy_fixed",
+    "energy_fixed", "on_path", "is_student",
 )  # fmt: skip
 
 
@@ -117,6 +118,8 @@ def state_env(s: SimState) -> dict[str, float]:
         "tracker_deal_years": float(p.TRACKER_DEAL_YEARS),
         "variable_margin": p.VARIABLE_MARGIN,
         "energy_fixed": float(s.energy_fixed_until >= s.year),
+        "on_path": float(s.path_id is not None),
+        "is_student": float(s.student),
     }
     return env
 
@@ -252,8 +255,48 @@ def build_event(lt: LoadedTemplate, s: SimState, mv: MacroView, env: Mapping[str
     )
 
 
+QUICK_TAG = "quick"
+STAGE_TAGS = {"study": "stage_study", "study_pg": "stage_study", "apprentice": "stage_work", "work": "stage_work"}
+
+
+def quick_pool(s: SimState, mv: MacroView, env: Mapping[str, float]) -> list[LoadedTemplate]:
+    """Quick Life templates that can fire for this year: tag `quick`, the stage tag (or `stage_any`), age and
+    year range, and macro data present. `when` is not checked, so earlier choices never change the pool."""
+    stage = stage_at(s.path_id, s.age) if s.path_id is not None else None
+    stage_tag = STAGE_TAGS.get(stage.kind, "stage_any") if stage is not None else "stage_any"
+    out: list[LoadedTemplate] = []
+    for lt in load_templates():
+        t = lt.t
+        if QUICK_TAG not in t.tags or not ({stage_tag, "stage_any"} & set(t.tags)):
+            continue
+        e = t.eligible
+        if not (e.age[0] <= s.age <= e.age[1] and e.years[0] <= s.year <= e.years[1]):
+            continue
+        if any(not mv.has(k) for k in lt.macro_keys) or any(n not in env for n in lt.macro_vars):
+            continue
+        out.append(lt)
+    return out
+
+
+def draw_quick_event(s: SimState, mv: MacroView, env: Mapping[str, float]) -> list[Event]:
+    """Quick Life (ADR 0052): one event at each planned event year, none in other years.
+
+    The template is a seeded pick from `quick_pool`, never one already used in this life. Same seed, path
+    and start year give the same events."""
+    if s.year not in s.quick_event_years:
+        return []
+    pool = [lt for lt in quick_pool(s, mv, env) if lt.t.id not in s.last_fired]
+    if not pool:
+        return []
+    lt = rng(s.seed, "quick", "event", s.year).choice(pool)
+    s.last_fired[lt.t.id] = s.year
+    return [build_event(lt, s, mv, env, f"ev-{s.year}-1")]
+
+
 def draw_events(s: SimState, mv: MacroView) -> list[Event]:
     env = {**mv.env(s.year, s.region), **state_env(s)}
+    if s.quick:
+        return draw_quick_event(s, mv, env)
     fired: list[tuple[int, float, str, LoadedTemplate]] = []
     focus_on = bool(s.focus_tags) and (s.focus_until is None or s.year <= s.focus_until)
     focus_tags = s.focus_tags if focus_on else ()
@@ -351,6 +394,9 @@ def apply_effects(s: SimState, effects: Mapping[str, float | str]) -> Deltas:
             s.rent = max(0.0, s.rent + value)
         elif target == "living":
             s.living = max(0.0, s.living + value)
+            s.living_adj += value
+        elif target == "want_weekly":
+            s.want_adj += value
         elif target in STAT_TARGETS:
             before = getattr(s, target)
             after = int(max(0, min(100, before + round(value))))

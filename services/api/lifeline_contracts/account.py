@@ -9,8 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from lifeline_contracts.domain import IsoDate, RegionSlug
-from lifeline_contracts.finance import Category, Transaction
+from lifeline_contracts.domain import IsoDate, RegionSlug, ShortId
+from lifeline_contracts.finance import Category, DebtItem, IncomeKind, IncomeSource, StudentLoanPlan, Transaction
 from lifeline_contracts.observation import Status
 
 
@@ -20,7 +20,7 @@ class _M(BaseModel):
 
 # ---------- account ----------
 
-FinanceInput = Literal["statement", "manual", "bank", "app_intent"]
+FinanceInput = Literal["statement", "manual", "bank", "app_intent", "sample"]
 
 
 class Me(_M):
@@ -58,6 +58,24 @@ class ImportResult(_M):
     stages: list[ImportStage]
 
 
+# ---------- onboarding: sample statements (ADR 0047) ----------
+
+
+class SampleStatement(_M):
+    """A built-in synthetic student statement. Imported data is always labelled "Sample data"."""
+
+    id: ShortId
+    title: str = Field(max_length=40, description="e.g. 'Scholarship student'")
+    description: str = Field(max_length=160)
+    funding: list[IncomeKind] = Field(max_length=8)
+    months: int = Field(ge=1, le=12)
+    team: bool = Field(default=False, description="Team phone profile, hidden from the judge picker")
+
+
+class SamplesResponse(_M):
+    samples: list[SampleStatement]
+
+
 # ---------- onboarding: manual entry ----------
 
 
@@ -80,6 +98,12 @@ class ManualFinanceInput(_M):
     regular_costs: list[RegularCost] = Field(default_factory=list, max_length=30)
     savings: float = Field(default=0, ge=0, le=100_000_000)
     birth_year: int | None = Field(default=None, ge=1920, le=2010)
+    # Student fields (ADR 0049). All optional so older clients still validate.
+    is_student: bool | None = None
+    age: int | None = Field(default=None, ge=16, le=100)
+    income_sources: list[IncomeSource] = Field(default_factory=list, max_length=20)
+    student_loan_plan: StudentLoanPlan | None = None
+    debts: list[DebtItem] = Field(default_factory=list, max_length=20)
 
 
 # ---------- connectors ----------

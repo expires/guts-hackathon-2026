@@ -248,40 +248,58 @@ def pay_off_debt(
     amount: float,
     monthly: float,
     savings_left: float,
-    months_left: float,
+    months_left: float | None,
     savings_rate: float,
     card_rate: float,
+    savings_rate_known: bool = True,
+    word: str = "spending",
+    target: str = "your card",
 ) -> TradeOff:
-    """mode: 'savings' (lump sum from savings), 'surplus' (monthly spare money) or 'cut' (cut spending)."""
+    """`word`: 'spending' or 'regular costs' (ADR 0057). `target`: 'your card', 'your overdraft' (F-V2-3).
+    mode: 'savings' (lump sum from savings), 'surplus' (monthly spare money) or 'cut' (cut spending).
+    `months_left` is None when monthly costs are not known (ADR 0053 bug 5): that point is left out.
+    `savings_rate_known` False: the rate is the UK average and the text says so (ADR 0053 bug 6)."""
     if mode == "savings":
         lost = amount * savings_rate / 100
-        points = [
+        rate_text = (
+            f"You lose about {pct(savings_rate)} interest on {gbp(amount)}: {gbp(lost)} a year."
+            if savings_rate_known
+            else f"At the UK average savings rate of {pct(savings_rate)}, {gbp(amount)} earns about {gbp(lost)} a year."
+        )
+        points = []
+        if months_left is not None:
+            points.append(
+                point(
+                    f"Your savings drop to {gbp(savings_left)}, about {months_left:g} months of {word}.",
+                    {"savings_left": money_value(savings_left), "months_left": months_left},
+                )
+            )
+        points += [
             point(
-                f"Your savings drop to {gbp(savings_left)}, about {months_left:g} months of spending.",
-                {"savings_left": money_value(savings_left), "months_left": months_left},
-            ),
-            point(
-                f"You lose about {pct(savings_rate)} interest on {gbp(amount)}: {gbp(lost)} a year.",
+                rate_text,
                 {"savings_rate": pct_value(savings_rate), "amount": money_value(amount), "lost": money_value(lost)},
             ),
             point(
-                f"If a surprise bill comes, you may need the card again at about {pct(card_rate)}.",
+                f"If a surprise bill comes, you may need to borrow again at about {pct(card_rate)}.",
                 {"card_rate": pct_value(card_rate)},
             ),
         ]
         return make(f"Less cash on hand: your savings drop to {gbp(savings_left)}", points)
     points = [
         point(
-            f"{gbp(monthly)} a month goes to the card, so it does not go to savings or spending.",
+            f"{gbp(monthly)} a month goes to {target}, so it does not go to savings or spending.",
             {"monthly": money_value(monthly)},
         ),
-        point(
-            f"Your cash and savings cover about {months_left:g} months of spending while you pay it down."
-            if months_left >= 0.5
-            else "You have almost no cash to fall back on while you pay it down.",
-            {"months_left": months_left} if months_left >= 0.5 else {},
-        ),
     ]
+    if months_left is not None:
+        points.append(
+            point(
+                f"Your cash and savings cover about {months_left:g} months of {word} while you pay it down."
+                if months_left >= 0.5
+                else "You have almost no cash to fall back on while you pay it down.",
+                {"months_left": months_left} if months_left >= 0.5 else {},
+            )
+        )
     return make(f"{gbp(monthly)} a month less to spend or save", points)
 
 
@@ -294,11 +312,15 @@ def emergency_fund(
     stock_return: float | None,
     first_year: int | None,
     last_year: int | None,
+    savings_rate_known: bool = True,
 ) -> TradeOff:
-    """Cash kept for emergencies is not invested, so its expected growth is lower."""
+    """Cash kept for emergencies is not invested, so its expected growth is lower. `savings_rate_known` False:
+    the rate is the UK average and the text says so (ADR 0053 bug 6)."""
     points = [
         point(
-            f"{gbp(amount)} kept as cash earns about {pct(savings_rate)} a year.",
+            f"{gbp(amount)} kept as cash earns about {pct(savings_rate)} a year."
+            if savings_rate_known
+            else f"{gbp(amount)} kept as cash earns about {pct(savings_rate)} a year at the UK average savings rate.",
             {"amount": money_value(amount), "savings_rate": pct_value(savings_rate)},
         )
     ]
@@ -339,17 +361,73 @@ def cut_budget(category: str, excess: float, average: float, over: int, history:
     return make(f"{gbp(excess)} a month less to spend on {_fit(category, SUMMARY_MAX - 40)}", points)
 
 
-# ---------- investments ----------
+# ---------- student moves (ADR 0046) ----------
 
 
-def spread_investments(name: str, share_pct: float, moved: float, limit_pct: float) -> TradeOff:
+def weekly_budget(
+    safe_weekly: float, pace: float, bills: float, day_text: str, day_facts: dict[str, float]
+) -> TradeOff:
+    cut = max(0.0, pace - safe_weekly)
     points = [
         point(
-            f"If {name} keeps rising faster than the rest, you gain less. Moving {gbp(moved)} out of it "
-            f"brings it down to {limit_pct:g}% of your ISA from {share_pct:g}%.",
-            {"moved": money_value(moved), "limit_pct": limit_pct, "share_pct": share_pct},
+            f"You spend {gbp(cut)} a week less than your recent pace until {day_text}.",
+            {"cut": money_value(cut), **day_facts},
         ),
-        point("Selling and buying can cost a dealing or currency fee. Inside an ISA there is no tax to pay.", {}),
-        point("A broad fund still falls when the whole market falls.", {}),
     ]
-    return make(f"Lower gains if {_fit(name, SUMMARY_MAX - 45)} keeps beating the rest", points)
+    if bills > 0:
+        points.append(point(f"{gbp(bills)} for regular bills is kept aside first.", {"bills": money_value(bills)}))
+    points.append(point("Nights out and treats need to fit inside the weekly amount.", {}))
+    return make(f"{gbp(cut)} a week less to spend until {day_text}", points)
+
+
+def shortfall(short: float, bills: float, day_text: str, day_facts: dict[str, float]) -> TradeOff:
+    """Bills alone take all the cash before the next payment: there is nothing safe to spend."""
+    points = [
+        point(
+            f"{gbp(bills)} of regular bills come first, so nothing is left to spend safely until {day_text}.",
+            {"bills": money_value(bills), **day_facts},
+        ),
+        point(
+            f"Borrowing the {gbp(short)} on an overdraft or card costs interest. Family or your university's "
+            "hardship fund cost nothing.",
+            {"short": money_value(short)},
+        ),
+    ]
+    return make(f"Nothing safe to spend until {day_text}: bills come first", points)
+
+
+def lifetime_isa(contribution: float, bonus: float, loss: float, charge_pct: float, house_limit: float,
+                 free_age: float) -> TradeOff:
+    back = contribution + bonus - (contribution + bonus) * charge_pct / 100
+    points = [
+        point(
+            f"Taking money out for anything but a first home costs {charge_pct:g}%. On {gbp(contribution)} paid in "
+            f"you would get back {gbp(back)}, {gbp(loss)} less than you put in.",
+            {"charge_pct": charge_pct, "contribution": money_value(contribution), "back": money_value(back),
+             "loss": money_value(loss)},
+        ),
+        point(
+            f"The money is for a first home costing up to {gbp(house_limit)}, or for after age {free_age:g}.",
+            {"house_limit": money_value(house_limit), "free_age": free_age},
+        ),
+        point("Money in it is not there for emergencies.", {}),
+    ]
+    return make(f"A {charge_pct:g}% charge if you take it out for anything but a first home", points)
+
+
+def keep_cash(savings: float, rate: float, cpi: float, year: int) -> TradeOff:
+    real = savings * (cpi - rate) / 100
+    if real > 0:
+        first = point(
+            f"Prices rose {pct(cpi)} in {year}. Your rate is {pct(rate)}, so your {gbp(savings)} buys about "
+            f"{gbp(real)} less after a year.",
+            {"cpi": pct_value(cpi), "year": float(year), "rate": pct_value(rate), "savings": money_value(savings),
+             "real_loss": money_value(real)},
+        )
+    else:
+        first = point(
+            f"Prices rose {pct(cpi)} in {year}, less than your {pct(rate)} rate. A rate cut can change that.",
+            {"cpi": pct_value(cpi), "year": float(year), "rate": pct_value(rate)},
+        )
+    points = [first, point("Over many years, cash usually grows less than money invested.", {})]
+    return make("Rising prices can make your cash worth less over time", points)

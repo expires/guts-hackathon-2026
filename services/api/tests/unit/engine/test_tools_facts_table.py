@@ -36,6 +36,18 @@ def test_official_values_2026_27() -> None:
         "postgraduate_loan_threshold": 21_000,
         "student_loan_rate": 9,
         "postgraduate_loan_rate": 6,
+        "student_loan_rate_plan1": 9,
+        "student_loan_rate_plan5": 9,
+        "lisa_min_open_age": 18,
+        "lisa_bonus_rate": 25,
+        "lisa_withdrawal_charge": 25,
+        "lisa_first_home_price_limit": 450_000,
+        "maintenance_instalments_england": 3,
+        "council_tax_all_students_discount": 100,
+        "railcard_16_25_price_1y": 35,
+        "railcard_16_25_discount": 33.33,
+        "saas_payment_months_term_time": 9,
+        "saas_payment_months_full_year": 12,
     }
     for key, value in expected.items():
         assert ft.get(key).value == value, key
@@ -45,8 +57,8 @@ def test_every_entry_has_govuk_url_date_and_unique_id() -> None:
     ids = [f.id for f in ft.FACTS]
     assert len(ids) == len(set(ids))
     for f in ft.FACTS:
-        assert f.url.startswith("https://www.gov.uk/")
-        assert f.as_of == "2026-10-17" and f.tax_year == "2026/27"
+        assert f.url.startswith("https://www.gov.uk/") or f.url in ft.OFFICIAL_NON_GOVUK
+        assert f.checked == "2026-10-17" and f.tax_year == "2026/27"
         assert f.id.startswith("rule.")
         assert f.unit in ("gbp", "gbp_per_month", "gbp_per_year", "percent", "months", "years", "count", "date_year")
 
@@ -68,3 +80,32 @@ def test_lookup() -> None:
     assert len(ft.lookup()) == len(ft.FACTS)
     with pytest.raises(KeyError):
         ft.get("nope")
+
+
+def test_every_entry_has_checked_date_and_tool_exposes_it() -> None:
+    import re
+
+    from lifeline_engine.tools.wrappers import FactsTableInput, tool_facts_table
+
+    for f in ft.FACTS:
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", f.checked), f.id
+    r = tool_facts_table(FactsTableInput(topic="travel"))
+    entries = {e["id"]: e for e in r.result["entries"]}
+    rail = ft.get("railcard_16_25_price_1y")
+    assert entries[rail.id] == {"id": rail.id, "url": rail.url, "checked": rail.checked}
+    assert not any(".entries." in f.id for f in r.facts)  # urls and dates are not turned into facts
+
+
+def test_adr_0058_official_domain_and_checked_date() -> None:
+    import re
+    from urllib.parse import urlparse
+
+    assert not hasattr(ft, "AS_OF")  # no global "checked" claim: each entry has its own date
+    for f in ft.FACTS:
+        u = urlparse(f.url)
+        assert u.scheme == "https" and u.netloc in ft.OFFICIAL_DOMAINS, f.id
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", f.checked), f.id
+    assert "rule.maintenance_payments_scotland" not in ft.BY_ID
+    assert ft.get("saas_payment_months_term_time").unit == "months"
+    assert ft.get("lisa_withdrawal_charge").url == "https://www.gov.uk/lifetime-isa/withdrawing-money-from-your-lifetime-isa"
+    assert ft.get("council_tax_single_adult_discount").url == "https://www.gov.uk/council-tax/who-has-to-pay"

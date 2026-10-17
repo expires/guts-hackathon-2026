@@ -17,6 +17,7 @@ from lifeline_contracts.domain import (
     CharacterSpec,
     ChoiceResult,
     Concept,
+    HabitScore,
     KeyMoment,
     Life,
     LifeMode,
@@ -29,6 +30,7 @@ from lifeline_contracts.domain import (
     YearLog,
 )
 from lifeline_contracts.macro import MacroKey, MacroTable
+from lifeline_contracts.play import DecisionOutcome, DecisionPrompt, StudentPath
 from lifeline_sim import params as p
 from lifeline_sim.actions import (
     action_decision_id,
@@ -40,16 +42,36 @@ from lifeline_sim.actions import (
     run_action,
 )
 from lifeline_sim.concepts import CONCEPTS, build_concept, build_lesson, concept_ids
+from lifeline_sim.decisions import best_option_ids, decision_prompt
+from lifeline_sim.decisions import decision_outcome as _decision_outcome
+from lifeline_sim.decisions import decision_outcomes as _decision_outcomes
+from lifeline_sim.decisions import decision_prompts as _decision_prompts
 from lifeline_sim.errors import SimError
 from lifeline_sim.events.engine import templates_by_id
+from lifeline_sim.habits import game_habit_score
 from lifeline_sim.health import HealthInput, health_id
 from lifeline_sim.index import IndexWeights, load_weights
 from lifeline_sim.macroview import MacroView
 from lifeline_sim.occupations import occupation
+from lifeline_sim.paths import (
+    PATH_IDS,
+    QUICK_DEFAULT_START_YEAR,
+    QUICK_END_AGE,
+    QUICK_START_AGE,
+    path_character,
+    path_def,
+    stage_starts,
+)
+from lifeline_sim.paths import paths as _paths
+from lifeline_sim.presets import LEGACY_PRESET_IDS
 from lifeline_sim.presets import god_mode_options as _god_mode_options
 from lifeline_sim.presets import presets as _presets
 from lifeline_sim.project import index_state, to_life
 from lifeline_sim.projection import ChoiceProjection
+from lifeline_sim.quick import QuickPlan, next_stop
+from lifeline_sim.quick import plan as quick_plan
+from lifeline_sim.quiz import QuizItem, QuizTopic, quiz_item
+from lifeline_sim.quiz import quiz_questions as _quiz_questions
 from lifeline_sim.replay import (
     TEMPLATE_COST_PREFIX,
     Decision,
@@ -72,6 +94,23 @@ FREE_REWINDS = 1
 
 __all__ = [
     "PRESENT_YEAR",
+    "decision_outcome",
+    "decision_outcomes",
+    "decision_prompts",
+    "habit_score",
+    "is_quick",
+    "new_path_life",
+    "offered_presets",
+    "paths",
+    "quick_finished",
+    "quick_life",
+    "quick_life_plan",
+    "quiz_questions",
+    "best_option_ids",
+    "decision_prompt",
+    "quiz_item",
+    "QuizItem",
+    "life_path",
     "act",
     "age",
     "challenges",
@@ -206,6 +245,9 @@ def _new_life(
     remember(mv, spec, True, [], s)
     where = f"in {character.town}" if character.town else ""
     job = f"a {character.occupation}" if s.employed else "retired" if s.retired else character.occupation
+    if setup.path is not None:
+        title = s.job_title.lower()
+        job = "a student" if s.student else f"{'an' if title[:1] in 'aeiou' else 'a'} {title}"
     first = _log(s, f"You start life at {s.age} as {job} {where}.".replace("  ", " ").replace(" .", "."), s)
     if not setup.empty:
         first = first.model_copy(update={"choice_id": setup.encode()})
@@ -222,6 +264,79 @@ def _new_life(
         room_code=None,
         w=w,
     )
+
+
+# ---------- student paths and Quick Life (ADR 0052, ADR 0059) ----------
+
+QUICK_LAST_START_YEAR = PRESENT_YEAR - (QUICK_END_AGE - QUICK_START_AGE)
+
+
+def new_path_life(
+    life_id: str,
+    path_id: str,
+    start_year: int | None,
+    seed: int,
+    macro: MacroTable,
+    *,
+    quick: bool = False,
+    mode: LifeMode = "random",
+    name: str | None = None,
+) -> Life:
+    """A life on a student path. `quick=True` gives a Quick Life: ages 18 to 25 in 5 or 6 AGE taps with 2 or
+    3 events, then `summary` with the habit score. Same path, start year and seed give the same life.
+
+    - `start_year`: the year the path starts (the person is `start_age`). None: QUICK_DEFAULT_START_YEAR for
+      Quick Life, else the year the person reaches `start_age` with the default Quick Life year of birth.
+    - Quick Life needs a path with `quick=True` and a start year of QUICK_LAST_START_YEAR or earlier.
+    - `name`: the player's display name for the character (optional).
+    """
+    d = path_def(path_id)
+    if d is None:
+        raise SimError("not_found", f"No student path {path_id}.")
+    if quick and not d.quick:
+        raise SimError("invalid_input", f"{d.title} is not offered in Quick Life.")
+    if start_year is None:
+        start_year = QUICK_DEFAULT_START_YEAR + (d.start_age - QUICK_START_AGE)
+    if quick and start_year > QUICK_LAST_START_YEAR:
+        raise SimError("invalid_input", f"Quick Life runs 7 years. Start in {QUICK_LAST_START_YEAR} or earlier.")
+    if start_year > PRESENT_YEAR:
+        raise SimError("invalid_input", f"Start in {PRESENT_YEAR} or earlier.")
+    character = path_character(path_id, start_year, view_for(macro))
+    if name:
+        character = character.model_copy(update={"name": name[:40]})
+    return _new_life(life_id, character, mode, start_year, seed, macro, Setup(path=path_id, quick=quick))
+
+
+def life_path(life: Life) -> str | None:
+    """The student path id of a life, or None."""
+    return _setup(life).path
+
+
+def is_quick(life: Life) -> bool:
+    return _setup(life).quick
+
+
+def quick_life_plan(life: Life) -> QuickPlan | None:
+    """The Quick Life plan (tap stop years, event years, end year), or None for other lives."""
+    return quick_plan(life.seed, life.start_year) if is_quick(life) else None
+
+
+def quick_finished(life: Life) -> bool:
+    """True when a Quick Life has reached its last tap (age 25). Show the summary then."""
+    qp = quick_life_plan(life)
+    return qp is not None and life.year >= qp.end_year and not life.pending_events
+
+
+def habit_score(life: Life, macro: MacroTable | None = None) -> HabitScore | None:
+    """Habit score of a student path life from its game ledger (lifeline_sim.habits). None for other lives,
+    or when no MacroTable is known (no `macro` and no table used yet in this process)."""
+    if _setup(life).path is None:
+        return None
+    mv = view_for(macro) if macro is not None else last_view()
+    if mv is None:
+        return None
+    s = replay(_spec(life), _decisions(life), life.year, mv, load_weights())
+    return game_habit_score(s)
 
 
 def _year_text(s: SimState) -> str:
@@ -247,6 +362,46 @@ def _year_text(s: SimState) -> str:
     return " ".join(parts)
 
 
+class _QuickFlows:
+    """Money flows over the years of one Quick Life tap, for the history text."""
+
+    def __init__(self) -> None:
+        self.net = 0.0
+        self.costs = 0.0
+        self.missed = 0
+        self.repaid = 0.0
+        self.graduated = False
+        self.started_study = False
+
+    def add(self, s: SimState) -> None:
+        self.net += s.last_net_income
+        self.costs += s.last_costs
+        self.missed += s.last_missed
+        self.repaid += s.last_loan_repaid
+        self.graduated = self.graduated or s.last_graduated
+        stage = stage_starts(s.path_id, s.age) if s.path_id is not None else None
+        self.started_study = self.started_study or (stage is not None and stage.kind in ("study", "study_pg"))
+
+
+def _quick_text(s: SimState, f: _QuickFlows, from_age: int) -> str:
+    span = f"Age {s.age}." if s.age - from_age == 1 else f"Ages {from_age + 1} to {s.age}."
+    parts = [span]
+    if f.net > 0:
+        parts.append(f"You took home £{f.net:,.0f} and spent £{f.costs:,.0f}.")
+    if f.started_study:
+        parts.append("You started university.")
+    if f.graduated:
+        parts.append(f"You graduated and started work on £{s.income:,.0f} a year.")
+    if f.repaid > 0:
+        parts.append(f"You repaid £{f.repaid:,.0f} of student loan.")
+    if f.missed:
+        word = "payment" if f.missed == 1 else "payments"
+        parts.append(f"You missed {f.missed} {word}.")
+    if s.quick_end_year is not None and s.year >= s.quick_end_year:
+        parts.append("Quick Life complete.")
+    return " ".join(parts)
+
+
 def age(life: Life, macro: MacroTable, health: HealthInput | None = None) -> AgeResult:
     """One year passes. `health` (optional, ADR 0029): the phone's average steps and sleep give a
     Health change of -10 to +10 this year (rule in `lifeline_sim.health`). It is stored in this
@@ -260,7 +415,16 @@ def age(life: Life, macro: MacroTable, health: HealthInput | None = None) -> Age
     spec = _spec(life)
     decisions = _decisions(life)
     s = replay(spec, decisions, life.year, mv, w)
-    step_year(s, mv, w)
+    flows = _QuickFlows()
+    if s.quick:
+        stop = next_stop(quick_plan(spec.seed, spec.start_year), s.year)
+        if stop is None:
+            raise SimError("finished", "This Quick Life is over. See the summary.")
+        while s.alive and s.year < stop:
+            step_year(s, mv, w)
+            flows.add(s)
+    else:
+        step_year(s, mv, w)
     health_text = ""
     health_choice: str | None = None
     if health is not None and not health.empty and s.alive:
@@ -273,7 +437,8 @@ def age(life: Life, macro: MacroTable, health: HealthInput | None = None) -> Age
     full_twin = replay(spec, [], s.year, mv, w, autopilot=True)
     remember(mv, spec, True, [], full_twin)
     twin = _comparable_twin(spec, full_twin, set(), bool(s.pending), mv, w)
-    entry = _log(s, _year_text(s) + health_text, twin)
+    text = _quick_text(s, flows, life.age) if s.quick else _year_text(s)
+    entry = _log(s, text + health_text, twin)
     if health_choice is not None:
         entry = entry.model_copy(update={"event_id": health_id(s.year), "choice_id": health_choice})
     history = [*life.history, entry]
@@ -762,8 +927,12 @@ def _key_moments(life: Life, limit: int = 5) -> list[KeyMoment]:
     return sorted(chosen, key=lambda m: (m.year, m.age))
 
 
-def summary(life: Life) -> LifeSummary:
+def summary(life: Life, macro: MacroTable | None = None) -> LifeSummary:
+    """The end-of-life card. Quick Life (and every student path life) gets `habit_score` from its game
+    ledger. Pass the life's pinned `macro` for that; without it the last table used in this process is used,
+    and with none the habit score is left out."""
     key_moments = _key_moments(life)
+    habit = habit_score(life, macro) if _setup(life).path is not None else None
     autopilot_nw = life.history[-1].autopilot_net_worth if life.history else life.finances.net_worth
     return LifeSummary(
         life_id=life.id,
@@ -778,12 +947,30 @@ def summary(life: Life) -> LifeSummary:
         ribbons=list(life.ribbons),
         key_moments=key_moments,
         concepts_unlocked=len(life.concepts_unlocked),
+        habit_score=habit,
         timeline=list(life.history),
     )
 
 
 def presets() -> list[CharacterSpec]:
+    """Every preset that a stored life may use, offered or not (old lives and old rooms load by id).
+    For the list shown to players, use `offered_presets`."""
     return _presets()
+
+
+def offered_presets(macro: MacroTable | None = None, start_year: int = QUICK_DEFAULT_START_YEAR) -> list[CharacterSpec]:
+    """Characters offered in Play solo (ADR 0052): one per student path, then the legacy `student` and
+    `teacher-glasgow` presets. Banker, plumber, pensioner and nurse are no longer offered. With `macro`,
+    each path character's starting pay is the path's stage pay for `start_year`."""
+    mv = view_for(macro) if macro is not None else None
+    out = [path_character(pid, start_year, mv) for pid in PATH_IDS]
+    out += [c for c in _presets() if c.id not in LEGACY_PRESET_IDS]
+    return out
+
+
+def paths() -> list[StudentPath]:
+    """Student start paths for `GET /v1/paths`."""
+    return _paths()
 
 
 def god_mode_options() -> dict[str, list[str]]:
@@ -862,3 +1049,62 @@ def challenges() -> list[Challenge]:
             goal={"type": "pension_at_least_by_age", "amount": 100_000.0, "age": 50.0},
         ),
     ]
+
+
+# ---------- Play with friends (ADR 0059) ----------
+
+
+def quick_life(
+    life_id: str,
+    *,
+    path_id: str,
+    seed: int,
+    macro: MacroTable,
+    start_year: int | None = None,
+    mode: LifeMode = "random",
+    name: str | None = None,
+) -> Life:
+    """A new Quick Life: `new_path_life(..., quick=True)`. Tap AGE until `quick_finished`, answering the open
+    event when a tap stops on one, then call `summary(life, macro)` for the card with the habit score."""
+    return new_path_life(life_id, path_id, start_year, seed, macro, quick=True, mode=mode, name=name)
+
+
+def quiz_questions(seed: int, *, topic: QuizTopic = "mixed", n: int = 8) -> list[QuizItem]:
+    """Money Quiz questions with answers (lifeline_sim.quiz). Send `item.question` to players; keep
+    `correct_choice_id`, `explanation` and the source for the reveal. Unknown topic raises ValueError."""
+    return _quiz_questions(seed, topic, n)
+
+
+def _table(macro: MacroTable | None) -> MacroTable:
+    """The MacroTable to use. Pass the room's table. Without one, the table of the most recent sim call in
+    this process is used; with none, `invalid_input`."""
+    if macro is not None:
+        return macro
+    mv = last_view()
+    if mv is None:
+        raise SimError("invalid_input", "Same Decision needs the MacroTable.")
+    return mv.table
+
+
+def decision_prompts(
+    seed: int, *, n: int = 1, macro: MacroTable | None, year: int | None = None
+) -> list[DecisionPrompt]:
+    """`n` Same Decision prompts (lifeline_sim.decisions). Without `year`: a seeded order. With `year`
+    (GameOptions.start_year): prompts nearest that year first, ties in seeded order."""
+    return _decision_prompts(seed, n, _table(macro), year)
+
+
+def decision_outcomes(prompt_id: str, *, macro: MacroTable | None) -> list[DecisionOutcome]:
+    """Every option's outcome in game money, in option order. `not_found` for an unknown prompt."""
+    try:
+        return _decision_outcomes(prompt_id, _table(macro))
+    except KeyError as exc:
+        raise SimError("not_found", f"No decision prompt {prompt_id}.") from exc
+
+
+def decision_outcome(prompt_id: str, *, option_id: str, macro: MacroTable | None) -> DecisionOutcome:
+    """One option's outcome in game money. `not_found` for an unknown prompt or option."""
+    try:
+        return _decision_outcome(prompt_id, option_id, _table(macro))
+    except KeyError as exc:
+        raise SimError("not_found", f"No option {option_id} in decision prompt {prompt_id}.") from exc

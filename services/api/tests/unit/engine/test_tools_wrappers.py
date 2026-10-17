@@ -149,7 +149,7 @@ def test_next_move_counts_decision_sources(macro: MacroTable) -> None:
 
 def _all_text(obj, skip=frozenset({"id", "date", "due_date", "as_of", "life_id", "move_id", "option_id",  # type: ignore[no-untyped-def]
                                    "fact_prefix", "concept_id", "kind", "feature", "fact_id", "status",
-                                   "data_status", "question"})):
+                                   "data_status", "question", "url", "checked"})):
     if isinstance(obj, dict):
         return [t for k, v in obj.items() if k not in skip for t in _all_text(v, skip)]
     if isinstance(obj, list):
@@ -242,8 +242,7 @@ def test_news_and_rate_dates_never_change_next_move(macro: MacroTable) -> None:
     import inspect
 
     snap = homeowner()
-    # holdings are user data (a decision input), not context.
-    assert set(inspect.signature(next_move).parameters) == {"snapshot", "macro", "today", "seed", "holdings"}
+    assert set(inspect.signature(next_move).parameters) == {"snapshot", "macro", "today", "seed"}
     plain = next_move(snap, macro, TODAY)
     with_context = plain.model_copy(update={"context_lines": ["Next Bank Rate decision: 5 November", "Headline"]})
     assert with_context.model_dump(exclude={"context_lines"}) == next_move(snap, macro, TODAY).model_dump(

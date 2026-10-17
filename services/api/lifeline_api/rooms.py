@@ -26,6 +26,7 @@ from typing import Any
 import qrcode  # type: ignore[import-untyped]
 
 from lifeline_contracts.api_models import Player, Room
+from lifeline_contracts.play import GameOptions
 
 log = logging.getLogger(__name__)
 
@@ -35,9 +36,11 @@ LOCK_MS = 10_000
 RECONNECT_SECONDS = 10 * 60
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 MAX_PLAYERS = {"duel": 2, "group": 6, "class": 8}
+LOBBY_MAX_PLAYERS = 8  # lobby first: the mode (and so the size) is set at start
 KEY = "lifeline:room:{code}"
 CHANNEL = "lifeline:room:{code}:events"
 LOCK = "lifeline:room:{code}:lock"
+USER_ROOMS = "lifeline:user-rooms:{sub}"
 
 
 def new_code() -> str:
@@ -90,20 +93,26 @@ class RoomDoc:
     code: str
     mode: str
     seed: int
-    preset_id: str
-    start_year: int
+    preset_id: str | None
+    start_year: int | None
     max_players: int
     status: str = "lobby"
     qr: str = ""
     players: list[dict[str, Any]] = field(default_factory=list)
     macro_hash: str | None = None
+    mode_fixed: bool = False  # False: decided at start (2 players = duel, more = group)
+    game: str | None = None
+    options: dict[str, Any] | None = None
+    game_state: dict[str, Any] = field(default_factory=dict)  # server only: answers, correct ids, scores
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__)
 
     @classmethod
     def from_json(cls, raw: str | bytes) -> RoomDoc:
-        return cls(**json.loads(raw))
+        data = json.loads(raw)
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in data.items() if k in known})
 
     def player(self, player_id: str) -> dict[str, Any] | None:
         return next((p for p in self.players if p["id"] == player_id), None)
@@ -133,7 +142,8 @@ class RoomDoc:
     def public(self) -> Room:
         return Room(
             code=self.code, mode=self.mode, seed=self.seed, preset_id=self.preset_id,
-            start_year=self.start_year, max_players=self.max_players,
+            start_year=self.start_year, max_players=self.max_players, game=self.game,
+            options=None if self.options is None else GameOptions.model_validate(self.options),
             players=[self.public_player(p) for p in self.players], join_url=join_url(self.code),
             qr_png_base64=self.qr, status=self.status,
         )
@@ -150,6 +160,7 @@ class RoomHub:
         self._docs: dict[str, str] = {}
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._queues: defaultdict[str, set[asyncio.Queue[str]]] = defaultdict(set)
+        self._user_rooms: defaultdict[str, set[str]] = defaultdict(set)
 
     async def get(self, code: str) -> RoomDoc | None:
         raw = await self.redis.get(KEY.format(code=code)) if self.redis is not None else self._docs.get(code)
@@ -160,6 +171,34 @@ class RoomHub:
             await self.redis.set(KEY.format(code=doc.code), doc.to_json(), ex=ROOM_TTL_SECONDS)
         else:
             self._docs[doc.code] = doc.to_json()
+
+    async def delete(self, code: str) -> None:
+        if self.redis is not None:
+            await self.redis.delete(KEY.format(code=code))
+        else:
+            self._docs.pop(code, None)
+
+    # Rooms a subject has a seat in, so a demo reset can clear them (judge mode, ADR 0049).
+
+    async def track(self, sub: str, code: str) -> None:
+        if self.redis is not None:
+            key = USER_ROOMS.format(sub=sub)
+            await self.redis.sadd(key, code)
+            await self.redis.expire(key, ROOM_TTL_SECONDS)
+        else:
+            self._user_rooms[sub].add(code)
+
+    async def rooms_of(self, sub: str) -> set[str]:
+        if self.redis is not None:
+            raw = await self.redis.smembers(USER_ROOMS.format(sub=sub))
+            return {c.decode() if isinstance(c, bytes) else str(c) for c in raw}
+        return set(self._user_rooms.get(sub, set()))
+
+    async def untrack_all(self, sub: str) -> None:
+        if self.redis is not None:
+            await self.redis.delete(USER_ROOMS.format(sub=sub))
+        else:
+            self._user_rooms.pop(sub, None)
 
     async def create(self, doc: RoomDoc) -> bool:
         """False when the code is taken."""

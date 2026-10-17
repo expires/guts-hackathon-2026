@@ -12,13 +12,14 @@ import secrets
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
-from lifeline_api import money, prediction
+from lifeline_api import macro, money, prediction
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.routes.lives import new_life_id
 from lifeline_api.routes.next_move import DOC_NEXT_MOVE, subject_seed
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeRecord, macro_hash
 from lifeline_contracts.chat import (
+    ChatBubble,
     ChatMessage,
     ChatRequest,
     ChatResponse,
@@ -31,6 +32,7 @@ from lifeline_contracts.finance import Account, FinanceSnapshot
 from lifeline_contracts.next_move import NextMoveResponse
 from lifeline_explain.chat_engine_tools import EngineToolSet
 from lifeline_explain.chat_tools import ChatToolContext, ChatTurn
+from lifeline_explain.prompts import UNAVAILABLE_TEXT
 
 log = logging.getLogger(__name__)
 
@@ -162,7 +164,7 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
     """W5's ChatToolContext for this caller. Returns the context and the hash of the pinned macro table."""
     snap = await money.maybe_snapshot(state, sub)
     today = money.today(snap) if snap is not None else datetime.now(UTC).date()
-    table = await state.hub.macro_table()
+    table, _fresh = await macro.table_fast(state)  # never wait for a cold build (V1 O1)
     digest = macro_hash(table)
     await state.store.put_macro(digest, table)
 
@@ -186,6 +188,9 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
         next_move_response=await _stored_next_move(state, sub),
         news=hub.news,
         rates=hub.rate_decisions,
+        series=hub.series,  # boe_rates (ADR 0051)
+        fx=hub.fx_rate,  # fx_convert (ADR 0060)
+        cpi=hub.cpi,
         life=life,
         event_id=event_id,
         holidays=holidays,
@@ -215,3 +220,13 @@ async def store_tool_lives(state: AppState, sub: str, ctx: ChatToolContext, dige
             await state.store.create(LifeRecord(id=life.id, owner=sub, life=life, macro_hash=digest))
             stored.append(life.id)
     return stored
+
+
+def unavailable_response(thread: dict[str, Any], user_message_id: str) -> ChatResponse:
+    """The answer when Penny cannot be reached or her context cannot be built (ADR 0051)."""
+    return ChatResponse(
+        thread_id=thread["id"], message_id=f"pm_{secrets.token_hex(8)}", reply_to=user_message_id,
+        reaction="question", mode="general",
+        bubbles=[ChatBubble(id="b1", kind="answer", text=UNAVAILABLE_TEXT)],
+        confidence=0.0, verified=False,
+    )

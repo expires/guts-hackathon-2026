@@ -11,18 +11,31 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any, cast
 
+from lifeline_api import onboarding
 from lifeline_api.errors import ApiError
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState
 from lifeline_api.store import StoreUnavailable
 from lifeline_contracts.domain import CharacterSpec, DecisionProfile, Lesson
-from lifeline_contracts.finance import FinanceMeta, FinanceSnapshot, PersonalFact
+from lifeline_contracts.finance import (
+    Account,
+    AmountPart,
+    Bill,
+    FinanceMeta,
+    FinanceOverview,
+    FinanceProfile,
+    FinanceSnapshot,
+    PersonalFact,
+    SpendPrediction,
+    Subscription,
+)
 from lifeline_data.finance import persona_for_subject
 from lifeline_engine import money as money_engine
 from lifeline_engine.money import ProfileHints
+from lifeline_engine.money.profile import is_cash
 
 log = logging.getLogger(__name__)
 
@@ -147,3 +160,100 @@ def engine_profile(snap: FinanceSnapshot, hints_: ProfileHints | None) -> tuple[
     """The same profile for /v1/finance/profile, the next move and Test it (ADR 0018)."""
     profile, character = money_engine.profile(snap, today(snap), hints_)
     return profile, character
+
+
+# ---------- shown totals and known dates (ADR 0053 bugs 2 and 3) ----------
+
+
+def _shown(a: Account) -> bool:
+    """An account the user gave us a balance for. The manual-entry current account has no entered balance."""
+    return not (a.name == onboarding.UNENTERED_CURRENT and a.balance == 0)
+
+
+def overview(snap: FinanceSnapshot) -> FinanceOverview:
+    """The engine overview plus the parts behind 'In your account' and 'Net worth', from entered data only.
+    The parts add up to the totals; Why? shows them as the calculation."""
+    ov = money_engine.overview(snap)
+    balance_parts = [AmountPart(label=a.name, amount=round(a.balance, 2))
+                     for a in snap.accounts if is_cash(a) and _shown(a)]
+    worth_parts = [AmountPart(label=a.name, amount=round(a.balance, 2)) for a in snap.accounts if _shown(a)]
+    m = snap.mortgage
+    if m is not None:
+        worth_parts.append(AmountPart(label="Home value you entered" if snap.source == "manual" else "Home value",
+                                      amount=round(m.property_value, 2)))
+        if not any(a.kind == "mortgage" for a in snap.accounts):
+            worth_parts.append(AmountPart(label="Mortgage", amount=-round(m.balance, 2)))
+    return ov.model_copy(update={"balance_parts": balance_parts, "net_worth_parts": worth_parts})
+
+
+def without_guessed_dates_bills(snap: FinanceSnapshot, items: list[Bill]) -> list[Bill]:
+    """Drop bills whose due date we would be guessing (costs entered as monthly amounts)."""
+    guessed = onboarding.synthetic_merchants(snap)
+    return [b for b in items if b.name.lower() not in guessed]
+
+
+def without_guessed_dates_subs(snap: FinanceSnapshot, items: list[Subscription]) -> list[Subscription]:
+    guessed = onboarding.synthetic_merchants(snap)
+    return [s.model_copy(update={"next_payment": None}) if s.merchant.lower() in guessed else s for s in items]
+
+
+def without_guessed_payday(snap: FinanceSnapshot, pred: SpendPrediction) -> SpendPrediction:
+    """No 'payday in N days' and no payday reason unless an income date is known."""
+    if onboarding.payday_known(snap):
+        return pred
+    return pred.model_copy(update={"days_to_payday": None,
+                                   "reasons": [r for r in pred.reasons if r.feature != "payday"]})
+
+
+# ---------- what the user said at onboarding (ADR 0053 bug 7) ----------
+
+DOC_ONBOARDING = "onboarding_profile"
+
+
+async def save_onboarding(state: AppState, sub: str, *, is_student: bool | None, housing: str,
+                          age: int | None) -> None:
+    await state.store.put_doc(sub, DOC_ONBOARDING, {"is_student": is_student, "housing": housing, "age": age})
+
+
+PAYMENTS_PER_YEAR = {"weekly": 52, "monthly": 12, "termly": 3, "yearly": 1, "one_off": 1}
+
+
+def yearly_income(snap: FinanceSnapshot) -> float | None:
+    """Income per year from the entered or detected income sources (scholarship, bursary, loan, family, pay),
+    by schedule. None when there are no income sources."""
+    if not snap.income_sources:
+        return None
+    return round(sum(s.amount * PAYMENTS_PER_YEAR[s.schedule] for s in snap.income_sources), 2)
+
+
+async def with_onboarding(state: AppState, sub: str, prof: FinanceProfile,
+                          snap: FinanceSnapshot | None = None) -> FinanceProfile:
+    """The You tab line must match onboarding: age, student or working, housing. Entered values win over
+    values the engine inferred from transactions. Birth year follows the known age, and income comes from
+    the income sources when there are any (a student's scholarship is income, not salary)."""
+    try:
+        doc = await state.store.get_doc(sub, DOC_ONBOARDING)
+    except StoreUnavailable:
+        doc = None
+    doc = doc or {}
+    p_upd: dict[str, Any] = {}
+    c_upd: dict[str, Any] = {}
+    top: dict[str, Any] = {}
+    if doc.get("housing"):
+        p_upd["housing"] = c_upd["housing"] = doc["housing"]
+    if "is_student" in doc:
+        top["is_student"] = doc.get("is_student")
+    elif snap is not None and snap.is_student is not None:
+        top["is_student"] = snap.is_student
+    age = doc.get("age") if doc.get("age") is not None else (snap.age if snap is not None else None)
+    if age is not None:
+        p_upd["age"] = age
+        as_of_year = date.fromisoformat(snap.as_of).year if snap is not None else datetime.now(UTC).year
+        c_upd["birth_year"] = as_of_year - int(age)
+    if top.get("is_student") is True:
+        c_upd["occupation"] = "Student"
+    income = yearly_income(snap) if snap is not None else None
+    if income is not None:
+        p_upd["annual_income"] = c_upd["annual_income"] = min(income, 10_000_000)
+    return prof.model_copy(update={**top, "profile": prof.profile.model_copy(update=p_upd),
+                                   "character": prof.character.model_copy(update=c_upd)})
