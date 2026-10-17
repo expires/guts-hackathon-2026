@@ -16,6 +16,9 @@ struct MoneyHomeView: View {
                 NextMoveCardView(state: state.nextMove, actions: actions.nextMove)
                     .padding(.top, 18)
                 tiles.padding(.top, Theme.Spacing.xs)
+                if let insights = state.insights {
+                    InsightsTeaserCard(state: insights, onOpen: actions.onOpenInsights)
+                }
                 GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess)
                 comingUp
                 navigationRow(
@@ -215,6 +218,57 @@ struct Sparkline: View {
             .stroke(Theme.Palette.money, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// "Last month" at a glance: spent against earned, then the top sentences. Opens Insights.
+private struct InsightsTeaserCard: View {
+    let state: InsightsTeaserState
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                HStack(spacing: Theme.Spacing.s) {
+                    Text("\(state.monthText) in numbers").font(.llBodyBold)
+                    Spacer(minLength: 0)
+                    Chevron()
+                }
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.l) {
+                    figure(title: "Spent", value: state.spentText)
+                    figure(title: "Earned", value: state.earnedText)
+                }
+                if let share = state.spentShare {
+                    InkProgressBar(value: share, color: Theme.Palette.home, height: 14)
+                        .accessibilityHidden(true)
+                }
+                ForEach(state.sentences, id: \.self) { sentence in
+                    Text(sentence)
+                        .font(.llLabel)
+                        .foregroundStyle(Theme.Palette.muted)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(Theme.Spacing.l)
+            .frame(maxWidth: .infinity, minHeight: Theme.minTarget, alignment: .leading)
+            .foregroundStyle(Theme.Palette.ink)
+            .contentShape(.rect)
+            .inkSurface(.cardAlt)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(state.monthText) in numbers. Spent \(state.spentText), earned \(state.earnedText). \(state.sentences.joined(separator: " "))")
+        .accessibilityHint("Opens Insights")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("money.insights")
+    }
+
+    private func figure(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+            Text(value).font(.llTitle).lineLimit(1).minimumScaleFactor(0.6)
+        }
     }
 }
 

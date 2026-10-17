@@ -279,6 +279,7 @@ extension Fixtures {
         static var ready: MoneyHomeViewState {
             .init(
                 header: header, paydayText: payday, nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess,
+                insights: Fixtures.Insights.teaser,
                 connections: .from(SampleInvesting.connections()),
                 investmentsLink: MoneyWidgetsViewModel.moveLink(for: .investments, moves: Fixtures.allMoves)
             )

@@ -38,6 +38,7 @@ from lifeline_contracts.finance import (
     SubscriptionsResponse,
     UpdateBudgetsRequest,
 )
+from lifeline_contracts.insights import SpendingInsights
 from lifeline_engine import money as money_engine
 from lifeline_engine.money import predict
 from lifeline_engine.money.profile import is_cash_savings
@@ -85,6 +86,15 @@ async def get_finance_overview(request: Request, sub: Subject) -> FinanceOvervie
 async def get_finance_spending(request: Request, sub: Subject, month: Month = None) -> SpendingResponse:
     _, snap = await _snap(request, sub)
     return await call_pure(money_engine.spending_response, snap, month)
+
+
+@router.get("/v1/finance/insights", response_model=SpendingInsights, response_model_exclude_none=True)
+async def get_finance_insights(
+    request: Request, sub: Subject, months: Annotated[int, Query(ge=1, le=12)] = 6
+) -> SpendingInsights:
+    """Spending insights over the last `months` complete months (fewer when that is all the history there is)."""
+    _, snap = await _snap(request, sub)
+    return await call_pure(money_engine.spending_insights, snap, money.today(snap), months)
 
 
 @router.get("/v1/finance/subscriptions", response_model=SubscriptionsResponse, response_model_exclude_none=True)

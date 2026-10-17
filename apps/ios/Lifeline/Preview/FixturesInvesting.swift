@@ -107,3 +107,44 @@ extension Fixtures {
         }
     }
 }
+
+// MARK: - Insights
+
+extension Fixtures {
+    @MainActor
+    enum Insights {
+        /// 6 months asked for, 4 exist: shows the "Based on your last 4 months" note.
+        static var ready: InsightsViewState {
+            InsightsViewModel.makeState(insights: SampleInsights.make(months: 6), months: 6, phase: .ready)
+        }
+
+        /// Two months, with changes against the two months before.
+        static var withChanges: InsightsViewState {
+            InsightsViewModel.makeState(insights: SampleInsights.make(months: 2), months: 3, phase: .ready)
+        }
+
+        static var live: InsightsViewState {
+            var insights = SampleInsights.make(months: 3)
+            insights.meta = FinanceMeta(dataStatus: .live, source: "monzo", asOf: "2026-10-17")
+            return InsightsViewModel.makeState(insights: insights, months: 3, phase: .ready)
+        }
+
+        /// Fewer than 2 complete months of history.
+        static var noHistory: InsightsViewState {
+            var insights = SampleInsights.make(months: 3)
+            insights.windowMonths = 0
+            insights.note = "We need at least 2 full months of spending to show insights"
+            return InsightsViewModel.makeState(insights: insights, months: 6, phase: .ready)
+        }
+
+        static var loading: InsightsViewState {
+            InsightsViewModel.makeState(insights: nil, months: 6, phase: .loading(.init(message: InsightsViewModel.loadingMessage)))
+        }
+
+        static var error: InsightsViewState {
+            InsightsViewModel.makeState(insights: nil, months: 6, phase: .failed(Fixtures.networkError))
+        }
+
+        static var teaser: InsightsTeaserState? { InsightsViewModel.teaser(SampleInsights.make(months: 6)) }
+    }
+}

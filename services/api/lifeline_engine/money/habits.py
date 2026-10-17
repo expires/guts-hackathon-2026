@@ -2,6 +2,8 @@
 
 Window: the last `window_months` complete calendar months ending at or before `today`. If `today` is the
 last day of its month, that month is included; otherwise the current (incomplete) month is excluded.
+Adaptive: with less history than that, the complete months available are used (at least MIN_MONTHS); fewer
+than that gives "Not enough history yet". The result reports the months actually used and a note.
 
 Reuses the money helpers: `monthly_totals` / `by_category` for spending (transfers, savings and income are not
 spending), `categorise` for income and treat spending, `detect_recurring` for subscriptions. Scores use fixed
@@ -10,7 +12,6 @@ piecewise-linear bands, so they are deterministic and need no population data. P
 
 from __future__ import annotations
 
-import calendar
 import statistics
 from collections import defaultdict
 from datetime import date
@@ -21,8 +22,9 @@ from lifeline_contracts.habits import FactorId, HabitFactor, HabitFactors, Habit
 from lifeline_engine.money import dates
 from lifeline_engine.money.categorise import categorise, merchant_key
 from lifeline_engine.money.profile import is_cash_savings
-from lifeline_engine.money.recurring import detect_recurring
+from lifeline_engine.money.recurring import Recurring, detect_recurring
 from lifeline_engine.money.spending import by_category, monthly_totals
+from lifeline_engine.money.window import MIN_MONTHS, adaptive_months, window_months_list, window_note
 
 DISCRETIONARY = frozenset(
     {"eating_out", "shopping", "entertainment", "travel", "personal_care", "gifts", "subscriptions"}
@@ -87,13 +89,6 @@ def overall_score(scores: list[int | None]) -> int | None:
 # ---------- inputs ----------
 
 
-def window_months_list(today: date, window_months: int) -> list[str]:
-    """'YYYY-MM' for each month of the window, oldest first."""
-    month_end = today.day == calendar.monthrange(today.year, today.month)[1]
-    last = dates.month_of(today) if month_end else dates.prev_month(dates.month_of(today))
-    return [dates.prev_month(last, k) for k in range(window_months - 1, -1, -1)]
-
-
 def hhi(holdings: list[Holding]) -> float | None:
     """Sum of squared shares of each holding's value. None when nothing is held."""
     total = sum(h.value for h in holdings)
@@ -123,17 +118,22 @@ def _is_housing(t: Transaction) -> bool:
     return any(w in text for w in HOUSING_WORDS)
 
 
-def subscription_keys(txs: list[Transaction], end: date) -> set[str]:
-    """Merchant keys of fixed-day subscriptions: category subscriptions, not housing, monthly or slower,
+def fixed_day_subscriptions(txs: list[Transaction], end: date) -> list[Recurring]:
+    """Fixed-day subscriptions: category subscriptions, not housing, monthly or slower,
     billed within MAX_BILLING_DAY_SPREAD days of the month."""
-    keys: set[str] = set()
+    out: list[Recurring] = []
     for r in detect_recurring([t for t in txs if not _is_housing(t)], end):
         if r.category != "subscriptions" or r.cadence == "weekly":
             continue
         days = [dates.parse(c.date).day for c in r.charges]
         if max(days) - min(days) <= MAX_BILLING_DAY_SPREAD:
-            keys.add(r.key)
-    return keys
+            out.append(r)
+    return out
+
+
+def subscription_keys(txs: list[Transaction], end: date) -> set[str]:
+    """Merchant keys of fixed-day subscriptions."""
+    return {r.key for r in fixed_day_subscriptions(txs, end)}
 
 
 def _creep(txs: list[Transaction], months: list[str], end: date) -> float:
@@ -143,8 +143,9 @@ def _creep(txs: list[Transaction], months: list[str], end: date) -> float:
     for t in in_window:
         if t.amount < 0 and merchant_key(t) in keys:
             per_month[t.date[:7]] += -t.amount
-    last = sum(per_month[m] for m in months[-3:]) / 3
-    prior = sum(per_month[m] for m in months[-6:-3]) / 3
+    k = max(1, min(3, len(months) // 2))  # compare the latest k months with the k before them
+    last = sum(per_month[m] for m in months[-k:]) / k
+    prior = sum(per_month[m] for m in months[-2 * k : -k]) / k
     if prior == 0:
         return 1.0 if last > 0 else 0.0
     return (last - prior) / prior
@@ -159,13 +160,13 @@ def habit_factors(
     window_months: int = 6,
     worst_drawdown: float = DEFAULT_WORST_DRAWDOWN,
 ) -> HabitFactors:
-    months = window_months_list(today, window_months)
+    full = window_months_list(today, window_months)
     txs = snapshot.transactions
-    first_month = min((t.date[:7] for t in txs), default=None)
-    end = dates.month_bounds(months[-1])[1]
+    months = adaptive_months(txs, today, window_months)
+    end = dates.month_bounds(full[-1])[1]
     raw: dict[FactorId, tuple[float | None, str | None]] = {}
 
-    if first_month is None or first_month > months[0]:
+    if len(months) < MIN_MONTHS:
         for f in _SPEND_BASED:
             raw[f] = (None, NO_HISTORY)
     else:
@@ -173,7 +174,7 @@ def habit_factors(
         totals = monthly_totals(txs, months)
         monthly = [totals[m] for m in months]
         spend = sum(monthly)
-        mean = spend / window_months
+        mean = spend / len(months)
         raw["savings_rate"] = ((income - spend) / income, None) if income > 0 else (None, NO_INCOME)
         if spend > 0:
             disc = sum(
@@ -202,7 +203,11 @@ def habit_factors(
             HabitFactor(id=f, label=label, explainer=explainer, raw=value, score=score_factor(f, value), reason=reason)
         )
     return HabitFactors(
-        window=HabitWindow(months=window_months, end=dates.iso(end)),
+        window=HabitWindow(
+            months=len(months) if len(months) >= MIN_MONTHS else window_months,
+            end=dates.iso(end),
+            note=window_note(len(months), window_months) if len(months) >= MIN_MONTHS else None,
+        ),
         factors=factors,
         overall=overall_score([f.score for f in factors]),
     )

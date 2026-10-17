@@ -35,6 +35,7 @@ class HabitFactor(_M):
 class HabitWindow(_M):
     months: int = Field(ge=1)
     end: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    note: str | None = Field(default=None, description="Set when fewer months were available than requested")
 
 
 class HabitFactors(_M):

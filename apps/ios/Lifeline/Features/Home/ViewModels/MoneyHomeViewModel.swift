@@ -16,6 +16,8 @@ struct MoneyHomeViewState: Equatable, Sendable {
     var nextMove: NextMoveCardState
     var widgets: MoneyWidgetsViewState
     var guess: GuessSpendViewState
+    /// Last full month at a glance, opens Insights. Nil until loaded or when there is not enough history.
+    var insights: InsightsTeaserState? = nil
     var connections: ConnectionsSummaryState = .unknown
     /// "Your next move: Spread your ISA" when the Next Move has a `spread_isa` move.
     var investmentsLink: MoveLinkState?
@@ -83,6 +85,7 @@ struct MoneyHomeActions {
     var onOpenAccounts: @MainActor () -> Void = {}
     var onOpenInvestments: @MainActor () -> Void = {}
     var onOpenHabits: @MainActor () -> Void = {}
+    var onOpenInsights: @MainActor () -> Void = {}
     var onRefresh: @MainActor () async -> Void = {}
     /// Opens the full "Guess my spend" screen.
     var onOpenGuess: @MainActor () -> Void = {}
@@ -103,8 +106,10 @@ final class MoneyHomeViewModel {
     private let now: @Sendable () -> Date
     private(set) var profile: FinanceProfile?
     private(set) var connections: ConnectionsResponse?
+    private(set) var insights: SpendingInsights?
     private var hasLoaded = false
     @ObservationIgnored var onOpenGuess: @MainActor () -> Void = {}
+    @ObservationIgnored var onOpenInsights: @MainActor () -> Void = {}
     @ObservationIgnored var onOpenDetail: @MainActor (MoneyDetail) -> Void = { _ in }
 
     init(client: any LifelineClient, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -125,6 +130,7 @@ final class MoneyHomeViewModel {
             nextMove: nextMove.state,
             widgets: widgets.state,
             guess: guess.state,
+            insights: InsightsViewModel.teaser(insights),
             connections: .from(connections),
             investmentsLink: MoneyWidgetsViewModel.moveLink(for: .investments, moves: nextMove.moves)
         )
@@ -135,6 +141,7 @@ final class MoneyHomeViewModel {
             nextMove: nextMove.actions,
             widgets: widgets.actions,
             guess: guess.actions,
+            onOpenInsights: { [weak self] in self?.onOpenInsights() },
             onRefresh: { [weak self] in await self?.load() },
             onOpenGuess: { [weak self] in self?.onOpenGuess() },
             onOpenDetail: { [weak self] in self?.onOpenDetail($0) }
@@ -157,12 +164,18 @@ final class MoneyHomeViewModel {
         async let widgetsDone: Void = widgets.load()
         async let guessDone: Void = guess.load()
         async let connectionsDone: Void = loadConnections()
-        _ = await (widgetsDone, guessDone, connectionsDone)
+        async let insightsDone: Void = loadInsights()
+        _ = await (widgetsDone, guessDone, connectionsDone, insightsDone)
     }
 
     /// Reloads everything after a connection changed, so live data replaces sample data.
     func reloadAfterConnectionChange() async {
         await load()
+    }
+
+    /// The card is optional: when the insights fail to load it simply stays hidden.
+    private func loadInsights() async {
+        insights = try? await client.insights(months: 6)
     }
 
     private func loadConnections() async {

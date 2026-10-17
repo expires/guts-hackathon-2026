@@ -7,57 +7,43 @@ struct AccountsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Theme.Spacing.l) {
-                    if let banner = state.banner {
-                        BannerView(banner: banner, onDismiss: actions.onDismissBanner)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                    switch state.phase {
-                    case let .loading(loading):
-                        LoadingStateView(state: loading)
-                    case let .failed(error):
-                        ErrorStateView(state: error, onRetry: actions.onRetry)
-                    case .ready:
-                        ForEach(state.rows) { row in
-                            AccountRowCard(row: row, state: state, actions: actions)
-                        }
-                        Text("Keys and sign-ins are checked by our server. They are never kept on your phone.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+        SheetContainer(title: "Accounts", closeIdentifier: "accounts.done", onClose: actions.onClose) {
+            if let banner = state.banner {
+                BannerView(banner: banner, onDismiss: actions.onDismissBanner)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            switch state.phase {
+            case let .loading(loading):
+                LoadingStateView(state: loading)
+            case let .failed(error):
+                ErrorStateView(state: error, onRetry: actions.onRetry)
+            case .ready:
+                ForEach(state.rows) { row in
+                    AccountRowCard(row: row, state: state, actions: actions)
                 }
-                .padding(Theme.Spacing.l)
+                Text("Keys and sign-ins are checked by our server. They are never kept on your phone.")
+                    .font(.llLabel)
+                    .foregroundStyle(Theme.Palette.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
-            .navigationTitle("Accounts")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done", action: actions.onClose)
-                        .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
-                        .accessibilityIdentifier("accounts.done")
-                }
+        }
+        .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
+        .background(Theme.Palette.paper)
+        .llSheet(isPresented: Binding(get: { state.trading212Form != nil }, set: { if !$0 { actions.onCancelTrading212() } })) {
+            if let form = state.trading212Form {
+                Trading212FormView(form: form, onSubmit: actions.onSubmitTrading212, onCancel: actions.onCancelTrading212)
             }
-            .sheet(isPresented: Binding(get: { state.trading212Form != nil }, set: { if !$0 { actions.onCancelTrading212() } })) {
-                if let form = state.trading212Form {
-                    Trading212FormView(form: form, onSubmit: actions.onSubmitTrading212, onCancel: actions.onCancelTrading212)
-                        .presentationDetents([.medium, .large])
-                }
-            }
-            .confirmationDialog(
-                state.disconnectPrompt?.title ?? "Disconnect?",
-                isPresented: Binding(get: { state.disconnectPrompt != nil }, set: { if !$0 { actions.onCancelDisconnect() } }),
-                titleVisibility: .visible,
-                presenting: state.disconnectPrompt
-            ) { prompt in
-                Button(prompt.confirmTitle, role: .destructive, action: actions.onConfirmDisconnect)
-                Button("Keep it connected", role: .cancel, action: actions.onCancelDisconnect)
-            } message: { prompt in
-                Text(prompt.message)
-            }
+        }
+        .confirmationDialog(
+            state.disconnectPrompt?.title ?? "Disconnect?",
+            isPresented: Binding(get: { state.disconnectPrompt != nil }, set: { if !$0 { actions.onCancelDisconnect() } }),
+            titleVisibility: .visible,
+            presenting: state.disconnectPrompt
+        ) { prompt in
+            Button(prompt.confirmTitle, role: .destructive, action: actions.onConfirmDisconnect)
+            Button("Keep it connected", role: .cancel, action: actions.onCancelDisconnect)
+        } message: { prompt in
+            Text(prompt.message)
         }
     }
 }
@@ -66,35 +52,34 @@ private struct BannerView: View {
     let banner: AccountsViewState.Banner
     let onDismiss: () -> Void
 
-    private var icon: String {
+    private var icon: LLIcon {
         switch banner.kind {
-        case .success: "checkmark.circle.fill"
-        case .error: "exclamationmark.triangle.fill"
-        case .info: "info.circle.fill"
+        case .success: .check
+        case .error: .crash
+        case .info: .why
         }
     }
 
-    private var tint: Color {
+    private var fill: Color {
         switch banner.kind {
-        case .success: .green
-        case .error: .orange
-        case .info: .blue
+        case .success: Theme.Palette.money
+        case .error: Theme.Palette.home
+        case .info: Theme.Palette.work
         }
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.m) {
-            Image(systemName: icon).foregroundStyle(tint).accessibilityHidden(true)
-            Text(banner.text).font(.subheadline)
-            Spacer(minLength: 0)
-            Button("Dismiss", systemImage: "xmark", action: onDismiss)
-                .labelStyle(.iconOnly)
-                .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
+            LLIconImage(icon, size: 24).accessibilityHidden(true)
+            Text(banner.text).font(.llBody).frame(maxWidth: .infinity, alignment: .leading)
+            HeaderSquareButton(kind: .close, identifier: "accounts.banner.dismiss", action: onDismiss)
         }
-        .padding(.horizontal, Theme.Spacing.l)
+        .foregroundStyle(Theme.Palette.onArea)
+        .padding(.leading, Theme.Spacing.l)
+        .padding(.trailing, Theme.Spacing.s)
         .padding(.vertical, Theme.Spacing.s)
-        .glassEffect(.regular.tint(tint.opacity(0.2)), in: .rect(cornerRadius: Theme.cornerRadius))
-        .accessibilityElement(children: .combine)
+        .inkSurface(.cardAlt, fill: fill)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("accounts.banner")
     }
 }
@@ -105,51 +90,50 @@ private struct AccountRowCard: View {
     let actions: AccountsActions
 
     var body: some View {
-        GlassCard {
+        InkCard(shape: row.id == ProviderID.monzo.rawValue ? .card : .cardAlt) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 HStack(alignment: .top, spacing: Theme.Spacing.m) {
-                    Image(systemName: row.systemImage)
-                        .font(.title2)
-                        .frame(width: 32)
+                    LLIconImage(row.id == ProviderID.monzo.rawValue ? .bank : .investment, size: 32)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text(row.name).font(.headline)
-                        Text(row.subtitle).font(.subheadline).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.name).font(.llBodyBold)
+                        Text(row.subtitle).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                     }
-                    Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     StatusPill(text: row.statusText, isConnected: row.isConnected, isSample: row.isSample)
                 }
                 if let hint = row.hintText {
-                    Text(hint).font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    Text(hint).font(.llLabel.monospacedDigit()).foregroundStyle(Theme.Palette.muted)
                 }
                 if let history = row.historyText {
-                    Label(history, systemImage: icon(for: row.historyKind))
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(row.historyKind == .imported ? Color.green : Color.orange)
-                        .accessibilityIdentifier("accounts.history.\(row.id)")
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                        LLIconImage(icon(for: row.historyKind), size: 24).accessibilityHidden(true)
+                        Text(history).font(.llLabelBold)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("accounts.history.\(row.id)")
                 }
                 if row.id == ProviderID.monzo.rawValue {
                     if let guidance = state.monzoGuidance {
-                        Label(guidance, systemImage: "envelope")
-                            .font(.footnote)
+                        Label(guidance, icon: .why)
+                            .font(.llLabel)
                             .accessibilityIdentifier("accounts.monzoGuidance")
                     }
                     if let note = state.approvalNote {
-                        Label(note, systemImage: "iphone.badge.checkmark")
-                            .font(.footnote)
+                        Label(note, icon: .lock)
+                            .font(.llLabel)
                             .accessibilityIdentifier("accounts.approvalNote")
                     }
                     if state.showsImportNow {
                         Button {
                             actions.onImportNow()
                         } label: {
-                            HStack {
+                            HStack(spacing: Theme.Spacing.s) {
                                 if state.isImporting { ProgressView() }
                                 Text("Import now")
                             }
-                            .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
                         }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.second)
                         .disabled(state.isImporting)
                         .accessibilityIdentifier("accounts.importNow")
                     }
@@ -160,23 +144,23 @@ private struct AccountRowCard: View {
         .accessibilityIdentifier("accounts.row.\(row.id)")
     }
 
-    private func icon(for kind: AccountsViewState.HistoryKind?) -> String {
+    private func icon(for kind: AccountsViewState.HistoryKind?) -> LLIcon {
         switch kind {
-        case .imported: "checkmark.circle"
-        case .waitingForApproval: "hourglass"
-        case .problem, nil: "exclamationmark.circle"
+        case .imported: .check
+        case .waitingForApproval: .statusCached
+        case .problem, nil: .crash
         }
     }
 
     @ViewBuilder
     private var actionButton: some View {
         if row.isConnected {
-            Button(role: .destructive) {
+            Button {
                 actions.onRequestDisconnect(row.id)
             } label: {
-                Text("Disconnect").frame(maxWidth: .infinity, minHeight: Theme.minTarget)
+                Text("Disconnect")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.second)
             .disabled(row.isBusy)
             .accessibilityLabel("Disconnect \(row.name)")
             .accessibilityIdentifier("accounts.disconnect.\(row.id)")
@@ -184,13 +168,12 @@ private struct AccountRowCard: View {
             Button {
                 row.id == ProviderID.monzo.rawValue ? actions.onConnectMonzo() : actions.onConnectTrading212()
             } label: {
-                HStack {
-                    if row.isBusy { ProgressView() }
-                    Text("Connect").font(.headline)
+                HStack(spacing: Theme.Spacing.s) {
+                    if row.isBusy { ProgressView().tint(Theme.Palette.surface) }
+                    Text("Connect")
                 }
-                .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.main)
             .disabled(row.isBusy)
             .accessibilityLabel("Connect \(row.name)")
             .accessibilityIdentifier("accounts.connect.\(row.id)")
@@ -204,16 +187,14 @@ private struct StatusPill: View {
     let isSample: Bool
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.xs) {
-            Circle().fill(isConnected ? (isSample ? Color.gray : Color.green) : Color.secondary.opacity(0.5))
-                .frame(width: 8, height: 8)
-            Text(text).font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, Theme.Spacing.m)
-        .frame(minHeight: 28)
-        .glassEffect(.regular, in: .capsule)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Status: \(text)")
+        Chip(text: text, fill: fill)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Status: \(text)")
+    }
+
+    private var fill: Color {
+        guard isConnected else { return Theme.Palette.surface }
+        return isSample ? Theme.Palette.other : Theme.Palette.money
     }
 }
 
@@ -231,58 +212,54 @@ private struct Trading212FormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text(form.guidance).font(.subheadline)
-                }
-                Section("Your Trading212 key") {
-                    SecureField("API key", text: $apiKey)
-                        .textContentType(.password)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .frame(minHeight: Theme.minTarget)
-                        .accessibilityIdentifier("trading212.key")
-                    SecureField("API secret", text: $apiSecret)
-                        .textContentType(.password)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .frame(minHeight: Theme.minTarget)
-                        .accessibilityIdentifier("trading212.secret")
-                }
-                if let error = form.errorText {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                            .accessibilityIdentifier("trading212.error")
-                    }
-                }
-                Section {
-                    Button {
-                        let key = apiKey, secret = apiSecret
-                        apiKey = ""
-                        apiSecret = ""
-                        onSubmit(key, secret)
-                    } label: {
-                        HStack {
-                            if form.isSubmitting { ProgressView() }
-                            Text("Connect Trading212").font(.headline)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
-                    }
-                    .disabled(!canSubmit)
-                    .accessibilityIdentifier("trading212.submit")
-                } footer: {
-                    Text("We send the key once to check it. It is not saved on your phone.")
+        SheetContainer(title: "Connect Trading212", closeIdentifier: "trading212.cancel", onClose: onCancel) {
+            Text(form.guidance).font(.llBody)
+            SecretField(title: "API key", text: $apiKey, identifier: "trading212.key")
+            SecretField(title: "API secret", text: $apiSecret, identifier: "trading212.secret")
+            if let error = form.errorText {
+                Label(error, icon: .crash)
+                    .font(.llLabelBold)
+                    .accessibilityIdentifier("trading212.error")
+            }
+            Button {
+                let key = apiKey, secret = apiSecret
+                apiKey = ""
+                apiSecret = ""
+                onSubmit(key, secret)
+            } label: {
+                HStack(spacing: Theme.Spacing.s) {
+                    if form.isSubmitting { ProgressView().tint(Theme.Palette.surface) }
+                    Text("Connect Trading212")
                 }
             }
-            .navigationTitle("Connect Trading212")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel).frame(minHeight: Theme.minTarget)
-                }
-            }
+            .buttonStyle(.main)
+            .disabled(!canSubmit)
+            .accessibilityIdentifier("trading212.submit")
+            Text("We send the key once to check it. It is not saved on your phone.")
+                .font(.llLabel)
+                .foregroundStyle(Theme.Palette.muted)
+        }
+    }
+}
+
+/// Outlined secret field in the style of `LLTextField`.
+private struct SecretField: View {
+    let title: String
+    @Binding var text: String
+    let identifier: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(title).font(.llLabelBold)
+            SecureField(title, text: $text)
+                .font(.llBody)
+                .textContentType(.password)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, Theme.Spacing.m)
+                .frame(minHeight: Theme.buttonHeight)
+                .inkSurface(.buttonAlt)
+                .accessibilityIdentifier(identifier)
         }
     }
 }

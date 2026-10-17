@@ -36,6 +36,7 @@ typealias LifeListItem = Components.Schemas.LifeListItem
 typealias FinanceMeta = Components.Schemas.FinanceMeta
 typealias FinanceOverview = Components.Schemas.FinanceOverview
 typealias SpendingResponse = Components.Schemas.SpendingResponse
+typealias SpendingInsights = Components.Schemas.SpendingInsights
 typealias SubscriptionsResponse = Components.Schemas.SubscriptionsResponse
 typealias BillsResponse = Components.Schemas.BillsResponse
 typealias BudgetsResponse = Components.Schemas.BudgetsResponse
@@ -121,6 +122,8 @@ protocol LifelineClient: Sendable {
     // Money tab (ADR 0016, 0017). `month` is YYYY-MM, `date` is YYYY-MM-DD; nil means "now".
     func financeOverview() async throws -> FinanceOverview
     func financeSpending(month: String?) async throws -> SpendingResponse
+    /// Spending insights over the last `months` complete months (1 to 12). Fewer are used when history is short.
+    func insights(months: Int) async throws -> SpendingInsights
     func subscriptions() async throws -> SubscriptionsResponse
     func bills() async throws -> BillsResponse
     func budgets(month: String?) async throws -> BudgetsResponse

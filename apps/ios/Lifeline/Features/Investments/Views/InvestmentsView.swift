@@ -1,6 +1,11 @@
 import Charts
 import SwiftUI
 
+/// Colours for chart series and slices, in a fixed order. Series are also named in text, never colour alone.
+private let seriesPalette: [Color] = [
+    Theme.Palette.work, Theme.Palette.money, Theme.Palette.home, Theme.Palette.family, Theme.Palette.health,
+]
+
 /// Your investments: value, split, holdings, "Replay your ISA" and "Possible paths".
 struct InvestmentsView: View {
     let state: InvestmentsViewState
@@ -8,86 +13,78 @@ struct InvestmentsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Theme.Spacing.l) {
-                    switch state.phase {
-                    case let .loading(loading):
-                        LoadingStateView(state: loading)
-                    case let .failed(error):
-                        ErrorStateView(state: error, onRetry: actions.onRetry)
-                    case .ready:
-                        summaryCard
-                        if !state.slices.isEmpty { allocationCard }
-                        if !state.holdings.isEmpty { holdingsCard }
-                        ReplaySection(replay: state.replay, actions: actions)
-                        PathsSection(paths: state.paths, actions: actions)
-                    }
-                }
-                .padding(Theme.Spacing.l)
-            }
-            .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
-            .navigationTitle("Your investments")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done", action: actions.onClose)
-                        .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
-                        .accessibilityIdentifier("investments.done")
-                }
+        SheetContainer(title: "Your investments", closeIdentifier: "investments.done", onClose: actions.onClose) {
+            switch state.phase {
+            case let .loading(loading):
+                LoadingStateView(state: loading)
+            case let .failed(error):
+                ErrorStateView(state: error, onRetry: actions.onRetry)
+            case .ready:
+                summaryCard
+                if !state.slices.isEmpty { allocationCard }
+                if !state.holdings.isEmpty { holdingsCard }
+                ReplaySection(replay: state.replay, actions: actions)
+                PathsSection(paths: state.paths, actions: actions)
             }
         }
+        .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
+        .background(Theme.Palette.paper)
     }
 
     private var summaryCard: some View {
-        GlassCard {
+        InkCard(shape: .hero, hero: true, padding: Theme.Spacing.xl) {
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                Text("Total value").font(.subheadline).foregroundStyle(.secondary)
+                Text("Total value").font(.llLabel).foregroundStyle(Theme.Palette.muted)
                 Text(Money.format(state.totalValue))
-                    .font(.largeTitle.bold().monospacedDigit())
+                    .font(.llHero)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                     .contentTransition(.numericText(value: state.totalValue))
                     .accessibilityLabel("Total value, \(Money.spoken(state.totalValue))")
                 HStack {
                     Text("Cash waiting to be invested")
                     Spacer()
                     Text(Money.format(state.cash))
-                        .monospacedDigit()
+                        .font(.llBodyBold.monospacedDigit())
                         .contentTransition(.numericText(value: state.cash))
                 }
-                .font(.subheadline)
+                .font(.llBody)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Cash waiting to be invested, \(Money.spoken(state.cash))")
                 if state.isSampleData {
                     DemoDataBadge()
                 } else {
-                    Label(state.dataLabel, systemImage: "bolt.horizontal.circle")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
+                    Chip(text: state.dataLabel, fill: Theme.Palette.money)
                 }
             }
         }
+        .padding(.trailing, Theme.heroShadow.width)
+        .padding(.bottom, Theme.heroShadow.height)
         .accessibilityIdentifier("investments.summary")
     }
 
     private var allocationCard: some View {
-        GlassCard {
+        InkCard(shape: .cardAlt) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                Text("What it is made of").font(.headline)
-                Chart(state.slices) { slice in
-                    SectorMark(angle: .value("Share", slice.percent), innerRadius: .ratio(0.6), angularInset: 1.5)
-                        .cornerRadius(4)
-                        .foregroundStyle(by: .value("Type", slice.label))
+                Text("What it is made of").font(.llBodyBold)
+                Chart(Array(state.slices.enumerated()), id: \.element.id) { offset, slice in
+                    SectorMark(angle: .value("Share", slice.percent), innerRadius: .ratio(0.6), angularInset: 2)
+                        .foregroundStyle(seriesPalette[offset % seriesPalette.count])
                 }
                 .frame(height: 180)
                 .accessibilityLabel("Split of your investments")
                 .accessibilityValue(state.slices.map { "\($0.label) \($0.percentText)" }.joined(separator: ", "))
-                ForEach(state.slices) { slice in
-                    HStack {
-                        Text(slice.label)
+                ForEach(Array(state.slices.enumerated()), id: \.element.id) { offset, slice in
+                    HStack(spacing: Theme.Spacing.s) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(seriesPalette[offset % seriesPalette.count])
+                            .strokeBorder(Theme.Palette.ink, lineWidth: 2)
+                            .frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
+                        Text(slice.label).font(.llBody)
                         Spacer()
-                        Text(slice.percentText).monospacedDigit()
+                        Text(slice.percentText).font(.llBodyBold.monospacedDigit())
                     }
-                    .font(.subheadline)
                     .frame(minHeight: 28)
                     .accessibilityElement(children: .combine)
                 }
@@ -97,22 +94,14 @@ struct InvestmentsView: View {
     }
 
     private var holdingsCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                Text("What you own").font(.headline)
-                ForEach(state.holdings) { holding in
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(holding.name).font(.body)
-                            Text(holding.detail).font(.footnote).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(Money.format(holding.value)).monospacedDigit()
-                    }
-                    .frame(minHeight: Theme.minTarget)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(holding.name), \(holding.detail), \(Money.spoken(holding.value))")
-                }
+        RowGroup(title: "What you own") {
+            ForEach(state.holdings) { holding in
+                ListRow(
+                    icon: .investment, title: holding.name, subtitle: holding.detail,
+                    trailing: Money.format(holding.value), showsChevron: false
+                )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(holding.name), \(holding.detail), \(Money.spoken(holding.value))")
             }
         }
         .accessibilityIdentifier("investments.holdings")
@@ -126,55 +115,65 @@ private struct ReplaySection: View {
     let actions: InvestmentsActions
 
     var body: some View {
-        GlassCard {
+        InkCard {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                HStack {
-                    Text("Replay your ISA").font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Replay your ISA").font(.llBodyBold)
                     Spacer()
                     IllustrativeBadge(text: replay.dataLabel)
                 }
                 Text("See how different mixes would have done in a real stretch of the past.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.llLabel)
+                    .foregroundStyle(Theme.Palette.muted)
 
                 if !replay.periods.isEmpty {
-                    Picker("Time period", selection: Binding(
-                        get: { replay.selectedPeriodID ?? replay.periods[0].id },
-                        set: { actions.onSelectPeriod($0) }
-                    )) {
-                        ForEach(replay.periods) { Text($0.label).tag($0.id) }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(minHeight: Theme.minTarget)
-                    .accessibilityIdentifier("replay.period")
+                    LLChoiceChips(
+                        title: "Time period",
+                        options: replay.periods.map { .init(id: $0.id, label: $0.label) },
+                        selection: replay.selectedPeriodID ?? replay.periods[0].id,
+                        identifier: "replay.period",
+                        onSelect: actions.onSelectPeriod
+                    )
                 }
 
-                FlowRow(spacing: Theme.Spacing.s) {
-                    ForEach(replay.mixes) { mix in
-                        let isOn = replay.selectedMixIDs.contains(mix.id)
-                        Button {
-                            actions.onToggleMix(mix.id)
-                        } label: {
-                            Label(mix.label, systemImage: isOn ? "checkmark.circle.fill" : "circle")
-                                .font(.subheadline.weight(.medium))
+                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                    Text("Mixes to compare").font(.llLabelBold)
+                    FlowRow(spacing: Theme.Spacing.s) {
+                        ForEach(replay.mixes) { mix in
+                            let isOn = replay.selectedMixIDs.contains(mix.id)
+                            Button {
+                                actions.onToggleMix(mix.id)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if isOn { LLIconImage(.check, size: 24) }
+                                    Text(mix.label).font(.llLabelBold)
+                                }
+                                .lineLimit(1)
+                                .foregroundStyle(isOn ? Theme.Palette.surface : Theme.Palette.ink)
                                 .padding(.horizontal, Theme.Spacing.m)
                                 .frame(minHeight: Theme.minTarget)
+                                .inkSurface(
+                                    HandCut((10, 13, 9, 12)),
+                                    fill: isOn ? Theme.Palette.ink : Theme.Palette.surface,
+                                    lineWidth: Theme.chipOutline
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(isOn ? .isSelected : [])
+                            .accessibilityLabel("\(mix.label), \(isOn ? "included" : "not included")")
+                            .accessibilityIdentifier("replay.mix.\(mix.id)")
                         }
-                        .buttonStyle(.glass)
-                        .tint(isOn ? .accentColor : nil)
-                        .accessibilityAddTraits(isOn ? .isSelected : [])
-                        .accessibilityLabel("\(mix.label), \(isOn ? "included" : "not included")")
-                        .accessibilityIdentifier("replay.mix.\(mix.id)")
                     }
                 }
 
-                Picker("How you pay in", selection: Binding(get: { replay.isMonthly }, set: { actions.onSetMonthly($0) })) {
-                    Text("A bit each month").tag(true)
-                    Text("All at once").tag(false)
+                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                    Text("How you pay in").font(.llLabelBold)
+                    LLSegmented(
+                        options: [.init(id: "monthly", label: "A bit each month"), .init(id: "once", label: "All at once")],
+                        selection: replay.isMonthly ? "monthly" : "once"
+                    ) { actions.onSetMonthly($0 == "monthly") }
+                    .accessibilityIdentifier("replay.technique")
                 }
-                .pickerStyle(.segmented)
-                .frame(minHeight: Theme.minTarget)
-                .accessibilityIdentifier("replay.technique")
 
                 switch replay.phase {
                 case let .loading(loading):
@@ -185,15 +184,14 @@ private struct ReplaySection: View {
                     chart
                     ForEach(replay.results) { result in
                         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text(result.label).font(.subheadline.weight(.semibold))
-                            Text(result.summary).font(.footnote).foregroundStyle(.secondary)
+                            Text(result.label).font(.llBodyBold)
+                            Text(result.summary).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                             ForEach(result.metrics) { metric in
                                 HStack {
-                                    Text(metric.label)
+                                    Text(metric.label).font(.llBody)
                                     Spacer()
-                                    Text(metric.value).monospacedDigit()
+                                    Text(metric.value).font(.llBodyBold.monospacedDigit())
                                 }
-                                .font(.subheadline)
                                 .frame(minHeight: 28)
                                 .accessibilityElement(children: .combine)
                             }
@@ -202,8 +200,8 @@ private struct ReplaySection: View {
                         .accessibilityElement(children: .contain)
                     }
                     Text("\(replay.detailLabel). Made-up numbers shaped like real markets. Not advice.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(.llLabel)
+                        .foregroundStyle(Theme.Palette.muted)
                 }
             }
         }
@@ -214,12 +212,17 @@ private struct ReplaySection: View {
         Chart(replay.points) { point in
             LineMark(x: .value("Month", point.month), y: .value("Index", point.value))
                 .foregroundStyle(by: .value("Mix", point.series))
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                 .interpolationMethod(.monotone)
         }
+        .chartForegroundStyleScale(range: seriesPalette)
         .chartYScale(domain: .automatic(includesZero: false))
         .chartXAxisLabel("Months into the period")
         .chartYAxisLabel("Value (start = 100)")
-        .frame(height: 220)
+        .chartYAxis { AxisMarks { _ in AxisGridLine().foregroundStyle(Theme.Palette.rule); AxisValueLabel().font(.llLabel) } }
+        .chartXAxis { AxisMarks { _ in AxisValueLabel().font(.llLabel) } }
+        .chartLegend(position: .bottom, alignment: .leading)
+        .frame(height: 240)
         .accessibilityLabel("Line chart. Each line is one mix, starting at 100.")
         .accessibilityValue(replay.results.map { "\($0.label): \($0.summary)" }.joined(separator: " "))
         .accessibilityIdentifier("replay.chart")
@@ -233,10 +236,10 @@ private struct PathsSection: View {
     let actions: InvestmentsActions
 
     var body: some View {
-        GlassCard {
+        InkCard(shape: .cardAlt) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                HStack {
-                    Text("Possible paths").font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Possible paths").font(.llBodyBold)
                     Spacer()
                     IllustrativeBadge(text: paths.dataLabel)
                 }
@@ -246,26 +249,29 @@ private struct PathsSection: View {
                 case let .failed(error):
                     ErrorStateView(state: error, onRetry: actions.onRetryReplay)
                 case .ready:
-                    Text(paths.basisText).font(.subheadline).foregroundStyle(.secondary)
+                    Text(paths.basisText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                     Chart(paths.points) { point in
                         AreaMark(x: .value("Month", point.month), yStart: .value("Low", point.low), yEnd: .value("High", point.high))
-                            .foregroundStyle(Color.accentColor.opacity(0.2))
+                            .foregroundStyle(Theme.Palette.work.opacity(0.3))
                             .interpolationMethod(.monotone)
                         LineMark(x: .value("Month", point.month), y: .value("Middle", point.middle))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Theme.Palette.work)
+                            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                             .interpolationMethod(.monotone)
                     }
                     .chartYScale(domain: .automatic(includesZero: false))
                     .chartXAxisLabel("Months from now")
                     .chartYAxisLabel("Value (start = 100)")
+                    .chartYAxis { AxisMarks { _ in AxisGridLine().foregroundStyle(Theme.Palette.rule); AxisValueLabel().font(.llLabel) } }
+                    .chartXAxis { AxisMarks { _ in AxisValueLabel().font(.llLabel) } }
                     .frame(height: 200)
                     .accessibilityLabel("Fan chart. The line is the middle path. The shaded band covers most paths.")
                     .accessibilityIdentifier("paths.chart")
                 }
                 // Always visible, in every state.
                 Text(paths.disclaimer)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.llLabelBold)
+                    .foregroundStyle(Theme.Palette.muted)
                     .accessibilityIdentifier("paths.disclaimer")
             }
         }
@@ -277,11 +283,8 @@ private struct IllustrativeBadge: View {
     let text: String
 
     var body: some View {
-        Label(text, systemImage: "wand.and.stars")
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.xs)
-            .glassEffect(.regular.tint(.purple.opacity(0.25)), in: .capsule)
+        Chip(text: text, fill: Theme.Palette.family)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(text). Made-up numbers, not real market data.")
     }
 }

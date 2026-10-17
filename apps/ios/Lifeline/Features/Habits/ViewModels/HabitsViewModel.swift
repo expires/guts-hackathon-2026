@@ -71,7 +71,8 @@ final class HabitsViewModel {
         }
         let windowText = habits.map { habits -> String in
             let months = habits.window.months
-            return "Last \(months == 1 ? "month" : "\(months) months"), up to \(FinanceMapping.dayText(habits.window.end))"
+            let span = habits.window.note ?? "Last \(months == 1 ? "month" : "\(months) months")"
+            return "\(span), up to \(FinanceMapping.dayText(habits.window.end))"
         } ?? ""
         return HabitsViewState(
             phase: phase,

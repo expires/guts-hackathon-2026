@@ -86,6 +86,10 @@ struct LiveClient: LifelineClient {
         try await call { try await client.getFinanceSpending(query: .init(month: month)).ok.body.json }
     }
 
+    func insights(months: Int) async throws -> SpendingInsights {
+        try await call { try await client.getFinanceInsights(query: .init(months: months)).ok.body.json }
+    }
+
     func subscriptions() async throws -> SubscriptionsResponse {
         try await call { try await client.listSubscriptions().ok.body.json }
     }

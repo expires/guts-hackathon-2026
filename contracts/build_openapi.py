@@ -24,6 +24,7 @@ from lifeline_contracts import accounts as ACC  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
 from lifeline_contracts import habits as H  # noqa: E402
+from lifeline_contracts import insights as INS  # noqa: E402
 from lifeline_contracts import investing as I  # noqa: E402,E741
 from lifeline_contracts import next_move as N  # noqa: E402
 from lifeline_contracts.observation import Observation, SourceStatus  # noqa: E402
@@ -64,6 +65,7 @@ MODELS: list[type[BaseModel]] = [
     SourceStatus,
     F.FinanceOverview,
     F.SpendingResponse,
+    INS.SpendingInsights,
     F.SubscriptionsResponse,
     F.BillsResponse,
     F.BudgetsResponse,
@@ -795,7 +797,53 @@ def finance_examples() -> dict[str, Any]:
         text="You spend £47 a month on 6 subscriptions.",
         facts={"monthly_total": 47, "count": 6},
     )
+    insights = INS.SpendingInsights(
+        meta=meta,
+        window_months=3,
+        requested_months=6,
+        start_month="2026-07",
+        end_month="2026-09",
+        note="Based on your last 3 months",
+        total_income=7500.0,
+        total_spend=5100.0,
+        monthly=[
+            INS.InsightMonth(month="2026-07", income=2500.0, spend=1700.0, net=800.0),
+            INS.InsightMonth(month="2026-08", income=2500.0, spend=1750.0, net=750.0),
+            INS.InsightMonth(month="2026-09", income=2500.0, spend=1650.0, net=850.0),
+        ],
+        categories=[
+            INS.InsightCategory(
+                category="groceries", label="Groceries", emoji="🛒", amount=900.0, share=0.1765, monthly_average=300.0
+            )
+        ],
+        category_months=["2026-07", "2026-08", "2026-09"],
+        category_by_month=[
+            INS.CategorySeries(category="groceries", label="Groceries", emoji="🛒", values=[290.0, 320.0, 290.0])
+        ],
+        top_merchants=[INS.InsightMerchant(merchant="Tesco", category="groceries", emoji="🛒", amount=540.0, count=21)],
+        subscriptions=INS.InsightSubscriptions(
+            monthly_total=37.98,
+            annual_total=455.76,
+            items=[INS.InsightSubscription(merchant="Netflix", emoji="📺", monthly_cost=12.99, annual_cost=155.88)],
+        ),
+        unusual=[
+            INS.UnusualPayment(
+                id="tx_1", date="2026-08-14", merchant="Zara", category="shopping", emoji="🛍️", amount=240.0, typical=35.0
+            )
+        ],
+        patterns=INS.SpendingPatterns(
+            weekend_share=0.42,
+            weekday_share=0.58,
+            average_daily_spend=55.4,
+            biggest_weekday="Saturday",
+            biggest_day="2026-08-14",
+            biggest_day_amount=310.0,
+            by_weekday=[INS.WeekdaySpend(weekday="Monday", amount=420.0)],
+        ),
+        insights=["Groceries is your biggest spend: £900, 18% of the £5,100 you spent."],
+    )
     return {
+        "SpendingInsights": insights,
         "FinanceOverview": F.FinanceOverview(
             meta=meta,
             balance=8040.22,
@@ -1546,6 +1594,23 @@ def finance_paths() -> dict[str, Any]:
                 "finance",
                 {**ok("SpendingResponse", "Spending"), **errs(*FIN)},
                 parameters=[MONTH],
+            )
+        },
+        "/v1/finance/insights": {
+            "get": op(
+                "getFinanceInsights",
+                "Spending insights over the last N complete months (fewer when history is short)",
+                "finance",
+                {**ok("SpendingInsights", "SpendingInsights"), **errs(*FIN)},
+                parameters=[
+                    {
+                        "name": "months",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "integer", "minimum": 1, "maximum": 12, "default": 6},
+                        "description": "Window length in complete months; fewer are used if that is all there is",
+                    }
+                ],
             )
         },
         "/v1/finance/subscriptions": {

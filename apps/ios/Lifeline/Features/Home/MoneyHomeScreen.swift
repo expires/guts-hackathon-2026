@@ -7,6 +7,7 @@ enum MoneyHomeSheet: Identifiable {
     case plan
     case accuracy
     case guess
+    case insights
 
     var id: String {
         switch self {
@@ -15,13 +16,14 @@ enum MoneyHomeSheet: Identifiable {
         case .plan: "plan"
         case .accuracy: "accuracy"
         case .guess: "guess"
+        case .insights: "insights"
         }
     }
 
     /// Full screens have their own header and back button. The others show as sheets.
     var isFullScreen: Bool {
         switch self {
-        case .testIt, .guess: true
+        case .testIt, .guess, .insights: true
         case .why, .plan, .accuracy: false
         }
     }
@@ -77,6 +79,7 @@ struct MoneyHomeScreen: View {
         model.nextMove.onOpenPlan = { present(.plan) }
         model.guess.onOpenAccuracy = { present(.accuracy) }
         model.onOpenGuess = { present(.guess) }
+        model.onOpenInsights = { present(.insights) }
         model.onOpenDetail = { detail = $0 }
     }
 
@@ -115,6 +118,8 @@ struct MoneyHomeScreen: View {
             SpendAccuracyScreen(client: client, onClose: close)
         case .guess:
             GuessSpendView(state: model.guess.state, actions: model.guess.actions, onClose: close)
+        case .insights:
+            InsightsScreen(client: client, onClose: close)
         }
     }
 }

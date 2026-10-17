@@ -153,7 +153,7 @@ extension Fixtures {
                     .init(id: "lifeMenu.mid", title: "Life menu bar", detail: "Mid-life with counts"),
                     .init(id: "lifeMenu.dead", title: "Life menu bar", detail: "Dead, disabled"),
                 ]),
-                .init(id: "accounts", title: "Accounts, investing, habits", entries: [
+                .init(id: "accounts", title: "Accounts, investing, habits, insights", entries: [
                     .init(id: "money.home.live", title: "Money tab", detail: "Connected, live data"),
                     .init(id: "accounts.none", title: "Accounts", detail: "Nothing connected"),
                     .init(id: "accounts.connected", title: "Accounts", detail: "Monzo and Trading212 live"),
@@ -170,6 +170,12 @@ extension Fixtures {
                     .init(id: "habits.live", title: "Your money habits", detail: "Live"),
                     .init(id: "habits.loading", title: "Your money habits", detail: "Loading"),
                     .init(id: "habits.error", title: "Your money habits", detail: "Error"),
+                    .init(id: "insights.ready", title: "Insights", detail: "Sample data, 6 months asked, 4 found"),
+                    .init(id: "insights.changes", title: "Insights", detail: "Changes against the months before"),
+                    .init(id: "insights.live", title: "Insights", detail: "Live"),
+                    .init(id: "insights.none", title: "Insights", detail: "Under 2 months of history"),
+                    .init(id: "insights.loading", title: "Insights", detail: "Loading"),
+                    .init(id: "insights.error", title: "Insights", detail: "Offline"),
                 ]),
             ]
         )

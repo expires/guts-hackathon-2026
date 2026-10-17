@@ -23,6 +23,7 @@ from lifeline_contracts.finance import (
 )
 from lifeline_engine.money import dates
 from lifeline_engine.money.categorise import CATEGORY_INFO, categorise
+from lifeline_engine.money.insights import spending_insights
 from lifeline_engine.money.profile import (
     ProfileHints,
     balance,
@@ -56,6 +57,7 @@ __all__ = [
     "personal_facts",
     "profile",
     "spending",
+    "spending_insights",
     "spending_response",
     "subscriptions_response",
     "upcoming_bills",

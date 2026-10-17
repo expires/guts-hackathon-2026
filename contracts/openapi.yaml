@@ -774,6 +774,38 @@ paths:
           type: string
           pattern: ^\d{4}-\d{2}$
         description: YYYY-MM; default this month
+  /v1/finance/insights:
+    get:
+      operationId: getFinanceInsights
+      summary: Spending insights over the last N complete months (fewer when history is short)
+      tags:
+      - finance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendingInsights'
+              examples:
+                SpendingInsights:
+                  $ref: '#/components/examples/SpendingInsights'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+      parameters:
+      - name: months
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 6
+        description: Window length in complete months; fewer are used if that is all there is
   /v1/finance/subscriptions:
     get:
       operationId: listSubscriptions
@@ -1962,6 +1994,46 @@ components:
       - month
       - items
       type: object
+    CategorySeries:
+      additionalProperties: false
+      properties:
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+        label:
+          type: string
+        emoji:
+          type: string
+        values:
+          description: Spend per month, aligned with category_months
+          items:
+            type: number
+          type: array
+      required:
+      - category
+      - label
+      - emoji
+      - values
+      type: object
     CategorySpend:
       additionalProperties: false
       properties:
@@ -2968,6 +3040,9 @@ components:
         end:
           pattern: ^\d{4}-\d{2}-\d{2}$
           type: string
+        note:
+          description: Set when fewer months were available than requested
+          type: string
       required:
       - months
       - end
@@ -3074,6 +3149,156 @@ components:
       - r_autopilot
       - missed_payments
       - max_drawdown
+      type: object
+    InsightCategory:
+      additionalProperties: false
+      properties:
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+        label:
+          type: string
+        emoji:
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        share:
+          maximum: 1
+          minimum: 0
+          type: number
+        monthly_average:
+          minimum: 0
+          type: number
+        change_pct:
+          description: vs the previous window of the same length, percent; null with no prior data
+          type: number
+      required:
+      - category
+      - label
+      - emoji
+      - amount
+      - share
+      - monthly_average
+      type: object
+    InsightMerchant:
+      additionalProperties: false
+      properties:
+        merchant:
+          type: string
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+        emoji:
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        count:
+          minimum: 1
+          type: integer
+      required:
+      - merchant
+      - category
+      - emoji
+      - amount
+      - count
+      type: object
+    InsightMonth:
+      additionalProperties: false
+      properties:
+        month:
+          pattern: ^\d{4}-\d{2}$
+          type: string
+        income:
+          minimum: 0
+          type: number
+        spend:
+          minimum: 0
+          type: number
+        net:
+          description: income minus spend
+          type: number
+      required:
+      - month
+      - income
+      - spend
+      - net
+      type: object
+    InsightSubscription:
+      additionalProperties: false
+      properties:
+        merchant:
+          type: string
+        emoji:
+          type: string
+        monthly_cost:
+          minimum: 0
+          type: number
+        annual_cost:
+          minimum: 0
+          type: number
+      required:
+      - merchant
+      - emoji
+      - monthly_cost
+      - annual_cost
+      type: object
+    InsightSubscriptions:
+      additionalProperties: false
+      properties:
+        monthly_total:
+          minimum: 0
+          type: number
+        annual_total:
+          minimum: 0
+          type: number
+        items:
+          items:
+            $ref: '#/components/schemas/InsightSubscription'
+          type: array
+      required:
+      - monthly_total
+      - annual_total
+      - items
       type: object
     InvestmentsResponse:
       additionalProperties: false
@@ -4487,6 +4712,114 @@ components:
       - is_bank_holiday
       - model
       type: object
+    SpendingInsights:
+      additionalProperties: false
+      properties:
+        meta:
+          $ref: '#/components/schemas/FinanceMeta'
+        window_months:
+          description: Months actually used
+          minimum: 0
+          type: integer
+        requested_months:
+          minimum: 1
+          type: integer
+        start_month:
+          pattern: ^\d{4}-\d{2}$
+          type: string
+        end_month:
+          pattern: ^\d{4}-\d{2}$
+          type: string
+        note:
+          description: Set when fewer months were available than requested
+          type: string
+        total_income:
+          minimum: 0
+          type: number
+        total_spend:
+          minimum: 0
+          type: number
+        monthly:
+          items:
+            $ref: '#/components/schemas/InsightMonth'
+          type: array
+        categories:
+          items:
+            $ref: '#/components/schemas/InsightCategory'
+          type: array
+        category_months:
+          items:
+            pattern: ^\d{4}-\d{2}$
+            type: string
+          type: array
+        category_by_month:
+          items:
+            $ref: '#/components/schemas/CategorySeries'
+          type: array
+        top_merchants:
+          items:
+            $ref: '#/components/schemas/InsightMerchant'
+          type: array
+        subscriptions:
+          $ref: '#/components/schemas/InsightSubscriptions'
+        unusual:
+          items:
+            $ref: '#/components/schemas/UnusualPayment'
+          type: array
+        patterns:
+          $ref: '#/components/schemas/SpendingPatterns'
+        insights:
+          description: Plain English facts, no advice
+          items:
+            type: string
+          type: array
+      required:
+      - meta
+      - window_months
+      - requested_months
+      - total_income
+      - total_spend
+      - monthly
+      - categories
+      - category_months
+      - category_by_month
+      - top_merchants
+      - subscriptions
+      - unusual
+      - patterns
+      - insights
+      type: object
+    SpendingPatterns:
+      additionalProperties: false
+      properties:
+        weekend_share:
+          description: Share of treat spending on Sat and Sun
+          maximum: 1
+          minimum: 0
+          type: number
+        weekday_share:
+          maximum: 1
+          minimum: 0
+          type: number
+        average_daily_spend:
+          minimum: 0
+          type: number
+        biggest_weekday:
+          type: string
+        biggest_day:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        biggest_day_amount:
+          minimum: 0
+          type: number
+        by_weekday:
+          items:
+            $ref: '#/components/schemas/WeekdaySpend'
+          type: array
+      required:
+      - average_daily_spend
+      - by_weekday
+      type: object
     SpendingResponse:
       additionalProperties: false
       properties:
@@ -4709,6 +5042,56 @@ components:
       - api_key
       - api_secret
       type: object
+    UnusualPayment:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        merchant:
+          type: string
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+        emoji:
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        typical:
+          description: Median payment in this category
+          minimum: 0
+          type: number
+      required:
+      - id
+      - date
+      - merchant
+      - category
+      - emoji
+      - amount
+      - typical
+      type: object
     UpdateBudgetsRequest:
       additionalProperties: false
       properties:
@@ -4741,6 +5124,19 @@ components:
       - temp_max_c
       - rain_mm
       - status
+      type: object
+    WeekdaySpend:
+      additionalProperties: false
+      properties:
+        weekday:
+          description: Monday to Sunday
+          type: string
+        amount:
+          minimum: 0
+          type: number
+      required:
+      - weekday
+      - amount
       type: object
     WsClientMessage:
       additionalProperties: false
@@ -6282,6 +6678,86 @@ components:
         access_token: eyJhbGciOiJIUzI1NiJ9.demo.sig
         token_type: bearer
         expires_in: 86400
+    SpendingInsights:
+      value:
+        meta:
+          data_status: mock
+          source: fixtures
+          as_of: '2026-10-17'
+          label: Sample data
+        window_months: 3
+        requested_months: 6
+        start_month: 2026-07
+        end_month: 2026-09
+        note: Based on your last 3 months
+        total_income: 7500.0
+        total_spend: 5100.0
+        monthly:
+        - month: 2026-07
+          income: 2500.0
+          spend: 1700.0
+          net: 800.0
+        - month: 2026-08
+          income: 2500.0
+          spend: 1750.0
+          net: 750.0
+        - month: 2026-09
+          income: 2500.0
+          spend: 1650.0
+          net: 850.0
+        categories:
+        - category: groceries
+          label: Groceries
+          emoji: 🛒
+          amount: 900.0
+          share: 0.1765
+          monthly_average: 300.0
+        category_months:
+        - 2026-07
+        - 2026-08
+        - 2026-09
+        category_by_month:
+        - category: groceries
+          label: Groceries
+          emoji: 🛒
+          values:
+          - 290.0
+          - 320.0
+          - 290.0
+        top_merchants:
+        - merchant: Tesco
+          category: groceries
+          emoji: 🛒
+          amount: 540.0
+          count: 21
+        subscriptions:
+          monthly_total: 37.98
+          annual_total: 455.76
+          items:
+          - merchant: Netflix
+            emoji: 📺
+            monthly_cost: 12.99
+            annual_cost: 155.88
+        unusual:
+        - id: tx_1
+          date: '2026-08-14'
+          merchant: Zara
+          category: shopping
+          emoji: 🛍️
+          amount: 240.0
+          typical: 35.0
+        patterns:
+          weekend_share: 0.42
+          weekday_share: 0.58
+          average_daily_spend: 55.4
+          biggest_weekday: Saturday
+          biggest_day: '2026-08-14'
+          biggest_day_amount: 310.0
+          by_weekday:
+          - weekday: Monday
+            amount: 420.0
+        insights:
+        - 'Groceries is your biggest spend: £900, 18% of the £5,100 you spent.'
     FinanceOverview:
       value:
         meta:

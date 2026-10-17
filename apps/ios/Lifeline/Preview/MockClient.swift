@@ -244,6 +244,7 @@ actor MockClient: LifelineClient {
 
     func financeOverview() async throws -> FinanceOverview { data.financeOverview }
     func financeSpending(month: String?) async throws -> SpendingResponse { data.spending }
+    func insights(months: Int) async throws -> SpendingInsights { SampleInsights.make(months: months) }
     func subscriptions() async throws -> SubscriptionsResponse { data.subscriptions }
     func bills() async throws -> BillsResponse { data.bills }
 

@@ -7,57 +7,48 @@ struct HabitsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Theme.Spacing.l) {
-                    switch state.phase {
-                    case let .loading(loading):
-                        LoadingStateView(state: loading)
-                    case let .failed(error):
-                        ErrorStateView(state: error, onRetry: actions.onRetry)
-                    case .ready:
-                        overallCard
-                        ForEach(state.factors) { FactorRow(factor: $0) }
-                    }
-                }
-                .padding(Theme.Spacing.l)
-            }
-            .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
-            .navigationTitle("Your money habits")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done", action: actions.onClose)
-                        .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
-                        .accessibilityIdentifier("habits.done")
-                }
+        SheetContainer(title: "Your money habits", closeIdentifier: "habits.done", onClose: actions.onClose) {
+            switch state.phase {
+            case let .loading(loading):
+                LoadingStateView(state: loading)
+            case let .failed(error):
+                ErrorStateView(state: error, onRetry: actions.onRetry)
+            case .ready:
+                overallCard
+                ForEach(state.factors) { FactorRow(factor: $0) }
             }
         }
+        .animation(Motion.standard(reduceMotion: reduceMotion), value: state)
+        .background(Theme.Palette.paper)
     }
 
     private var overallCard: some View {
-        GlassCard {
+        InkCard(shape: .hero, hero: true, padding: Theme.Spacing.xl) {
             VStack(spacing: Theme.Spacing.m) {
                 ScoreRing(score: state.overall)
-                    .frame(width: 140, height: 140)
+                    .frame(width: 148, height: 148)
                 if let band = state.overallBandText {
-                    Text(band).font(.headline)
+                    Text(band).font(.llTitle)
                 }
-                Text(state.windowText).font(.footnote).foregroundStyle(.secondary)
+                Text(state.windowText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    .multilineTextAlignment(.center)
                 if state.isSampleData { DemoDataBadge() }
             }
             .frame(maxWidth: .infinity)
         }
+        .padding(.trailing, Theme.heroShadow.width)
+        .padding(.bottom, Theme.heroShadow.height)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("habits.overall")
     }
 }
 
+/// Green when going well, orange for fine, pink for worth a look. Always paired with words.
 private func scoreColor(_ score: Int) -> Color {
     switch score {
-    case 70...: .green
-    case 40..<70: .orange
-    default: .red
+    case 70...: Theme.Palette.money
+    case 40..<70: Theme.Palette.home
+    default: Theme.Palette.health
     }
 }
 
@@ -67,17 +58,19 @@ private struct ScoreRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(.quaternary, lineWidth: 14)
+            Circle().stroke(Theme.Palette.rule, lineWidth: 16)
             Circle()
                 .trim(from: 0, to: CGFloat(score ?? 0) / 100)
-                .stroke(scoreColor(score ?? 0).gradient, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                .stroke(scoreColor(score ?? 0), style: StrokeStyle(lineWidth: 16, lineCap: .butt))
                 .rotationEffect(.degrees(-90))
                 .animation(Motion.standard(reduceMotion: reduceMotion), value: score)
+            Circle().strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline)
+            Circle().strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline).padding(16)
             VStack(spacing: 0) {
                 Text(score.map(String.init) ?? "-")
-                    .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.llHero)
                     .contentTransition(.numericText(value: Double(score ?? 0)))
-                Text("out of 100").font(.caption).foregroundStyle(.secondary)
+                Text("out of 100").font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -91,33 +84,26 @@ private struct FactorRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        GlassCard {
+        InkCard {
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(factor.label).font(.headline)
-                    Spacer()
-                    if let band = factor.bandText {
-                        Text(band).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                    Text(factor.label).font(.llBodyBold)
+                    Spacer(minLength: Theme.Spacing.s)
+                    if let band = factor.bandText, let score = factor.score {
+                        Chip(text: band, fill: scoreColor(score))
                     }
                 }
-                Text(factor.explainer).font(.subheadline).foregroundStyle(.secondary)
+                Text(factor.explainer).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let score = factor.score {
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.quaternary)
-                            Capsule()
-                                .fill(scoreColor(score).gradient)
-                                .frame(width: proxy.size.width * CGFloat(min(100, max(0, score))) / 100)
-                        }
-                    }
-                    .frame(height: 8)
-                    .animation(Motion.standard(reduceMotion: reduceMotion), value: score)
-                    .accessibilityHidden(true)
-                    Text(factor.scoreText).font(.footnote.monospacedDigit())
+                    InkProgressBar(value: Double(min(100, max(0, score))) / 100, color: scoreColor(score), height: 14)
+                        .animation(Motion.standard(reduceMotion: reduceMotion), value: score)
+                        .accessibilityHidden(true)
+                    Text(factor.scoreText).font(.llLabelBold.monospacedDigit())
                 } else if let reason = factor.reason {
-                    Label(reason, systemImage: "info.circle")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Label(reason, icon: .why)
+                        .font(.llLabel)
+                        .foregroundStyle(Theme.Palette.muted)
                 }
             }
         }

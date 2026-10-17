@@ -108,7 +108,8 @@ def test_mid_month_today_excludes_incomplete_month() -> None:
     assert hf.window.end == "2026-06-30"
     early = habit_factors(snap(main_txs()), date(2026, 6, 15))  # window Dec..May
     assert early.window.end == "2026-05-31"
-    assert early.factors[0].reason == "Not enough history yet"
+    assert early.window.months == 5 and early.window.note == "Based on your last 5 months"
+    assert early.factors[0].raw is not None
 
 
 def test_transfers_and_savings_not_spending() -> None:
@@ -135,15 +136,40 @@ def test_zero_spend() -> None:
     assert f["isa_concentration"].raw is not None
 
 
-def test_insufficient_history_and_shorter_window() -> None:
-    txs = [t for t in main_txs() if int(t.date[5:7]) >= 3]
-    f = {x.id: x for x in habit_factors(snap(txs), TODAY).factors}
+def test_short_history_uses_the_months_available() -> None:
+    txs = [t for t in main_txs() if int(t.date[5:7]) >= 3]  # Mar to Jun: 4 complete months
+    hf = habit_factors(snap(txs), TODAY)
+    assert hf.window.months == 4 and hf.window.note == "Based on your last 4 months"
+    f = {x.id: x for x in hf.factors}
+    assert f["savings_rate"].raw == pytest.approx((12000 - 4155) / 12000, abs=1e-3)  # 1110+1015*3 = 4155
+    assert f["runway_months"].raw == pytest.approx(3500 / (4155 / 4), abs=1e-3)
+    assert all(x.raw is not None for x in hf.factors)
+    full = habit_factors(snap(main_txs()), TODAY)
+    assert full.window.months == 6 and full.window.note is None
+
+
+def test_two_months_is_the_minimum() -> None:
+    two = [t for t in main_txs() if int(t.date[5:7]) >= 5]
+    hf = habit_factors(snap(two), TODAY)
+    assert hf.window.months == 2 and hf.window.note == "Based on your last 2 months"
+    assert {x.id: x for x in hf.factors}["savings_rate"].raw is not None
+    one = [t for t in main_txs() if int(t.date[5:7]) >= 6]
+    f = {x.id: x for x in habit_factors(snap(one), TODAY).factors}
     for n in FACTOR_IDS:
         if n == "isa_concentration":
             assert f[n].raw is not None
         else:
             assert f[n].raw is None and f[n].score is None and f[n].reason == "Not enough history yet"
-    ok = {x.id: x for x in habit_factors(snap(txs), TODAY, window_months=4).factors}
+
+
+def test_part_first_month_is_left_out() -> None:
+    txs = [t for t in main_txs() if int(t.date[5:7]) >= 3]
+    txs = [t for t in txs if not (t.date[5:7] == "03" and int(t.date[8:10]) < 15)]  # March starts on the 15th
+    assert habit_factors(snap(txs), TODAY).window.months == 3
+
+
+def test_shorter_requested_window() -> None:
+    ok = {x.id: x for x in habit_factors(snap(main_txs()), TODAY, window_months=4).factors}
     assert ok["savings_rate"].raw is not None
 
 

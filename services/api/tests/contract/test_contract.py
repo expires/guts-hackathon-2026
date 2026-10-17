@@ -29,6 +29,7 @@ TIER1 = {
     "listLives",
     "getFinanceOverview",
     "getFinanceSpending",
+    "getFinanceInsights",
     "listSubscriptions",
     "listBills",
     "listBudgets",
@@ -385,6 +386,8 @@ async def test_later_tier_ops_answer_inside_contract(
 FINANCE_GETS = [
     ("/v1/finance/overview", None),
     ("/v1/finance/spending", None),
+    ("/v1/finance/insights", None),
+    ("/v1/finance/insights", {"months": 3}),
     ("/v1/finance/subscriptions", None),
     ("/v1/finance/bills", None),
     ("/v1/finance/budgets", None),
