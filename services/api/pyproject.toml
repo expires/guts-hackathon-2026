@@ -1,0 +1,80 @@
+[project]
+name = "lifeline-api"
+version = "0.1.0"
+description = "Lifeline backend: data adapters, decision engine, life sim, API."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "httpx>=0.27",
+    "redis>=5.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "pyjwt[crypto]>=2.9",
+    "numpy>=2.0",
+    "pyyaml>=6.0",
+    "anthropic>=0.40",
+    "qrcode>=7.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.112",
+    "respx>=0.21",
+    "fakeredis>=2.25",
+    "openapi-core>=0.19",
+    "openapi-spec-validator>=0.7",
+    "jsonschema>=4.23",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-pyyaml",
+    "types-redis",
+    "aiosqlite>=0.20",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "lifeline_contracts",
+    "lifeline_api",
+    "lifeline_data",
+    "lifeline_engine",
+    "lifeline_sim",
+    "lifeline_explain",
+    "lifeline_eval",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "tier1: Tier 1 feature",
+    "tier2: Tier 2 feature",
+    "live: hits the real network (skipped by default)",
+]
+addopts = "-q -m 'not live and not tier1 and not tier2'"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S"]
+ignore = ["S101", "S311", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+files = ["lifeline_contracts", "lifeline_engine", "lifeline_eval", "lifeline_sim"]
+strict = true
