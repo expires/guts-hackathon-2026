@@ -53,6 +53,7 @@ from lifeline_explain.chat_tools import (
     source_key,
 )
 from lifeline_explain.config import ExplainSettings, has_api_key, load_settings
+from lifeline_explain.trade_off import TRADE_OFF_TOOLS, find_trade_offs, trade_off_facts, trade_off_sources
 from lifeline_explain.verifier import Found, extract_numbers, fact_matches
 
 log = logging.getLogger(__name__)
@@ -482,17 +483,24 @@ class Penny:
             return None, False, "Tool failed. Say you could not check this.", int((time.monotonic() - start) * 1000)
 
     def _register(self, tool: str, out: ToolOutput, state: TurnState) -> dict[str, Any]:
+        result = to_jsonable_python(out.result)
+        out_facts = list(out.facts)
+        out_sources = list(out.sources)
+        if tool in TRADE_OFF_TOOLS:
+            # ADR 0042: the engine's trade-off numbers become facts (tf_<move_id>_<key>) Penny may quote.
+            for move_id, tf in find_trade_offs(result):
+                out_facts += trade_off_facts(move_id, tf)
+                out_sources += trade_off_sources(tf)
         source_ids = [
             state.add_source(tool, ref, out.links[i] if i < len(out.links) else None)
-            for i, ref in enumerate(out.sources)
+            for i, ref in enumerate(out_sources)
         ]
         call_no = len(state.calls)
         facts = []
-        result = to_jsonable_python(out.result)
         state.tainted |= {abs(v) for v in _untrusted_numbers(result)}
         # Drop earlier text facts that a later result shows came from untrusted text.
         state.facts = [x for x in state.facts if not is_untrusted_text_fact(x.id, state.tainted, x.value)]
-        for f in out.facts:
+        for f in out_facts:
             if is_untrusted_text_fact(f.id, state.tainted, f.value):
                 log.info("penny: dropped fact %s (number from untrusted text)", f.id[:80])
                 continue

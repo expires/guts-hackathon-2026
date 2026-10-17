@@ -21,6 +21,7 @@ from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.next_move import NextMoveResponse
 from lifeline_explain.chat_tools import ToolInputError, ToolOutput, ToolSpec, source_key
+from lifeline_explain.trade_off import TRADE_OFF_TOOLS, attach_trade_offs
 
 NewsFn = Callable[[date, date, str], Awaitable[NewsResponse]]  # e.g. DataHub.news(start, end, topic)
 RatesFn = Callable[[date], Awaitable[RateDecisions]]  # e.g. DataHub.rate_decisions(today)
@@ -154,7 +155,12 @@ class EngineToolSet:
             result = await asyncio.to_thread(self._run_sync, name, inp)
         except (ValueError, KeyError) as exc:
             raise ToolInputError(str(exc)[:200] or "Invalid input") from None
-        return ToolOutput.of(result)
+        out = ToolOutput.of(result)
+        if name in TRADE_OFF_TOOLS and self.response is not None:
+            # ADR 0042: make sure each move's engine trade-off reaches the model (and so its facts).
+            moves = {m.id: m for m in [self.response.top, *self.response.runners_up]}
+            attach_trade_offs(out.result, moves)
+        return out
 
     def _life_id(self) -> str:
         return f"{self.life_id_prefix}_{uuid.uuid4().hex[:12]}"
@@ -162,6 +168,10 @@ class EngineToolSet:
     def _run_sync(self, name: str, inp: BaseModel) -> Any:
         et = self._et
         s, m, t = self.snapshot, self.macro, self.today
+        if name in TRADE_OFF_TOOLS and self.response is None:
+            from lifeline_engine.next_move import next_move
+
+            self.response = next_move(s, m, t, self.seed)  # same call the engine tool makes; reused this turn
         if name == "next_move":
             return et.tool_next_move(s, m, t, self.seed, response=self.response)
         if name == "test_move":

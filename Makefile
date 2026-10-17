@@ -8,7 +8,7 @@ COMPOSE := docker compose
 # CLI iOS builds never share Xcode GUI DerivedData (path is relative to $(IOS)).
 IOS_DD := .build/DerivedData
 
-.PHONY: ios-record-mock ios-device ios-playground help up down logs ps test test-stack lint fmt contract ios-gen ios-build ios-test ios-screens demo-seed secrets-scan dev
+.PHONY: ai-disclosure ios-record-mock ios-device ios-playground help up down logs ps test test-stack lint fmt contract ios-gen ios-build ios-test ios-screens demo-seed secrets-scan dev
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n",$$1,$$2}'
@@ -36,8 +36,15 @@ test: ## Python tests: unit, contract, integration (offline, recorded fixtures)
 test-stack: ## Contract tests against the running docker stack
 	cd $(API) && LIFELINE_BASE_URL=http://localhost:8000 uv run pytest tests/contract -q
 
-lint: ## ruff + mypy strict
+lint: ## ruff + mypy strict + AI disclosure copy in sync
 	cd $(API) && uv run ruff check . && uv run mypy
+	@cmp -s $(AI_DISCLOSURE) $(AI_DISCLOSURE_IOS) || (echo "AI disclosure out of sync: run make ai-disclosure" && exit 1)
+
+AI_DISCLOSURE = $(API)/lifeline_explain/ai_disclosure.json
+AI_DISCLOSURE_IOS = apps/ios/Lifeline/Features/You/Resources/AIDisclosure.json
+
+ai-disclosure: ## Copy the "How Penny uses AI" text (W5 source) into the iOS app
+	cp $(AI_DISCLOSURE) $(AI_DISCLOSURE_IOS)
 
 fmt: ## Auto-fix lint
 	cd $(API) && uv run ruff check --fix . && uv run ruff format .

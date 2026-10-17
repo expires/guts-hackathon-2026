@@ -2,6 +2,40 @@
 
 This document states where Penny uses a large language model (LLM), what stays deterministic, how the system checks LLM output, and what happens when the LLM fails.
 
+## How Penny uses AI
+
+This section is also shown in the app (You tab) and in the README. Source: `services/api/lifeline_explain/ai_disclosure.json`. A unit test keeps the two in step.
+
+### Where AI is used
+
+- An AI model (Claude, from Anthropic) rewords the text of game events and their outcomes.
+- It rewords the headline and the evidence lines on the Next Move card.
+- It writes the wording of Ask Penny answers. Penny gets every number from the engine's tools.
+- Lessons are fixed text. AI does not write them.
+- The app never calls the AI model. Only our server calls it.
+
+### What stays deterministic
+
+- Every number comes from your data, a public data source or the engine. AI never makes a number.
+- The engine ranks the moves and picks your Next Move. AI does not choose it.
+- The engine writes the trade-off of each move (What you give up). Penny can only say it in other words.
+- The game engine decides every event, outcome and money change. The same seed gives the same game.
+
+### How output is checked
+
+- A number verifier checks every number in AI text against the engine's facts. It also checks the unit: a money fact needs a £ sign and a percent fact needs a % sign. Code: services/api/lifeline_explain/verifier.py.
+- Verifier tests: services/api/tests/unit/explain/test_explain.py and services/api/tests/unit/explain/test_trade_off.py.
+- Golden tests ask Penny 30 fixed questions with a fake AI model and check each answer: services/api/tests/unit/explain/test_chat.py.
+- Prompt injection tests put hostile text in news headlines, merchant names and user messages. The model gets this text fenced as data. The tests check that it cannot change a rule or add a number. Same file: test_chat.py.
+
+### What happens when AI fails
+
+- No AI key, an AI error or a failed check: events, outcomes and the Next Move card show the engine's template text. The template text is complete and correct.
+- If an Ask Penny answer fails the number check, Penny gets one rewrite. If it fails again, Penny shows a summary of the tool facts, marked as not checked.
+- If the AI model is off, Penny shows the facts of your Next Move.
+- By default, each AI call stops after 12 seconds and an Ask Penny answer stops after 24 seconds. Then the fallback text shows.
+- A number that fails the check is never shown.
+
 ## Where AI is used
 
 The LLM rewrites wording only. It never decides an outcome, a number, a ranking or a recommendation.
@@ -104,6 +138,7 @@ Penny answers chat questions through engine tools. The LLM chooses which tool to
   - Count and duration facts never match a "%" or "£" number.
   - "one" and "none" before a unit word count as numbers. "nil" and "nought" count as 0.
 - News results carry no facts. Penny cannot cite a headline as a source for a number.
+- Trade-offs (ADR 0042): the engine writes each move's `trade_off`. The numbers in its points become facts with ids `tf_<move_id>_<key>`, so Penny may quote them. The system prompt (`penny-v4`) tells Penny to state the trade-off ("What you give up:") when she explains or recommends a move. Any other trade-off number fails the verifier.
 - Matching uses the same rules as the event verifier above.
 - A general-knowledge bubble may hold no number at all.
 - Verifier failure: the service asks the model for one rewrite. A second failure gives a template summary of the tool facts with `verified: false`.
