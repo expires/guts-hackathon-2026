@@ -1,6 +1,40 @@
 # STATUS
 
-Last update: 2026-10-17, **Tier 0 accepted**. Tier 1 gate in progress.
+## Needs Akshat (do these when back; nothing waits on them)
+
+- [ ] **URGENT: secrets in the public repo.** Branch `integration` (commit 31eaaa6) contains `services/api/data/private/aa298cec…/credentials.json` with Trading212 api_key/api_secret and Monzo access/refresh tokens, plus real Monzo history and a finance snapshot. Revoke the Trading212 key and the Monzo tokens now, purge the files from history (git filter-repo or BFG) and force-push. Our `.gitignore` now ignores `**/data/private/`, `**/data/cache/` and `**/credentials.json` (the old rule only matched the repo root); keep this on merge. Also check `services/api/tests/integration/test_live_data_flow.py` lines 26-27 (gitleaks hit).
+- [ ] **Yaffy's integration branch** (pushed 17:46): recon done (Insights feature). 15 files conflict with ours; credentials still in the branch. Merge plan: keep ours, re-add his route, client method and contract path, regenerate the contract and Xcode project. Waiting for your decision.
+- [ ] Phone installs: the phone is away. All UI work is checked on the simulator. Run `make ios-device` when the phone is back (Mock config) or the Demo config once Railway is up.
+- [ ] TrueLayer: disabled by your rule (sandbox has test banks only). No action unless you change that.
+- [ ] Monzo / Trading212: Yaffy's area. Untouched until you merge his branch. The onboarding buttons call `/v1/bank` and `/v1/connections` and show "unavailable" until then.
+- [ ] Sign in with Apple: needs the "Sign in with Apple" capability on team 472PHZCF99 in the Apple Developer portal (bundle `com.akshat.lifeline`). A free personal team cannot use it. Until then the app falls back to the demo sign-in.
+
+
+Last update: 2026-10-17 17:15, **Tier 0 accepted**. Tier 1 backend green; iOS fix pass and V4 in progress. Railway live.
+
+## Phone checkpoints
+
+| # | Time | App | Source | Features |
+|---|---|---|---|---|
+| 1 | 18:08 | Lifeline Dev (`com.akshat.lifeline.dev`, Railway) | last green snapshot 38faeaa | Design rebuild, UI fix pass, Next Move, Test it, Money home, Life, Guess my spend |
+
+- From 18:50 (ADR 0039): one app, **Lifeline** (`com.akshat.lifeline`, Railway). Installs only at milestones after V4: 1 Onboarding + Money empty state, 2 Ask Penny, 3 Same Life PvP, 4 Final. Or on "install now". Checkpoint 1's "Lifeline Dev" app can be deleted.
+- Railway runs in live mode: Money and Next Move show "Connect your money first" until onboarding (W6) lands.
+
+## Away plan progress (updated 18:40)
+
+| # | Item | State |
+|---|---|---|
+| 1 | UI fix pass + V4 (simulator) | W6 and W7 green on the simulator. **V4 running** (screenshots of every screen, your fix list) |
+| 2 | Railway | **Done.** https://api-production-15615.up.railway.app; 16 live, 6 unavailable, 0 mock (18 live locally with Guardian and MPC dates; Railway redeploy pending); Demo iOS config; GUARDIAN_API_KEY set there (stdin) |
+| — | No mock in Live (ADR 0027) | **Done** (data, sim, API, iOS "Unavailable" state) |
+| 3 | Onboarding + accounts | Backend **done** (me, delete revokes all tokens, reset, logout, Apple sign-in, statement upload, manual entry, logged payments, encrypted at rest). iOS: W6 in progress |
+| 4 | News + Ask Penny | Backend **done** (Guardian + MPC live; tools; Penny with verifier; streaming; threads; chat rate limit). Railway timings: reaction 0.32 s warm (3.35 s cold), first bubble 7.7-12.4 s, all verified. iOS: W7 in progress |
+| 5 | Same Life PvP | Backend **done** (rooms, Redis pub/sub, server-owned seed and numbers, reconnect 10 min, 4-client test). iOS: W9 in progress |
+| 6 | On-device connectors | Backend **done** (reverse postcode live, health effect, log payment). iOS after features 3-5 |
+| 7 | Presentation mode | Client only. After step 6 |
+| — | Challenges + demo store | Backend **done** (challenge scoring per life; demo purchases labelled "Demo payment") |
+| — | Widget | Cut. StoreKit only if all else is green |
 
 ## Source of truth
 

@@ -72,3 +72,115 @@ feat: Next Move engine, Test it, Money tab API and spend prediction
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
 ```
+
+## 4. Live data mode, Railway deploy, design rebuild
+
+```
+feat: live data mode, Railway deploy, native design rebuild
+
+- data: DATA_MODE=live serves real data only; sources without real data
+  are "unavailable"; Adzuna, DVLA, DVSA, TrueLayer disabled (ADR 0027);
+  Companies House, Stat-Xplore and EPC live (16 live sources); key aliases
+- deploy: Railway project in the personal workspace, api + worker from one
+  image (ROLE), Postgres, Redis, health check, Demo iOS config (ADR 0028,
+  docs/DEPLOY.md)
+- engine: affordability-weighted regret; demo persona Priya Shah; card
+  states today's 5y vs 2y gap from live BoE rates (ADR 0020 amendment 2)
+- sim: no event repeats within 3 years (except mortgage deal end)
+- ios: native rebuild of the design handoff (tokens, fonts, icons, own tab
+  bar and sheets, no Liquid Glass), Mock build serves recorded engine
+  output (ADR 0026)
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+
+## 5. Tier 2 backend and Penny rename (sectioned commits, ADR 0041)
+
+```
+chore(repo): BOSS commit rule, Penny rename, tooling
+
+- CLAUDE.md: BOSS may commit on main, never push (ADR 0041)
+- product renamed to Penny, tagline "Your money, played forward." (ADR 0040)
+- Makefile, tools and agent definitions for parallel iOS workers (ADR 0037)
+- .env.example: Guardian, token encryption and rate limit settings
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+```
+feat(contracts): accounts, onboarding, Ask Penny, rooms, finance home
+
+- Me (with bank_name), statement import, manual input, connectors
+- chat models, SSE stream events, news and rate decisions
+- room player ready/connected state and WebSocket messages
+- GET /v1/finance/home with an explicit empty state
+- regenerated contracts/openapi.yaml
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+```
+feat(data): news, rate decision dates, statements, encryption
+
+- Guardian headlines (headline and link only) and BoE MPC dates
+- Monzo and Revolut statement parser
+- Fernet encryption for tokens and bank data in Postgres
+- reverse postcode lookup; live mode never serves mock values
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+```
+feat(engine,sim): Penny tools, Next Move sources, health effect
+
+- engine tools: cash flow projection, gov.uk 2026/27 facts table,
+  wrappers that emit ChatFacts
+- decision source count and context lines on the Next Move (ADR 0032)
+- sim: projection, health effect, play_scenario, event choices
+- no event repeats within 3 years
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+```
+feat(explain): Ask Penny with tools, verifier and streaming
+
+- Anthropic tool-use loop, max 5 tools, template fallback
+- unit-aware number verifier, number words, fenced untrusted text
+- prompt penny-v3 (product name Penny)
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+```
+feat(api): accounts, onboarding, chat stream, rooms, finance home
+
+- sign in (demo, Apple), account delete with token revocation
+- statement upload and manual input; encrypted snapshots in Postgres
+- POST /v1/chat/stream (reaction first, warm-up at startup)
+- Same Life PvP rooms over WebSocket; challenges with progress
+- GET /v1/finance/home; read 300/min, chat 6/min, Retry-After on 429
+- Railway health check config
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
+```
+docs: ADRs 0029-0041, status, verify reports, screenshots
+
+- decisions for news, Ask Penny, PvP, connectors, phone milestones,
+  Penny rename and BOSS commits
+- V2, V3, V4, V6 reports and fix-pass screenshots
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
+
