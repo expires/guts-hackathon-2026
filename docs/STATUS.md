@@ -1,5 +1,23 @@
 # STATUS
 
+## Direction V2 progress (23:32)
+
+Direction: `DIRECTION_V2.md` (ADRs 0046-0061). Feature freeze 09:30, coding closes 12:00 on 18 Oct.
+
+| Step | State |
+|---|---|
+| 1 Bugs 1-9, chat fixes | Built. Backend verified (V1 PASS, V2 fixes re-checked, V6 fixes in). iOS: V4 re-check running. |
+| 2 Four tabs, compact, Penny tab | Built. V4 re-check running. |
+| 3 Student onboarding, samples, judge mode | Built. V4 re-check running. |
+| 4 Student moves, verified facts, habit score | Built. All 70 facts verified against official sources (URL + checked date). |
+| 5 Play: lobby, Quiz, Same Decision, Quick Life, Circles | Built. V1 PASS. V6 re-check running (2 low findings fixed). |
+| ADR 0060 instant screens, Penny tools | Built. Tab switch ~0.5 s; Penny first bubble 1.4-2.6 s. |
+| 6 Life student paths, challenges | Built (paths, student challenges, old presets removed). |
+| 7 README, DEMO.md, V5 rehearsal | Not started. DEMO.md waits for the user's script. |
+
+- Railway still runs the 19:00 build; the phone has the 19:33 build. Deploy + install after V4 passes (Railway gets AUTH_RATE_LIMIT_PER_MINUTE=300, ADR 0055).
+- About 420 files uncommitted; they become per-feature commits after the verifiers pass.
+- Feature map with screenshots: docs/FEATURE_MAP.md and https://claude.ai/artifact/7AQVTwaKBUwS8UgYnT9agF.
 ## 18:45 update
 
 - Product renamed to **Penny** ("Your money, played forward.", ADR 0040). Railway API redeployed ("Penny API", /v1/finance/home live, read limit 300/min).
@@ -8,11 +26,18 @@
 - Crashes: 10 simulator crashes (worker simulators, 18:31-18:36) from one bug in W9's mock room server (exclusivity conflict). No crash reports on the iPhone. W9 is fixing it.
 - iOS build: red only in W7 Penny files (2 errors) and W9 MockRoomTransport (1). V4 fix pass: FAIL on j, k, l (sent to W6, helper).
 
+## Phone install 19:33 ("install now", not V4-checked)
+
+- App "Penny" (`com.akshat.lifeline`), Demo config, Railway. Checkpoint 2. Features: penny-rename, trade-offs, ask-penny, same-life, presentation-mode.
+- Known open: "Play yourself" form test fails (W6). V4 has not run on this build.
+- An old app "Lifeline" (`com.lifeline.app`, not ours) is also on the phone.
+
 ## Needs Akshat (do these when back; nothing waits on them)
+
 
 - [ ] Bank tokens: on `merge/yaffy`, Monzo and Trading212 tokens are plain files under `CREDENTIALS_DIR`. BOSS moves them to encrypted Postgres during the merge (README "Security" stays unticked until then).
 
-- [ ] Trade-off typical ranges (ADR 0042 amendment) were written from memory: early repayment charge 1% to 5%, energy exit fee £25 to £75 per fuel, savings notice 30 to 120 days. Check them or accept them as labelled assumptions.
+- [x] Facts: BOSS verifies every facts-table entry against official sources (URL and date stored per entry); only facts with no official source are flagged here.
 
 - [ ] **URGENT: secrets in the public repo.** Branch `integration` (commit 31eaaa6) contains `services/api/data/private/aa298cec…/credentials.json` with Trading212 api_key/api_secret and Monzo access/refresh tokens, plus real Monzo history and a finance snapshot. Revoke the Trading212 key and the Monzo tokens now, purge the files from history (git filter-repo or BFG) and force-push. Our `.gitignore` now ignores `**/data/private/`, `**/data/cache/` and `**/credentials.json` (the old rule only matched the repo root); keep this on merge. Also check `services/api/tests/integration/test_live_data_flow.py` lines 26-27 (gitleaks hit).
 - [ ] **Named user Yaffy (ADR 0043):** send his age, his situation (student or working), his city, and his consent to show his real Monzo and Trading212 data on stage. Until then README shows placeholders and the demo uses Priya.
