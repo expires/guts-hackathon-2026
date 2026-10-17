@@ -135,6 +135,44 @@ enum ChartHelpCatalogue {
     )
 }
 
+extension ChartHelpCatalogue {
+    static let friendsLeaderboard = ChartHelp(
+        id: "friendsLeaderboard",
+        title: "Friends and scores",
+        caption: "Scores run from 0 to 100 and come from your money habits, not how much you have.",
+        whatItShows: "You and your friends in order of your overall money habits score. Each bar is a score out of 100.",
+        howToRead: "A longer bar is a higher score. The line under a name says how far ahead or behind you they are, in points.",
+        whatItMeansForYou: "It is a friendly way to compare habits like saving and steady spending. Nobody sees amounts, balances or what anyone bought."
+    )
+
+    static let growthIndex = ChartHelp(
+        id: "growthIndex",
+        title: "Growth index",
+        caption: "Everyone starts at 100. 112 means that investment mix grew by 12%. It never shows amounts.",
+        whatItShows: "How each person's current investment mix would have grown over the same stretch of the past, with the start set to 100.",
+        howToRead: "Compare the numbers. 100 is the start. 150 means the mix grew by half. A number below 100 means it lost value over that stretch.",
+        whatItMeansForYou: "It lets you compare how mixes behaved without showing how much anyone has. It looks at the past and is not a forecast."
+    )
+
+    static let friendFactors = ChartHelp(
+        id: "friendFactors",
+        title: "Habit factors",
+        caption: "Each bar is one habit scored out of 100. A fuller bar means a stronger habit.",
+        whatItShows: "The separate habits behind this person's overall score, like saving and steady spending. A habit with no bar did not have enough data yet.",
+        howToRead: "Read the habit name, then the bar. Green is going well, orange is fine, pink is worth a look.",
+        whatItMeansForYou: "It shows where each of you is strong. It is a summary of recent habits, not a grade of a person."
+    )
+
+    static let friendMix = ChartHelp(
+        id: "friendMix",
+        title: "Investment mix",
+        caption: "Each slice of the ring is a share of their investments. Bigger slice, bigger share.",
+        whatItShows: "How this person's investments are split between kinds of holdings, as percentages. They chose to share it.",
+        howToRead: "Match each colour to the list under the ring. The percentages add up to 100. It never shows how much money is in each.",
+        whatItMeansForYou: "It shows how spread out their investments are. It is a percentage split only, with no amounts."
+    )
+}
+
 /// One line under a chart: how to read it. Selectable by VoiceOver like any text.
 struct ChartCaption: View {
     let help: ChartHelp
@@ -209,7 +247,6 @@ struct ChartExplainerSheet: View {
             section("How to read it", help.howToRead, id: "read")
             section("What it means for you", help.whatItMeansForYou, id: "means")
         }
-        .accessibilityIdentifier("chart.explainer.\(help.id)")
     }
 
     private func section(_ title: String, _ text: String, id: String) -> some View {

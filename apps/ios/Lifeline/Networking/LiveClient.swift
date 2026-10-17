@@ -241,6 +241,32 @@ struct LiveClient: LifelineClient {
         try await call { try await client.postIsaScenarios(body: .json(query)).ok.body.json }
     }
 
+    // MARK: Friends
+
+    func leaderboard() async throws -> Leaderboard {
+        try await call { try await client.getLeaderboard().ok.body.json }
+    }
+
+    func createFriendInvite(rotate: Bool) async throws -> InviteCode {
+        try await call { try await client.createFriendInvite(query: .init(rotate: rotate)).ok.body.json }
+    }
+
+    func joinFriend(code: String) async throws -> Leaderboard {
+        try await call { try await client.joinFriend(body: .json(.init(code: code))).ok.body.json }
+    }
+
+    func myFriendCard() async throws -> FriendCard {
+        try await call { try await client.getMyFriendCard().ok.body.json }
+    }
+
+    func updateMyFriendCard(_ settings: ShareSettings) async throws -> FriendCard {
+        try await call { try await client.updateMyFriendCard(body: .json(settings)).ok.body.json }
+    }
+
+    func removeFriend(id: String) async throws -> Leaderboard {
+        try await call { try await client.removeFriend(path: .init(friendId: id)).ok.body.json }
+    }
+
     // MARK: Bank
 
     func bankAuthLink() async throws -> BankAuthLink {

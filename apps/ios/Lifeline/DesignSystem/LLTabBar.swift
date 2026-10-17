@@ -7,6 +7,8 @@ struct LLTabBar: View {
         var id: String
         var title: String
         var icon: LLIcon
+        /// SF Symbol used instead of `icon` when set (for tabs with no drawn icon yet).
+        var symbol: String?
     }
 
     let items: [Item]
@@ -19,7 +21,14 @@ struct LLTabBar: View {
                 let isActive = item.id == selection
                 Button { onSelect(item.id) } label: {
                     VStack(spacing: Theme.Spacing.xs) {
-                        LLIconImage(item.icon, size: 28, active: isActive)
+                        if let symbol = item.symbol {
+                            Image(systemName: isActive ? symbol + ".fill" : symbol)
+                                .font(.system(size: 22, weight: .semibold))
+                                .frame(width: 28, height: 28)
+                                .accessibilityHidden(true)
+                        } else {
+                            LLIconImage(item.icon, size: 28, active: isActive)
+                        }
                         Text(item.title)
                             .font(isActive ? .llLabelBold : .llLabel)
                             .lineLimit(1)

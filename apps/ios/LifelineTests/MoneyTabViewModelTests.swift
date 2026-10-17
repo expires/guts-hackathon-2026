@@ -332,7 +332,7 @@ struct MoneyTabViewModelTests {
 
     @Test func appOpensOnMoneyTab() {
         #expect(AppTab.launch == .money)
-        #expect(AppTab.allCases.map(\.title) == ["Money", "Life", "Play", "You"])
+        #expect(AppTab.allCases.map(\.title) == ["Money", "Life", "Play", "Friends", "You"])
     }
 
     @Test func galleryCatalogHasUniqueIDsAndNewScreens() {

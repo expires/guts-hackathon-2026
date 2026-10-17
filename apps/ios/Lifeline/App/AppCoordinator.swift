@@ -65,7 +65,7 @@ final class AppCoordinator {
     /// A Play yourself form is waiting for the Monzo sign-in. The return goes there instead of Accounts.
     var bankFlowAwaitingReturn = false
     private(set) var bankFlowReturn: ConnectionReturn?
-    /// Room code from `lifeline://join/CODE`, for the Rooms screen to pick up.
+    /// Invite code from `lifeline://join/CODE`, for the Friends tab to pick up.
     private(set) var pendingJoinCode: String?
 
     func handle(_ url: URL) {
@@ -80,6 +80,11 @@ final class AppCoordinator {
             pendingReturn = result
             sheet = .accounts
         case let .join(code):
+            // Friend invite: open the Friends tab, which adds the friend.
+            if AppFeatures.friends {
+                selectedTab = .friends
+                sheet = nil
+            }
             pendingJoinCode = code
         }
     }

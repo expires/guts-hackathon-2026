@@ -2,15 +2,14 @@ import SwiftUI
 
 /// App tabs (ADR 0016), in this order. Money is the default.
 enum AppTab: String, Hashable, CaseIterable {
-    case money, life, play, you
-    // TODO(friends): add `case friends` here (and title/icon/content below) when the Friends tab lands.
-    // Gate it with `AppFeatures.friends` in `AppFeatures.visibleTabs`.
+    case money, life, play, friends, you
 
     var title: String {
         switch self {
         case .money: "Money"
         case .life: "Life"
         case .play: "Play"
+        case .friends: "Friends"
         case .you: "You"
         }
     }
@@ -21,10 +20,13 @@ enum AppTab: String, Hashable, CaseIterable {
         case .money: .tabMoney
         case .life: .tabLife
         case .play: .tabPlay
+        case .friends: .tabYou
         case .you: .tabYou
         }
     }
 
+    /// SF Symbol for tabs with no drawn icon yet.
+    var symbol: String? { self == .friends ? "person.2" : nil }
 
     /// The app always opens here. It does not restore the last tab (ADR 0016).
     static let launch: AppTab = .money
@@ -55,7 +57,7 @@ struct RootScreen: View {
             // Setup flows (character select, form, start year) hide the tab bar.
             if showsTabBar {
                 LLTabBar(
-                    items: AppFeatures.visibleTabs.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon) },
+                    items: AppFeatures.visibleTabs.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon, symbol: $0.symbol) },
                     selection: selection.rawValue
                 ) { id in
                     if let tab = AppTab(rawValue: id) { coordinator.selectedTab = tab }
@@ -110,6 +112,8 @@ struct RootScreen: View {
             NavigationStack {
                 PlayScreen(session: session) { coordinator.selectedTab = .life }
             }
+        case .friends:
+            NavigationStack { FriendsScreen(client: session.client) }
         case .you:
             NavigationStack { YouScreen(session: session) }
         }

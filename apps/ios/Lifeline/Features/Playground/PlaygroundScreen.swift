@@ -39,6 +39,20 @@ struct PlaygroundScreen: View {
         case "insights.none": InsightsView(state: Fixtures.Insights.noHistory).previewInNavigation()
         case "insights.loading": InsightsView(state: Fixtures.Insights.loading).previewInNavigation()
         case "insights.error": InsightsView(state: Fixtures.Insights.error).previewInNavigation()
+        case "friends.loaded": NavigationStack { FriendsView(state: Fixtures.Friends.loaded) }
+        case "friends.added": NavigationStack { FriendsView(state: Fixtures.Friends.added) }
+        case "friends.empty": NavigationStack { FriendsView(state: Fixtures.Friends.empty) }
+        case "friends.loading": NavigationStack { FriendsView(state: Fixtures.Friends.loading) }
+        case "friends.error": NavigationStack { FriendsView(state: Fixtures.Friends.error) }
+        case "friends.detail": FriendDetailView(detail: Fixtures.Friends.detailWithMix)
+        case "friends.detailNoMix": FriendDetailView(detail: Fixtures.Friends.detailNoMix)
+        case "friends.add": AddFriendView(state: Fixtures.Friends.add)
+        case "friends.addError": AddFriendView(state: Fixtures.Friends.addError)
+        case "friends.mine": WhatFriendsSeeView(state: Fixtures.Friends.mineHidden)
+        case "friends.mineShared": WhatFriendsSeeView(state: Fixtures.Friends.mineShared)
+        case "chartHelp.friendsLeaderboard": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.friendsLeaderboard) {} }
+        case "chartHelp.growthIndex": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.growthIndex) {} }
+        case "chartHelp.friendMix": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.friendMix) {} }
         case "select.ready": CharacterSelectView(state: Fixtures.CharacterSelect.ready)
         case "select.godOwned": CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned)
         case "select.loading": CharacterSelectView(state: Fixtures.CharacterSelect.loading)

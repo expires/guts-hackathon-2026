@@ -184,6 +184,22 @@ extension Fixtures {
                     .init(id: "insights.loading", title: "Insights", detail: "Loading"),
                     .init(id: "insights.error", title: "Insights", detail: "Offline"),
                 ]),
+                .init(id: "friends", title: "Friends", entries: [
+                    .init(id: "friends.loaded", title: "Friends tab", detail: "Leaderboard, sample data"),
+                    .init(id: "friends.added", title: "Friends tab", detail: "Friend just added"),
+                    .init(id: "friends.empty", title: "Friends tab", detail: "No friends yet"),
+                    .init(id: "friends.loading", title: "Friends tab", detail: "Loading"),
+                    .init(id: "friends.error", title: "Friends tab", detail: "Offline"),
+                    .init(id: "friends.detail", title: "Friend detail", detail: "Habits and shared mix"),
+                    .init(id: "friends.detailNoMix", title: "Friend detail", detail: "Mix not shared"),
+                    .init(id: "friends.add", title: "Add a friend", detail: "Code and entry field"),
+                    .init(id: "friends.addError", title: "Add a friend", detail: "Unknown code"),
+                    .init(id: "friends.mine", title: "What friends see", detail: "Mix hidden"),
+                    .init(id: "friends.mineShared", title: "What friends see", detail: "Mix shared"),
+                    .init(id: "chartHelp.friendsLeaderboard", title: "Chart explainer", detail: "Friends scores"),
+                    .init(id: "chartHelp.growthIndex", title: "Chart explainer", detail: "Growth index"),
+                    .init(id: "chartHelp.friendMix", title: "Chart explainer", detail: "Friend investment mix"),
+                ]),
             ]
         )
     }

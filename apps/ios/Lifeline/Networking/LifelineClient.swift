@@ -77,6 +77,12 @@ typealias IsaBacktestResponse = Components.Schemas.IsaBacktestResponse
 typealias IsaBacktestResult = Components.Schemas.IsaBacktestResult
 typealias IsaScenariosQuery = Components.Schemas.IsaScenariosQuery
 typealias IsaScenariosResult = Components.Schemas.IsaScenariosResult
+// Friends
+typealias Leaderboard = Components.Schemas.Leaderboard
+typealias LeaderboardEntry = Components.Schemas.LeaderboardEntry
+typealias FriendCard = Components.Schemas.FriendCard
+typealias InviteCode = Components.Schemas.InviteCode
+typealias ShareSettings = Components.Schemas.ShareSettings
 
 /// Providers the app can connect. Raw values match the contract path parameter.
 enum ProviderID: String, Sendable, CaseIterable, Hashable {
@@ -155,6 +161,14 @@ protocol LifelineClient: Sendable {
     func isaPeriods() async throws -> IsaPeriodsResponse
     func isaBacktest(_ query: IsaBacktestQuery) async throws -> IsaBacktestResponse
     func isaScenarios(_ query: IsaScenariosQuery) async throws -> IsaScenariosResult
+
+    // Friends: scores and percentages only, never amounts
+    func leaderboard() async throws -> Leaderboard
+    func createFriendInvite(rotate: Bool) async throws -> InviteCode
+    func joinFriend(code: String) async throws -> Leaderboard
+    func myFriendCard() async throws -> FriendCard
+    func updateMyFriendCard(_ settings: ShareSettings) async throws -> FriendCard
+    func removeFriend(id: String) async throws -> Leaderboard
 
     // Rooms
     func createRoom(_ request: CreateRoomRequest) async throws -> Room

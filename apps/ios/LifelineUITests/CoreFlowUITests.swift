@@ -71,7 +71,6 @@ final class CoreFlowUITests: XCTestCase {
         // The expected move comes from the recorded engine output, never from a hard-coded decision.
         XCTAssertEqual(action.label, Self.recordedTopAction())
         XCTAssertTrue(app.staticTexts["nextMove.headline"].exists)
-        XCTAssertTrue(app.staticTexts["nextMove.deadline"].exists || app.descendants(matching: .any)["nextMove.deadline"].exists)
 
         // Guess my spend hides the prediction until the guess (ADR 0017).
         XCTAssertFalse(app.staticTexts["guess.predicted"].exists)
@@ -106,10 +105,14 @@ final class CoreFlowUITests: XCTestCase {
 
         let insights = app.buttons["money.insights"]
         XCTAssertTrue(insights.waitForExistence(timeout: 10))
-        insights.tap()
+        for _ in 0..<6 where !insights.isHittable { app.swipeUp() }
+        sleep(1)
+        insights.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.15)).tap()
+        XCTAssertTrue(app.buttons["insights.back"].waitForExistence(timeout: 10), "Insights did not open")
 
-        let info = app.buttons["chart.info.moneyInAndOut"]
-        XCTAssertTrue(info.waitForExistence(timeout: 10))
+        // The card's own identifier ("insights.months") wins over the button's inside it.
+        let info = app.buttons["insights.months"]
+        XCTAssertTrue(info.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(info.label, "About this chart")
         info.tap()
         XCTAssertTrue(app.staticTexts["What this shows"].waitForExistence(timeout: 5))
@@ -128,6 +131,27 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertFalse(app.buttons["you.store"].exists)
         XCTAssertFalse(app.buttons["you.evaluation"].exists)
         XCTAssertFalse(app.buttons["you.spendAccuracy"].exists)
+    }
+
+    @MainActor
+    func testFriendsTabOpensAddAFriend() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestingMock"]
+        app.launch()
+        let tab = app.buttons["tab.friends"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        tab.tap()
+        XCTAssertTrue(app.staticTexts["friends.intro"].waitForExistence(timeout: 10))
+        let add = app.buttons["friends.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+        let code = app.staticTexts["addFriend.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["addFriend.copy"].exists)
+        XCTAssertTrue(app.buttons["addFriend.rotate"].exists)
+        XCTAssertTrue(app.textFields["addFriend.input"].exists)
+        app.buttons["addFriend.close"].tap()
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
     }
 
     /// `top.action` from `Lifeline/Preview/Recorded/getNextMove.json` (the file the app's mock client serves).

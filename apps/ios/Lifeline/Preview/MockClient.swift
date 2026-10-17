@@ -15,6 +15,11 @@ actor MockClient: LifelineClient {
     /// Guesses made in this session, by date (YYYY-MM-DD). One per day (ADR 0017).
     private var guessesByDate: [String: Double] = [:]
     private var planItems: [PlanItem] = []
+    private var friends: [FriendCard] = SampleFriends.initialFriends
+    private var myName = "You"
+    private var shareMix = false
+    private var inviteCode = SampleFriends.myCode
+    private let friendsOffline: Bool
     private var monzo: ProviderConnection?
     private var trading212: ProviderConnection?
     /// Monzo refuses the history import until the user approves in the app. This many syncs fail first.
@@ -23,7 +28,8 @@ actor MockClient: LifelineClient {
     private let data: MockData
 
     /// - Parameter data: `.contract` (default: tests, previews, Playground) or `.recorded` (the app's mock mode).
-    init(data: MockData = .contract, monzoSyncsBeforeApproval: Int = 0) {
+    init(data: MockData = .contract, monzoSyncsBeforeApproval: Int = 0, friendsOffline: Bool = false) {
+        self.friendsOffline = friendsOffline
         self.data = data
         self.monzoSyncsBeforeApproval = monzoSyncsBeforeApproval
     }
@@ -449,6 +455,50 @@ actor MockClient: LifelineClient {
     func isaPeriods() async throws -> IsaPeriodsResponse { SampleInvesting.periods }
     func isaBacktest(_ query: IsaBacktestQuery) async throws -> IsaBacktestResponse { SampleInvesting.backtest(query) }
     func isaScenarios(_ query: IsaScenariosQuery) async throws -> IsaScenariosResult { SampleInvesting.scenarios(query) }
+
+    // MARK: Friends (sample data, labelled mock)
+
+    func leaderboard() async throws -> Leaderboard {
+        if friendsOffline { throw APIError.network }
+        return SampleFriends.leaderboard(me: SampleFriends.me(name: myName, shareMix: shareMix), friends: friends, code: inviteCode)
+    }
+
+    func createFriendInvite(rotate: Bool) async throws -> InviteCode {
+        if rotate { inviteCode = Self.rotatedCode(after: inviteCode) }
+        return InviteCode(code: inviteCode)
+    }
+
+    func joinFriend(code: String) async throws -> Leaderboard {
+        let clean = code.uppercased().filter { !$0.isWhitespace }
+        if clean == inviteCode {
+            throw APIError.server(status: 400, code: "cannot_add_self", message: "That is your own code.", source: "friends")
+        }
+        guard let card = SampleFriends.joinable[clean] else {
+            throw APIError.server(status: 404, code: "invite_not_found", message: "No one has that code.", source: "friends")
+        }
+        if !friends.contains(where: { $0.friendId == card.friendId }) { friends.append(card) }
+        return try await leaderboard()
+    }
+
+    func myFriendCard() async throws -> FriendCard {
+        if friendsOffline { throw APIError.network }
+        return SampleFriends.me(name: myName, shareMix: shareMix)
+    }
+
+    func updateMyFriendCard(_ settings: ShareSettings) async throws -> FriendCard {
+        myName = settings.displayName
+        shareMix = settings.shareMix
+        return SampleFriends.me(name: myName, shareMix: shareMix)
+    }
+
+    func removeFriend(id: String) async throws -> Leaderboard {
+        friends.removeAll { $0.friendId == id }
+        return try await leaderboard()
+    }
+
+    private static func rotatedCode(after code: String) -> String {
+        code == "H3C9TD4V" ? SampleFriends.myCode : "H3C9TD4V"
+    }
 
     // MARK: Bank
 
