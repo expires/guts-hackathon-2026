@@ -26,6 +26,7 @@ MoveKind = Literal[
     "pay_off_debt",
     "build_emergency_fund",
     "cut_budget",
+    "spread_investments",
 ]
 
 
@@ -43,6 +44,17 @@ class MoveOption(_M):
     id: str = Field(description="e.g. fix_5y, fix_2y, tracker, keep, switch, cancel")
     label: str
     is_recommended: bool = False
+
+
+class TradeOff(_M):
+    """What the user gives up with this move. Engine-defined per move kind (ADR 0042), never LLM-written."""
+
+    summary: str = Field(
+        max_length=90, description="One line for the card, e.g. 'Less flexibility: a fee if you leave early'"
+    )
+    points: list[EvidencePoint] = Field(
+        min_length=1, max_length=4, description="Full trade-off for Why?. Every number in a point appears in its facts."
+    )
 
 
 class TestPeriod(_M):
@@ -68,6 +80,13 @@ class Move(_M):
     testable: bool
     test_period: TestPeriod | None = None
     concept_id: str | None = Field(default=None, description="Lesson for the 'Why?' button")
+    gain_kind: Literal["gbp_per_year", "months_of_cover"] = Field(
+        default="gbp_per_year", description="Gain as £ a year (impact_per_year) or months of cover (cover_months)"
+    )
+    cover_months: float | None = Field(default=None, ge=0, description="Months of costs covered after the move")
+    trade_off: TradeOff | None = Field(
+        default=None, description="What you give up. Always set by the engine (ADR 0042)"
+    )
 
 
 class NextMoveBacktest(_M):

@@ -242,7 +242,8 @@ def test_news_and_rate_dates_never_change_next_move(macro: MacroTable) -> None:
     import inspect
 
     snap = homeowner()
-    assert set(inspect.signature(next_move).parameters) == {"snapshot", "macro", "today", "seed"}
+    # holdings are user data (a decision input), not context.
+    assert set(inspect.signature(next_move).parameters) == {"snapshot", "macro", "today", "seed", "holdings"}
     plain = next_move(snap, macro, TODAY)
     with_context = plain.model_copy(update={"context_lines": ["Next Bank Rate decision: 5 November", "Headline"]})
     assert with_context.model_dump(exclude={"context_lines"}) == next_move(snap, macro, TODAY).model_dump(

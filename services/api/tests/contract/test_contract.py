@@ -507,6 +507,20 @@ async def test_next_move_flow(client: httpx.AsyncClient, auth: dict[str, str]) -
     assert any(i["move_id"] == top["id"] for i in plan.json()["items"])
 
 
+async def test_next_move_trade_offs(client: httpx.AsyncClient, auth: dict[str, str]) -> None:
+    """GUTS brief: every recommendation states its trade-off (ADR 0042)."""
+    r = await client.get("/v1/next-move", headers=auth)
+    assert r.status_code == 200
+    nm = r.json()
+    for move in [nm["top"], *nm["runners_up"]]:
+        t = move.get("trade_off")
+        assert t, f"{move['kind']} has no trade-off"
+        assert t["summary"] and len(t["summary"]) <= 90
+        assert 1 <= len(t["points"]) <= 4
+        if move["gain_kind"] == "months_of_cover":
+            assert move["cover_months"] is not None
+
+
 # ---------------- Tier 2: accounts, onboarding, connectors (ADR 0029) ----------------
 
 MONZO_CSV = (

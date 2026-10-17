@@ -696,6 +696,20 @@ def next_move_examples() -> dict[str, Any]:
         testable=True,
         test_period=period,
         concept_id="fixed-vs-variable",
+        trade_off=N.TradeOff(
+            summary="Less flexibility: a fee if you leave the deal early",
+            points=[
+                N.EvidencePoint(
+                    text="Leaving a 5-year fix early usually costs 1% to 5% of the balance.",
+                    facts={"erc_min_pct": 1, "erc_max_pct": 5},
+                ),
+                N.EvidencePoint(
+                    text="If rates fall, you keep paying 4.21% until 2031.",
+                    facts={"fix_5y_pct": 4.21, "fixed_until_year": 2031},
+                    source=boe5,
+                ),
+            ],
+        ),
     )
     subs = N.Move(
         id="mv_cancel_subs",
@@ -718,6 +732,10 @@ def next_move_examples() -> dict[str, Any]:
         ],
         testable=False,
         concept_id="subscriptions",
+        trade_off=N.TradeOff(
+            summary="You lose access to both services",
+            points=[N.EvidencePoint(text="Restarting later costs £22 a month again.", facts={"monthly": 22})],
+        ),
     )
     me = D.CharacterSpec(
         name="You",

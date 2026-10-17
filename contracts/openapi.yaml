@@ -4228,6 +4228,7 @@ components:
           - pay_off_debt
           - build_emergency_fund
           - cut_budget
+          - spread_investments
           type: string
         action:
           description: The move in a few words, e.g. 'Fix for 5 years'
@@ -4276,6 +4277,20 @@ components:
         concept_id:
           description: Lesson for the 'Why?' button
           type: string
+        gain_kind:
+          default: gbp_per_year
+          description: Gain as £ a year (impact_per_year) or months of cover (cover_months)
+          enum:
+          - gbp_per_year
+          - months_of_cover
+          type: string
+        cover_months:
+          description: Months of costs covered after the move
+          minimum: 0
+          type: number
+        trade_off:
+          description: What you give up. Always set by the engine (ADR 0042)
+          $ref: '#/components/schemas/TradeOff'
       required:
       - id
       - kind
@@ -4576,6 +4591,7 @@ components:
           - pay_off_debt
           - build_emergency_fund
           - cut_budget
+          - spread_investments
           type: string
         action:
           type: string
@@ -5410,6 +5426,25 @@ components:
       required:
       - tool
       - label
+      type: object
+    TradeOff:
+      additionalProperties: false
+      description: What the user gives up with this move. Engine-defined per move kind (ADR 0042), never LLM-written.
+      properties:
+        summary:
+          description: 'One line for the card, e.g. ''Less flexibility: a fee if you leave early'''
+          maxLength: 90
+          type: string
+        points:
+          description: Full trade-off for Why?. Every number in a point appears in its facts.
+          items:
+            $ref: '#/components/schemas/EvidencePoint'
+          maxItems: 4
+          minItems: 1
+          type: array
+      required:
+      - summary
+      - points
       type: object
     Transaction:
       additionalProperties: false
@@ -7228,6 +7263,22 @@ components:
             end: 2023
             label: 2021-2023 rate shock
           concept_id: fixed-vs-variable
+          gain_kind: gbp_per_year
+          trade_off:
+            summary: 'Less flexibility: a fee if you leave the deal early'
+            points:
+            - text: Leaving a 5-year fix early usually costs 1% to 5% of the balance.
+              facts:
+                erc_min_pct: 1.0
+                erc_max_pct: 5.0
+            - text: If rates fall, you keep paying 4.21% until 2031.
+              facts:
+                fix_5y_pct: 4.21
+                fixed_until_year: 2031.0
+              source:
+                source: boe
+                series_id: IUMBV42
+                status: live
         runners_up:
         - id: mv_cancel_subs
           kind: cancel_subscription
@@ -7259,6 +7310,13 @@ components:
             is_recommended: false
           testable: false
           concept_id: subscriptions
+          gain_kind: gbp_per_year
+          trade_off:
+            summary: You lose access to both services
+            points:
+            - text: Restarting later costs £22 a month again.
+              facts:
+                monthly: 22.0
         backtest:
           method: Walk-forward over past deal-end dates, 1995-2023
           n: 58

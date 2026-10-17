@@ -42,10 +42,13 @@ from lifeline_contracts.next_move import (
     NextMoveBacktest,
     NextMoveResponse,
     TestPeriod,
+    TradeOff,
 )
+from lifeline_engine import trade_offs
 from lifeline_engine.decision import _twins as nearest_twins
 from lifeline_engine.decision import candidate_starts, mortgage_interest
 from lifeline_engine.finance import monthly_payment
+from lifeline_engine.investments import Holding, concentration, spread_score
 from lifeline_engine.macro_access import latest_year, source_ref, value_or
 from lifeline_engine.money import dates, finance_meta
 from lifeline_engine.money.categorise import label as category_label
@@ -143,6 +146,7 @@ KIND_ORDER: tuple[MoveKind, ...] = (
     "cancel_subscription",
     "switch_subscription",
     "cut_budget",
+    "spread_investments",
 )
 
 # Sim template tag per move kind (lifeline_sim templates, ADR 0018). Every option of a move uses the same tag.
@@ -171,6 +175,7 @@ OPTION_LABEL: dict[str, str] = {
     "cancel": "Cancel it",
     "cut": "Cut back",
     "save": "Build a safety net",
+    "spread": "Spread your investments",
 }
 OPTION_NUMBERS: dict[str, dict[str, float]] = {"fix_5y": {"fix_years": 5.0}, "fix_2y": {"fix_years": 2.0}}
 
@@ -280,6 +285,7 @@ class Context:
     profile: DecisionProfile
     seed: int
     twins: list[Person] = field(default_factory=list)
+    holdings: list[Holding] = field(default_factory=list)
     _periods: dict[int, list[int]] = field(default_factory=dict)
 
     def periods(self, horizon: int) -> list[int]:
@@ -326,7 +332,9 @@ def _move(
     options: list[MoveOption],
     test_period: TestPeriod | None,
     concept_id: str,
+    trade_off: TradeOff,
     deadline: str | None = None,
+    cover_months: float | None = None,
 ) -> Candidate:
     # The recommended option's label is the action, word for word (V5).
     options = [o.model_copy(update={"label": action}) if o.is_recommended else o for o in options]
@@ -350,6 +358,9 @@ def _move(
         testable=test_period is not None,
         test_period=test_period,
         concept_id=concept_id,
+        gain_kind="gbp_per_year" if cover_months is None else "months_of_cover",
+        cover_months=None if cover_months is None else round(cover_months, 1),
+        trade_off=trade_off,
     )
     return Candidate(move=move, score=score(impact, worst, confidence))
 
@@ -642,6 +653,16 @@ def _mortgage(ctx: Context) -> Candidate | None:
         **alt_names,
     }
     e3 = _ev(f"{s3}.", f3, source_ref(ctx.macro, MacroKey.BANK_RATE, stress.start))
+    fix_years = int(OPTION_NUMBERS[best]["fix_years"]) if best in OPTION_NUMBERS else None
+    deal_start = dates.parse(deadline).year if deadline is not None else ctx.today.year
+    new_rate = {"fix_5y": q5, "fix_2y": q2}.get(best, tracker_now)
+    one_point = monthly_payment(m.balance, tracker_now + 1.0, m.years_left) - monthly_payment(
+        m.balance, tracker_now, m.years_left
+    )
+    trade = trade_offs.mortgage(
+        best, m.balance, new_rate, deal_start, fix_years, one_point, stress.text, stress.facts(),
+        _bank(ctx.macro, stress.start), _bank(ctx.macro, stress.end),
+    )
     sources = [
         *_refs(
             ctx.macro,
@@ -654,7 +675,7 @@ def _mortgage(ctx: Context) -> Candidate | None:
     return _move(
         ctx, kind, kind, action, headline, impact, worst, r.confidence, best_choice_label(r.confidence),
         [e1, e2, e3], sources, _options(best, [*MORTGAGE_OPTIONS, "keep"]), stress.test_period, "interest-rates",
-        deadline,
+        trade, deadline,
     )
 
 
@@ -719,7 +740,22 @@ def _savings(ctx: Context) -> Candidate | None:
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.SAVINGS_RATE, MacroKey.BANK_RATE]), _bank_ref(ctx.snapshot)],
         _options("switch", ["keep"]), stress.test_period, "compound-interest",
+        trade_offs.move_savings(best_now, biggest_savings_fall(ctx.macro, ctx.year)),
     )
+
+
+SAVINGS_FALL_YEARS = 20  # look back this many years for the largest fall
+
+
+def biggest_savings_fall(macro: MacroTable, upto: int) -> tuple[int, float, float] | None:
+    """(year, rate before, rate after) for the largest one-year fall in the top easy-access rate in the
+    SAVINGS_FALL_YEARS years up to `upto`. None when the rate never fell."""
+    years = [y for y in macro.years(MacroKey.BANK_RATE) if upto - SAVINGS_FALL_YEARS <= y <= upto]
+    falls = [(_best_savings(macro, y - 1) - _best_savings(macro, y), y) for y in years if y - 1 in years]
+    drop, year = max(falls, default=(0.0, 0))
+    if drop <= 0:
+        return None
+    return year, _best_savings(macro, year - 1), _best_savings(macro, year)
 
 
 # ---------- energy ----------
@@ -780,7 +816,8 @@ def _energy(ctx: Context) -> Candidate | None:
         "Your energy price can go up" if deadline is None else f"Your energy deal ends in {days} days",
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.ENERGY_TARIFF, MacroKey.ENERGY_PRICE_CHANGE]), _bank_ref(ctx.snapshot)],
-        _options("fix", ["keep"]), stress.test_period, "inflation", deadline,
+        _options("fix", ["keep"]), stress.test_period, "inflation",
+        trade_offs.switch_energy(e.monthly_cost, sum(1 for g in user if g < 0), len(user)), deadline,
     )
 
 
@@ -889,7 +926,23 @@ def _debt(ctx: Context) -> Candidate | None:
         impact, worst, conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.CARD_RATE, MacroKey.SAVINGS_RATE]), _bank_ref(ctx.snapshot)],
         _options("pay_off", ["keep"]), stress.test_period, "debt",
+        _debt_trade_off(ctx, from_savings, surplus, amount, sav, spend, sav_now, card_now),
     )
+
+
+def _debt_trade_off(
+    ctx: Context, from_savings: bool, surplus: float, amount: float, sav: float, spend: float, sav_now: float,
+    card_now: float,
+) -> TradeOff:
+    cash = max(0.0, liquid(ctx.snapshot))
+    if from_savings:
+        left = sav - amount
+        months = round(max(0.0, cash - amount) / spend, 1) if spend > 0 else 0.0
+        return trade_offs.pay_off_debt("savings", amount, 0.0, left, months, sav_now, card_now)
+    monthly = surplus if surplus > 0 else PAYDOWN_MONTHLY
+    months = round(cash / spend, 1) if spend > 0 else 0.0
+    return trade_offs.pay_off_debt("surplus" if surplus > 0 else "cut", amount, monthly, sav, months, sav_now,
+                                   card_now)
 
 
 # ---------- emergency fund ----------
@@ -950,7 +1003,24 @@ def _emergency(ctx: Context) -> Candidate | None:
         impact, min(0.0, stressed), conf, confidence_label(conf), [e1, e2, e3],
         [*_refs(ctx.macro, ctx.year, [MacroKey.CARD_RATE, MacroKey.UNEMPLOYMENT]), _bank_ref(ctx.snapshot)],
         _options("save", ["keep"]), stress.test_period, "emergency-fund",
+        _emergency_trade_off(ctx, gap), cover_months=float(EMERGENCY_MONTHS),
     )
+
+
+def stock_history(macro: MacroTable, upto: int) -> tuple[float, int, int] | None:
+    """Mean yearly UK share return over every year with data up to `upto`, and the first and last year."""
+    years = [y for y in macro.years(MacroKey.STOCK_RETURN) if y <= upto]
+    if not years:
+        return None
+    return float(np.mean([macro.value(MacroKey.STOCK_RETURN, y) for y in years])), years[0], years[-1]
+
+
+def _emergency_trade_off(ctx: Context, amount: float) -> TradeOff:
+    sav_now = savings_rate_pct(ctx.snapshot, ctx.today) or _savings_avg(ctx.macro, ctx.year)
+    hist = stock_history(ctx.macro, ctx.year)
+    if hist is None:
+        return trade_offs.emergency_fund(amount, sav_now, None, None, None)
+    return trade_offs.emergency_fund(amount, sav_now, *hist)
 
 
 # ---------- subscriptions ----------
@@ -986,6 +1056,7 @@ def _subscription(ctx: Context) -> Candidate | None:
         ctx, "cancel_subscription", f"cancel_subscription-{_slug(name)}", f"Cancel {name}",
         f"{name} put its price up", impact, impact, 1.0, SURE_LABEL, [e1, e2, e3],
         [_bank_ref(ctx.snapshot)], _options("cancel", ["keep"]), ctx.matched_test_period(), "budgeting",
+        trade_offs.cancel_subscription(name, s.amount, _PER[s.cadence], s.price_rise.to_amount),
     )
 
 
@@ -1038,6 +1109,48 @@ def _budget(ctx: Context) -> Candidate | None:
         f"You spent {gbp(excess)} more than usual on {name}", impact, 0.0, conf,
         f"You spent this little in {under} of the last {len(history)} months",
         [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("cut", ["keep"]), ctx.matched_test_period(), "budgeting",
+        trade_offs.cut_budget(name, excess, avg, len(history) - under, len(history)),
+    )
+
+
+# ---------- investments ----------
+
+
+def _spread(ctx: Context) -> Candidate | None:
+    """spread_investments: one ISA holding is more than CONCENTRATION_LIMIT_PCT of the value (investments.py)."""
+    from lifeline_engine.investments import CONCENTRATION_LIMIT_PCT, SPREAD_HORIZON
+
+    c = concentration(ctx.holdings)
+    if c is None:
+        return None
+    sc = spread_score(c.moved)
+    name = clean_name(c.name, "your largest holding")
+    single = trade_offs.TYPICAL["single_share_swing_pct"].low
+    broad = trade_offs.TYPICAL["broad_fund_swing_pct"].low
+    e1 = _ev(
+        f"{name} is {c.share_pct:g}% of your ISA's {gbp(c.total)}.",
+        {"share_pct": c.share_pct, "total": money_value(c.total)},
+        _bank_ref(ctx.snapshot),
+    )
+    e2 = _ev(
+        f"One company's shares usually swing about {single:g}% a year. A broad fund swings about {broad:g}%.",
+        {"single_pct": single, "broad_pct": broad},
+        trade_offs.typical_ref("single_share_swing_pct"),
+    )
+    e3 = _ev(
+        f"Moving {gbp(c.moved)} into a broad fund brings it to {CONCENTRATION_LIMIT_PCT:g}% and adds about "
+        f"{gbp(sc.impact_per_year)} a year to the typical result.",
+        {"moved": money_value(c.moved), "limit_pct": CONCENTRATION_LIMIT_PCT,
+         "impact": money_value(sc.impact_per_year)},
+    )
+    n = int(round(sc.confidence * 10))
+    return _move(
+        ctx, "spread_investments", f"spread_investments-{_slug(name)}", "Spread your investments",
+        f"{name} is {c.share_pct:g}% of your ISA", sc.impact_per_year, sc.worst_case_per_year, sc.confidence,
+        f"Spreading did better in about {n} of 10 likely {SPREAD_HORIZON}-year results",
+        [e1, e2, e3], [_bank_ref(ctx.snapshot), trade_offs.typical_ref("single_share_swing_pct")],
+        _options("spread", ["keep"]), None, "diversification",
+        trade_offs.spread_investments(name, c.share_pct, c.moved, CONCENTRATION_LIMIT_PCT),
     )
 
 
@@ -1058,6 +1171,7 @@ def _fallback(ctx: Context) -> Candidate:
         ctx, "build_emergency_fund", "build_emergency_fund", "Keep your safety net topped up",
         "Nothing urgent this month", 0.0, 0.0, 0.0, "Nothing urgent. Your money looks on track",
         evidence, [_bank_ref(ctx.snapshot)], _options("save", ["keep"]), None, "emergency-fund",
+        _emergency_trade_off(ctx, cash), cover_months=months,
     )
 
 
@@ -1069,6 +1183,7 @@ BUILDERS: tuple[Callable[[Context], Candidate | None], ...] = (
     _emergency,
     _subscription,
     _budget,
+    _spread,
 )
 
 
@@ -1082,16 +1197,24 @@ def candidates(ctx: Context) -> list[Candidate]:
     return sorted(out, key=key)
 
 
-def build_context(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> Context:
+def build_context(
+    snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0,
+    holdings: Sequence[Holding] | None = None,
+) -> Context:
     year = min(today.year, latest_year(macro))
     prof, _ = profile(snapshot, today)
     twins = nearest_twins(prof, macro, year)[:K_TWINS]
-    return Context(snapshot=snapshot, macro=macro, today=today, year=year, profile=prof, seed=seed, twins=twins)
+    return Context(snapshot=snapshot, macro=macro, today=today, year=year, profile=prof, seed=seed, twins=twins,
+                   holdings=list(holdings or []))
 
 
-def next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> NextMoveResponse:
-    """ONE top move and up to 2 runners-up. `generated_at` is a placeholder: the API sets server time."""
-    ctx = build_context(snapshot, macro, today, seed)
+def next_move(
+    snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0,
+    holdings: Sequence[Holding] | None = None,
+) -> NextMoveResponse:
+    """ONE top move and up to 2 runners-up. `generated_at` is a placeholder: the API sets server time.
+    `holdings`: ISA holdings (FinanceSnapshot has no holdings field yet); empty means no spread_investments move."""
+    ctx = build_context(snapshot, macro, today, seed, holdings)
     ranked = candidates(ctx)
     if not ranked:
         ranked = [_fallback(ctx)]
@@ -1178,6 +1301,8 @@ def option_policy(move: Move, option_id: str) -> dict[str, str]:
     tag key, so the event sets match across options. Mortgage moves also set the deal end year."""
     if option_id not in {o.id for o in move.options}:
         raise ValueError(f"unknown option {option_id} for move {move.id}")
+    if move.kind not in MOVE_TAG:
+        raise ValueError(f"move {move.id} cannot be tested")
     policy = {MOVE_TAG[move.kind]: option_id}
     if move.kind in ("fix_mortgage", "remortgage") and move.test_period is not None:
         policy[POLICY_DEAL_END] = str(move.test_period.start)
