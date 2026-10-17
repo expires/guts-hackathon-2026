@@ -1,0 +1,8 @@
+// Copy to Config/Local.xcconfig (git-ignored). Then run `make ios-gen`.
+// Your Apple Developer Team ID (Xcode > Settings > Accounts, or developer.apple.com > Membership).
+DEVELOPMENT_TEAM = ABCDE12345
+// A free personal team needs a unique bundle id.
+LIFELINE_BUNDLE_ID = com.yourname.lifeline
+// The phone cannot reach "localhost" on your Mac. Use your Mac's name on the local network.
+// Find it with: scutil --get LocalHostName   (then add .local)
+LIFELINE_API_BASE_URL = http:/$()/your-mac.local:8000
