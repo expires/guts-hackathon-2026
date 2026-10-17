@@ -159,7 +159,7 @@ def test_bad_payloads_rejected():
 
 @respx.mock
 async def test_market_adapters_fetch_validated(client, settings, no_sleep):
-    respx.get(url__startswith="https://api.frankfurter.app/").mock(
+    respx.get(url__startswith="https://api.frankfurter.dev/v1/").mock(
         return_value=httpx.Response(200, text=fx("frankfurter_gbpusd.json"))
     )
     respx.get(url__startswith="https://api.coingecko.com/").mock(
@@ -251,7 +251,7 @@ async def test_open_meteo_daily_splits_archive_and_forecast(client, settings, no
 
 @respx.mock
 async def test_new_adapter_retries_then_breaker_opens(client, settings, no_sleep):
-    route = respx.get(url__startswith="https://api.frankfurter.app/").mock(side_effect=httpx.ReadTimeout("slow"))
+    route = respx.get(url__startswith="https://api.frankfurter.dev/v1/").mock(side_effect=httpx.ReadTimeout("slow"))
     adapter = FrankfurterAdapter(client, settings, sleep=no_sleep)
     for _ in range(3):
         with pytest.raises(FetchError, match="timeout"):
@@ -302,7 +302,7 @@ async def test_bad_payload_counts_against_breaker(client, settings, no_sleep):
 # --- key-needing sources ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("sid", ["companieshouse", "epc", "statxplore", "adzuna", "dvla", "dvsamot"])
+@pytest.mark.parametrize("sid", ["companieshouse", "epc", "statxplore"])  # adzuna, dvla, dvsamot: cut (ADR 0046)
 async def test_missing_key_gives_labelled_mock(settings, client, clock, no_sleep, sid):
     hub = make_hub(settings, client, clock, no_sleep)
     st = next(s for s in await hub.statuses() if s.id == sid)
@@ -453,7 +453,7 @@ async def test_daily_weather_failure_falls_back_to_mock(settings, client, clock,
 
 @respx.mock
 async def test_macro_table_uses_tier1_sources(settings, client, clock, no_sleep):
-    respx.get(url__startswith="https://api.frankfurter.app/").mock(
+    respx.get(url__startswith="https://api.frankfurter.dev/v1/").mock(
         return_value=httpx.Response(200, text=fx("frankfurter_gbpusd.json"))
     )
     respx.get("https://api.octopus.energy/v1/products/").mock(

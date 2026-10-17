@@ -68,7 +68,7 @@ async def test_unexpected_error_with_url_is_redacted(settings, client, clock, no
     with respx.mock(assert_all_mocked=True):
         hub = _hub(settings, client, clock, no_sleep)
         await hub.series("adzuna", "advertised-salary")
-        st = next(s for s in await hub.statuses() if s.id == "adzuna")
+        st = await hub._get_state("adzuna")  # cut from /v1/sources (ADR 0046); internal state still recorded
     assert st.status == "mock" and st.last_error and SECRET not in st.last_error
     assert SECRET not in caplog.text
 
@@ -86,7 +86,7 @@ def test_worker_main_quiets_http_loggers(monkeypatch):
 @respx.mock
 async def test_invalid_body_is_not_reused(client, settings, no_sleep):
     good = {"rates": {"2026-10-16": {"USD": 1.33}}}
-    route = respx.get(url__startswith="https://api.frankfurter.app/").mock(
+    route = respx.get(url__startswith="https://api.frankfurter.dev/v1/").mock(
         side_effect=[httpx.Response(200, json={"rates": {"2026-10-16": {"USD": 50.0}}}), httpx.Response(200, json=good)]
     )
     adapter = FrankfurterAdapter(client, settings, sleep=no_sleep)

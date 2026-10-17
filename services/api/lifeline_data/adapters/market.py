@@ -11,7 +11,15 @@ from typing import Any, ClassVar
 from lifeline_contracts.observation import Observation
 from lifeline_data.base import Adapter, PayloadError, parse_number
 
-FRANKFURTER_URL = "https://api.frankfurter.app/{start}.."
+FRANKFURTER_URL = "https://api.frankfurter.dev/v1/{start}.."
+FRANKFURTER_LATEST_URL = "https://api.frankfurter.dev/v1/latest"
+# Currencies with ECB reference rates (Frankfurter /currencies, recorded 2026-10-17). A pair outside this set is
+# never fetched, so a bad request cannot mark the source as down.
+FX_CURRENCIES = frozenset({
+    "AUD", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR", "ILS", "INR", "ISK",
+    "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR",
+})
+FX_UNIT = "fx"  # units of `quote` per 1 `base`; no shared unit bound (IDR per GBP is about 20,000)
 COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
 YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
@@ -30,6 +38,32 @@ def parse_frankfurter(payload: str | dict[str, Any], quote: str = "USD") -> list
     if not isinstance(rates, dict) or not rates:
         raise PayloadError("frankfurter: no rates")
     return sorted((date.fromisoformat(day), parse_number(row[quote])) for day, row in rates.items())
+
+
+def fx_pair(base: str, quote: str) -> str | None:
+    """Series id for a supported pair, e.g. ('cny', 'GBP') -> 'CNYGBP'. None when either code is unsupported."""
+    b, q = base.strip().upper(), quote.strip().upper()
+    if b not in FX_CURRENCIES or q not in FX_CURRENCIES or b == q:
+        return None
+    return b + q
+
+
+def parse_frankfurter_latest(payload: str | dict[str, Any], base: str, quote: str) -> tuple[date, float]:
+    """/latest?from=BASE&to=QUOTE -> (ECB reference date, rate). The rate must be positive."""
+    data = _json(payload, "frankfurter")
+    if str(data.get("base", "")).upper() != base:
+        raise PayloadError("frankfurter: wrong base currency")
+    rates = data.get("rates")
+    if not isinstance(rates, dict) or quote not in rates:
+        raise PayloadError("frankfurter: no rate")
+    value = parse_number(rates[quote])
+    if value <= 0:
+        raise PayloadError("frankfurter: rate must be positive")
+    try:
+        day = date.fromisoformat(str(data.get("date")))
+    except ValueError as exc:
+        raise PayloadError("frankfurter: bad date") from exc
+    return day, value
 
 
 def parse_coingecko(payload: str | dict[str, Any]) -> list[tuple[date, float]]:
@@ -109,10 +143,18 @@ class FrankfurterAdapter(Adapter):
     bounds: ClassVar[dict[str, tuple[float, float]]] = {"GBPUSD": (0.5, 3.0)}
 
     async def fetch(self, series_id: str, region: str | None = None) -> list[Observation]:
-        if series_id.upper() != "GBPUSD":
+        """GBPUSD: daily history since 1999 (MacroTable). Any other supported pair (e.g. CNYGBP): latest rate."""
+        sid = series_id.upper()
+        if sid == "GBPUSD":
+            text = await self.get_text(FRANKFURTER_URL.format(start="1999-01-04"), {"from": "GBP", "to": "USD"})
+            return [self.obs("GBPUSD", d, v, "rate") for d, v in parse_frankfurter(text)]
+        pair = fx_pair(sid[:3], sid[3:]) if len(sid) == 6 else None
+        if pair is None:
             raise PayloadError(f"frankfurter: unknown series {series_id}")
-        text = await self.get_text(FRANKFURTER_URL.format(start="1999-01-04"), {"from": "GBP", "to": "USD"})
-        return [self.obs("GBPUSD", d, v, "rate") for d, v in parse_frankfurter(text)]
+        base, quote = pair[:3], pair[3:]
+        text = await self.get_text(FRANKFURTER_LATEST_URL, {"from": base, "to": quote})
+        day, value = parse_frankfurter_latest(text, base, quote)
+        return [self.obs(pair, day, value, FX_UNIT)]
 
 
 class CoinGeckoAdapter(Adapter):

@@ -69,7 +69,7 @@ SOURCES: dict[str, SourceInfo] = {
         SourceInfo(
             "frankfurter", "Frankfurter FX rates", "Global",
             "Exchange rates from Frankfurter, based on European Central Bank reference rates.",
-            "Free to use (ECB reference rates)", HOUR, tier=1, url="https://www.frankfurter.app/",
+            "Free to use (ECB reference rates)", 6 * HOUR, tier=1, url="https://frankfurter.dev/",
         ),
         SourceInfo(
             "coingecko", "CoinGecko", "Global",
@@ -220,6 +220,16 @@ def base_url(name: str, env: Mapping[str, str]) -> str:
     if parts.scheme != "https" or not parts.hostname or parts.query or parts.fragment or " " in raw:
         return default
     return raw.rstrip("/")
+
+
+# ADR 0046 / Direction V2: sources cut from the product. They stay in the registry (adapter code and tests keep
+# working) but /v1/sources does not list them and nothing in the product calls them.
+CUT_SOURCES: frozenset[str] = frozenset({"openbanking", "adzuna", "dvla", "dvsamot"})
+
+
+def served_sources() -> dict[str, SourceInfo]:
+    """Sources listed by /v1/sources: the registry minus CUT_SOURCES."""
+    return {sid: info for sid, info in SOURCES.items() if sid not in CUT_SOURCES}
 
 
 # ADR 0027: sources disabled by policy in live mode, with the ADR's reason.

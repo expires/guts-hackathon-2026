@@ -107,7 +107,7 @@
     {
       "id": "frankfurter",
       "name": "Frankfurter exchange rates",
-      "url": "https://www.frankfurter.app/",
+      "url": "https://frankfurter.dev/",
       "series": [
         "GBPUSD (daily from 1999-01-04)"
       ],

@@ -39,6 +39,7 @@ from lifeline_data.adapters import (
     PostcodesAdapter,
 )
 from lifeline_data.adapters.context import guardian_query
+from lifeline_data.adapters.market import fx_pair
 from lifeline_data.adapters.postcodes import LAT_RANGE, LON_RANGE, normalise_postcode
 from lifeline_data.base import Adapter, CircuitBreaker, PayloadError, utcnow
 from lifeline_data.cache import ObservationCache, SnapshotStore, UserSnapshotStore, obs_key
@@ -60,6 +61,7 @@ from lifeline_data.sources import (
     UNRELIABLE_IN_LIVE,
     missing_key_message,
     missing_keys,
+    served_sources,
 )
 
 log = logging.getLogger(__name__)
@@ -298,7 +300,7 @@ class DataHub:
 
     async def statuses(self) -> list[SourceStatus]:
         out: list[SourceStatus] = []
-        for sid, info in SOURCES.items():
+        for sid, info in served_sources().items():
             nd = self.no_data
             disabled = self._disabled_reason(sid)
             key_error = self._missing_key_error(sid)
@@ -528,6 +530,31 @@ class DataHub:
         except Exception:
             log.exception("news failed")
         return NewsResponse(status="unavailable", items=[])
+
+    @staticmethod
+    def _latest_real(observations: list[Observation]) -> tuple[float, date] | None:
+        """Newest UK-level value with status live or cached. Mock values never count (ADR 0060: never invented)."""
+        real = [o for o in observations if o.status in ("live", "cached") and o.region is None]
+        if not real:
+            return None
+        newest = max(real, key=lambda o: o.date)
+        return newest.value, newest.date
+
+    async def fx_rate(self, base: str, quote: str) -> tuple[float, date] | None:
+        """(units of `quote` per 1 `base`, ECB reference date) from Frankfurter, e.g. fx_rate("CNY", "GBP").
+        Cached 6 h (live -> Redis -> Postgres last-good). None for an unsupported code, the same currency
+        twice, or when no live or cached rate exists. Never raises."""
+        try:
+            pair = fx_pair(base, quote)
+        except AttributeError:
+            return None
+        if pair is None:
+            return None
+        return self._latest_real(await self.series("frankfurter", pair))
+
+    async def cpi(self) -> tuple[float, date] | None:
+        """(latest ONS CPI annual rate in percent, month) from series D7G7. None when only mock data exists."""
+        return self._latest_real(await self.series("ons", "D7G7"))
 
     async def rate_decisions(self, today: date | None = None) -> RateDecisions:
         """Bank of England MPC rate-decision dates. Never raises. Never mock (both modes)."""

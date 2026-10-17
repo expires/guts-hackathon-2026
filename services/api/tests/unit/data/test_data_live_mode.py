@@ -15,7 +15,7 @@ from lifeline_data.adapters.boe import BOE_URL
 from lifeline_data.finance import DEMO_SUBJECT
 from lifeline_data.hub import DataHub
 from lifeline_data.settings import DataSettings
-from lifeline_data.sources import DISABLED_IN_LIVE, SOURCES
+from lifeline_data.sources import CUT_SOURCES, DISABLED_IN_LIVE, SOURCES
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "data"
 
@@ -45,7 +45,9 @@ async def test_statuses_offline_live_mode_are_unavailable_never_mock(live_settin
     statuses = {s.id: s for s in await hub.statuses()}
     assert all(s.status == "unavailable" for s in statuses.values())
     for sid, reason in DISABLED_IN_LIVE.items():
-        assert statuses[sid].last_error == f"Disabled: {reason}"
+        if sid in statuses:
+            assert statuses[sid].last_error == f"Disabled: {reason}"
+    assert not CUT_SOURCES & set(statuses)
     assert statuses["companieshouse"].last_error.startswith("COMPANIES_HOUSE_KEY not set")
     assert statuses["yahoo"].last_error.startswith("Disabled: Blocked or timing out")
 

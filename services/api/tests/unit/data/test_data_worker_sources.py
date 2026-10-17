@@ -7,8 +7,9 @@ import asyncio
 import pytest
 
 from lifeline_data import worker
+from lifeline_data.hub import DataHub
 from lifeline_data.settings import DataSettings
-from lifeline_data.sources import SOURCES, missing_keys
+from lifeline_data.sources import CUT_SOURCES, SOURCES, missing_keys, served_sources
 
 SPEC_SOURCES = {
     "boe", "ons", "nomis", "landregistry", "postcodes", "frankfurter", "coingecko", "yahoo", "fred", "octopus",
@@ -22,6 +23,23 @@ def test_registry_lists_every_spec_source():
     for s in SOURCES.values():
         assert s.name and s.coverage and s.attribution and s.licence and s.ttl_seconds > 0
         assert s.needs_key == bool(s.key_env)
+
+
+SERVED = {
+    "boe", "ons", "nomis", "landregistry", "postcodes", "frankfurter", "coingecko", "yahoo", "fred", "octopus",
+    "carbonintensity", "openmeteo", "police", "environmentagency", "companieshouse", "statxplore", "epc",
+    "bankholidays", "guardian", "boe-mpc",
+}
+
+
+async def test_sources_endpoint_lists_only_served_sources():
+    """ADR 0046: Open Banking (TrueLayer), Adzuna, DVLA and DVSA MOT are cut from /v1/sources."""
+    assert {"openbanking", "adzuna", "dvla", "dvsamot"} == CUT_SOURCES
+    assert set(served_sources()) == SERVED
+    ids = [s.id for s in await DataHub(DataSettings(app_env="test"), env={}).statuses()]
+    assert set(ids) == SERVED and len(ids) == len(SERVED)
+    assert {"frankfurter", "ons", "boe", "guardian"} <= set(ids)
+    assert not any(word in i for i in ids for word in ("monzo", "trading212", "truelayer"))
 
 
 def test_missing_keys_reports_names_only():

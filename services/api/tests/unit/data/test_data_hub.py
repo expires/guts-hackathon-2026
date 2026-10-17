@@ -15,7 +15,7 @@ from lifeline_contracts.observation import SourceStatus
 from lifeline_data.adapters.boe import BOE_URL
 from lifeline_data.adapters.ons import ONS_BASE, PIPR_PAGE
 from lifeline_data.hub import DataHub
-from lifeline_data.sources import SOURCES
+from lifeline_data.sources import SOURCES, served_sources
 
 EMPTY_ENV: dict[str, str] = {}
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "data"
@@ -125,8 +125,6 @@ async def test_missing_key_gives_mock_status(settings):
     st = status_of(await hub.statuses(), "companieshouse")
     assert st.status == "mock" and st.needs_key
     assert st.last_error == "COMPANIES_HOUSE_KEY not set (or COMPANIES_HOUSE_API_KEY)"
-    adz = status_of(await hub.statuses(), "adzuna")
-    assert adz.last_error == "ADZUNA_APP_ID not set"
     assert await hub.series("companieshouse", "anything") == []
 
 
@@ -151,7 +149,7 @@ async def _offline_checks(settings):
     assert await hub.series("nomis", "NM_30_1", "london")
     assert await hub.lookup_postcode("SW1A 1AA") == {"region": "london", "town": "London", "postcode": "SW1A 1AA"}
     statuses = await hub.statuses()
-    assert {s.id for s in statuses} == set(SOURCES)
+    assert {s.id for s in statuses} == set(served_sources())
     assert all(s.status == "mock" for s in statuses)
     await hub.aclose()
 
@@ -259,7 +257,7 @@ def _mock_tier1_sources(fixture_text, router=respx):
     router.get(url__startswith="https://archive-api.open-meteo.com/").mock(
         return_value=httpx.Response(200, text=fx("openmeteo_archive_leeds.json"))
     )
-    router.get(url__startswith="https://api.frankfurter.app/").mock(
+    router.get(url__startswith="https://api.frankfurter.dev/v1/").mock(
         return_value=httpx.Response(200, text=fx("frankfurter_gbpusd.json"))
     )
     router.get(url__startswith="https://api.coingecko.com/").mock(
