@@ -1,4 +1,4 @@
-"""Load demo data into a running Lifeline API through its public HTTP contract.
+"""Load demo data into a running Penny API through its public HTTP contract.
 
 Run:  python -m seed.load            (inside the api container: `make demo-seed`)
       LIFELINE_BASE_URL=http://localhost:8000 uv run python -m seed.load   (from services/api)
@@ -361,7 +361,7 @@ def run(base_url: str, timeout_s: float, skip_ageing: bool, device_id: str, add_
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m seed.load", description="Load Lifeline demo data via the API.")
+    parser = argparse.ArgumentParser(prog="python -m seed.load", description="Load Penny demo data via the API.")
     parser.add_argument("--base-url", default=os.environ.get("LIFELINE_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument(
         "--device-id",

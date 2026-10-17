@@ -1,6 +1,6 @@
 # AI usage log
 
-How Claude Code built Lifeline. This log supports the event's AI-level declaration. The user sets the final AI level.
+How Claude Code built Penny (working name Lifeline). This log supports the event's AI-level declaration. The user sets the final AI level.
 
 AI use inside the product (LLM wording for events and lessons, with a number verifier) is described in `docs/RESPONSIBLE_AI.md`. This file covers AI use in development.
 
@@ -105,4 +105,4 @@ Add one row per milestone.
 
 ## AI-usage statement (draft)
 
-> We built Lifeline with Claude Code as the main engineering tool. A human wrote the product spec and the rules. One Claude Code session (the "BOSS") turned the spec into a shared contract, an ownership table and decision records. It then ran eight worker agents in parallel, each restricted to its own folders, and six verifier agents that had to pass before each milestone was accepted. Agents could not commit; a human read every diff and committed by hand. Inside the app, an LLM writes only event and lesson wording. The engine computes every number, and a verifier rejects any LLM text whose numbers do not match the engine, falling back to fixed templates. No AI output decides a game outcome, the Next Move or the Real-life Decision. When the engine disagreed with our own demo script, we changed the script, not the engine.
+> We built Penny with Claude Code as the main engineering tool. A human wrote the product spec and the rules. One Claude Code session (the "BOSS") turned the spec into a shared contract, an ownership table and decision records. It then ran eight worker agents in parallel, each restricted to its own folders, and six verifier agents that had to pass before each milestone was accepted. Agents could not commit; a human read every diff and committed by hand. Inside the app, an LLM writes only event and lesson wording. The engine computes every number, and a verifier rejects any LLM text whose numbers do not match the engine, falling back to fixed templates. No AI output decides a game outcome, the Next Move or the Real-life Decision. When the engine disagreed with our own demo script, we changed the script, not the engine.

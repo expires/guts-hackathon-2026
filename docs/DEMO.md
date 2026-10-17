@@ -124,7 +124,7 @@ These values change when W2 changes the engine. Re-run the check and update this
 
 ## Opening: Your next money move (about 2 minutes)
 
-Say: "Many sources. One answer: your next money move. Play it before you live it."
+Say: "Penny. Your money, played forward. Many sources. One answer: your next money move. Play it before you live it."
 
 | Step | Tap | API call | Say (from the check output) |
 |---|---|---|---|

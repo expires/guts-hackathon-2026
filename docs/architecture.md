@@ -1,6 +1,6 @@
 # Architecture
 
-Lifeline has three layers, as the brief requires: experience, decision and data integration. A FastAPI service joins them. This page describes the target design from `BUILD_SPEC.md` and the code paths that implement it.
+Penny has three layers, as the brief requires: experience, decision and data integration. A FastAPI service joins them. This page describes the target design from `BUILD_SPEC.md` and the code paths that implement it.
 
 ## System diagram
 
@@ -107,6 +107,8 @@ flowchart TB
 3. Postgres keeps the last good snapshot.
 4. The hub reduces observations to an annual `MacroTable`.
 5. Every value carries a status: `live`, `cached` or `mock`.
+
+Context-only sources (ADR 0030): Guardian headlines (`GET /v1/news`, headline and link only, no body text) and Bank of England MPC rate-decision dates (`GET /v1/rate-decisions`, the "Next Bank of England rate decision" line in Next Move "Why?"). They never feed the `MacroTable` or any engine result; a test asserts that `next_move` output is identical with and without them. Headlines are untrusted text (ADR 0034).
 
 A source that fails serves `cached` data. A source with no key, or with no cached data, serves labelled `mock` data. A source that excludes Scotland uses the UK value with the note "UK average used".
 

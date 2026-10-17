@@ -1,8 +1,12 @@
-# Lifeline
+# Penny
+
+_Your money, played forward._
 
 **Many sources. One answer: your next money move. Play it before you live it.**
 
-Lifeline answers one question: "What is my next money move?" It reads your money (sample bank data until bank connection ships), combines it with live UK data, and gives one move with its yearly value in £, its worst case and its evidence. "Test it" plays that move through a past shock in a life simulation before you make it in real life.
+Code names keep the earlier working name "Lifeline" (bundle ids, Xcode project, `LifelineClient`, Python packages). See ADR 0040.
+
+Penny answers one question: "What is my next money move?" It reads your money (sample bank data until bank connection ships), combines it with live UK data, and gives one move with its yearly value in £, its worst case and its evidence. "Test it" plays that move through a past shock in a life simulation before you make it in real life.
 
 The life simulation is a BitLife-style game on real UK data. You live a full financial life, birth to death. Each AGE tap is one year. Events come from real data for that person, place and year: Bank Rate, mortgage rates, house prices, pay, unemployment, inflation.
 
@@ -179,6 +183,8 @@ Machine-readable list: [`services/api/lifeline_data_attributions.json`](services
 | DVSA MOT History | MOT fail rates | GB | `DVSA_MOT_KEY` | OGL v3.0 | Contains public sector information from DVSA, OGL v3.0. |
 | DWP Stat-Xplore | Benefits | GB | `DWP_STATXPLORE_KEY` | OGL v3.0 | Source: DWP Stat-Xplore, OGL v3.0. |
 | EPC register | Home energy ratings | England and Wales | `EPC_KEY` | OGL v3.0 (plus Royal Mail and OS for addresses) | Contains public sector information licensed under the OGL v3.0. |
+| The Guardian Open Platform | **Context only** (ADR 0030): real headlines in the Life feed (`GET /v1/news`). Never a decision input | UK and world | `GUARDIAN_API_KEY` | Guardian Open Platform terms; headlines and links only, no body text | Powered by Guardian Open Platform (each headline links to the article). |
+| Bank of England MPC dates | **Context only** (ADR 0030): "Next Bank of England rate decision" line in Next Move "Why?" (`GET /v1/rate-decisions`). Never a decision input | UK | No | Bank of England terms | Source: Bank of England, upcoming MPC dates. |
 | Fixture bank data | Money tab and Next Move until bank OAuth | Synthetic personas | No | Our own synthetic data | Sample data. Not a real bank account. |
 | TrueLayer sandbox | "Play yourself" bank connection | UK sandbox | `OB_CLIENT_ID`, `OB_CLIENT_SECRET`, `OB_REDIRECT_URI` | TrueLayer developer terms | Bank connection powered by the TrueLayer sandbox. |
 

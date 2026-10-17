@@ -1,4 +1,4 @@
-# BUILD_SPEC.md — Lifeline (working name)
+# BUILD_SPEC.md: Penny
 
 You are the BOSS agent for a 30-hour solo hackathon build. Build the complete product below, end to end, with maximum parallelism and strict verification. Work autonomously. Do not ask questions unless a step is impossible without user input. If a decision is open, choose, record it in `docs/adr/`, and continue.
 
@@ -6,19 +6,19 @@ You are the BOSS agent for a 30-hour solo hackathon build. Build the complete pr
 
 ## 0. Product
 
-**Working name:** "Lifeline". Keep the name in one constant so it can change.
+**Name:** "Penny" (ADR 0040; earlier working name "Lifeline"). Tagline: "Your money, played forward." The name lives in one constant. Code names (bundle ids, modules, `LifelineClient`, `apps/ios/Lifeline`) keep "Lifeline".
 
 A BitLife-style iOS game about money. The player lives a full financial life, birth to death, on REAL UK data. Purpose: financial literacy for anyone, through play.
 
 **Hackathon brief (BlackRock / Aladdin):** "One app. Every source. One clear decision." Combine independent data sources into a clear, personalised decision. Go beyond a dashboard.
 
-**Pitch:** "Many sources. One answer: your next money move. Play it before you live it." (Earlier line: "Aladdin stress tests portfolios. We stress test a life.")
+**Pitch:** "Penny. Your money, played forward. Many sources. One answer: your next money move. Play it before you live it." (Earlier line: "Aladdin stress tests portfolios. We stress test a life.")
 
 ### The one question (TOP PRIORITY, ADR 0018)
 
 **The product answers ONE question: "What is my next money move?"** Everything else serves this.
 
-**Pitch:** "Many sources. One answer: your next money move. Play it before you live it."
+**Pitch:** "Penny. Your money, played forward. Many sources. One answer: your next money move. Play it before you live it."
 
 1. **Next Move engine** (W2, engine code, not LLM): candidate moves from the user's finance data + live sources: fix or remortgage, move savings to a better rate, cancel or switch subscriptions, switch energy deal, pay off expensive debt, build emergency fund, cut a budget category. Score each move in £ per year and risk (worst case), using twins and similar past periods. Return ONE top move: action, £ impact, confidence, 3 evidence points, sources with live/cached/mock status. Plus up to 2 runner-ups. Endpoint: `GET /v1/next-move`. Backtest where possible.
 2. **"Test it"** (W3 + W4): from the Next Move card, create a Life simulation of the user's real profile and play each option through the most relevant past period (e.g. 2021-2023 for mortgages). Return side-by-side outcomes. Endpoint: `POST /v1/next-move/test`.
