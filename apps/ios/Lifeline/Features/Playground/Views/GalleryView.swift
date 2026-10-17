@@ -14,7 +14,7 @@ struct GalleryView<Destination: View>: View {
                             NavigationLink(value: entry) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(entry.title)
-                                    Text(entry.detail).font(.caption).foregroundStyle(.secondary)
+                                    Text(entry.detail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                                 }
                                 .frame(minHeight: Theme.minTarget, alignment: .leading)
                             }

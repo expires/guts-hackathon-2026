@@ -4,7 +4,7 @@
 - Date: 2026-10-17
 
 ## Decision
-- The LLM (`claude-opus-5-5`, ADR 0007) rewords text only: `Event.text`, `Outcome.text`, and the Next Move `headline`, `action` and evidence `text`. `confidence_label`, numbers, options and sources never pass through it.
+- The LLM (`claude-opus-5-5`, ADR 0007) rewords text only: `Event.text`, `Outcome.text`, and the Next Move `headline` and evidence `text`. `action` (must equal the option label), `confidence_label`, numbers, options and sources never pass through it.
 - Allowed numbers in LLM output: engine facts, numbers already in the deterministic template text, the event year and age. Outcomes also allow `deltas.money`. Moves also allow impact, worst case, confidence, `days_left` and test-period years. The template text is engine output, so repeating its numbers adds nothing new.
 - Matching: the same value at the precision written in the text, or within 0.5%. Percentages match a fact stored as 4.1 or 0.041. Ratios ("7 in 10") match a share fact.
 - Any unmatched number rejects the text. Events and outcomes fall back to the whole template text. Moves fall back per field.

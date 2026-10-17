@@ -106,7 +106,7 @@ final class GuessSpendViewModel {
         let streakText = (streak == 1 ? "1 day in a row" : "\(streak) days in a row") + " with 70 points or more. Best: \(best)."
         guard let prediction else {
             return GuessSpendViewState(
-                phase: phase, date: today ?? "", dateText: "Today", isToday: true, stage: .guessing, reveal: nil,
+                phase: phase, initialGuess: initialGuess(guesses), dayChip: "Streak \(streak)", date: today ?? "", dateText: "Today", isToday: true, stage: .guessing, reveal: nil,
                 weatherText: nil, history: history, pointsTotal: guesses?.pointsTotal ?? 0, streak: streak,
                 bestStreak: best, streakText: streakText, accuracyText: nil,
                 isSampleData: guesses.map { FinanceMapping.isSample($0.meta) } ?? false,
@@ -117,6 +117,8 @@ final class GuessSpendViewModel {
         let dayText = FinanceMapping.shortDayText(prediction.date)
         return GuessSpendViewState(
             phase: phase,
+            initialGuess: initialGuess(guesses),
+            dayChip: "Streak \(streak)",
             date: prediction.date,
             dateText: isToday ? "Today, \(dayText)" : dayText,
             isToday: isToday,
@@ -138,7 +140,15 @@ final class GuessSpendViewModel {
         )
     }
 
+    /// The last guess, else £20 (a neutral start, not a model number).
+    static func initialGuess(_ guesses: GuessesResponse?) -> Double {
+        guesses?.items.last?.guess.rounded() ?? 20
+    }
+
     static func reveal(_ prediction: SpendPrediction, guess: Components.Schemas.GuessState) -> GuessSpendViewState.Reveal {
+        let top = max(prediction.high, guess.amount, prediction.actual ?? 0) * 1.1
+        let scaleMax = max(10, (top / 10).rounded(.up) * 10)
+        func fraction(_ value: Double) -> Double { min(1, max(0, value / scaleMax)) }
         let gap = guess.amount - prediction.predicted
         let comparison: String
         if abs(gap) < 0.005 {
@@ -172,7 +182,16 @@ final class GuessSpendViewModel {
             actualText: prediction.actual.map { "You spent \(FinanceMapping.pounds($0))." },
             points: guess.points,
             beatModel: guess.beatModel,
-            resultText: result
+            resultText: result,
+            rangeShortText: "\(Money.format(prediction.low)) – \(Money.format(prediction.high))",
+            scaleMax: scaleMax,
+            scaleMaxText: Money.format(scaleMax),
+            lowFraction: fraction(prediction.low),
+            highFraction: fraction(prediction.high),
+            predictedFraction: fraction(prediction.predicted),
+            guessFraction: fraction(guess.amount),
+            isGuessInRange: guess.amount >= prediction.low && guess.amount <= prediction.high,
+            baselineText: "Your normal day is \(FinanceMapping.pounds(prediction.baseline))."
         )
     }
 

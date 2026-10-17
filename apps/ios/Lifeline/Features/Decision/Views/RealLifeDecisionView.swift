@@ -6,8 +6,11 @@ struct RealLifeDecisionView: View {
     var actions: RealLifeDecisionActions = .noop
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                ScreenHeader(title: "Your real decision") {
+                    HeaderSquareButton(kind: .close, identifier: "decision.close", action: actions.onClose)
+                }
                 switch state.phase {
                 case let .loading(loading):
                     LoadingStateView(state: loading)
@@ -17,50 +20,48 @@ struct RealLifeDecisionView: View {
                     content
                 }
             }
-            .navigationTitle("Your real decision")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", action: actions.onClose)
-                }
-            }
+            .foregroundStyle(Theme.Palette.ink)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.m)
+            .padding(.bottom, Theme.Spacing.xxl)
         }
+        .paperBackground()
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            Text(state.question).font(.headline).foregroundStyle(.secondary)
+            Text(state.question).font(.llBodyBold).foregroundStyle(Theme.Palette.muted)
             Text(state.headline)
-                .font(.largeTitle.bold())
+                .font(.llHero)
                 .accessibilityIdentifier("decision.headline")
-            GlassCard {
+            InkCard {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                    Text(state.evidenceSentence).font(.title3.weight(.semibold))
-                    ProgressView(value: state.successRate)
-                        .tint(.green)
+                    Text(state.evidenceSentence).font(.llTitle)
+                    InkProgressBar(value: state.successRate, color: Theme.Palette.money)
+                        .accessibilityElement()
                         .accessibilityLabel("Success rate")
                         .accessibilityValue("\(Int((state.successRate * 100).rounded())) percent")
                     Text("Based on \(state.twinsCount) similar lives in \(state.periods.joined(separator: ", ")).")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(.llLabel)
+                        .foregroundStyle(Theme.Palette.muted)
                 }
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                 SectionTitle(text: "Why")
                 ForEach(state.reasons, id: \.self) { reason in
-                    Label(reason, systemImage: "checkmark.circle")
+                    Label(reason, icon: .check)
                 }
             }
             if !state.alternatives.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     SectionTitle(text: "Other options")
                     ForEach(state.alternatives) { alternative in
-                        HStack {
-                            Text(alternative.label)
-                            Spacer()
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(alternative.label).fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: Theme.Spacing.m)
                             Text("\(Int((alternative.successRate * 10).rounded())) in 10 did better")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                                .font(.llBody.monospacedDigit())
+                                .foregroundStyle(Theme.Palette.muted)
                         }
                         .frame(minHeight: Theme.minTarget)
                         .accessibilityElement(children: .combine)
@@ -69,11 +70,10 @@ struct RealLifeDecisionView: View {
             }
             SourcesFooter(sources: state.sources)
             Text(state.disclaimer)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(.llLabel)
+                .foregroundStyle(Theme.Palette.muted)
                 .accessibilityIdentifier("decision.disclaimer")
         }
-        .padding(Theme.Spacing.l)
     }
 }
 

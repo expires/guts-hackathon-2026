@@ -1,0 +1,66 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "month": "2026-10",
+  "total": 1795.83,
+  "categories": [
+    {
+      "category": "housing",
+      "label": "Housing",
+      "emoji": "🏠",
+      "amount": 992.34,
+      "share": 0.5526,
+      "transactions": 1,
+      "change_pct": 0.0
+    },
+    {
+      "category": "bills",
+      "label": "Bills",
+      "emoji": "💡",
+      "amount": 479.41,
+      "share": 0.267,
+      "transactions": 6,
+      "change_pct": -4.4
+    },
+    {
+      "category": "groceries",
+      "label": "Groceries",
+      "emoji": "🛒",
+      "amount": 236.76,
+      "share": 0.1318,
+      "transactions": 10,
+      "change_pct": -58.3
+    },
+    {
+      "category": "eating_out",
+      "label": "Eating out",
+      "emoji": "🍔",
+      "amount": 42.34,
+      "share": 0.0236,
+      "transactions": 6,
+      "change_pct": -57.2
+    },
+    {
+      "category": "subscriptions",
+      "label": "Subscriptions",
+      "emoji": "🔁",
+      "amount": 37.98,
+      "share": 0.0211,
+      "transactions": 2,
+      "change_pct": 0.0
+    },
+    {
+      "category": "shopping",
+      "label": "Shopping",
+      "emoji": "🛍️",
+      "amount": 7.0,
+      "share": 0.0039,
+      "transactions": 1,
+      "change_pct": -84.8
+    }
+  ]
+}

@@ -1,0 +1,3833 @@
+{
+  "concepts": [
+    {
+      "id": "inflation",
+      "title": "Inflation",
+      "emoji": "🎈",
+      "area": "money",
+      "summary": "Prices rise over time.",
+      "lesson": {
+        "concept_id": "inflation",
+        "title": "Prices creep up",
+        "chart": {
+          "kind": "line",
+          "title": "Price rises per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 3.0
+            },
+            {
+              "x": 2018.0,
+              "y": 2.1
+            },
+            {
+              "x": 2019.0,
+              "y": 1.3
+            },
+            {
+              "x": 2020.0,
+              "y": 0.6
+            },
+            {
+              "x": 2021.0,
+              "y": 5.4
+            },
+            {
+              "x": 2022.0,
+              "y": 10.5
+            },
+            {
+              "x": 2023.0,
+              "y": 4.0
+            },
+            {
+              "x": 2024.0,
+              "y": 2.5
+            },
+            {
+              "x": 2025.0,
+              "y": 3.4
+            },
+            {
+              "x": 2026.0,
+              "y": 3.1
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7G7",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "When prices rise, the same money buys less.",
+          "If your pay rises slower than prices, you are worse off."
+        ],
+        "quiz": {
+          "question": "If rent rises 4% and pay rises 2%, are you better off?",
+          "options": [
+            "Yes",
+            "No",
+            "Same"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "interest-rates",
+      "title": "Interest rates",
+      "emoji": "🏦",
+      "area": "home",
+      "summary": "The Bank Rate moves what loans cost.",
+      "lesson": {
+        "concept_id": "interest-rates",
+        "title": "Rates set the bill",
+        "chart": {
+          "kind": "line",
+          "title": "2-year fixed mortgage rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1.57
+            },
+            {
+              "x": 2018.0,
+              "y": 1.73
+            },
+            {
+              "x": 2019.0,
+              "y": 1.42
+            },
+            {
+              "x": 2020.0,
+              "y": 1.86
+            },
+            {
+              "x": 2021.0,
+              "y": 1.57
+            },
+            {
+              "x": 2022.0,
+              "y": 5.43
+            },
+            {
+              "x": 2023.0,
+              "y": 5.03
+            },
+            {
+              "x": 2024.0,
+              "y": 4.6
+            },
+            {
+              "x": 2025.0,
+              "y": 3.97
+            },
+            {
+              "x": 2026.0,
+              "y": 5.13
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBV34",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A fixed rate keeps your payment the same until the deal ends.",
+          "When the deal ends, you pay the rate of that year."
+        ],
+        "quiz": {
+          "question": "Your 2-year fix ends when rates are high. What happens to your payment?",
+          "options": [
+            "It goes up",
+            "It goes down",
+            "No change"
+          ],
+          "answer_index": 0
+        },
+        "personal": "Your mortgage rate is 4.42% and your fixed deal ends in 165 days."
+      }
+    },
+    {
+      "id": "emergency-fund",
+      "title": "Emergency fund",
+      "emoji": "🛟",
+      "area": "money",
+      "summary": "Cash put aside for surprises.",
+      "lesson": {
+        "concept_id": "emergency-fund",
+        "title": "Keep a cushion",
+        "chart": {
+          "kind": "line",
+          "title": "Bank Rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.5
+            },
+            {
+              "x": 2018.0,
+              "y": 0.75
+            },
+            {
+              "x": 2019.0,
+              "y": 0.75
+            },
+            {
+              "x": 2020.0,
+              "y": 0.1
+            },
+            {
+              "x": 2021.0,
+              "y": 0.25
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 5.25
+            },
+            {
+              "x": 2024.0,
+              "y": 4.75
+            },
+            {
+              "x": 2025.0,
+              "y": 3.75
+            },
+            {
+              "x": 2026.0,
+              "y": 3.75
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBEDR",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A few months of costs in cash stops a surprise bill turning into debt.",
+          "Card debt costs far more than savings earn."
+        ],
+        "quiz": {
+          "question": "A £500 bill arrives and you have no savings. What is the cheapest way to pay?",
+          "options": [
+            "Credit card",
+            "Payday loan",
+            "Savings next time"
+          ],
+          "answer_index": 2
+        },
+        "personal": "Your cash and savings cover 3.7 months of spending."
+      }
+    },
+    {
+      "id": "job-security",
+      "title": "Job security",
+      "emoji": "🧰",
+      "area": "work",
+      "summary": "Jobs are less safe when unemployment rises.",
+      "lesson": {
+        "concept_id": "job-security",
+        "title": "When jobs get scarce",
+        "chart": {
+          "kind": "line",
+          "title": "Unemployment rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.4
+            },
+            {
+              "x": 2018.0,
+              "y": 4.2
+            },
+            {
+              "x": 2019.0,
+              "y": 3.9
+            },
+            {
+              "x": 2020.0,
+              "y": 4.6
+            },
+            {
+              "x": 2021.0,
+              "y": 4.4
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 3.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.8
+            },
+            {
+              "x": 2025.0,
+              "y": 4.4
+            },
+            {
+              "x": 2026.0,
+              "y": 5.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_17_5",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "When unemployment rises, more people lose jobs and new jobs are harder to find.",
+          "Savings buy you time to find the right next job."
+        ],
+        "quiz": {
+          "question": "Unemployment is rising. What helps most?",
+          "options": [
+            "Spend more",
+            "Build savings",
+            "Borrow more"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "house-prices",
+      "title": "House prices",
+      "emoji": "🏘️",
+      "area": "home",
+      "summary": "Home values go down as well as up.",
+      "lesson": {
+        "concept_id": "house-prices",
+        "title": "Homes can fall in value",
+        "chart": {
+          "kind": "line",
+          "title": "House price change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.6
+            },
+            {
+              "x": 2018.0,
+              "y": 2.0
+            },
+            {
+              "x": 2019.0,
+              "y": 0.9
+            },
+            {
+              "x": 2020.0,
+              "y": 7.0
+            },
+            {
+              "x": 2021.0,
+              "y": 7.3
+            },
+            {
+              "x": 2022.0,
+              "y": 7.3
+            },
+            {
+              "x": 2023.0,
+              "y": -2.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.1
+            },
+            {
+              "x": 2025.0,
+              "y": 1.7
+            },
+            {
+              "x": 2026.0,
+              "y": 1.4
+            }
+          ],
+          "source": {
+            "source": "landregistry",
+            "series_id": "ukhpi-annual-change",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "House prices can fall for several years in a row.",
+          "You only lose money on a fall if you sell or must sell."
+        ],
+        "quiz": {
+          "question": "Prices fall 10% and you do not sell. Have you lost cash?",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "diversification",
+      "title": "Spreading risk",
+      "emoji": "🧺",
+      "area": "money",
+      "summary": "Do not put all your eggs in one basket.",
+      "lesson": {
+        "concept_id": "diversification",
+        "title": "Spread your bets",
+        "chart": {
+          "kind": "line",
+          "title": "Stock market return per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 13.1
+            },
+            {
+              "x": 2018.0,
+              "y": -9.5
+            },
+            {
+              "x": 2019.0,
+              "y": 19.2
+            },
+            {
+              "x": 2020.0,
+              "y": -9.8
+            },
+            {
+              "x": 2021.0,
+              "y": 18.3
+            },
+            {
+              "x": 2022.0,
+              "y": 0.3
+            },
+            {
+              "x": 2023.0,
+              "y": 7.9
+            },
+            {
+              "x": 2024.0,
+              "y": 9.5
+            },
+            {
+              "x": 2025.0,
+              "y": 15.0
+            },
+            {
+              "x": 2026.0,
+              "y": 6.0
+            }
+          ],
+          "source": {
+            "source": "yahoo",
+            "series_id": "^FTAS",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Shares can fall a lot in one year and recover over several.",
+          "People who sell after a crash often miss the recovery."
+        ],
+        "quiz": {
+          "question": "The market falls 30%. What did long-term investors usually do best by?",
+          "options": [
+            "Selling",
+            "Holding"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "insurance",
+      "title": "Insurance",
+      "emoji": "☂️",
+      "area": "place",
+      "summary": "Pay a little to avoid a big loss.",
+      "lesson": {
+        "concept_id": "insurance",
+        "title": "Small cost, big cover",
+        "chart": {
+          "kind": "line",
+          "title": "Burglaries per 1,000 homes",
+          "x_label": "Year",
+          "y_label": "per 1,000",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 16.0
+            },
+            {
+              "x": 2018.0,
+              "y": 15.0
+            },
+            {
+              "x": 2019.0,
+              "y": 14.0
+            },
+            {
+              "x": 2020.0,
+              "y": 12.0
+            },
+            {
+              "x": 2021.0,
+              "y": 11.0
+            },
+            {
+              "x": 2022.0,
+              "y": 11.0
+            },
+            {
+              "x": 2023.0,
+              "y": 10.0
+            },
+            {
+              "x": 2024.0,
+              "y": 10.0
+            },
+            {
+              "x": 2025.0,
+              "y": 10.0
+            },
+            {
+              "x": 2026.0,
+              "y": 10.0
+            }
+          ],
+          "source": {
+            "source": "police",
+            "series_id": "burglary",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Insurance turns a rare big loss into a small regular cost.",
+          "The excess is the part you still pay when you claim."
+        ],
+        "quiz": {
+          "question": "What is the excess on a policy?",
+          "options": [
+            "The part you pay",
+            "The part they pay",
+            "A bonus"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "budgeting",
+      "title": "Budgeting",
+      "emoji": "📒",
+      "area": "bills",
+      "summary": "Know what comes in and what goes out.",
+      "lesson": {
+        "concept_id": "budgeting",
+        "title": "Track the bills",
+        "chart": {
+          "kind": "line",
+          "title": "Energy price change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 6.3
+            },
+            {
+              "x": 2018.0,
+              "y": 8.1
+            },
+            {
+              "x": 2019.0,
+              "y": -1.6
+            },
+            {
+              "x": 2020.0,
+              "y": -8.5
+            },
+            {
+              "x": 2021.0,
+              "y": 22.7
+            },
+            {
+              "x": 2022.0,
+              "y": 88.7
+            },
+            {
+              "x": 2023.0,
+              "y": -21.5
+            },
+            {
+              "x": 2024.0,
+              "y": -6.8
+            },
+            {
+              "x": 2025.0,
+              "y": 2.5
+            },
+            {
+              "x": 2026.0,
+              "y": 6.0
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7GT",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Bills that rise every month add up over a year.",
+          "Cutting one regular cost often beats one big saving."
+        ],
+        "quiz": {
+          "question": "Which saves more over a year: £20 a month or £200 once?",
+          "options": [
+            "£20 a month",
+            "£200 once"
+          ],
+          "answer_index": 0
+        },
+        "personal": "You spend £38 a month on 2 subscriptions."
+      }
+    },
+    {
+      "id": "crypto-risk",
+      "title": "Crypto risk",
+      "emoji": "🪙",
+      "area": "money",
+      "summary": "Crypto can double or halve in a year.",
+      "lesson": {
+        "concept_id": "crypto-risk",
+        "title": "Wild swings",
+        "chart": {
+          "kind": "line",
+          "title": "Bitcoin return per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1330.0
+            },
+            {
+              "x": 2018.0,
+              "y": -73.0
+            },
+            {
+              "x": 2019.0,
+              "y": 92.0
+            },
+            {
+              "x": 2020.0,
+              "y": 305.0
+            },
+            {
+              "x": 2021.0,
+              "y": 60.0
+            },
+            {
+              "x": 2022.0,
+              "y": -64.0
+            },
+            {
+              "x": 2023.0,
+              "y": 155.0
+            },
+            {
+              "x": 2024.0,
+              "y": 121.0
+            },
+            {
+              "x": 2025.0,
+              "y": -5.0
+            },
+            {
+              "x": 2026.0,
+              "y": -22.93
+            }
+          ],
+          "source": {
+            "source": "coingecko",
+            "series_id": "bitcoin",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Crypto prices can rise or fall by more than half in one year.",
+          "Only put in money you can afford to lose."
+        ],
+        "quiz": {
+          "question": "How much should you put in something that can halve in a year?",
+          "options": [
+            "All my savings",
+            "Money I can lose",
+            "Borrowed money"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "compound-interest",
+      "title": "Compound interest",
+      "emoji": "🌱",
+      "area": "money",
+      "summary": "Interest earns interest.",
+      "lesson": {
+        "concept_id": "compound-interest",
+        "title": "Money that grows itself",
+        "chart": {
+          "kind": "line",
+          "title": "Bank Rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.5
+            },
+            {
+              "x": 2018.0,
+              "y": 0.75
+            },
+            {
+              "x": 2019.0,
+              "y": 0.75
+            },
+            {
+              "x": 2020.0,
+              "y": 0.1
+            },
+            {
+              "x": 2021.0,
+              "y": 0.25
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 5.25
+            },
+            {
+              "x": 2024.0,
+              "y": 4.75
+            },
+            {
+              "x": 2025.0,
+              "y": 3.75
+            },
+            {
+              "x": 2026.0,
+              "y": 3.75
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBEDR",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Interest added to savings earns interest the next year.",
+          "Debt compounds the same way, so it grows if you do not pay it."
+        ],
+        "quiz": {
+          "question": "£1,000 earns 5% a year. After two years is it more or less than £1,100?",
+          "options": [
+            "More",
+            "Less",
+            "Exactly"
+          ],
+          "answer_index": 0
+        },
+        "personal": "Your savings of £6,850 earned £86 in interest in the last year."
+      }
+    },
+    {
+      "id": "pensions",
+      "title": "Pensions",
+      "emoji": "👵",
+      "area": "state",
+      "summary": "Money for later, with a boost from your employer.",
+      "lesson": {
+        "concept_id": "pensions",
+        "title": "Future you",
+        "chart": {
+          "kind": "line",
+          "title": "10-year government bond yield",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1.2
+            },
+            {
+              "x": 2018.0,
+              "y": 1.3
+            },
+            {
+              "x": 2019.0,
+              "y": 0.8
+            },
+            {
+              "x": 2020.0,
+              "y": 0.2
+            },
+            {
+              "x": 2021.0,
+              "y": 1.0
+            },
+            {
+              "x": 2022.0,
+              "y": 3.7
+            },
+            {
+              "x": 2023.0,
+              "y": 3.5
+            },
+            {
+              "x": 2024.0,
+              "y": 4.6
+            },
+            {
+              "x": 2025.0,
+              "y": 4.5
+            },
+            {
+              "x": 2026.0,
+              "y": 4.5
+            }
+          ],
+          "source": {
+            "source": "fred",
+            "series_id": "IRLTLT01GBM156N",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Your employer adds to your pension when you pay in.",
+          "Money paid in early has the longest time to grow."
+        ],
+        "quiz": {
+          "question": "Who adds money to a workplace pension?",
+          "options": [
+            "Only you",
+            "You and your employer",
+            "Nobody"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "scams",
+      "title": "Scams",
+      "emoji": "🎣",
+      "area": "money",
+      "summary": "If it sounds too good to be true, it is.",
+      "lesson": {
+        "concept_id": "scams",
+        "title": "Stop and check",
+        "chart": {
+          "kind": "line",
+          "title": "Bank Rate (real returns are near this)",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.5
+            },
+            {
+              "x": 2018.0,
+              "y": 0.75
+            },
+            {
+              "x": 2019.0,
+              "y": 0.75
+            },
+            {
+              "x": 2020.0,
+              "y": 0.1
+            },
+            {
+              "x": 2021.0,
+              "y": 0.25
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 5.25
+            },
+            {
+              "x": 2024.0,
+              "y": 4.75
+            },
+            {
+              "x": 2025.0,
+              "y": 3.75
+            },
+            {
+              "x": 2026.0,
+              "y": 3.75
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBEDR",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Your bank will never ask you to move money to a safe account.",
+          "Returns far above normal rates are a warning sign."
+        ],
+        "quiz": {
+          "question": "A caller says your account is at risk and asks you to move money. What do you do?",
+          "options": [
+            "Move it",
+            "Hang up and call the bank",
+            "Give your PIN"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "subscriptions",
+      "title": "Subscriptions",
+      "emoji": "📺",
+      "area": "money",
+      "summary": "Small monthly costs add up.",
+      "lesson": {
+        "concept_id": "subscriptions",
+        "title": "The quiet drain",
+        "chart": {
+          "kind": "line",
+          "title": "Price rises per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 3.0
+            },
+            {
+              "x": 2018.0,
+              "y": 2.1
+            },
+            {
+              "x": 2019.0,
+              "y": 1.3
+            },
+            {
+              "x": 2020.0,
+              "y": 0.6
+            },
+            {
+              "x": 2021.0,
+              "y": 5.4
+            },
+            {
+              "x": 2022.0,
+              "y": 10.5
+            },
+            {
+              "x": 2023.0,
+              "y": 4.0
+            },
+            {
+              "x": 2024.0,
+              "y": 2.5
+            },
+            {
+              "x": 2025.0,
+              "y": 3.4
+            },
+            {
+              "x": 2026.0,
+              "y": 3.1
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7G7",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A £10 monthly subscription costs £120 a year.",
+          "Prices of subscriptions often rise faster than other prices, so check them each year."
+        ],
+        "quiz": {
+          "question": "You pay £8 a month for an app you never open. What does it cost in a year?",
+          "options": [
+            "£8",
+            "£96",
+            "£80"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "energy-bills",
+      "title": "Energy bills",
+      "emoji": "⚡",
+      "area": "bills",
+      "summary": "A fixed energy price trades a small extra cost for no surprises.",
+      "lesson": {
+        "concept_id": "energy-bills",
+        "title": "Fix or float",
+        "chart": {
+          "kind": "line",
+          "title": "Typical yearly energy bill",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1140.0
+            },
+            {
+              "x": 2018.0,
+              "y": 1180.0
+            },
+            {
+              "x": 2019.0,
+              "y": 1206.0
+            },
+            {
+              "x": 2020.0,
+              "y": 1118.0
+            },
+            {
+              "x": 2021.0,
+              "y": 1149.0
+            },
+            {
+              "x": 2022.0,
+              "y": 1930.0
+            },
+            {
+              "x": 2023.0,
+              "y": 2227.0
+            },
+            {
+              "x": 2024.0,
+              "y": 1726.0
+            },
+            {
+              "x": 2025.0,
+              "y": 1766.0
+            },
+            {
+              "x": 2026.0,
+              "y": 1715.95
+            }
+          ],
+          "source": {
+            "source": "octopus",
+            "series_id": "dual-fuel-typical-bill",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A fixed energy deal keeps your price the same even when the market jumps.",
+          "A fix often costs a little more than the standard price when prices are calm."
+        ],
+        "quiz": {
+          "question": "Energy prices are about to jump 50%. Which deal protects you?",
+          "options": [
+            "Standard price",
+            "A fixed deal"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "debt",
+      "title": "Debt",
+      "emoji": "💳",
+      "area": "money",
+      "summary": "Borrowing costs money every month.",
+      "lesson": {
+        "concept_id": "debt",
+        "title": "The cost of borrowing",
+        "chart": {
+          "kind": "line",
+          "title": "Bank Rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.5
+            },
+            {
+              "x": 2018.0,
+              "y": 0.75
+            },
+            {
+              "x": 2019.0,
+              "y": 0.75
+            },
+            {
+              "x": 2020.0,
+              "y": 0.1
+            },
+            {
+              "x": 2021.0,
+              "y": 0.25
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 5.25
+            },
+            {
+              "x": 2024.0,
+              "y": 4.75
+            },
+            {
+              "x": 2025.0,
+              "y": 3.75
+            },
+            {
+              "x": 2026.0,
+              "y": 3.75
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBEDR",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Card debt charges interest far above the Bank Rate.",
+          "Paying off expensive debt first saves the most."
+        ],
+        "quiz": {
+          "question": "You have a card at 20% and savings at 4%. What should you pay off first?",
+          "options": [
+            "The card",
+            "Nothing"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "depreciation",
+      "title": "Depreciation",
+      "emoji": "🚗",
+      "area": "car",
+      "summary": "Cars lose value every year you own them.",
+      "lesson": {
+        "concept_id": "depreciation",
+        "title": "Cars lose value",
+        "chart": {
+          "kind": "line",
+          "title": "Fuel price change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.7
+            },
+            {
+              "x": 2018.0,
+              "y": 3.4
+            },
+            {
+              "x": 2019.0,
+              "y": 1.0
+            },
+            {
+              "x": 2020.0,
+              "y": -8.3
+            },
+            {
+              "x": 2021.0,
+              "y": 26.8
+            },
+            {
+              "x": 2022.0,
+              "y": 11.5
+            },
+            {
+              "x": 2023.0,
+              "y": -10.8
+            },
+            {
+              "x": 2024.0,
+              "y": -5.0
+            },
+            {
+              "x": 2025.0,
+              "y": 0.9
+            },
+            {
+              "x": 2026.0,
+              "y": 23.0
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7IO",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A car loses value each year, and you also pay to run it.",
+          "The cheapest car is often the one you already own."
+        ],
+        "quiz": {
+          "question": "You buy a car for £10,000. What is it worth after five years?",
+          "options": [
+            "More",
+            "Less",
+            "The same"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "car-costs",
+      "title": "Running a car",
+      "emoji": "⛽",
+      "area": "car",
+      "summary": "Fuel, insurance and repairs cost more than the car.",
+      "lesson": {
+        "concept_id": "car-costs",
+        "title": "The real cost of a car",
+        "chart": {
+          "kind": "line",
+          "title": "Fuel price change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.7
+            },
+            {
+              "x": 2018.0,
+              "y": 3.4
+            },
+            {
+              "x": 2019.0,
+              "y": 1.0
+            },
+            {
+              "x": 2020.0,
+              "y": -8.3
+            },
+            {
+              "x": 2021.0,
+              "y": 26.8
+            },
+            {
+              "x": 2022.0,
+              "y": 11.5
+            },
+            {
+              "x": 2023.0,
+              "y": -10.8
+            },
+            {
+              "x": 2024.0,
+              "y": -5.0
+            },
+            {
+              "x": 2025.0,
+              "y": 0.9
+            },
+            {
+              "x": 2026.0,
+              "y": 23.0
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7IO",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Fuel, insurance, tax and repairs often cost more each year than the car loses in value.",
+          "Shopping around at renewal can cut insurance by a lot."
+        ],
+        "quiz": {
+          "question": "Your car insurance renews 30% higher. What should you do first?",
+          "options": [
+            "Pay it",
+            "Get other quotes"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "household-costs",
+      "title": "Household costs",
+      "emoji": "👨‍👩‍👧",
+      "area": "family",
+      "summary": "A partner or a child changes the budget.",
+      "lesson": {
+        "concept_id": "household-costs",
+        "title": "More people, more costs",
+        "chart": {
+          "kind": "line",
+          "title": "Price rises per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 3.0
+            },
+            {
+              "x": 2018.0,
+              "y": 2.1
+            },
+            {
+              "x": 2019.0,
+              "y": 1.3
+            },
+            {
+              "x": 2020.0,
+              "y": 0.6
+            },
+            {
+              "x": 2021.0,
+              "y": 5.4
+            },
+            {
+              "x": 2022.0,
+              "y": 10.5
+            },
+            {
+              "x": 2023.0,
+              "y": 4.0
+            },
+            {
+              "x": 2024.0,
+              "y": 2.5
+            },
+            {
+              "x": 2025.0,
+              "y": 3.4
+            },
+            {
+              "x": 2026.0,
+              "y": 3.1
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7G7",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A child adds hundreds of pounds a month to household costs.",
+          "Two incomes in one home can share rent and bills."
+        ],
+        "quiz": {
+          "question": "Which usually lowers the cost per person of a home?",
+          "options": [
+            "Living alone",
+            "Sharing it"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "childcare",
+      "title": "Childcare",
+      "emoji": "🧸",
+      "area": "family",
+      "summary": "Childcare can cost as much as rent.",
+      "lesson": {
+        "concept_id": "childcare",
+        "title": "The cost of care",
+        "chart": {
+          "kind": "line",
+          "title": "Price rises per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 3.0
+            },
+            {
+              "x": 2018.0,
+              "y": 2.1
+            },
+            {
+              "x": 2019.0,
+              "y": 1.3
+            },
+            {
+              "x": 2020.0,
+              "y": 0.6
+            },
+            {
+              "x": 2021.0,
+              "y": 5.4
+            },
+            {
+              "x": 2022.0,
+              "y": 10.5
+            },
+            {
+              "x": 2023.0,
+              "y": 4.0
+            },
+            {
+              "x": 2024.0,
+              "y": 2.5
+            },
+            {
+              "x": 2025.0,
+              "y": 3.4
+            },
+            {
+              "x": 2026.0,
+              "y": 3.1
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7G7",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Full-time nursery can cost more than a monthly rent.",
+          "Free hours and tax-free childcare cut the bill, but you must apply."
+        ],
+        "quiz": {
+          "question": "Who must apply for tax-free childcare?",
+          "options": [
+            "The parent",
+            "The nursery",
+            "Nobody"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "inheritance",
+      "title": "Inheritance",
+      "emoji": "📜",
+      "area": "family",
+      "summary": "Money passed on when someone dies.",
+      "lesson": {
+        "concept_id": "inheritance",
+        "title": "What gets passed on",
+        "chart": {
+          "kind": "line",
+          "title": "Average house price",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 207568.0
+            },
+            {
+              "x": 2018.0,
+              "y": 211621.0
+            },
+            {
+              "x": 2019.0,
+              "y": 213521.0
+            },
+            {
+              "x": 2020.0,
+              "y": 228446.0
+            },
+            {
+              "x": 2021.0,
+              "y": 245189.0
+            },
+            {
+              "x": 2022.0,
+              "y": 263190.0
+            },
+            {
+              "x": 2023.0,
+              "y": 256177.0
+            },
+            {
+              "x": 2024.0,
+              "y": 263991.0
+            },
+            {
+              "x": 2025.0,
+              "y": 268493.0
+            },
+            {
+              "x": 2026.0,
+              "y": 272611.0
+            }
+          ],
+          "source": {
+            "source": "landregistry",
+            "series_id": "ukhpi-average-price",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Most inheritances in the UK are a share of a home.",
+          "Paying off expensive debt with a windfall beats spending it."
+        ],
+        "quiz": {
+          "question": "You inherit £10,000 and owe £3,000 on a card. What is the best first step?",
+          "options": [
+            "Clear the card",
+            "Buy a car",
+            "Leave it in a current account"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "divorce-costs",
+      "title": "Splitting up",
+      "emoji": "💔",
+      "area": "family",
+      "summary": "A split divides one home into two.",
+      "lesson": {
+        "concept_id": "divorce-costs",
+        "title": "Two homes cost more",
+        "chart": {
+          "kind": "line",
+          "title": "Average house price",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 207568.0
+            },
+            {
+              "x": 2018.0,
+              "y": 211621.0
+            },
+            {
+              "x": 2019.0,
+              "y": 213521.0
+            },
+            {
+              "x": 2020.0,
+              "y": 228446.0
+            },
+            {
+              "x": 2021.0,
+              "y": 245189.0
+            },
+            {
+              "x": 2022.0,
+              "y": 263190.0
+            },
+            {
+              "x": 2023.0,
+              "y": 256177.0
+            },
+            {
+              "x": 2024.0,
+              "y": 263991.0
+            },
+            {
+              "x": 2025.0,
+              "y": 268493.0
+            },
+            {
+              "x": 2026.0,
+              "y": 272611.0
+            }
+          ],
+          "source": {
+            "source": "landregistry",
+            "series_id": "ukhpi-average-price",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "When a couple splits, two homes cost more than one.",
+          "Assets such as homes and pensions are usually shared out."
+        ],
+        "quiz": {
+          "question": "After a split, what usually happens to housing costs per person?",
+          "options": [
+            "They rise",
+            "They fall"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "health-cost",
+      "title": "Health and money",
+      "emoji": "🩺",
+      "area": "health",
+      "summary": "Being ill can cost you pay.",
+      "lesson": {
+        "concept_id": "health-cost",
+        "title": "Health is wealth",
+        "chart": {
+          "kind": "line",
+          "title": "Median yearly pay",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 28759.0
+            },
+            {
+              "x": 2018.0,
+              "y": 29559.0
+            },
+            {
+              "x": 2019.0,
+              "y": 30378.0
+            },
+            {
+              "x": 2020.0,
+              "y": 31487.0
+            },
+            {
+              "x": 2021.0,
+              "y": 31224.0
+            },
+            {
+              "x": 2022.0,
+              "y": 33061.0
+            },
+            {
+              "x": 2023.0,
+              "y": 35004.0
+            },
+            {
+              "x": 2024.0,
+              "y": 37439.0
+            },
+            {
+              "x": 2025.0,
+              "y": 39039.0
+            },
+            {
+              "x": 2026.0,
+              "y": 40200.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_30_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Time off sick can cut your pay if your employer pays only statutory sick pay.",
+          "Cheap habits like walking protect both health and money."
+        ],
+        "quiz": {
+          "question": "Statutory sick pay is usually...",
+          "options": [
+            "More than your pay",
+            "Less than your pay",
+            "The same"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "income-protection",
+      "title": "Income protection",
+      "emoji": "🛡️",
+      "area": "health",
+      "summary": "Cover that pays you if you cannot work.",
+      "lesson": {
+        "concept_id": "income-protection",
+        "title": "If you cannot work",
+        "chart": {
+          "kind": "line",
+          "title": "Unemployment rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.4
+            },
+            {
+              "x": 2018.0,
+              "y": 4.2
+            },
+            {
+              "x": 2019.0,
+              "y": 3.9
+            },
+            {
+              "x": 2020.0,
+              "y": 4.6
+            },
+            {
+              "x": 2021.0,
+              "y": 4.4
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 3.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.8
+            },
+            {
+              "x": 2025.0,
+              "y": 4.4
+            },
+            {
+              "x": 2026.0,
+              "y": 5.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_17_5",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Income protection insurance pays part of your salary if illness stops you working.",
+          "Savings of a few months do the same job for short gaps."
+        ],
+        "quiz": {
+          "question": "What does income protection replace?",
+          "options": [
+            "Your car",
+            "Part of your pay",
+            "Your pension"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "human-capital",
+      "title": "Skills pay",
+      "emoji": "📚",
+      "area": "study",
+      "summary": "New skills can raise your pay.",
+      "lesson": {
+        "concept_id": "human-capital",
+        "title": "Invest in yourself",
+        "chart": {
+          "kind": "line",
+          "title": "Median yearly pay",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 28759.0
+            },
+            {
+              "x": 2018.0,
+              "y": 29559.0
+            },
+            {
+              "x": 2019.0,
+              "y": 30378.0
+            },
+            {
+              "x": 2020.0,
+              "y": 31487.0
+            },
+            {
+              "x": 2021.0,
+              "y": 31224.0
+            },
+            {
+              "x": 2022.0,
+              "y": 33061.0
+            },
+            {
+              "x": 2023.0,
+              "y": 35004.0
+            },
+            {
+              "x": 2024.0,
+              "y": 37439.0
+            },
+            {
+              "x": 2025.0,
+              "y": 39039.0
+            },
+            {
+              "x": 2026.0,
+              "y": 40200.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_30_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Skills you learn can raise your pay for the rest of your working life.",
+          "A course costs money now and may pay back over many years."
+        ],
+        "quiz": {
+          "question": "A £1,000 course raises your pay £1,000 a year. When has it paid back?",
+          "options": [
+            "After one year",
+            "Never",
+            "After ten years"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "student-loans",
+      "title": "Student loans",
+      "emoji": "🎓",
+      "area": "study",
+      "summary": "You repay only when you earn enough.",
+      "lesson": {
+        "concept_id": "student-loans",
+        "title": "Not like other debt",
+        "chart": {
+          "kind": "line",
+          "title": "Price rises per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 3.0
+            },
+            {
+              "x": 2018.0,
+              "y": 2.1
+            },
+            {
+              "x": 2019.0,
+              "y": 1.3
+            },
+            {
+              "x": 2020.0,
+              "y": 0.6
+            },
+            {
+              "x": 2021.0,
+              "y": 5.4
+            },
+            {
+              "x": 2022.0,
+              "y": 10.5
+            },
+            {
+              "x": 2023.0,
+              "y": 4.0
+            },
+            {
+              "x": 2024.0,
+              "y": 2.5
+            },
+            {
+              "x": 2025.0,
+              "y": 3.4
+            },
+            {
+              "x": 2026.0,
+              "y": 3.1
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7G7",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "You repay 9% of what you earn above a threshold, not a fixed monthly amount.",
+          "Any balance left after the repayment period is written off."
+        ],
+        "quiz": {
+          "question": "You earn below the threshold. How much do you repay that month?",
+          "options": [
+            "9%",
+            "Nothing",
+            "£100"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "state-pension",
+      "title": "State pension",
+      "emoji": "🏛️",
+      "area": "state",
+      "summary": "A pension from the state from your mid-60s.",
+      "lesson": {
+        "concept_id": "state-pension",
+        "title": "The state's part",
+        "chart": {
+          "kind": "line",
+          "title": "Median yearly pay",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 28759.0
+            },
+            {
+              "x": 2018.0,
+              "y": 29559.0
+            },
+            {
+              "x": 2019.0,
+              "y": 30378.0
+            },
+            {
+              "x": 2020.0,
+              "y": 31487.0
+            },
+            {
+              "x": 2021.0,
+              "y": 31224.0
+            },
+            {
+              "x": 2022.0,
+              "y": 33061.0
+            },
+            {
+              "x": 2023.0,
+              "y": 35004.0
+            },
+            {
+              "x": 2024.0,
+              "y": 37439.0
+            },
+            {
+              "x": 2025.0,
+              "y": 39039.0
+            },
+            {
+              "x": 2026.0,
+              "y": 40200.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_30_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "The state pension starts at state pension age and needs years of National Insurance.",
+          "It is not enough to live on for most people, so a workplace pension matters."
+        ],
+        "quiz": {
+          "question": "What do you need to build a full state pension?",
+          "options": [
+            "Years of National Insurance",
+            "A house",
+            "A bank loan"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "benefits",
+      "title": "Benefits",
+      "emoji": "🤲",
+      "area": "state",
+      "summary": "Help from the state when income is low.",
+      "lesson": {
+        "concept_id": "benefits",
+        "title": "A safety net",
+        "chart": {
+          "kind": "line",
+          "title": "Unemployment rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.4
+            },
+            {
+              "x": 2018.0,
+              "y": 4.2
+            },
+            {
+              "x": 2019.0,
+              "y": 3.9
+            },
+            {
+              "x": 2020.0,
+              "y": 4.6
+            },
+            {
+              "x": 2021.0,
+              "y": 4.4
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 3.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.8
+            },
+            {
+              "x": 2025.0,
+              "y": 4.4
+            },
+            {
+              "x": 2026.0,
+              "y": 5.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_17_5",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Universal Credit tops up income for people out of work or on low pay.",
+          "The rules and amounts change, so check what you can get each year."
+        ],
+        "quiz": {
+          "question": "You lose your job. What should you check first?",
+          "options": [
+            "Benefits you can claim",
+            "Holiday deals"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "tax-bands",
+      "title": "Tax bands",
+      "emoji": "🧮",
+      "area": "state",
+      "summary": "Each slice of pay is taxed at its own rate.",
+      "lesson": {
+        "concept_id": "tax-bands",
+        "title": "How income tax works",
+        "chart": {
+          "kind": "line",
+          "title": "Median yearly pay",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 28759.0
+            },
+            {
+              "x": 2018.0,
+              "y": 29559.0
+            },
+            {
+              "x": 2019.0,
+              "y": 30378.0
+            },
+            {
+              "x": 2020.0,
+              "y": 31487.0
+            },
+            {
+              "x": 2021.0,
+              "y": 31224.0
+            },
+            {
+              "x": 2022.0,
+              "y": 33061.0
+            },
+            {
+              "x": 2023.0,
+              "y": 35004.0
+            },
+            {
+              "x": 2024.0,
+              "y": 37439.0
+            },
+            {
+              "x": 2025.0,
+              "y": 39039.0
+            },
+            {
+              "x": 2026.0,
+              "y": 40200.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_30_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Income tax charges each slice of pay at its own rate, so a raise never lowers take-home pay.",
+          "When bands stay frozen and pay rises, more of your pay is taxed at higher rates."
+        ],
+        "quiz": {
+          "question": "A raise pushes you into the higher band. Is all your pay now taxed at 40%?",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "fixed-vs-variable",
+      "title": "Fixed or variable",
+      "emoji": "⚖️",
+      "area": "home",
+      "summary": "A fix trades flexibility for certainty.",
+      "lesson": {
+        "concept_id": "fixed-vs-variable",
+        "title": "Certainty has a price",
+        "chart": {
+          "kind": "line",
+          "title": "Bank Rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.5
+            },
+            {
+              "x": 2018.0,
+              "y": 0.75
+            },
+            {
+              "x": 2019.0,
+              "y": 0.75
+            },
+            {
+              "x": 2020.0,
+              "y": 0.1
+            },
+            {
+              "x": 2021.0,
+              "y": 0.25
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 5.25
+            },
+            {
+              "x": 2024.0,
+              "y": 4.75
+            },
+            {
+              "x": 2025.0,
+              "y": 3.75
+            },
+            {
+              "x": 2026.0,
+              "y": 3.75
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBEDR",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A fixed rate stays the same while a variable rate moves with the Bank Rate.",
+          "A longer fix protects you from rises but you pay a fee to leave early."
+        ],
+        "quiz": {
+          "question": "Rates look set to rise. Which deal protects your payment?",
+          "options": [
+            "Variable",
+            "Fixed"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "negative-equity",
+      "title": "Negative equity",
+      "emoji": "⚠️",
+      "area": "home",
+      "summary": "Owing more than your home is worth.",
+      "lesson": {
+        "concept_id": "negative-equity",
+        "title": "Underwater",
+        "chart": {
+          "kind": "line",
+          "title": "House price change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.6
+            },
+            {
+              "x": 2018.0,
+              "y": 2.0
+            },
+            {
+              "x": 2019.0,
+              "y": 0.9
+            },
+            {
+              "x": 2020.0,
+              "y": 7.0
+            },
+            {
+              "x": 2021.0,
+              "y": 7.3
+            },
+            {
+              "x": 2022.0,
+              "y": 7.3
+            },
+            {
+              "x": 2023.0,
+              "y": -2.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.1
+            },
+            {
+              "x": 2025.0,
+              "y": 1.7
+            },
+            {
+              "x": 2026.0,
+              "y": 1.4
+            }
+          ],
+          "source": {
+            "source": "landregistry",
+            "series_id": "ukhpi-annual-change",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "You are in negative equity when your mortgage is bigger than your home's value.",
+          "It only costs you if you must sell or remortgage before prices recover."
+        ],
+        "quiz": {
+          "question": "Your home is worth £180,000 and you owe £200,000. What is your equity?",
+          "options": [
+            "£20,000",
+            "-£20,000",
+            "£200,000"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "renting",
+      "title": "Renting",
+      "emoji": "🏢",
+      "area": "home",
+      "summary": "Rents move with local demand.",
+      "lesson": {
+        "concept_id": "renting",
+        "title": "Rent rises",
+        "chart": {
+          "kind": "line",
+          "title": "Rent change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1.49
+            },
+            {
+              "x": 2018.0,
+              "y": 1.23
+            },
+            {
+              "x": 2019.0,
+              "y": 2.09
+            },
+            {
+              "x": 2020.0,
+              "y": 1.16
+            },
+            {
+              "x": 2021.0,
+              "y": 2.46
+            },
+            {
+              "x": 2022.0,
+              "y": 5.59
+            },
+            {
+              "x": 2023.0,
+              "y": 8.39
+            },
+            {
+              "x": 2024.0,
+              "y": 8.98
+            },
+            {
+              "x": 2025.0,
+              "y": 3.95
+            },
+            {
+              "x": 2026.0,
+              "y": 3.81
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "PIPR",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Rents in your area can rise faster than your pay.",
+          "Moving costs money, so a small rise can be cheaper than moving."
+        ],
+        "quiz": {
+          "question": "Your rent rises £30 a month and moving costs £900. How many months until moving pays off?",
+          "options": [
+            "3",
+            "30",
+            "300"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "deposit",
+      "title": "Saving a deposit",
+      "emoji": "🐷",
+      "area": "home",
+      "summary": "Lenders want part of the price up front.",
+      "lesson": {
+        "concept_id": "deposit",
+        "title": "The deposit hurdle",
+        "chart": {
+          "kind": "line",
+          "title": "Average house price",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 207568.0
+            },
+            {
+              "x": 2018.0,
+              "y": 211621.0
+            },
+            {
+              "x": 2019.0,
+              "y": 213521.0
+            },
+            {
+              "x": 2020.0,
+              "y": 228446.0
+            },
+            {
+              "x": 2021.0,
+              "y": 245189.0
+            },
+            {
+              "x": 2022.0,
+              "y": 263190.0
+            },
+            {
+              "x": 2023.0,
+              "y": 256177.0
+            },
+            {
+              "x": 2024.0,
+              "y": 263991.0
+            },
+            {
+              "x": 2025.0,
+              "y": 268493.0
+            },
+            {
+              "x": 2026.0,
+              "y": 272611.0
+            }
+          ],
+          "source": {
+            "source": "landregistry",
+            "series_id": "ukhpi-average-price",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A bigger deposit usually gets you a lower mortgage rate.",
+          "When house prices rise faster than you save, the deposit gets further away."
+        ],
+        "quiz": {
+          "question": "A £200,000 home with a 10% deposit needs how much up front?",
+          "options": [
+            "£2,000",
+            "£20,000",
+            "£200"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "owning-vs-renting",
+      "title": "Own or rent",
+      "emoji": "🔑",
+      "area": "home",
+      "summary": "Owning builds equity but ties up money.",
+      "lesson": {
+        "concept_id": "owning-vs-renting",
+        "title": "Own or rent?",
+        "chart": {
+          "kind": "line",
+          "title": "Homes owned by the people living in them",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 63.7
+            },
+            {
+              "x": 2018.0,
+              "y": 63.8
+            },
+            {
+              "x": 2019.0,
+              "y": 64.0
+            },
+            {
+              "x": 2020.0,
+              "y": 64.1
+            },
+            {
+              "x": 2021.0,
+              "y": 61.6
+            },
+            {
+              "x": 2022.0,
+              "y": 64.3
+            },
+            {
+              "x": 2023.0,
+              "y": 64.4
+            },
+            {
+              "x": 2024.0,
+              "y": 64.4
+            },
+            {
+              "x": 2025.0,
+              "y": 64.5
+            },
+            {
+              "x": 2026.0,
+              "y": 64.5
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_2072_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Paying a mortgage builds equity, while rent buys only a place to live.",
+          "Owning also brings repair bills and moving costs that renters do not pay."
+        ],
+        "quiz": {
+          "question": "Who pays for a broken boiler in a rented flat?",
+          "options": [
+            "The tenant",
+            "The landlord"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "remortgaging",
+      "title": "Remortgaging",
+      "emoji": "🔁",
+      "area": "home",
+      "summary": "Switch deals before yours ends.",
+      "lesson": {
+        "concept_id": "remortgaging",
+        "title": "Do not drift to the standard rate",
+        "chart": {
+          "kind": "line",
+          "title": "5-year fixed mortgage rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 2.07
+            },
+            {
+              "x": 2018.0,
+              "y": 2.01
+            },
+            {
+              "x": 2019.0,
+              "y": 1.67
+            },
+            {
+              "x": 2020.0,
+              "y": 2.0
+            },
+            {
+              "x": 2021.0,
+              "y": 1.59
+            },
+            {
+              "x": 2022.0,
+              "y": 5.05
+            },
+            {
+              "x": 2023.0,
+              "y": 4.68
+            },
+            {
+              "x": 2024.0,
+              "y": 4.37
+            },
+            {
+              "x": 2025.0,
+              "y": 3.99
+            },
+            {
+              "x": 2026.0,
+              "y": 4.98
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMBV42",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "When a fixed deal ends, lenders move you to a higher standard rate unless you switch.",
+          "You can usually lock in a new deal up to six months before the old one ends."
+        ],
+        "quiz": {
+          "question": "Your fix ends next month and you do nothing. What happens?",
+          "options": [
+            "You move to the standard rate",
+            "Your rate stays the same"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "real-returns",
+      "title": "Real returns",
+      "emoji": "📏",
+      "area": "money",
+      "summary": "What savings earn after prices rise.",
+      "lesson": {
+        "concept_id": "real-returns",
+        "title": "Beat inflation",
+        "chart": {
+          "kind": "line",
+          "title": "Average easy-access savings rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.21
+            },
+            {
+              "x": 2018.0,
+              "y": 0.27
+            },
+            {
+              "x": 2019.0,
+              "y": 0.41
+            },
+            {
+              "x": 2020.0,
+              "y": 0.06
+            },
+            {
+              "x": 2021.0,
+              "y": 0.11
+            },
+            {
+              "x": 2022.0,
+              "y": 1.2
+            },
+            {
+              "x": 2023.0,
+              "y": 2.81
+            },
+            {
+              "x": 2024.0,
+              "y": 2.59
+            },
+            {
+              "x": 2025.0,
+              "y": 2.2
+            },
+            {
+              "x": 2026.0,
+              "y": 2.06
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMB6VJ",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "If your savings earn less than inflation, they buy less each year.",
+          "The real return is the interest rate minus the inflation rate."
+        ],
+        "quiz": {
+          "question": "Savings earn 2% and prices rise 5%. What is the real return?",
+          "options": [
+            "7%",
+            "-3%",
+            "2%"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "shopping-around",
+      "title": "Shopping around",
+      "emoji": "🔍",
+      "area": "money",
+      "summary": "Loyalty rarely pays.",
+      "lesson": {
+        "concept_id": "shopping-around",
+        "title": "Loyalty costs",
+        "chart": {
+          "kind": "line",
+          "title": "Average easy-access savings rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 0.21
+            },
+            {
+              "x": 2018.0,
+              "y": 0.27
+            },
+            {
+              "x": 2019.0,
+              "y": 0.41
+            },
+            {
+              "x": 2020.0,
+              "y": 0.06
+            },
+            {
+              "x": 2021.0,
+              "y": 0.11
+            },
+            {
+              "x": 2022.0,
+              "y": 1.2
+            },
+            {
+              "x": 2023.0,
+              "y": 2.81
+            },
+            {
+              "x": 2024.0,
+              "y": 2.59
+            },
+            {
+              "x": 2025.0,
+              "y": 2.2
+            },
+            {
+              "x": 2026.0,
+              "y": 2.06
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMB6VJ",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Banks often pay old customers less than new ones.",
+          "Checking your rates once a year can earn you more for little effort."
+        ],
+        "quiz": {
+          "question": "Your bank pays 1% and a rival pays 4% on £5,000. What is the gap in a year?",
+          "options": [
+            "£15",
+            "£150",
+            "£1,500"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "pound-cost-averaging",
+      "title": "Drip feeding",
+      "emoji": "💧",
+      "area": "money",
+      "summary": "Investing a little each month smooths the ride.",
+      "lesson": {
+        "concept_id": "pound-cost-averaging",
+        "title": "Little and often",
+        "chart": {
+          "kind": "line",
+          "title": "Stock market return per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 13.1
+            },
+            {
+              "x": 2018.0,
+              "y": -9.5
+            },
+            {
+              "x": 2019.0,
+              "y": 19.2
+            },
+            {
+              "x": 2020.0,
+              "y": -9.8
+            },
+            {
+              "x": 2021.0,
+              "y": 18.3
+            },
+            {
+              "x": 2022.0,
+              "y": 0.3
+            },
+            {
+              "x": 2023.0,
+              "y": 7.9
+            },
+            {
+              "x": 2024.0,
+              "y": 9.5
+            },
+            {
+              "x": 2025.0,
+              "y": 15.0
+            },
+            {
+              "x": 2026.0,
+              "y": 6.0
+            }
+          ],
+          "source": {
+            "source": "yahoo",
+            "series_id": "^FTAS",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Investing a fixed amount each month buys more shares when prices are low.",
+          "It takes the guesswork out of choosing a good time to invest."
+        ],
+        "quiz": {
+          "question": "Prices fall and you invest the same £100. Do you buy more or fewer shares?",
+          "options": [
+            "More",
+            "Fewer"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "bonds",
+      "title": "Bonds",
+      "emoji": "📜",
+      "area": "money",
+      "summary": "Lending to the government for a fixed return.",
+      "lesson": {
+        "concept_id": "bonds",
+        "title": "Steady but not risk-free",
+        "chart": {
+          "kind": "line",
+          "title": "10-year government bond yield",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1.2
+            },
+            {
+              "x": 2018.0,
+              "y": 1.3
+            },
+            {
+              "x": 2019.0,
+              "y": 0.8
+            },
+            {
+              "x": 2020.0,
+              "y": 0.2
+            },
+            {
+              "x": 2021.0,
+              "y": 1.0
+            },
+            {
+              "x": 2022.0,
+              "y": 3.7
+            },
+            {
+              "x": 2023.0,
+              "y": 3.5
+            },
+            {
+              "x": 2024.0,
+              "y": 4.6
+            },
+            {
+              "x": 2025.0,
+              "y": 4.5
+            },
+            {
+              "x": 2026.0,
+              "y": 4.5
+            }
+          ],
+          "source": {
+            "source": "fred",
+            "series_id": "IRLTLT01GBM156N",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "A government bond pays a fixed interest rate until it ends.",
+          "When rates rise, existing bonds fall in price."
+        ],
+        "quiz": {
+          "question": "Interest rates rise sharply. What happens to the price of old bonds?",
+          "options": [
+            "Rises",
+            "Falls"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "currency",
+      "title": "Currency",
+      "emoji": "💱",
+      "area": "money",
+      "summary": "The pound buys more or less abroad.",
+      "lesson": {
+        "concept_id": "currency",
+        "title": "The pound abroad",
+        "chart": {
+          "kind": "line",
+          "title": "Dollars per pound",
+          "x_label": "Year",
+          "y_label": "$",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1.35
+            },
+            {
+              "x": 2018.0,
+              "y": 1.28
+            },
+            {
+              "x": 2019.0,
+              "y": 1.32
+            },
+            {
+              "x": 2020.0,
+              "y": 1.36
+            },
+            {
+              "x": 2021.0,
+              "y": 1.35
+            },
+            {
+              "x": 2022.0,
+              "y": 1.2
+            },
+            {
+              "x": 2023.0,
+              "y": 1.27
+            },
+            {
+              "x": 2024.0,
+              "y": 1.25
+            },
+            {
+              "x": 2025.0,
+              "y": 1.35
+            },
+            {
+              "x": 2026.0,
+              "y": 1.33
+            }
+          ],
+          "source": {
+            "source": "frankfurter",
+            "series_id": "GBPUSD",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "A weaker pound makes holidays and imported goods cost more.",
+          "Shares in global companies can rise in pounds when the pound falls."
+        ],
+        "quiz": {
+          "question": "The pound falls against the dollar. A US holiday costs...",
+          "options": [
+            "More",
+            "Less"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "credit-cards",
+      "title": "Credit cards",
+      "emoji": "💳",
+      "area": "money",
+      "summary": "Clear the balance in full to avoid interest.",
+      "lesson": {
+        "concept_id": "credit-cards",
+        "title": "Pay in full",
+        "chart": {
+          "kind": "line",
+          "title": "Average credit card rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 17.95
+            },
+            {
+              "x": 2018.0,
+              "y": 18.66
+            },
+            {
+              "x": 2019.0,
+              "y": 20.77
+            },
+            {
+              "x": 2020.0,
+              "y": 20.9
+            },
+            {
+              "x": 2021.0,
+              "y": 21.42
+            },
+            {
+              "x": 2022.0,
+              "y": 22.48
+            },
+            {
+              "x": 2023.0,
+              "y": 24.02
+            },
+            {
+              "x": 2024.0,
+              "y": 24.65
+            },
+            {
+              "x": 2025.0,
+              "y": 24.65
+            },
+            {
+              "x": 2026.0,
+              "y": 24.71
+            }
+          ],
+          "source": {
+            "source": "boe",
+            "series_id": "IUMCCTL",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "If you clear the full balance each month, a credit card charges no interest.",
+          "Paying only the minimum can take years and cost more than you borrowed."
+        ],
+        "quiz": {
+          "question": "You pay only the minimum each month. What happens to the interest you pay?",
+          "options": [
+            "It adds up",
+            "It is zero"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "opportunity-cost",
+      "title": "Opportunity cost",
+      "emoji": "🔀",
+      "area": "money",
+      "summary": "Every choice gives up another one.",
+      "lesson": {
+        "concept_id": "opportunity-cost",
+        "title": "What you give up",
+        "chart": {
+          "kind": "line",
+          "title": "Stock market return per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 13.1
+            },
+            {
+              "x": 2018.0,
+              "y": -9.5
+            },
+            {
+              "x": 2019.0,
+              "y": 19.2
+            },
+            {
+              "x": 2020.0,
+              "y": -9.8
+            },
+            {
+              "x": 2021.0,
+              "y": 18.3
+            },
+            {
+              "x": 2022.0,
+              "y": 0.3
+            },
+            {
+              "x": 2023.0,
+              "y": 7.9
+            },
+            {
+              "x": 2024.0,
+              "y": 9.5
+            },
+            {
+              "x": 2025.0,
+              "y": 15.0
+            },
+            {
+              "x": 2026.0,
+              "y": 6.0
+            }
+          ],
+          "source": {
+            "source": "yahoo",
+            "series_id": "^FTAS",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Money you spend today cannot grow for tomorrow.",
+          "The true cost of a choice includes the best thing you gave up."
+        ],
+        "quiz": {
+          "question": "You spend £1,000 instead of investing at 5%. What did you give up in year one?",
+          "options": [
+            "£0",
+            "£50",
+            "£500"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "pay-growth",
+      "title": "Pay growth",
+      "emoji": "📈",
+      "area": "work",
+      "summary": "Pay rises with the economy, unevenly.",
+      "lesson": {
+        "concept_id": "pay-growth",
+        "title": "Keeping up",
+        "chart": {
+          "kind": "line",
+          "title": "Median yearly pay",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 28759.0
+            },
+            {
+              "x": 2018.0,
+              "y": 29559.0
+            },
+            {
+              "x": 2019.0,
+              "y": 30378.0
+            },
+            {
+              "x": 2020.0,
+              "y": 31487.0
+            },
+            {
+              "x": 2021.0,
+              "y": 31224.0
+            },
+            {
+              "x": 2022.0,
+              "y": 33061.0
+            },
+            {
+              "x": 2023.0,
+              "y": 35004.0
+            },
+            {
+              "x": 2024.0,
+              "y": 37439.0
+            },
+            {
+              "x": 2025.0,
+              "y": 39039.0
+            },
+            {
+              "x": 2026.0,
+              "y": 40200.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_30_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Typical pay in your area rises most years, but not always faster than prices.",
+          "A pay rise below inflation is a pay cut in what your money buys."
+        ],
+        "quiz": {
+          "question": "Your pay rises 2% and prices rise 5%. Can you buy more or less?",
+          "options": [
+            "More",
+            "Less"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "negotiation",
+      "title": "Asking for more",
+      "emoji": "🤝",
+      "area": "work",
+      "summary": "If you do not ask, the answer is no.",
+      "lesson": {
+        "concept_id": "negotiation",
+        "title": "Know your worth",
+        "chart": {
+          "kind": "line",
+          "title": "Median yearly pay",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 28759.0
+            },
+            {
+              "x": 2018.0,
+              "y": 29559.0
+            },
+            {
+              "x": 2019.0,
+              "y": 30378.0
+            },
+            {
+              "x": 2020.0,
+              "y": 31487.0
+            },
+            {
+              "x": 2021.0,
+              "y": 31224.0
+            },
+            {
+              "x": 2022.0,
+              "y": 33061.0
+            },
+            {
+              "x": 2023.0,
+              "y": 35004.0
+            },
+            {
+              "x": 2024.0,
+              "y": 37439.0
+            },
+            {
+              "x": 2025.0,
+              "y": 39039.0
+            },
+            {
+              "x": 2026.0,
+              "y": 40200.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_30_1",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Knowing the typical pay for your job helps you ask for a fair raise.",
+          "A raise early in your career grows with every later raise."
+        ],
+        "quiz": {
+          "question": "Which helps most when asking for a raise?",
+          "options": [
+            "Local pay data",
+            "Guessing"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "redundancy",
+      "title": "Redundancy",
+      "emoji": "📦",
+      "area": "employer",
+      "summary": "When a job goes, the law sets a minimum payout.",
+      "lesson": {
+        "concept_id": "redundancy",
+        "title": "When jobs go",
+        "chart": {
+          "kind": "line",
+          "title": "Unemployment rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.4
+            },
+            {
+              "x": 2018.0,
+              "y": 4.2
+            },
+            {
+              "x": 2019.0,
+              "y": 3.9
+            },
+            {
+              "x": 2020.0,
+              "y": 4.6
+            },
+            {
+              "x": 2021.0,
+              "y": 4.4
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 3.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.8
+            },
+            {
+              "x": 2025.0,
+              "y": 4.4
+            },
+            {
+              "x": 2026.0,
+              "y": 5.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_17_5",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Statutory redundancy pay depends on your age, pay and years in the job.",
+          "Redundancies rise when unemployment rises."
+        ],
+        "quiz": {
+          "question": "What increases statutory redundancy pay?",
+          "options": [
+            "Years in the job",
+            "Your job title"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "employer-risk",
+      "title": "Employer risk",
+      "emoji": "🏚️",
+      "area": "employer",
+      "summary": "Your employer can go bust.",
+      "lesson": {
+        "concept_id": "employer-risk",
+        "title": "Do not bet twice",
+        "chart": {
+          "kind": "line",
+          "title": "Unemployment rate",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.4
+            },
+            {
+              "x": 2018.0,
+              "y": 4.2
+            },
+            {
+              "x": 2019.0,
+              "y": 3.9
+            },
+            {
+              "x": 2020.0,
+              "y": 4.6
+            },
+            {
+              "x": 2021.0,
+              "y": 4.4
+            },
+            {
+              "x": 2022.0,
+              "y": 3.5
+            },
+            {
+              "x": 2023.0,
+              "y": 3.7
+            },
+            {
+              "x": 2024.0,
+              "y": 3.8
+            },
+            {
+              "x": 2025.0,
+              "y": 4.4
+            },
+            {
+              "x": 2026.0,
+              "y": 5.0
+            }
+          ],
+          "source": {
+            "source": "nomis",
+            "series_id": "NM_17_5",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "If your employer goes bust, you can lose your job and unpaid wages.",
+          "Holding a lot of your employer's shares doubles that risk."
+        ],
+        "quiz": {
+          "question": "Why hold few shares in your own employer?",
+          "options": [
+            "Your job already depends on it",
+            "They pay no dividends"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "flood-risk",
+      "title": "Flood risk",
+      "emoji": "🌊",
+      "area": "place",
+      "summary": "Some homes are far more likely to flood.",
+      "lesson": {
+        "concept_id": "flood-risk",
+        "title": "Water damage",
+        "chart": {
+          "kind": "line",
+          "title": "Chance of a flood per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1.07
+            },
+            {
+              "x": 2018.0,
+              "y": 1.08
+            },
+            {
+              "x": 2019.0,
+              "y": 1.09
+            },
+            {
+              "x": 2020.0,
+              "y": 1.1
+            },
+            {
+              "x": 2021.0,
+              "y": 1.11
+            },
+            {
+              "x": 2022.0,
+              "y": 1.12
+            },
+            {
+              "x": 2023.0,
+              "y": 1.13
+            },
+            {
+              "x": 2024.0,
+              "y": 1.14
+            },
+            {
+              "x": 2025.0,
+              "y": 1.15
+            },
+            {
+              "x": 2026.0,
+              "y": 1.16
+            }
+          ],
+          "source": {
+            "source": "environmentagency",
+            "series_id": "flood-risk",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "A small yearly chance of a flood adds up over the years you own a home.",
+          "Insurance and flood defences cut the cost when it happens."
+        ],
+        "quiz": {
+          "question": "A 1% flood chance each year, over 30 years, is roughly...",
+          "options": [
+            "1%",
+            "26%",
+            "100%"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "home-security",
+      "title": "Home security",
+      "emoji": "🔐",
+      "area": "place",
+      "summary": "Simple locks cut burglary risk.",
+      "lesson": {
+        "concept_id": "home-security",
+        "title": "Lock it up",
+        "chart": {
+          "kind": "line",
+          "title": "Burglaries per 1,000 homes",
+          "x_label": "Year",
+          "y_label": "per 1,000",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 16.0
+            },
+            {
+              "x": 2018.0,
+              "y": 15.0
+            },
+            {
+              "x": 2019.0,
+              "y": 14.0
+            },
+            {
+              "x": 2020.0,
+              "y": 12.0
+            },
+            {
+              "x": 2021.0,
+              "y": 11.0
+            },
+            {
+              "x": 2022.0,
+              "y": 11.0
+            },
+            {
+              "x": 2023.0,
+              "y": 10.0
+            },
+            {
+              "x": 2024.0,
+              "y": 10.0
+            },
+            {
+              "x": 2025.0,
+              "y": 10.0
+            },
+            {
+              "x": 2026.0,
+              "y": 10.0
+            }
+          ],
+          "source": {
+            "source": "police",
+            "series_id": "burglary",
+            "status": "mock"
+          }
+        },
+        "sentences": [
+          "Burglary rates differ a lot between areas and years.",
+          "Good locks can lower both the risk and the insurance price."
+        ],
+        "quiz": {
+          "question": "Which usually lowers home insurance?",
+          "options": [
+            "Good locks",
+            "A bigger TV"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "regional-pay",
+      "title": "Where you live",
+      "emoji": "🗺️",
+      "area": "place",
+      "summary": "Pay and prices differ by region.",
+      "lesson": {
+        "concept_id": "regional-pay",
+        "title": "Place matters",
+        "chart": {
+          "kind": "line",
+          "title": "Average house price",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 207568.0
+            },
+            {
+              "x": 2018.0,
+              "y": 211621.0
+            },
+            {
+              "x": 2019.0,
+              "y": 213521.0
+            },
+            {
+              "x": 2020.0,
+              "y": 228446.0
+            },
+            {
+              "x": 2021.0,
+              "y": 245189.0
+            },
+            {
+              "x": 2022.0,
+              "y": 263190.0
+            },
+            {
+              "x": 2023.0,
+              "y": 256177.0
+            },
+            {
+              "x": 2024.0,
+              "y": 263991.0
+            },
+            {
+              "x": 2025.0,
+              "y": 268493.0
+            },
+            {
+              "x": 2026.0,
+              "y": 272611.0
+            }
+          ],
+          "source": {
+            "source": "landregistry",
+            "series_id": "ukhpi-average-price",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Pay and house prices differ a lot between UK regions.",
+          "A higher salary can buy less if local homes cost much more."
+        ],
+        "quiz": {
+          "question": "London pay is higher. Does that always make London cheaper to live in?",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "answer_index": 1
+        }
+      }
+    },
+    {
+      "id": "price-cap",
+      "title": "The energy price cap",
+      "emoji": "🧢",
+      "area": "bills",
+      "summary": "A limit on the unit price, not the bill.",
+      "lesson": {
+        "concept_id": "price-cap",
+        "title": "Caps are not limits on bills",
+        "chart": {
+          "kind": "line",
+          "title": "Typical yearly energy bill",
+          "x_label": "Year",
+          "y_label": "£",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 1140.0
+            },
+            {
+              "x": 2018.0,
+              "y": 1180.0
+            },
+            {
+              "x": 2019.0,
+              "y": 1206.0
+            },
+            {
+              "x": 2020.0,
+              "y": 1118.0
+            },
+            {
+              "x": 2021.0,
+              "y": 1149.0
+            },
+            {
+              "x": 2022.0,
+              "y": 1930.0
+            },
+            {
+              "x": 2023.0,
+              "y": 2227.0
+            },
+            {
+              "x": 2024.0,
+              "y": 1726.0
+            },
+            {
+              "x": 2025.0,
+              "y": 1766.0
+            },
+            {
+              "x": 2026.0,
+              "y": 1715.95
+            }
+          ],
+          "source": {
+            "source": "octopus",
+            "series_id": "dual-fuel-typical-bill",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "The energy price cap limits the price per unit, not your total bill.",
+          "If you use more energy, you still pay more."
+        ],
+        "quiz": {
+          "question": "The price cap falls. Can your bill still rise?",
+          "options": [
+            "Yes, if you use more",
+            "No, never"
+          ],
+          "answer_index": 0
+        }
+      }
+    },
+    {
+      "id": "fuel-costs",
+      "title": "Fuel costs",
+      "emoji": "⛽",
+      "area": "bills",
+      "summary": "Fuel prices swing with oil and the pound.",
+      "lesson": {
+        "concept_id": "fuel-costs",
+        "title": "Pain at the pump",
+        "chart": {
+          "kind": "line",
+          "title": "Fuel price change per year",
+          "x_label": "Year",
+          "y_label": "%",
+          "points": [
+            {
+              "x": 2017.0,
+              "y": 4.7
+            },
+            {
+              "x": 2018.0,
+              "y": 3.4
+            },
+            {
+              "x": 2019.0,
+              "y": 1.0
+            },
+            {
+              "x": 2020.0,
+              "y": -8.3
+            },
+            {
+              "x": 2021.0,
+              "y": 26.8
+            },
+            {
+              "x": 2022.0,
+              "y": 11.5
+            },
+            {
+              "x": 2023.0,
+              "y": -10.8
+            },
+            {
+              "x": 2024.0,
+              "y": -5.0
+            },
+            {
+              "x": 2025.0,
+              "y": 0.9
+            },
+            {
+              "x": 2026.0,
+              "y": 23.0
+            }
+          ],
+          "source": {
+            "source": "ons",
+            "series_id": "D7IO",
+            "status": "live"
+          }
+        },
+        "sentences": [
+          "Fuel prices follow oil prices and the value of the pound.",
+          "Driving less is the only sure way to cut a fuel bill."
+        ],
+        "quiz": {
+          "question": "Which cuts a fuel bill for sure?",
+          "options": [
+            "Driving less",
+            "Waiting for prices to fall"
+          ],
+          "answer_index": 0
+        }
+      }
+    }
+  ]
+}

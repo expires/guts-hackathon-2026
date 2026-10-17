@@ -19,7 +19,7 @@ struct CharacterFormScreen: View {
                 model.onContinue = onContinue
                 model.onConnectBank = { showBank = true }
             }
-            .sheet(isPresented: $showBank) {
+            .llCover(isPresented: $showBank) {
                 BankConnectScreen(client: session.client) { profile, status in
                     model.apply(bankProfile: profile, status: status)
                     showBank = false

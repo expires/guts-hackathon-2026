@@ -1,0 +1,206 @@
+{
+  "method": "Leave-one-period-out, walk-forward backtest of the mortgage decision over 5-year windows. Best constant rule: always take a tracker, right in 71.4% of periods.",
+  "n": 28,
+  "hit_rate": 0.7142857142857143,
+  "baseline_hit_rate": 0.14285714285714285,
+  "baseline": "Always fix for 2 years (best constant rule: always take a tracker, 71.4%)",
+  "periods": [
+    {
+      "start": 1995,
+      "end": 1999,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 1996,
+      "end": 2000,
+      "recommended": "tracker",
+      "realised_best": "fix_2y",
+      "hit": false
+    },
+    {
+      "start": 1997,
+      "end": 2001,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 1998,
+      "end": 2002,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 1999,
+      "end": 2003,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2000,
+      "end": 2004,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2001,
+      "end": 2005,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2002,
+      "end": 2006,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2003,
+      "end": 2007,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2004,
+      "end": 2008,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2005,
+      "end": 2009,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2006,
+      "end": 2010,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2007,
+      "end": 2011,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2008,
+      "end": 2012,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2009,
+      "end": 2013,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2010,
+      "end": 2014,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2011,
+      "end": 2015,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2012,
+      "end": 2016,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2013,
+      "end": 2017,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2014,
+      "end": 2018,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    },
+    {
+      "start": 2015,
+      "end": 2019,
+      "recommended": "tracker",
+      "realised_best": "fix_2y",
+      "hit": false
+    },
+    {
+      "start": 2016,
+      "end": 2020,
+      "recommended": "tracker",
+      "realised_best": "fix_2y",
+      "hit": false
+    },
+    {
+      "start": 2017,
+      "end": 2021,
+      "recommended": "tracker",
+      "realised_best": "fix_2y",
+      "hit": false
+    },
+    {
+      "start": 2018,
+      "end": 2022,
+      "recommended": "tracker",
+      "realised_best": "fix_3y",
+      "hit": false
+    },
+    {
+      "start": 2019,
+      "end": 2023,
+      "recommended": "tracker",
+      "realised_best": "fix_5y",
+      "hit": false
+    },
+    {
+      "start": 2020,
+      "end": 2024,
+      "recommended": "tracker",
+      "realised_best": "fix_5y",
+      "hit": false
+    },
+    {
+      "start": 2021,
+      "end": 2025,
+      "recommended": "tracker",
+      "realised_best": "fix_5y",
+      "hit": false
+    },
+    {
+      "start": 2022,
+      "end": 2026,
+      "recommended": "tracker",
+      "realised_best": "tracker",
+      "hit": true
+    }
+  ],
+  "generated_at": "2026-01-01T00:00:00Z"
+}

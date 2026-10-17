@@ -10,6 +10,7 @@ final class StoreViewModel {
     private let session: GameSession
     private(set) var purchasing: String?
     private(set) var message: String?
+    private(set) var selectedID: String? = PurchaseProduct.lifeline_rewindpass.rawValue
     @ObservationIgnored var onClose: @MainActor () -> Void = {}
 
     static let catalog: [(product: PurchaseProduct, emoji: String, title: String, detail: String)] = [
@@ -26,7 +27,8 @@ final class StoreViewModel {
         Self.makeState(
             owned: owned,
             purchasing: purchasing,
-            message: message
+            message: message,
+            selectedID: selectedID
         )
     }
 
@@ -40,8 +42,18 @@ final class StoreViewModel {
     var actions: StoreActions {
         StoreActions(
             onBuy: { [weak self] id in Task { await self?.buy(id) } },
-            onClose: { [weak self] in self?.onClose() }
+            onClose: { [weak self] in self?.onClose() },
+            onSelect: { [weak self] id in self?.selectedID = id },
+            onRestore: { [weak self] in self?.restore() }
         )
+    }
+
+    /// Demo purchases live in this session. Restore reports what this session owns.
+    func restore() {
+        let names = Self.catalog.filter { owned.contains($0.product.rawValue) }.map(\.title)
+        message = names.isEmpty
+            ? "No demo purchases to restore. Demo purchases last for this session only."
+            : "Restored: " + names.joined(separator: ", ") + "."
     }
 
     func buy(_ id: String) async {
@@ -65,22 +77,53 @@ final class StoreViewModel {
         }
     }
 
-    static func makeState(owned: Set<String>, purchasing: String?, message: String?) -> StoreViewState {
-        StoreViewState(
+    /// `LLIcon` raw value per product.
+    static let icons: [String: String] = [
+        PurchaseProduct.lifeline_rewindpass.rawValue: "rewind",
+        PurchaseProduct.lifeline_godmode.rawValue: "face-blue-hair",
+        PurchaseProduct.lifeline_bossmode.rawValue: "job",
+    ]
+
+    /// "£0.99".
+    static func priceText(_ price: Double) -> String {
+        price.formatted(.currency(code: "GBP").locale(Money.locale).precision(.fractionLength(2)))
+    }
+
+    static func makeState(
+        owned: Set<String>,
+        purchasing: String?,
+        message: String?,
+        selectedID: String? = nil,
+        prices: [String: Double] = StoreFixtures.demoPrices
+    ) -> StoreViewState {
+        var state = StoreViewState(
             products: catalog.map {
                 .init(
                     id: $0.product.rawValue,
                     emoji: $0.emoji,
                     title: $0.title,
                     detail: $0.detail,
-                    priceText: "Demo",
+                    priceText: prices[$0.product.rawValue].map(priceText) ?? "Demo",
                     isOwned: owned.contains($0.product.rawValue),
-                    isPurchasing: purchasing == $0.product.rawValue
+                    isPurchasing: purchasing == $0.product.rawValue,
+                    icon: icons[$0.product.rawValue] ?? "demo-pay",
+                    price: prices[$0.product.rawValue]
                 )
             },
             demoLabel: Brand.demoPaymentLabel,
             lessonsNote: "Lessons are always free.",
             message: message
         )
+        state.selectedID = selectedID ?? state.products.first(where: { !$0.isOwned })?.id
+        if let product = state.selected {
+            state.buyTitle = product.isOwned
+                ? "\(product.title) owned"
+                : "Buy \(product.title) · \(product.priceText) · demo"
+            state.canBuy = !product.isOwned && purchasing == nil
+        } else {
+            state.buyTitle = "Choose an extra"
+            state.canBuy = false
+        }
+        return state
     }
 }

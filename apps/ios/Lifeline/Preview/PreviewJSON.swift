@@ -1167,6 +1167,101 @@ enum PreviewJSON {
      "answer_index": 1
     }
    }
+  },
+  {
+   "id": "fixed-vs-variable",
+   "title": "Fixed or variable",
+   "emoji": "🔒",
+   "area": "home",
+   "summary": "A fix keeps your payment the same. A variable rate moves with Bank Rate.",
+   "lesson": {
+    "concept_id": "fixed-vs-variable",
+    "title": "Lock it or let it move",
+    "chart": {
+     "kind": "line",
+     "title": "Bank Rate at year end",
+     "x_label": "Year",
+     "y_label": "%",
+     "points": [
+      {
+       "x": 2021.0,
+       "y": 0.25
+      },
+      {
+       "x": 2022.0,
+       "y": 3.5
+      },
+      {
+       "x": 2023.0,
+       "y": 5.25
+      }
+     ],
+     "source": {
+      "source": "boe",
+      "series_id": "IUMBEDR",
+      "status": "live"
+     }
+    },
+    "sentences": [
+     "A fixed rate costs a little more when rates fall but protects you when they rise.",
+     "In 2022 Bank Rate rose from 0.25% to 3.5%, so variable payments jumped."
+    ],
+    "quiz": {
+     "question": "Rates are about to rise fast. Which payment stays the same?",
+     "options": [
+      "Fixed",
+      "Variable",
+      "Tracker"
+     ],
+     "answer_index": 0
+    },
+    "personal": "Your deal ends in 165 days."
+   }
+  },
+  {
+   "id": "subscriptions",
+   "title": "Subscriptions",
+   "emoji": "📺",
+   "area": "money",
+   "summary": "Small monthly payments add up.",
+   "lesson": {
+    "concept_id": "subscriptions",
+    "title": "The quiet spend",
+    "chart": {
+     "kind": "bar",
+     "title": "Your subscriptions per month",
+     "x_label": "Month",
+     "y_label": "£",
+     "points": [
+      {
+       "x": 1.0,
+       "y": 41.0
+      },
+      {
+       "x": 2.0,
+       "y": 44.0
+      },
+      {
+       "x": 3.0,
+       "y": 47.0
+      }
+     ]
+    },
+    "sentences": [
+     "Each one looks small, but together they are a bill.",
+     "Prices rise quietly, so check them once a year."
+    ],
+    "quiz": {
+     "question": "You pay £13 a month for something you never use. What does it cost a year?",
+     "options": [
+      "£13",
+      "£156",
+      "£52"
+     ],
+     "answer_index": 1
+    },
+    "personal": "You spend £47 a month on 6 subscriptions."
+   }
   }
  ]
 }
@@ -1340,7 +1435,7 @@ enum PreviewJSON {
    "id": "boe",
    "name": "Bank of England IADB",
    "status": "live",
-   "fetched_at": "2026-10-17T11:00:00",
+   "fetched_at": "2026-10-17T11:00:00Z",
    "ttl_seconds": 86400,
    "coverage": "UK",
    "attribution": "Bank of England",

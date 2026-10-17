@@ -1,90 +1,109 @@
 import SwiftUI
 
-/// One real-data event with its choices. The player must pick one to continue.
+/// Full-screen event choice (handoff Life-Event): a colour band for the life area, the event icon,
+/// the title and text, then one outlined card per choice with its monthly cost when the engine gives one.
 struct EventSheetView: View {
     let state: EventSheetViewState
     var actions: EventSheetActions = .noop
-    @Namespace private var glassNamespace
+    @Namespace private var namespace
+
+    private var areaColor: Color { (Area(rawValue: state.area) ?? .other).color }
+    private let cardShapes: [HandCut] = [HandCut((18, 24, 16, 22), (22, 16, 24, 18)), HandCut((24, 18, 22, 16), (16, 22, 18, 24))]
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                HStack(alignment: .top, spacing: Theme.Spacing.m) {
-                    Text(state.emoji)
-                        .font(.system(size: 48))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                        Text("\(String(state.year)) · Age \(state.age)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                band
+                VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                         Text(state.title)
-                            .font(.title2.bold())
+                            .font(.llTitle)
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityIdentifier("event.title")
+                        Text(state.text).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                        if state.isAIText {
+                            Text("Words by AI. Numbers from the game engine.").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                        }
+                    }
+                    ForEach(Array(state.choices.enumerated()), id: \.element.id) { offset, choice in
+                        choiceCard(choice, shape: cardShapes[offset % cardShapes.count])
+                    }
+                    if !state.sources.isEmpty {
+                        SourcesFooter(sources: state.sources)
                     }
                 }
+                .padding(.horizontal, Theme.Spacing.margin)
+                .padding(.vertical, Theme.Spacing.xl)
+            }
+        }
+        .paperBackground()
+        .foregroundStyle(Theme.Palette.ink)
+    }
 
-                Text(state.text)
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
+    private var band: some View {
+        VStack(spacing: Theme.Spacing.m) {
+            HStack {
+                AreaChip(area: Area(rawValue: state.area) ?? .other, text: state.areaLabel)
+                Spacer()
+                Chip(text: state.dateText)
+                HeaderSquareButton(kind: .close, identifier: "event.close", action: actions.onClose)
+            }
+            LLIconImage(LLIcon.from(emoji: state.emoji, fallback: Self.icon(for: state.area)), size: 120)
+                .padding(.vertical, Theme.Spacing.s)
+        }
+        .padding(Theme.Spacing.margin)
+        .frame(maxWidth: .infinity)
+        .background(areaColor.ignoresSafeArea(edges: .top))
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.Palette.ink).frame(height: Theme.outline) }
+    }
 
-                if state.isAIText {
-                    Label("Words written by AI. Numbers come from the game engine.", systemImage: "sparkles")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+    private func choiceCard(_ choice: EventSheetViewState.Choice, shape: HandCut) -> some View {
+        Button { actions.onChoose(choice.id) } label: {
+            HStack(spacing: Theme.Spacing.m) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(choice.label).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
+                    if let hint = choice.hint {
+                        Text(hint).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-
-                GlassEffectContainer(spacing: Theme.Spacing.m) {
-                    VStack(spacing: Theme.Spacing.m) {
-                        ForEach(state.choices) { choice in
-                            ChoiceButton(choice: choice, disabled: state.isSubmitting) {
-                                actions.onChoose(choice.id)
-                            }
-                            .glassEffectID(choice.id, in: glassNamespace)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let amount = choice.amountText {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(amount).font(.llTitle).lineLimit(1).minimumScaleFactor(0.7)
+                        if let caption = choice.amountCaption {
+                            Text(caption).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                         }
                     }
                 }
-
-                if !state.sources.isEmpty {
-                    SourcesFooter(sources: state.sources)
+            }
+            .padding(.horizontal, Theme.Spacing.l)
+            .padding(.vertical, Theme.Spacing.m)
+            .frame(minHeight: 76)
+            .contentShape(shape)
+            .background {
+                ZStack {
+                    shape.fill(Theme.Palette.ink).offset(x: 5, y: 6)
+                    shape.fill(Theme.Palette.surface)
+                    shape.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline)
                 }
             }
-            .padding(Theme.Spacing.xl)
         }
-        .accessibilityIdentifier("event.sheet")
-    }
-}
-
-/// A choice as a large glass button with an optional cost hint.
-struct ChoiceButton: View {
-    let choice: EventSheetViewState.Choice
-    let disabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Theme.Spacing.m) {
-                if let emoji = choice.emoji {
-                    Text(emoji).font(.title2).accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(choice.label).font(.headline)
-                    if let hint = choice.hint {
-                        Text(hint)
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, minHeight: Theme.minTarget, alignment: .leading)
-            .padding(.vertical, Theme.Spacing.xs)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.glass)
-        .disabled(disabled)
-        .accessibilityLabel([choice.label, choice.hint].compactMap { $0 }.joined(separator: ". "))
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.Palette.ink)
+        .disabled(state.isSubmitting)
+        .accessibilityLabel([choice.label, choice.hint, choice.amountText.map { "\($0) a month" }].compactMap { $0 }.joined(separator: ". "))
         .accessibilityIdentifier("event.choice.\(choice.id)")
+    }
+
+    static func icon(for area: String) -> LLIcon {
+        switch area {
+        case "work": .job
+        case "home": .home
+        case "money": .savings
+        case "family": .family
+        case "health": .health
+        default: .activities
+        }
     }
 }
 

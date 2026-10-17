@@ -1,0 +1,323 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "question": "What is my next money move?",
+  "top": {
+    "id": "fix_mortgage",
+    "kind": "fix_mortgage",
+    "action": "Take a tracker",
+    "headline": "Your current deal finishes in 165 days",
+    "impact_per_year": 3097.22,
+    "worst_case_per_year": 2570.15,
+    "confidence": 0.8333,
+    "confidence_label": "In 8 of 10 similar cases this was the best choice",
+    "evidence": [
+      {
+        "text": "Your 4.42% fixed rate finishes in 165 days, and after that you move to about 6.58%. At today's rates on £180,000 over 25 years, a 5-year fix (4.98%) costs £189 a year less than a 2-year fix (5.13%), while a tracker (4.23%) starts at £1,114 a year less than the 2-year fix. If rates hit 9.58%, you would pay £1,583 a month, which is 69% of your take-home pay.",
+        "facts": {
+          "current_rate": 4.42,
+          "days_left": 165.0,
+          "svr_rate": 6.58,
+          "balance": 180000.0,
+          "term_years": 25.0,
+          "rate_5y": 4.98,
+          "rate_2y": 5.13,
+          "rate_tracker": 4.23,
+          "gap_5y_vs_2y": 189.0,
+          "gap_tracker_vs_2y": 1114.0,
+          "years_5": 5.0,
+          "years_2": 2.0,
+          "stressed_rate": 9.58,
+          "stressed_payment": 1583.0,
+          "regret_weight": 1.5,
+          "net_monthly_income": 2280.0,
+          "stressed_ratio_pct": 69.0,
+          "stressed_ratio": 0.694
+        },
+        "source": {
+          "source": "boe",
+          "series_id": "IUMBV42",
+          "status": "live"
+        }
+      },
+      {
+        "text": "We looked at 20 people like you in similar past periods (2005-2011, 2017-2022), and on average “Take a tracker” saved £3,097 a year compared with doing nothing.",
+        "facts": {
+          "twins": 20.0,
+          "impact": 3097.0,
+          "period_1_start": 2005.0,
+          "period_1_end": 2011.0,
+          "period_2_start": 2017.0,
+          "period_2_end": 2022.0
+        },
+        "source": {
+          "source": "boe",
+          "series_id": "IUMBEDR",
+          "status": "live"
+        }
+      },
+      {
+        "text": "During the 2021-2023 rate shock, “Take a tracker” saved £4,605 a year compared with doing nothing for a mortgage like yours, while “Fix for 5 years” saved £7,068 a year. Test it replays your whole life across those years, so its totals may be different.",
+        "facts": {
+          "stress": 4605.0,
+          "stress_alt": 7068.0,
+          "stress_start": 2021.0,
+          "stress_end": 2023.0,
+          "alt_fix_years": 5.0
+        },
+        "source": {
+          "source": "boe",
+          "series_id": "IUMBEDR",
+          "status": "live"
+        }
+      }
+    ],
+    "sources": [
+      {
+        "source": "boe",
+        "series_id": "IUMBEDR",
+        "status": "live"
+      },
+      {
+        "source": "boe",
+        "series_id": "IUMBV34",
+        "status": "live"
+      },
+      {
+        "source": "boe",
+        "series_id": "IUMBV42",
+        "status": "live"
+      },
+      {
+        "source": "boe",
+        "series_id": "IUMTLMV",
+        "status": "live"
+      },
+      {
+        "source": "boe",
+        "series_id": "IUMBV48",
+        "status": "live"
+      },
+      {
+        "source": "bank:fixtures",
+        "series_id": "homeowner-leeds",
+        "status": "mock",
+        "note": "Sample data"
+      }
+    ],
+    "options": [
+      {
+        "id": "tracker",
+        "label": "Take a tracker",
+        "is_recommended": true
+      },
+      {
+        "id": "fix_5y",
+        "label": "Fix for 5 years",
+        "is_recommended": false
+      },
+      {
+        "id": "fix_2y",
+        "label": "Fix for 2 years",
+        "is_recommended": false
+      },
+      {
+        "id": "keep",
+        "label": "Do nothing",
+        "is_recommended": false
+      }
+    ],
+    "deadline": "2027-03-31",
+    "days_left": 165,
+    "testable": true,
+    "test_period": {
+      "start": 2021,
+      "end": 2023,
+      "label": "2021-2023 rate shock (stress test)"
+    },
+    "concept_id": "interest-rates"
+  },
+  "runners_up": [
+    {
+      "id": "cut_budget-groceries",
+      "kind": "cut_budget",
+      "action": "Cut groceries to £402 a month",
+      "headline": "Your grocery spending was £165 higher than normal",
+      "impact_per_year": 1984.16,
+      "worst_case_per_year": 0.0,
+      "confidence": 0.6667,
+      "confidence_label": "You spent this little in 4 of the last 6 months",
+      "evidence": [
+        {
+          "text": "Last month you spent £568 on groceries, which is £165 above your usual amount.",
+          "facts": {
+            "spent": 568.0,
+            "excess": 165.0
+          },
+          "source": {
+            "source": "bank:fixtures",
+            "series_id": "homeowner-leeds",
+            "status": "mock",
+            "note": "Sample data"
+          }
+        },
+        {
+          "text": "Over the 3 months before that, your average was £402 a month.",
+          "facts": {
+            "months": 3.0,
+            "average": 402.0
+          },
+          "source": {
+            "source": "bank:fixtures",
+            "series_id": "homeowner-leeds",
+            "status": "mock",
+            "note": "Sample data"
+          }
+        },
+        {
+          "text": "If you return to £402 a month, you save £1,984 a year, and you managed that or less in 4 of the last 6 months.",
+          "facts": {
+            "average": 402.0,
+            "impact": 1984.0,
+            "under": 4.0,
+            "history": 6.0
+          }
+        }
+      ],
+      "sources": [
+        {
+          "source": "bank:fixtures",
+          "series_id": "homeowner-leeds",
+          "status": "mock",
+          "note": "Sample data"
+        }
+      ],
+      "options": [
+        {
+          "id": "cut",
+          "label": "Cut groceries to £402 a month",
+          "is_recommended": true
+        },
+        {
+          "id": "keep",
+          "label": "Do nothing",
+          "is_recommended": false
+        }
+      ],
+      "testable": true,
+      "test_period": {
+        "start": 2007,
+        "end": 2009,
+        "label": "2007-2009, the past period most like today"
+      },
+      "concept_id": "budgeting"
+    },
+    {
+      "id": "switch_energy",
+      "kind": "switch_energy",
+      "action": "Fix your energy price",
+      "headline": "The price you pay for energy could rise",
+      "impact_per_year": 260.71,
+      "worst_case_per_year": -27.26,
+      "confidence": 0.8,
+      "confidence_label": "8 in 10 twins in similar past periods did better",
+      "evidence": [
+        {
+          "text": "Your energy costs you £142 a month on a price that can change, and a typical home pays £1,716 a year under the price cap.",
+          "facts": {
+            "monthly": 142.0,
+            "typical": 1716.0
+          },
+          "source": {
+            "source": "octopus",
+            "series_id": "dual-fuel-typical-bill",
+            "status": "live"
+          }
+        },
+        {
+          "text": "In past years like these (2006, 2008, 2018-2019, 2025), prices went up in 4 of 5, and fixing saved £261 a year on average.",
+          "facts": {
+            "rose": 4.0,
+            "periods": 5.0,
+            "impact": 261.0,
+            "period_1_start": 2006.0,
+            "period_1_end": 2006.0,
+            "period_2_start": 2008.0,
+            "period_2_end": 2008.0,
+            "period_3_start": 2018.0,
+            "period_3_end": 2019.0,
+            "period_4_start": 2025.0,
+            "period_4_end": 2025.0
+          },
+          "source": {
+            "source": "ons",
+            "series_id": "D7GT",
+            "status": "live"
+          }
+        },
+        {
+          "text": "During the 2021-2023 energy price shock, fixing saved £1,511 a year.",
+          "facts": {
+            "stress": 1511.0,
+            "stress_start": 2021.0,
+            "stress_end": 2023.0
+          },
+          "source": {
+            "source": "ons",
+            "series_id": "D7GT",
+            "status": "live"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "source": "octopus",
+          "series_id": "dual-fuel-typical-bill",
+          "status": "live"
+        },
+        {
+          "source": "ons",
+          "series_id": "D7GT",
+          "status": "live"
+        },
+        {
+          "source": "bank:fixtures",
+          "series_id": "homeowner-leeds",
+          "status": "mock",
+          "note": "Sample data"
+        }
+      ],
+      "options": [
+        {
+          "id": "fix",
+          "label": "Fix your energy price",
+          "is_recommended": true
+        },
+        {
+          "id": "keep",
+          "label": "Do nothing",
+          "is_recommended": false
+        }
+      ],
+      "testable": true,
+      "test_period": {
+        "start": 2021,
+        "end": 2023,
+        "label": "2021-2023 energy price shock (stress test)"
+      },
+      "concept_id": "inflation"
+    }
+  ],
+  "backtest": {
+    "method": "Walk-forward backtest over past deal-end years 1995-2022: the engine picks fix 2 years, fix 5 years or tracker using only earlier periods, then we check which was cheapest over the next 5 years on the real rate path. Best constant rule: always take a tracker, right in 71.4% of years.",
+    "n": 28,
+    "hit_rate": 0.6429,
+    "baseline": "Always fix for 2 years (best constant rule: always take a tracker, 71.4%)",
+    "baseline_hit_rate": 0.1429
+  },
+  "generated_at": "2026-10-17T15:13:36Z"
+}

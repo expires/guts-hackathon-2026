@@ -53,7 +53,14 @@ enum TestItFixtures {
         return value
     }
 
+    /// Real engine output for the demo persona: `Preview/Recorded/testNextMove.json`, as served by
+    /// `MockClient(data: .recorded)` in the Mock build. Falls back to the contract example when the file is missing.
+    static var recordedResult: Components.Schemas.TestMoveResult { MockData.recorded.testMoveResult }
+
     // MARK: View states
+
+    /// What the Mock build shows: hero and summary from the recorded engine output.
+    static var recorded: TestItViewState { TestItViewModel.makeState(result: recordedResult, phase: .ready) }
 
     static var ready: TestItViewState { TestItViewModel.makeState(result: result, phase: .ready) }
     static var sampleData: TestItViewState { TestItViewModel.makeState(result: sampleThreeOptions, phase: .ready) }
@@ -75,6 +82,7 @@ enum TestItFixtures {
     /// Every state with a Playground title. W6 lists these in the gallery.
     static var all: [(id: String, title: String, state: TestItViewState)] {
         [
+            ("testit.recorded", "Mock build: recorded engine output", recorded),
             ("testit.ready", "Fix for 5 years against 2 years", ready),
             ("testit.sample", "Three options, sample data, missed payments", sampleData),
             ("testit.mixed", "Live, saved copy and sample sources", mixed),

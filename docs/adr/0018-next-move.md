@@ -1,6 +1,6 @@
 # ADR 0018: The product answers one question: "What is my next money move?"
 
-- Status: accepted. TOP PRIORITY for Tier 1.
+- Status: accepted. TOP PRIORITY for Tier 1. Amended by ADR 0020 (stress period in risk; demo follows the engine).
 - Date: 2026-10-17
 - Requested by: the user (spec change)
 

@@ -10,7 +10,7 @@ The LLM rewrites wording only. It never decides an outcome, a number, a ranking 
 |---|---|---|
 | Game event text | `lifeline_explain.api.event_text(event)` | `Event.text` |
 | Choice outcome text | `lifeline_explain.api.outcome_text(event, outcome)` | `Outcome.text` |
-| Next Move card wording (ADR 0018) | `lifeline_explain.api.move_text(move)` | `Move.headline`, `Move.action`, `EvidencePoint.text` |
+| Next Move card wording (ADR 0018) | `lifeline_explain.api.move_text(move)` | `Move.headline`, `EvidencePoint.text` (never `Move.action`: it must match the option label) |
 
 - Model: `claude-opus-5-5` (ADR 0007). Set by the `LLM_MODEL` environment variable.
 - Provider: Anthropic Messages API, through the official `anthropic` Python SDK.
@@ -22,14 +22,14 @@ The LLM rewrites wording only. It never decides an outcome, a number, a ranking 
 - The decision engine (`lifeline_engine`) computes every Next Move: candidates, yearly impact, worst case, confidence, ranking, deadline and evidence facts.
 - The engine writes a template text for every event, outcome and move. The template text is complete and correct without the LLM.
 - The LLM does not see user identity data. It receives the template text, the engine facts, the event year and age, and choice labels.
-- These fields never pass through the LLM: `facts`, `choices`, `deltas`, `good`, `impact_per_year`, `worst_case_per_year`, `confidence`, `confidence_label`, `options`, `deadline`, `days_left`, `sources`.
+- The LLM cannot change these fields: `facts`, `choices`, `deltas`, `good`, `action`, `impact_per_year`, `worst_case_per_year`, `confidence`, `confidence_label`, `options`, `deadline`, `days_left`, `sources`.
 
 ## How outputs are checked
 
 Each LLM reply goes through these checks, in this order:
 
 1. Structure. The request uses a JSON schema output format. The service rejects a reply that is not valid JSON, or a Move reply whose evidence list has a different length.
-2. Clean-up. The service removes extra whitespace and replaces em dashes. It rejects empty text and text much longer than the template (event and outcome: more than 2x the template length or 160 characters more; move action: 60 characters; move headline: 120 characters).
+2. Clean-up. The service removes extra whitespace and replaces em dashes. It rejects empty text and text much longer than the template (event and outcome: more than 2x the template length or 160 characters more; move headline: 120 characters).
 3. Number verifier (`lifeline_explain/verifier.py`). The verifier extracts every number from the text and checks it against an allowed set.
 
 ### Number verifier rules

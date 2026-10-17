@@ -24,6 +24,7 @@ final class ActivitiesViewModel {
             onAction: { [weak self] in
                 guard let self else { return }
                 ActionTabSupport.perform(session, tab: .activities, actionID: $0)
+                onClose()
             },
             onDismissOutcome: { [weak self] in self?.session.dismissOutcome() },
             onClose: { [weak self] in self?.onClose() }

@@ -1,6 +1,7 @@
 import XCTest
 
-/// Character select -> start year -> Life -> AGE -> answer event -> lesson. Uses canned data (`-uiTestingMock`).
+/// Money tab first, then Life: character select -> start year -> AGE -> answer event -> lesson.
+/// Uses canned data (`-uiTestingMock`).
 final class CoreFlowUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -11,6 +12,11 @@ final class CoreFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTestingMock"]
         app.launch()
+
+        // The app opens on Money (ADR 0016). The game is in the Life tab.
+        let lifeTab = app.buttons["tab.life"]
+        XCTAssertTrue(lifeTab.waitForExistence(timeout: 10))
+        lifeTab.tap()
 
         // "Play yourself" is the first card.
         let playYourself = app.buttons["character.self"]
@@ -49,6 +55,41 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertFalse(choice.exists)
         XCTAssertEqual(app.staticTexts["life.age"].label, "Age 19")
         XCTAssertTrue(ageButton.isEnabled)
+    }
+
+    @MainActor
+    func testMoneyTabOpensOnNextMove() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestingMock"]
+        app.launch()
+
+        // The Next Move card is the first element on the Money tab (ADR 0018).
+        let action = app.staticTexts["nextMove.action"]
+        XCTAssertTrue(action.waitForExistence(timeout: 10))
+        XCTAssertEqual(action.label, "Fix for 5 years")
+        XCTAssertTrue(app.staticTexts["nextMove.headline"].exists)
+        XCTAssertTrue(app.staticTexts["nextMove.deadline"].exists || app.descendants(matching: .any)["nextMove.deadline"].exists)
+
+        // Guess my spend hides the prediction until the guess (ADR 0017).
+        XCTAssertFalse(app.staticTexts["guess.predicted"].exists)
+
+        // Do this adds the move to the plan.
+        let doThis = app.buttons["nextMove.doThis"]
+        XCTAssertTrue(doThis.waitForExistence(timeout: 5))
+        doThis.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["nextMove.planMessage"].waitForExistence(timeout: 5))
+
+        // Test it opens the W7 comparison.
+        app.buttons["nextMove.testIt"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["testit.summary"].waitForExistence(timeout: 10))
+        app.buttons["testit.close"].tap()
+
+        // Why? shows the 3 evidence points.
+        let why = app.buttons["nextMove.why"]
+        XCTAssertTrue(why.waitForExistence(timeout: 5))
+        why.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["why.evidence.2"].waitForExistence(timeout: 5))
+        app.buttons["why.close"].tap()
     }
 
     @MainActor

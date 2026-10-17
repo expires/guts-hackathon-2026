@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "data_status": "mock",
+    "source": "fixtures",
+    "as_of": "2026-10-17",
+    "label": "Sample data"
+  },
+  "monthly_total": 37.98,
+  "count": 2,
+  "items": [
+    {
+      "id": "sub_puregym",
+      "merchant": "PureGym",
+      "emoji": "🔁",
+      "category": "subscriptions",
+      "amount": 24.99,
+      "cadence": "monthly",
+      "monthly_cost": 24.99,
+      "next_payment": "2026-11-01"
+    },
+    {
+      "id": "sub_netflix",
+      "merchant": "Netflix",
+      "emoji": "🔁",
+      "category": "subscriptions",
+      "amount": 12.99,
+      "cadence": "monthly",
+      "monthly_cost": 12.99,
+      "next_payment": "2026-11-09"
+    }
+  ]
+}

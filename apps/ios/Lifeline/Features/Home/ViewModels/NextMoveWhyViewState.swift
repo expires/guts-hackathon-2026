@@ -9,6 +9,21 @@ struct NextMoveWhyViewState: Equatable, Sendable {
         var source: SourceChipState?
     }
 
+    struct RateBar: Equatable, Sendable, Identifiable {
+        var id: String
+        /// "5-year fix".
+        var label: String
+        var value: Double
+        /// "4.21%".
+        var valueText: String
+        /// 0 to 1, relative to the largest rate.
+        var fraction: Double
+        /// The recommended option's rate (filled bar).
+        var isHighlighted: Bool
+        /// Bank Rate (dashed bar).
+        var isReference: Bool
+    }
+
     struct LessonPreview: Equatable, Sendable {
         var title: String
         /// Always 2 sentences.
@@ -30,6 +45,16 @@ struct NextMoveWhyViewState: Equatable, Sendable {
     /// Nil when the concept has no lesson yet.
     var lesson: LessonPreview?
     var isSampleData: Bool
+    /// 0 to 1. Penny's face and the confidence chip follow it.
+    var confidence: Double = 0
+    /// "Medium".
+    var confidenceChip: String = ""
+    /// "Worst past period: £310 a year worse off".
+    var worstCaseText: String = ""
+    /// Rate bars taken from the evidence facts (keys ending in `_pct`).
+    var rates: [RateBar] = []
+    /// All sources on one line, grouped: "Bank of England · live, Your bank · sample".
+    var ratesSourceText: String?
     /// Mortgage moves also link to the full Real-life Decision screen (W7).
     var hasDecisionDetail: Bool = false
 }

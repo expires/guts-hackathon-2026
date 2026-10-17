@@ -4,6 +4,7 @@ import SwiftUI
 struct CharacterFormView: View {
     let state: CharacterFormViewState
     var actions: CharacterFormActions = .noop
+    @Environment(\.dismiss) private var dismiss
 
     private func field<T>(_ keyPath: WritableKeyPath<CharacterFormFields, T>) -> Binding<T> {
         Binding(
@@ -17,87 +18,87 @@ struct CharacterFormView: View {
     }
 
     var body: some View {
-        Form {
-            if !state.quickPicks.isEmpty {
-                Section("Quick pick") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(state.quickPicks) { pick in
-                                Button("\(pick.emoji) \(pick.label)") { actions.onQuickPick(pick.id) }
-                                    .buttonStyle(.glass)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                ScreenHeader(title: state.title, leading: HeaderSquareButton(kind: .back, identifier: "form.back") { dismiss() }) { EmptyView() }
+                if !state.quickPicks.isEmpty {
+                    RowGroupTitle(text: "Quick pick")
+                    FlowRow(spacing: Theme.Spacing.s) {
+                        ForEach(state.quickPicks) { pick in
+                            Button { actions.onQuickPick(pick.id) } label: {
+                                Label(pick.label, icon: LLIcon.face(emoji: pick.emoji)).font(.llLabelBold).padding(.horizontal, Theme.Spacing.m)
                                     .frame(minHeight: Theme.minTarget)
-                                    .accessibilityIdentifier("form.quickPick.\(pick.id)")
+                                    .inkSurface(.chip, lineWidth: Theme.chipOutline)
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("form.quickPick.\(pick.id)")
                         }
                     }
                 }
-            }
-            if state.showsBankConnect {
-                Section {
-                    Button("Fill in from my bank", systemImage: "building.columns", action: actions.onConnectBank)
-                        .frame(minHeight: Theme.minTarget)
-                        .accessibilityIdentifier("form.connectBank")
-                    if let status = state.bankStatusText {
-                        Label(status, systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                if state.showsBankConnect {
+                    Button(action: actions.onConnectBank) {
+                        ListRow(icon: .bank, title: "Fill in from my bank", subtitle: state.bankStatusText)
+                            .padding(.horizontal, Theme.Spacing.l)
+                            .inkSurface(.card)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("form.connectBank")
                 }
-            }
-            Section("You") {
-                TextField("Name", text: field(\.name))
+                RowGroupTitle(text: "You")
+                LLTextField(title: "Name", text: field(\.name), identifier: "form.name")
                     .textContentType(.givenName)
-                    .accessibilityIdentifier("form.name")
-                Stepper("Born in \(String(state.fields.birthYear))", value: field(\.birthYear), in: state.birthYearRange)
-                    .accessibilityIdentifier("form.birthYear")
-                TextField("Job, for example nurse", text: field(\.occupation))
+                LLStepper(
+                    title: "Born in",
+                    valueText: String(state.fields.birthYear),
+                    canDecrement: state.fields.birthYear > state.birthYearRange.lowerBound,
+                    canIncrement: state.fields.birthYear < state.birthYearRange.upperBound,
+                    identifier: "form.birthYear",
+                    onDecrement: { change(\.birthYear, state.fields.birthYear - 1) },
+                    onIncrement: { change(\.birthYear, state.fields.birthYear + 1) }
+                )
+                LLTextField(title: "Job, for example nurse", text: field(\.occupation), identifier: "form.occupation")
                     .textContentType(.jobTitle)
-                    .accessibilityIdentifier("form.occupation")
-            }
-            Section("Where you live") {
-                Picker("Region", selection: field(\.regionID)) {
-                    ForEach(state.regions) { Text($0.label).tag($0.id) }
-                }
-                TextField("Town", text: field(\.town))
+                RowGroupTitle(text: "Where you live")
+                LLChoiceChips(
+                    title: "Region",
+                    options: state.regions.map { .init(id: $0.id, label: $0.label) },
+                    selection: state.fields.regionID,
+                    identifier: "form.region"
+                ) { change(\.regionID, $0) }
+                LLTextField(title: "Town", text: field(\.town), identifier: "form.town")
                     .textContentType(.addressCity)
-                    .accessibilityIdentifier("form.town")
-                Picker("Home", selection: field(\.housing)) {
-                    ForEach(HousingOption.allCases) { Text($0.label).tag($0) }
-                }
+                LLChoiceChips(
+                    title: "Home",
+                    options: HousingOption.allCases.map { .init(id: $0.rawValue, label: $0.label) },
+                    selection: state.fields.housing.rawValue,
+                    identifier: "form.housing"
+                ) { if let option = HousingOption(rawValue: $0) { change(\.housing, option) } }
+                RowGroupTitle(text: "Money")
+                LLMoneyField(title: "Pay before tax, per year", value: field(\.income), identifier: "form.income")
+                LLMoneyField(title: "Savings", value: field(\.savings), identifier: "form.savings")
+                LLMoneyField(title: "Debts, not counting a mortgage", value: field(\.debt), identifier: "form.debt")
+                Text(state.footer).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
-            Section("Money") {
-                MoneyField(title: "Pay before tax, per year", value: field(\.income), identifier: "form.income")
-                MoneyField(title: "Savings", value: field(\.savings), identifier: "form.savings")
-                MoneyField(title: "Debts, not counting a mortgage", value: field(\.debt), identifier: "form.debt")
-            }
-            Section {
-                Button(action: actions.onContinue) {
-                    Text("Choose a start year")
-                        .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
-                }
-                .buttonStyle(.glassProminent)
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.vertical, Theme.Spacing.xl)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button("Choose a start year", action: actions.onContinue)
+                .buttonStyle(.main)
                 .disabled(!state.canContinue)
                 .accessibilityIdentifier("form.continue")
-            } footer: {
-                Text(state.footer)
-            }
+                .padding(.horizontal, Theme.Spacing.margin)
+                .padding(.vertical, Theme.Spacing.m)
+                .background(Theme.Palette.paper.ignoresSafeArea(edges: .bottom))
         }
-        .navigationTitle(state.title)
+        .paperBackground()
+        .toolbar(.hidden, for: .navigationBar)
     }
-}
 
-/// Pounds entry field with a GBP format.
-struct MoneyField: View {
-    let title: String
-    @Binding var value: Double
-    let identifier: String
-
-    var body: some View {
-        LabeledContent(title) {
-            TextField(title, value: $value, format: .currency(code: "GBP").locale(Money.locale).precision(.fractionLength(0)))
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .accessibilityIdentifier(identifier)
-        }
+    private func change<T>(_ keyPath: WritableKeyPath<CharacterFormFields, T>, _ value: T) {
+        var fields = state.fields
+        fields[keyPath: keyPath] = value
+        actions.onChange(fields)
     }
 }
 

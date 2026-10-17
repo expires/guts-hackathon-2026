@@ -8,43 +8,45 @@ struct ConceptCollectionView: View {
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: Theme.Spacing.m)]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                switch state.phase {
-                case let .loading(loading):
-                    LoadingStateView(state: loading)
-                case let .failed(error):
-                    ErrorStateView(state: error, onRetry: actions.onRetry)
-                case .ready:
-                    VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                        Text("\(state.unlockedCount) of \(state.totalCount) unlocked")
-                            .font(.headline)
-                            .accessibilityIdentifier("concepts.count")
-                        LazyVGrid(columns: columns, spacing: Theme.Spacing.m) {
-                            ForEach(state.items) { item in
-                                Button { actions.onSelect(item.id) } label: {
-                                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                                        Text(item.emoji).font(.largeTitle).accessibilityHidden(true)
-                                        Text(item.title).font(.headline)
-                                        Text(item.summary).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                                        Text(item.areaLabel).font(.caption2).foregroundStyle(.tertiary)
+        SheetContainer(title: "Concepts", closeIdentifier: "concepts.close", onClose: actions.onClose) {
+            switch state.phase {
+            case let .loading(loading):
+                LoadingStateView(state: loading)
+            case let .failed(error):
+                ErrorStateView(state: error, onRetry: actions.onRetry)
+            case .ready:
+                Text("\(state.unlockedCount) of \(state.totalCount) unlocked")
+                    .font(.llBodyBold)
+                    .accessibilityIdentifier("concepts.count")
+                VStack(spacing: Theme.Spacing.m) {
+                    ForEach(state.items) { item in
+                        Button { actions.onSelect(item.id) } label: {
+                            HStack(alignment: .top, spacing: Theme.Spacing.m) {
+                                LLIconImage(LLIcon.from(emoji: item.emoji, fallback: .lesson), size: 48)
+                                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                    Text(item.title).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
+                                    Text(item.summary).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
+                                    HStack(spacing: Theme.Spacing.s) {
+                                        Chip(text: item.areaLabel)
+                                        if !item.isUnlocked {
+                                            Label("Not unlocked yet", icon: .lock).font(.llLabel)
+                                        }
                                     }
-                                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-                                    .opacity(item.isUnlocked ? 1 : 0.55)
                                 }
-                                .buttonStyle(.glass)
-                                .accessibilityLabel("\(item.title). \(item.summary). \(item.isUnlocked ? "Unlocked" : "Not unlocked yet")")
-                                .accessibilityIdentifier("concept.\(item.id)")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                Chevron()
                             }
+                            .padding(Theme.Spacing.l)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .inkSurface(item.isUnlocked ? .card : .cardAlt, fill: item.isUnlocked ? Theme.Palette.surface : Theme.Palette.paper)
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.Palette.ink)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(item.title). \(item.summary). \(item.isUnlocked ? "Unlocked" : "Not unlocked yet")")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("concept.\(item.id)")
                     }
-                    .padding(Theme.Spacing.l)
-                }
-            }
-            .navigationTitle("Concepts")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: actions.onClose)
                 }
             }
         }

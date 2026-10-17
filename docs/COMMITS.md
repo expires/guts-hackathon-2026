@@ -45,3 +45,30 @@ feat: Tier 0 Lifeline core (data, engine, sim, API, iOS) with green gates
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
 ```
+
+## 3. Tier 1 backend: Next Move, Money tab, spend prediction (V1, V2, V3, V5, V6 green; iOS V4 pending)
+
+```
+feat: Next Move engine, Test it, Money tab API and spend prediction
+
+- next-move: one answer to "What is my next money move?" with 3 evidence
+  points, live/cached/mock sources, regret-based option choice, stress
+  periods and honest confidence (ADR 0018, 0020, 0023)
+- test it: play_scenario replays the user's profile through the stress
+  period for each option, with costs (ADR 0018, 0024)
+- money: /v1/finance/* from labelled fixture personas: overview,
+  spending, subscriptions, bills, budgets, goals, profile (ADR 0016)
+- prediction: ridge model on daily spend with £ reasons, Guess my spend,
+  walk-forward backtest vs weekday baseline (ADR 0017)
+- data: 13 live sources incl. BoE SVR and tracker series, gov.uk bank
+  holidays, Open-Meteo; key-safe logging (ADR 0021)
+- sim: 152 events, 50 concepts, 31 actions, rewind, ribbons (ADR 0024)
+- explain: Opus rewording with number verifier and template fallback
+  (ADR 0019)
+- api: all Tier 1 endpoints, plan, store fallbacks, calendar validation
+- docs: DEMO.md opens with the Next Move story; README accuracy section;
+  verifier reports V1-V3, V5, V6 (Tier 1)
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```

@@ -1,6 +1,6 @@
 # STATUS
 
-Last update: 2026-10-17 14:52, **Tier 0 accepted (all gates green)**. Tier 1 starting.
+Last update: 2026-10-17, **Tier 0 accepted**. Tier 1 gate in progress.
 
 ## Source of truth
 
@@ -34,7 +34,7 @@ Both documents agree on: three layers, pure decision layer, AI explains but neve
 |---|---|
 | Step A (setup) | Done |
 | Tier 0 | **Accepted.** `make up` healthy; `make test` 385 passed; `make lint` clean; contract on stack 49 passed; iOS build + 51 tests green; V1-V5 PASS; secret scan clean |
-| Tier 1 | In progress (workers W1-W7 launched 14:55). Order: Next Move first (ADR 0018), then Money tab (ADR 0016), spend prediction (ADR 0017), then the original Tier 1 list |
+| Tier 1 | Backend gate green (V1, V2, V3, V5, V6 PASS; 860 tests). iOS: ADR 0026 design rebuild steps 1-5 built; user's UI fix pass in progress (W6: own tab bar and sheets, no Liquid Glass, compact Money home; W7: Test it and Rewind numbers from data). V4 after the fix pass. Build installed on the user's iPhone (Mock config, recorded engine data) |
 | Tier 2 | Not started |
 
 ## Tier 0 verifier results
@@ -57,11 +57,18 @@ Both documents agree on: three layers, pure decision layer, AI explains but neve
 - iOS: View/ViewModel split (ADR 0011), LiveClient and MockClient, Playground gallery (63 states), character select, Life, AGE, event sheet, lesson. 32 screenshots in `docs/screens/`.
 - Contract: 35 paths. Tier 1 and Tier 2 operations answer 501 `not_implemented` (declared) until built.
 
+## Demo persona and Next Move (current)
+
+- Persona (devices demo-presenter-01..05): Priya Shah, 34, Nurse, Leeds LS6 1AN; £180,000 mortgage, 25 years, 2-year fix 4.42% (BoE IUMBV34 Apr 2025) ending 2027-03-31; Netflix £12.99 + PureGym £24.99 (£37.98 a month).
+- Engine decision on real BoE rates: **"Take a tracker"**, £3,097 a year vs doing nothing, "In 8 of 10 similar cases this was the best choice". Evidence 1 states the 5-year vs 2-year gap at today's rates (£189 a year) and her stressed payment (69% of take-home). ADR 0020 Amendment 2 records why the engine does not pick "Fix for 5 years": today's tracker rate (4.23%) is below both fixes, and the 2007 matched period makes a 5-year fix the riskiest option by regret.
+- The phone's Mock build serves recorded real engine responses (`make ios-record-mock`), not contract examples.
+
 ## Secret scan
 
 | Milestone | Tool | Result |
 |---|---|---|
 | Step A | gitleaks (`make secrets-scan`) | No leaks. `.env` ignored |
+| Tier 1 (re-run) | gitleaks (`make secrets-scan`) | No leaks. Allowlist covers enum assignments; fake test keys built at run time |
 | Tier 0 | gitleaks (`make secrets-scan`) | No leaks after allowlisting one false positive (`key == MacroKey...` in engine code, line-scoped regex in `.gitleaks.toml`). `.env` ignored |
 
 ## Mocked and why

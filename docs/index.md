@@ -74,6 +74,13 @@ The denominator uses income when the peak is small or negative. A person in debt
 
 The Index can still move at AGE when the player's choices made the two lives different. For example, a player who holds more shares than the twin gains or loses more in a market year. That movement is real.
 
+## Tab actions, rewind and "Test it" (Tier 1)
+
+- Tab actions (Job, Assets, Relationships, Activities, Money) change the player only. The twin takes no actions, so an action moves the Index at once.
+- AnnualIncome(0) and NetWorth(0) come from the life's start state. For an unedited preset, the start money scales with the start year (regional pay, CPI, regional house prices), so a 2021 nurse starts on 2021 pay.
+- Rewind replays the life with one decision changed. The twin does not change, because its choices never depend on the player.
+- "Test it" (`play_scenario`, ADR 0018) builds an ordinary life. Its twin takes every default, so the Index of each option compares that option with the default path. The option that equals the default (for example `fix_2y` at a mortgage deal end) scores exactly 100.
+
 ## Worked example
 
 Amira, a nurse in Leeds. AnnualIncome(0) = £24,800. NetWorth(0) = −£10,500.

@@ -1,57 +1,59 @@
+// Rebuilt for ADR 0026 (Play-Live.dc.html rival strip) by W7.
 import SwiftUI
 
-/// Live rival strip: age, net worth and Index for every player in the room.
+/// Live rival strip: one tile per player with face, name, age and INDEX.
 struct RivalStripView: View {
     let state: RivalStripViewState
+    var caption: String?
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: Theme.Spacing.s) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            ScrollView(.horizontal) {
                 HStack(spacing: Theme.Spacing.s) {
                     ForEach(state.rivals) { rival in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: Theme.Spacing.xs) {
-                                Text(rival.isMe ? "You" : rival.name).font(.caption.weight(.semibold))
-                                if rival.finished {
-                                    Image(systemName: "flag.checkered").font(.caption2).accessibilityLabel("Finished")
-                                }
-                            }
-                            Text(rival.age.map { "Age \($0)" } ?? "Not started")
-                                .font(.caption2.monospacedDigit())
-                                .contentTransition(.numericText(value: Double(rival.age ?? 0)))
-                            if let netWorth = rival.netWorth {
-                                Text(Money.compact(netWorth))
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(netWorth < 0 ? .red : .secondary)
-                            }
-                            if let index = rival.index {
-                                Text("Index \(Int(index.rounded()))").font(.caption2.monospacedDigit())
+                        HStack(spacing: 6) {
+                            LLIconImage(LLIcon(rawValue: rival.face) ?? .faceTeen, size: 24)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(rival.isMe ? "You" : rival.name).font(.llLabelBold).lineLimit(1)
+                                Text(detail(rival)).font(.llLabel).lineLimit(1)
                             }
                         }
-                        .padding(Theme.Spacing.s)
-                        .frame(minWidth: 88, minHeight: Theme.minTarget, alignment: .leading)
-                        .glassEffect(rival.isMe ? .regular.tint(.blue.opacity(0.2)) : .regular, in: .rect(cornerRadius: 14))
-                        .accessibilityElement(children: .combine)
+                        .padding(.horizontal, Theme.Spacing.s)
+                        .padding(.vertical, 6)
+                        .inkSurface(.badge, fill: rival.isMe ? Theme.Palette.family : Theme.Palette.surface, lineWidth: Theme.chipOutline)
+                        .foregroundStyle(rival.isMe ? Theme.Palette.onArea : Theme.Palette.ink)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(spoken(rival))
                         .accessibilityIdentifier("rival.\(rival.id)")
                     }
                 }
-                .padding(.horizontal, Theme.Spacing.l)
+                .padding(.trailing, 6)
+                .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            if let caption {
+                Text(caption).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
         }
-        .accessibilityLabel("Rivals")
+    }
+
+    private func detail(_ rival: RivalStripViewState.Rival) -> String {
+        let age = rival.age.map(String.init) ?? "-"
+        let index = rival.index.map { String(Int($0.rounded())) } ?? "-"
+        return rival.finished ? "Done · \(index)" : "\(age) · \(index)"
+    }
+
+    private func spoken(_ rival: RivalStripViewState.Rival) -> String {
+        var parts = [rival.isMe ? "You" : rival.name]
+        if let age = rival.age { parts.append("age \(age)") }
+        if let index = rival.index { parts.append("INDEX \(Int(index.rounded()))") }
+        if rival.finished { parts.append("finished") }
+        return parts.joined(separator: ", ")
     }
 }
 
 // MARK: - Previews (one per fixture: light, dark, AX3 Dynamic Type)
 
-#Preview("4 players · light") {
-    RivalStripView(state: Fixtures.Rooms.rivals)
-}
-
-#Preview("4 players · dark") {
-    RivalStripView(state: Fixtures.Rooms.rivals).previewDark()
-}
-
-#Preview("4 players · AX3") {
-    RivalStripView(state: Fixtures.Rooms.rivals).previewLargeType()
-}
+#Preview("4 players · light") { RivalStripView(state: RoomsFixtures.live.rivals, caption: RoomsFixtures.live.rivalCaption).padding() }
+#Preview("4 players · dark") { RivalStripView(state: RoomsFixtures.live.rivals).padding().previewDark() }
+#Preview("4 players · AX3") { RivalStripView(state: Fixtures.Rooms.rivals).padding().previewLargeType() }

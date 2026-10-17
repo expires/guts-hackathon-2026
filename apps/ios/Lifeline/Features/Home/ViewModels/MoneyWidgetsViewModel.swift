@@ -102,11 +102,20 @@ final class MoneyWidgetsViewModel {
             try? overview?.get().meta, try? spending?.get().meta, try? subscriptions?.get().meta,
             try? bills?.get().meta, try? budgets?.get().meta, try? goals?.get().meta,
         ]
+        var billsSection = section(bills, link: moveLink(for: .bills, moves: moves), map: Self.bills)
+        // A bill that is also a subscription with a price rise gets the "Up £2" chip.
+        if let subs = try? subscriptions?.get(), var value = billsSection.value {
+            for index in value.items.indices {
+                let name = value.items[index].name
+                value.items[index].priceRiseChip = subs.items.first { $0.merchant == name }.flatMap { priceRiseChip($0.priceRise) }
+            }
+            billsSection.value = value
+        }
         return MoneyWidgetsViewState(
             overview: section(overview, link: moveLink(for: .overview, moves: moves), map: Self.overview),
             spending: section(spending, link: moveLink(for: .spending, moves: moves), map: Self.spending),
             subscriptions: section(subscriptions, link: moveLink(for: .subscriptions, moves: moves), map: Self.subscriptions),
-            bills: section(bills, link: moveLink(for: .bills, moves: moves), map: Self.bills),
+            bills: billsSection,
             budgets: section(budgets, link: moveLink(for: .budgets, moves: moves), map: Self.budgets),
             goals: section(goals, link: moveLink(for: .goals, moves: moves)) { $0.items.map(Self.goal) },
             isSampleData: metas.compactMap { $0 }.contains(where: FinanceMapping.isSample)
@@ -145,8 +154,40 @@ final class MoneyWidgetsViewModel {
             accounts: response.accounts.map {
                 .init(id: $0.id, name: $0.name, provider: $0.provider, kindLabel: accountKind($0.kind.rawValue), balance: $0.balance)
             },
+            netWorthSeries: response.netWorthHistory.map(\.value),
+            netWorthChangeText: netWorthChange(response.netWorthHistory),
+            monthLabels: response.netWorthHistory.map { FinanceMapping.shortMonthText($0.date) },
             asOfText: "As of " + FinanceMapping.dayText(response.meta.asOf)
         )
+    }
+
+    /// "Up £648 since Aug", "Down £120 since Aug".
+    static func netWorthChange(_ points: [Components.Schemas.Point]) -> String? {
+        guard let first = points.first, let last = points.last, points.count >= 2 else { return nil }
+        let change = (last.value - first.value).rounded()
+        let since = FinanceMapping.shortMonthText(first.date)
+        if change == 0 { return "No change since \(since)" }
+        return "\(change > 0 ? "Up" : "Down") \(Money.format(abs(change))) since \(since)"
+    }
+
+    /// Spending category to a life area colour.
+    static func area(_ category: String) -> String {
+        switch category {
+        case "groceries", "eating_out", "gifts", "entertainment": "family"
+        case "transport", "travel", "education": "work"
+        case "housing", "bills", "subscriptions": "home"
+        case "health", "personal_care": "health"
+        case "savings", "income", "transfers": "money"
+        default: "other"
+        }
+    }
+
+    /// "Up £2" for a price rise.
+    static func priceRiseChip(_ rise: Components.Schemas.PriceRise?) -> String? {
+        guard let rise else { return nil }
+        let change = rise.toAmount - rise.fromAmount
+        let text = abs(change) < 1 ? FinanceMapping.pounds(abs(change)) : Money.format(abs(change).rounded())
+        return "\(change >= 0 ? "Up" : "Down") \(text)"
     }
 
     static func accountKind(_ raw: String) -> String {
@@ -175,7 +216,8 @@ final class MoneyWidgetsViewModel {
                     share: category.share,
                     shareText: FinanceMapping.percent(category.share),
                     countText: category.transactions == 1 ? "1 payment" : "\(category.transactions) payments",
-                    changeText: category.changePct.flatMap(changeText)
+                    changeText: category.changePct.flatMap(changeText),
+                    area: area(category.category.rawValue)
                 )
             }
         )
@@ -206,7 +248,9 @@ final class MoneyWidgetsViewModel {
                 nextPaymentText: item.nextPayment.map { "Next payment " + FinanceMapping.dayText($0) },
                 priceRiseText: item.priceRise.map {
                     "Price went up from \(FinanceMapping.pounds($0.fromAmount)) to \(FinanceMapping.pounds($0.toAmount)) on \(FinanceMapping.dayText($0.since))"
-                }
+                },
+                priceRiseChip: priceRiseChip(item.priceRise),
+                monthlyCostText: FinanceMapping.pounds(item.monthlyCost)
             )
         }
         return .init(
@@ -235,7 +279,8 @@ final class MoneyWidgetsViewModel {
                 }
                 return .init(
                     id: bill.id, emoji: bill.emoji, name: bill.name, amount: bill.amount,
-                    dueText: "Due " + FinanceMapping.dayText(bill.dueDate), status: status, statusText: statusText
+                    dueText: "Due " + FinanceMapping.dayText(bill.dueDate), status: status, statusText: statusText,
+                    shortDateText: FinanceMapping.shortDateText(bill.dueDate), priceRiseChip: nil
                 )
             }
         )
@@ -260,7 +305,8 @@ final class MoneyWidgetsViewModel {
                     progress: budget.progress,
                     status: status,
                     detailText: "\(Money.format(budget.spent)) of \(Money.format(budget.limit))",
-                    statusText: gap < 0 ? "\(Money.format(-gap)) over" : "\(Money.format(gap)) left"
+                    statusText: gap < 0 ? "\(Money.format(-gap)) over" : "\(Money.format(gap)) left",
+                    area: area(budget.category.rawValue)
                 )
             }
         )

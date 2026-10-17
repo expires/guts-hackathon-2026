@@ -9,8 +9,8 @@ struct LoadingStateView: View {
             ProgressView()
                 .controlSize(.large)
             Text(state.message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.llBody)
+                .foregroundStyle(Theme.Palette.muted)
         }
         .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity)

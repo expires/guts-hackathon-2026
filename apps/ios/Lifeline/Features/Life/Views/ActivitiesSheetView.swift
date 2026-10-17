@@ -6,23 +6,9 @@ struct ActivitiesSheetView: View {
     var actions: ActionTabActions = .noop
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Theme.Spacing.l) {
-                    if let outcome = state.outcome {
-                        OutcomeBanner(outcome: outcome, onDismiss: actions.onDismissOutcome)
-                    }
-                    ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction)
-                }
-                .padding(Theme.Spacing.l)
-            }
-            .navigationTitle("Activities")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: actions.onClose)
-                        .accessibilityIdentifier("activities.done")
-                }
-            }
+        SheetContainer(title: "Activities", closeIdentifier: "activities.done", onClose: actions.onClose) {
+            RowGroupTitle(text: "What you can do")
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
         }
     }
 }

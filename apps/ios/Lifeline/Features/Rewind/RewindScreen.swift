@@ -6,8 +6,14 @@ struct RewindScreen: View {
     private let onClose: @MainActor () -> Void
     private let onBuyPass: @MainActor () -> Void
 
-    init(session: GameSession, onClose: @escaping @MainActor () -> Void, onBuyPass: @escaping @MainActor () -> Void) {
-        _model = State(initialValue: RewindViewModel(session: session))
+    /// - Parameter decisionID: the decision to show first (for example from the Lesson). Nil shows the newest.
+    init(
+        session: GameSession,
+        decisionID: String? = nil,
+        onClose: @escaping @MainActor () -> Void,
+        onBuyPass: @escaping @MainActor () -> Void
+    ) {
+        _model = State(initialValue: RewindViewModel(session: session, decisionID: decisionID))
         self.onClose = onClose
         self.onBuyPass = onBuyPass
     }

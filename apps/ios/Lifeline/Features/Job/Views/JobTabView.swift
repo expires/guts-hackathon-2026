@@ -6,40 +6,22 @@ struct JobTabView: View {
     var actions: ActionTabActions = .noop
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Theme.Spacing.l) {
-                GlassCard {
-                    if let job = state.job {
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            Text(job.title).font(.title2.bold())
-                            if let employer = job.employer {
-                                Text(employer).foregroundStyle(.secondary)
-                            }
-                            Text("\(Money.format(job.annualIncome)) a year")
-                                .font(.headline.monospacedDigit())
-                                .contentTransition(.numericText(value: job.annualIncome))
-                            Text(job.yearsInRole == 1 ? "1 year in this job" : "\(job.yearsInRole) years in this job")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            if let status = job.employerStatus {
-                                Label(status, systemImage: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(job.employerAtRisk ? .orange : .secondary)
-                            }
-                        }
-                        .accessibilityElement(children: .combine)
-                    } else {
-                        Text("You do not have a job.").foregroundStyle(.secondary)
+        SheetContainer(title: "Job", closeIdentifier: "menu.close", onClose: actions.onClose) {
+            if let job = state.job {
+                RowGroup(title: "My job") {
+                    ListRow(icon: .job, title: job.title, subtitle: [job.employer, job.yearsInRole == 1 ? "1 year in this job" : "\(job.yearsInRole) years in this job"].compactMap { $0 }.joined(separator: " · "), trailing: Money.format(job.annualIncome), showsChevron: false)
+                    if let status = job.employerStatus {
+                        ListRow(icon: .jobLoss, title: status, showsChevron: false)
                     }
                 }
-                if let outcome = state.outcome {
-                    OutcomeBanner(outcome: outcome, onDismiss: actions.onDismissOutcome)
+            } else {
+                RowGroup(title: "My job") {
+                    ListRow(icon: .job, title: "No job right now", showsChevron: false)
                 }
-                SectionTitle(text: "What to do")
-                ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction)
             }
-            .padding(Theme.Spacing.l)
+            RowGroupTitle(text: "What you can do")
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
         }
-        .navigationTitle("Job")
     }
 }
 
