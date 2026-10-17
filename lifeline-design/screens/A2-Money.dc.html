@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Money tab</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: {{t.ground}}; color: {{t.ink}}; font-family: 'Atkinson Hyperlegible', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="flex: 1; padding: 20px 20px 12px; display: flex; flex-direction: column; gap: 16px">
+
+    <div style="display: flex; align-items: center; gap: 12px; height: 40px">
+      <dc-import name="Icon" icon="face-priya" size="{{40}}" hint-size="40px,40px"></dc-import>
+      <div style="flex: 1; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px">Morning, Priya</div>
+      <div style="font-size: 13px; font-weight: 700; padding: 3px 10px; border: 2px solid {{t.ink}}; border-radius: 12px 16px 11px 15px / 15px 11px 16px 12px; background: {{t.surface}}">Mock data</div>
+    </div>
+
+    <section aria-label="Your next money move" style="position: relative; margin-top: 18px; background: {{t.cardBg}}; color: {{t.cardFg}}; border: 3px solid {{t.ink}}; border-radius: 22px 30px 20px 28px / 28px 20px 30px 22px; box-shadow: 6px 7px 0 {{t.shadow}}; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+      <svg width="66" height="66" viewBox="0 0 64 64" fill="none" stroke="{{t.ink}}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Penny is thinking: medium confidence" style="position: absolute; top: -34px; right: 18px; transform: rotate(8deg)"><path d="M32 6 C47 5.5 58.5 17 58 32.5 C57.5 47 47 58.5 31.5 58 C16.5 57.5 5.5 47 6 31.5 C6.5 17 17 6.5 32 6 Z" fill="{{t.money}}"></path><path d="M32 13 C43 12.5 51.5 21 51 32.5" stroke-width="2.5"></path><path d="M19 21 L28 23.5"></path><path d="M36 25 L45 21"></path><ellipse cx="24" cy="31" rx="4" ry="5" fill="#FFFFFF" stroke-width="2.5"></ellipse><ellipse cx="40" cy="31" rx="4" ry="5" fill="#FFFFFF" stroke-width="2.5"></ellipse><circle cx="22.8" cy="33" r="2" fill="#16181D" stroke="none"></circle><circle cx="38.8" cy="33" r="2" fill="#16181D" stroke="none"></circle><path d="M26 43 Q29 41 32 43 Q35 45 38 43"></path></svg>
+      <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase">Your next money move</div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; line-height: 1.15">Fix your mortgage for 5 years</h2>
+        <p style="margin: 0; font-size: 17px; line-height: 1.4">Your deal ends in 165 days. Fix at 4.98% and pay £1,050 a month.</p>
+      </div>
+      <div style="display: flex; border-top: 3px solid {{t.cardLine}}; border-bottom: 3px solid {{t.cardLine}}; padding: 12px 0">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+          <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1">£190</div>
+          <div style="font-size: 13px">a year less than a 2-year fix</div>
+        </div>
+        <div style="width: 3px; background: {{t.cardLine}}; margin: 0 16px; border-radius: 2px"></div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; justify-content: center">
+          <div style="font-size: 17px; font-weight: 700">Medium confidence</div>
+          <div role="img" aria-label="2 of 3" style="display: flex; gap: 4px">
+            <div style="width: 28px; height: 10px; border: 2px solid {{t.cardLine}}; border-radius: 5px 3px 6px 4px; background: {{t.cardLine}}"></div>
+            <div style="width: 28px; height: 10px; border: 2px solid {{t.cardLine}}; border-radius: 3px 6px 4px 5px; background: {{t.cardLine}}"></div>
+            <div style="width: 28px; height: 10px; border: 2px solid {{t.cardLine}}; border-radius: 6px 4px 5px 3px; background: transparent"></div>
+          </div>
+          <div style="font-size: 13px">Rates could fall</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <button type="button" style="flex: 1.3; height: 52px; border: 3px solid {{t.cardLine}}; border-radius: 14px 20px 12px 18px / 18px 12px 20px 14px; background: {{t.pBg}}; color: {{t.pFg}}; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer">
+          <dc-import name="Icon" icon="test" size="{{24}}" hint-size="24px,24px"></dc-import>Test it</button>
+        <button type="button" style="flex: 0.8; height: 52px; border: 3px solid {{t.cardLine}}; border-radius: 18px 12px 20px 14px / 14px 20px 12px 18px; background: {{t.sBg}}; color: {{t.cardFg}}; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Why?</button>
+        <button type="button" style="flex: 1; height: 52px; border: 3px solid {{t.cardLine}}; border-radius: 12px 18px 14px 20px / 20px 14px 18px 12px; background: {{t.sBg}}; color: {{t.cardFg}}; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer">Do this</button>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px">
+      <div style="background: {{t.surface}}; border: 3px solid {{t.ink}}; border-radius: 16px 20px 15px 19px / 19px 15px 20px 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px">
+        <div style="font-size: 13px; color: {{t.muted}}">In your account</div>
+        <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; line-height: 1.1">£2,418</div>
+        <div style="font-size: 13px; color: {{t.muted}}">Payday in 9 days</div>
+      </div>
+      <div style="background: {{t.surface}}; border: 3px solid {{t.ink}}; border-radius: 20px 15px 19px 16px / 15px 20px 16px 19px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px">
+        <div style="font-size: 13px; color: {{t.muted}}">Net worth</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px">
+          <div style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; line-height: 1.1">£38,200</div>
+          <svg width="48" height="22" viewBox="0 0 48 22" fill="none" aria-hidden="true"><path d="M2 18 L10 15 L18 16 L26 10 L34 11 L46 4" stroke="{{t.money}}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </div>
+        <div style="font-size: 13px; color: {{t.muted}}">Up £1,150 since May</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between">
+        <div style="font-size: 17px; font-weight: 700">Spending this month</div>
+        <div style="font-size: 13px; color: {{t.muted}}"><b style="color: {{t.ink}}">£612 left</b> of £1,400</div>
+      </div>
+      <div role="img" aria-label="£788 spent of £1,400" style="height: 20px; display: flex; border: 3px solid {{t.ink}}; border-radius: 10px 14px 9px 13px / 13px 9px 14px 10px; background: {{t.surface}}; overflow: hidden">
+        <sc-for list="{{segments}}" as="s" hint-placeholder-count="5">
+          <div style="width: {{s.w}}; height: 100%; background: {{s.c}}; border-right: 2px solid {{t.ink}}"></div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; column-gap: 14px; row-gap: 4px">
+        <sc-for list="{{segments}}" as="s" hint-placeholder-count="5">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 13px"><span style="width: 10px; height: 10px; border: 2px solid {{t.ink}}; border-radius: 3px; background: {{s.c}}"></span>{{s.label}} <b>{{s.amount}}</b></div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column">
+      <div style="font-size: 17px; font-weight: 700; padding-bottom: 4px">Coming up</div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 40px; border-bottom: 2px solid {{t.rule}}">
+        <div style="width: 40px; font-size: 13px; color: {{t.muted}}">1 Nov</div>
+        <div style="flex: 1; font-size: 17px">Council tax</div>
+        <div style="font-size: 17px; font-weight: 700">£148</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 40px">
+        <div style="width: 40px; font-size: 13px; color: {{t.muted}}">3 Nov</div>
+        <div style="flex: 1; font-size: 17px">Phone plan</div>
+        <div style="font-size: 13px; font-weight: 700; padding: 2px 8px; border: 2px solid {{t.ink}}; border-radius: 8px 11px 7px 10px; background: {{t.health}}; color: #16181D">Up £3</div>
+        <div style="font-size: 17px; font-weight: 700">£21</div>
+      </div>
+    </div>
+  </div>
+
+  <nav aria-label="Tabs" style="height: 80px; flex: none; background: {{t.surface}}; border-top: 3px solid {{t.ink}}; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center">
+    <a href="Money-Home.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: {{t.ink}}; text-decoration: none; font-size: 13px; font-weight: 700"><dc-import name="Icon" icon="tab-money" size="{{28}}" active="{{true}}" hint-size="28px,28px"></dc-import>Money</a>
+    <a href="Life-Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: {{t.ink}}; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-life" size="{{28}}" hint-size="28px,28px"></dc-import>Life</a>
+    <a href="Play-Lobby.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: {{t.ink}}; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-play" size="{{28}}" hint-size="28px,28px"></dc-import>Play</a>
+    <a href="You-Profile.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; color: {{t.ink}}; text-decoration: none; font-size: 13px"><dc-import name="Icon" icon="tab-you" size="{{28}}" hint-size="28px,28px"></dc-import>You</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["Paper","Lagoon","Grape","Tomato","Night","Bubblegum"],"default":"Paper","section":"Theme"},"card":{"editor":"enum","options":["Theme","Sage","Peach","Lilac","Powder","White"],"default":"Theme","section":"Theme"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var themes = {
+      Paper:     { ground: '#F5F2EA', surface: '#FFFFFF', ink: '#16181D', muted: '#4A4F59', rule: '#DDD8CC', cardBg: '#FFFFFF', cardFg: '#16181D', cardLine: '#16181D', shadow: '#16181D', pBg: '#16181D', pFg: '#FFFFFF', sBg: '#FFFFFF', work: '#6C8EF5', home: '#FFA94D', money: '#3FB57A', family: '#A78BFA', health: '#FF7A8A', other: '#CFCAC0' },
+      Lagoon:    { ground: '#E3F2EF', surface: '#FFFFFF', ink: '#0D2B2A', muted: '#3F5C5A', rule: '#C7DEDA', cardBg: '#0B4F4A', cardFg: '#FFFFFF', cardLine: '#FFFFFF', shadow: '#FF8A65', pBg: '#FFFFFF', pFg: '#0B4F4A', sBg: 'transparent', work: '#4F7CFF', home: '#FF8A65', money: '#19A87E', family: '#9C7BEA', health: '#F25C78', other: '#BFD3CF' },
+      Grape:     { ground: '#EFEAFE', surface: '#FFFFFF', ink: '#1D1433', muted: '#4E4566', rule: '#D9D0F2', cardBg: '#5B3FD9', cardFg: '#FFFFFF', cardLine: '#FFFFFF', shadow: '#1D1433', pBg: '#C6F36B', pFg: '#1D1433', sBg: 'transparent', work: '#3E8BFF', home: '#FF9F43', money: '#2DBE7E', family: '#E879C9', health: '#FF6363', other: '#CEC6E3' },
+      Tomato:    { ground: '#FFF0E8', surface: '#FFFFFF', ink: '#2A1410', muted: '#5E4740', rule: '#F0D8CC', cardBg: '#C7361F', cardFg: '#FFFFFF', cardLine: '#FFFFFF', shadow: '#2A1410', pBg: '#FFFFFF', pFg: '#C7361F', sBg: 'transparent', work: '#2F6BFF', home: '#FFB547', money: '#23A36B', family: '#8E6CF0', health: '#FF6F91', other: '#E2CFC5' },
+      Night:     { ground: '#121318', surface: '#1E2029', ink: '#F2F1EC', muted: '#A9ABB8', rule: '#33364A', cardBg: '#C6F36B', cardFg: '#121318', cardLine: '#121318', shadow: '#F2F1EC', pBg: '#121318', pFg: '#C6F36B', sBg: 'transparent', work: '#7FA6FF', home: '#FFAE5C', money: '#4FD69C', family: '#BBA2FF', health: '#FF8FA3', other: '#4A4D5E' },
+      Bubblegum: { ground: '#FFEEF6', surface: '#FFFFFF', ink: '#2B1630', muted: '#5E4A63', rule: '#F2D3E2', cardBg: '#FF5FA8', cardFg: '#2B1630', cardLine: '#2B1630', shadow: '#2B1630', pBg: '#2B1630', pFg: '#FFFFFF', sBg: '#FFFFFF', work: '#5B8DEF', home: '#FFB04D', money: '#20B49A', family: '#9B7BF2', health: '#F2545B', other: '#E6CEDA' }
+    };
+    var base = themes[this.props.theme] || themes.Paper;
+    var cards = { Sage: '#CFE6D6', Peach: '#F8D3BE', Lilac: '#DED6FA', Powder: '#D3E3F8', White: '#FFFFFF' };
+    var t = base;
+    if (cards[this.props.card]) {
+      t = Object.assign({}, base, { cardBg: cards[this.props.card], cardFg: base.ink, cardLine: base.ink, shadow: base.ink, pBg: base.ink, pFg: base.surface, sBg: base.surface });
+    }
+    var segments = [
+      { label: 'Food & family', amount: '£310', w: '22.1%', c: t.family },
+      { label: 'Travel to work', amount: '£180', w: '12.9%', c: t.work },
+      { label: 'Home', amount: '£150', w: '10.7%', c: t.home },
+      { label: 'Health', amount: '£60', w: '4.3%', c: t.health },
+      { label: 'Other', amount: '£88', w: '6.3%', c: t.other }
+    ];
+    return { t: t, segments: segments };
+  }
+}
+</script>
+</body>
+</html>
