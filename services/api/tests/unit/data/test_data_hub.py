@@ -123,7 +123,8 @@ async def test_breaker_open_serves_cached_without_network(settings, client, cloc
 async def test_missing_key_gives_mock_status(settings):
     hub = DataHub(settings, env={})
     st = status_of(await hub.statuses(), "companieshouse")
-    assert st.status == "mock" and st.needs_key and st.last_error == "COMPANIES_HOUSE_KEY not set"
+    assert st.status == "mock" and st.needs_key
+    assert st.last_error == "COMPANIES_HOUSE_KEY not set (or COMPANIES_HOUSE_API_KEY)"
     adz = status_of(await hub.statuses(), "adzuna")
     assert adz.last_error == "ADZUNA_APP_ID not set"
     assert await hub.series("companieshouse", "anything") == []
@@ -132,7 +133,7 @@ async def test_missing_key_gives_mock_status(settings):
 async def test_key_present_is_not_reported_missing(settings):
     hub = DataHub(settings, env={"COMPANIES_HOUSE_KEY": "x"})
     st = status_of(await hub.statuses(), "companieshouse")
-    assert st.last_error != "COMPANIES_HOUSE_KEY not set"
+    assert not (st.last_error or "").startswith("COMPANIES_HOUSE_KEY not set")
 
 
 async def test_offline_hub_sends_no_requests(settings):

@@ -20,6 +20,7 @@ import httpx
 from lifeline_contracts.observation import Observation, Status
 from lifeline_data.logsafe import redact_urls
 from lifeline_data.settings import BROWSER_USER_AGENT, DataSettings
+from lifeline_data.sources import missing_key_message, resolve_key
 
 T = TypeVar("T")
 
@@ -134,6 +135,8 @@ class Adapter:
     # Series fetched by the worker and used for the MacroTable: list of (series_id, region).
     default_series: ClassVar[tuple[tuple[str, str | None], ...]] = ()
     bounds: ClassVar[dict[str, tuple[float, float]]] = {}
+    # Per-source request timeout in seconds. None = settings.http_timeout_seconds (default 8 s).
+    timeout_seconds: ClassVar[float | None] = None
 
     def __init__(
         self,
@@ -234,7 +237,7 @@ class Adapter:
                     headers=sent,
                     json=json_body,
                     auth=auth if auth is not None else httpx.USE_CLIENT_DEFAULT,
-                    timeout=self.settings.http_timeout_seconds,
+                    timeout=self.timeout_seconds or self.settings.http_timeout_seconds,
                     follow_redirects=True,
                 )
             except httpx.TimeoutException as exc:
@@ -257,9 +260,9 @@ class Adapter:
 
     def key(self, name: str) -> str:
         """Value of a required env var. Never logged. Missing -> MissingKeyError (hub serves mock)."""
-        value = self.env.get(name, "")
+        value = resolve_key(name, self.env)
         if not value:
-            raise MissingKeyError(f"{name} not set")
+            raise MissingKeyError(missing_key_message(name))
         return value
 
     def obs(

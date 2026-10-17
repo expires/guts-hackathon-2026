@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 OGL = "Open Government Licence v3.0"
 
@@ -156,6 +157,59 @@ SOURCES: dict[str, SourceInfo] = {
 }
 
 
+# Alternative env names from the user's key file. The canonical name wins when both are set.
+KEY_ALIASES: dict[str, str] = {
+    "COMPANIES_HOUSE_KEY": "COMPANIES_HOUSE_API_KEY",
+    "EPC_KEY": "EPC_API_TOKEN",
+    "DWP_STATXPLORE_KEY": "STATXPLORE_API_KEY",
+    "DVLA_KEY": "DVLA_VES_API_KEY",
+    "OB_CLIENT_ID": "TRUELAYER_CLIENT_ID",
+    "OB_CLIENT_SECRET": "TRUELAYER_CLIENT_SECRET",
+    "OB_REDIRECT_URI": "TRUELAYER_REDIRECT_URI",
+}
+
+# Optional base-URL overrides. Used only when the value is a valid https URL.
+COMPANIES_HOUSE_API_URL = "https://api.company-information.service.gov.uk"
+STATXPLORE_API_URL = "https://stat-xplore.dwp.gov.uk/webapi/rest/v1"
+TRUELAYER_AUTH_URL = "https://auth.truelayer-sandbox.com"
+TRUELAYER_API_URL = "https://api.truelayer-sandbox.com"
+URL_DEFAULTS: dict[str, str] = {
+    "COMPANIES_HOUSE_API_URL": COMPANIES_HOUSE_API_URL,
+    "STATXPLORE_API_URL": STATXPLORE_API_URL,
+    "TRUELAYER_AUTH_URL": TRUELAYER_AUTH_URL,
+    "TRUELAYER_API_URL": TRUELAYER_API_URL,
+}
+
+
+def resolve_key(name: str, env: Mapping[str, str]) -> str:
+    """Value of `name`, else of its alias, else "". Callers must never log the result."""
+    value = (env.get(name) or "").strip()
+    if not value and name in KEY_ALIASES:
+        value = (env.get(KEY_ALIASES[name]) or "").strip()
+    return value
+
+
+def missing_key_message(name: str) -> str:
+    """Names only, never values. E.g. 'COMPANIES_HOUSE_KEY not set (or COMPANIES_HOUSE_API_KEY)'."""
+    alias = KEY_ALIASES.get(name)
+    return f"{name} not set (or {alias})" if alias else f"{name} not set"
+
+
+def base_url(name: str, env: Mapping[str, str]) -> str:
+    """Env override for a base URL when it is a valid https URL with a host; else the default.
+
+    The result has no trailing slash. Query strings and fragments are not allowed.
+    """
+    default = URL_DEFAULTS[name]
+    raw = (env.get(name) or "").strip()
+    if not raw:
+        return default
+    parts = urlsplit(raw)
+    if parts.scheme != "https" or not parts.hostname or parts.query or parts.fragment or " " in raw:
+        return default
+    return raw.rstrip("/")
+
+
 def missing_keys(source: SourceInfo, env: Mapping[str, str]) -> list[str]:
-    """Names (never values) of required env vars that are unset or empty."""
-    return [name for name in source.key_env if not env.get(name)]
+    """Canonical names (never values) of required env vars unset or empty, aliases included."""
+    return [name for name in source.key_env if not resolve_key(name, env)]

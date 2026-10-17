@@ -63,7 +63,7 @@ from lifeline_data.prediction_inputs import (
     mock_daily_weather,
     parse_bank_holidays,
 )
-from lifeline_data.sources import SOURCES
+from lifeline_data.sources import SOURCES, missing_key_message
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "data"
 FAKE_KEY = "test-key-not-real-123"
@@ -306,7 +306,8 @@ async def test_bad_payload_counts_against_breaker(client, settings, no_sleep):
 async def test_missing_key_gives_labelled_mock(settings, client, clock, no_sleep, sid):
     hub = make_hub(settings, client, clock, no_sleep)
     st = next(s for s in await hub.statuses() if s.id == sid)
-    assert st.status == "mock" and st.last_error == f"{SOURCES[sid].key_env[0]} not set"
+    assert st.status == "mock" and st.last_error == missing_key_message(SOURCES[sid].key_env[0])
+    assert st.last_error.startswith(f"{SOURCES[sid].key_env[0]} not set")
     assert st.needs_key
 
 
@@ -534,3 +535,28 @@ async def test_macro_svr_and_tracker_live_from_boe(settings, client, clock, no_s
     assert tracker.status == "live" and tracker.value == pytest.approx(5.69) and tracker.series_id == "IUMBV48"
     assert table.get(MacroKey.MORTGAGE_SVR, 1991).status == "mock"  # before IADB coverage
     assert route.calls.last.request.url.params["SeriesCodes"] == ",".join(BOE_SERIES)
+
+
+def test_epc_has_longer_timeout():
+    assert EpcAdapter.timeout_seconds == 30.0
+    assert CompaniesHouseAdapter.timeout_seconds is None  # default from settings
+
+
+@respx.mock
+async def test_epc_request_uses_source_timeout_and_skips_failed_region(client, settings, no_sleep):
+    seen: list[float] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions["timeout"]["read"])
+        if request.url.params["council[]"] == "Westminster":
+            raise httpx.ReadTimeout("slow council")
+        rated = "efficiency_rating[]" in request.url.params
+        return httpx.Response(200, json={"data": [], "pagination": {"totalRecords": 50 if rated else 100}})
+
+    respx.get(url__startswith=EPC_SEARCH_URL).mock(side_effect=answer)
+    adapter = EpcAdapter(client, settings, sleep=no_sleep)
+    adapter.env = {"EPC_KEY": FAKE_KEY}
+    obs = await adapter.fetch_validated("epc-abc-share")
+    regions = {o.region for o in obs}
+    assert "london" not in regions and len(regions) == 9 and all(o.value == 50.0 for o in obs)
+    assert set(seen) == {30.0}
