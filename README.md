@@ -2,362 +2,357 @@
 
 _Your money, played forward._
 
-**Many sources. One answer: your next money move. Play it before you live it.**
+**Penny. Your money, played forward. Many sources. One answer: your next money move. Play it before you live it.**
 
-Code names keep the earlier working name "Lifeline" (bundle ids, Xcode project, `LifelineClient`, Python packages). See ADR 0040.
+GUTS Hackathon 2026 (24 hours). BlackRock / Aladdin challenge: "One app. Every source. One clear decision."
 
-Penny answers one question: "What is my next money move?" It reads your money (sample bank data until bank connection ships), combines it with live UK data, and gives one move with its yearly value in £, its worst case and its evidence. "Test it" plays that move through a past shock in a life simulation before you make it in real life.
+- This README is the submission checklist. The sections follow the order of the official brief (ADR 0043).
+- Code names keep the earlier working name "Lifeline": bundle ids, the Xcode project, `LifelineClient`, the Python packages `lifeline_*` (ADR 0040).
 
-The life simulation is a BitLife-style game on real UK data. You live a full financial life, birth to death. Each AGE tap is one year. Events come from real data for that person, place and year: Bank Rate, mortgage rates, house prices, pay, unemployment, inflation.
+> **Not financial advice.** Penny is education. It shows how people like you did in similar past periods. It is not a forecast or a recommendation.
 
-GUTS Hackathon 2026 · BlackRock / Aladdin challenge: "One app. Every source. One clear decision." Aladdin stress tests portfolios. We stress test a life.
+## 1. User story
 
-> **Not financial advice.** The Next Move and the Real-life Decision are education. They show how people like you did in similar past periods. They are not a forecast or a recommendation.
+**Yaffy**, **[age]**, **[student/working]** in **[city]**.
 
-## The app
+- He banks with Monzo.
+- He holds a Stocks and Shares ISA at Trading212.
+- He rents.
+- His question: **"What is my next money move?"**
+- Penny reads his money, adds live UK data, and gives him one move. He can play that move through a past shock before he makes it in real life.
 
-Four tabs (ADR 0016). The app always opens on Money.
+The three bracketed values are placeholders. They stay visible until Yaffy confirms them (ADR 0043, "Open").
 
-| Tab | What it does |
-|---|---|
-| **Money** | Balance and net worth over time, spending by category, subscriptions with price-rise flags, bills for the next 30 days, budgets, savings goals, "Guess my spend". The **Next Move** card is the first element. Data is labelled "Sample data" until bank OAuth (Tier 2). |
-| **Life** | The game. Character select (Play yourself, Random, God Mode, presets), AGE, event sheets, action menus (Job, Assets, People, Money, Activities), lessons, rewind, life summary, Real-life Decision. |
-| **Play** | Same Life rooms (Tier 2), challenges, ribbons, the collection of lesson concepts. |
-| **You** | Profile, bank connection, settings. |
+## 2. One decision: the Next Move
 
-## Next Move
+`GET /v1/next-move` returns one top move and up to two runners-up (ADR 0018). The engine (`lifeline_engine`) computes every number. No LLM chooses the move.
 
-`GET /v1/next-move` returns one top move and up to two runners-up (ADR 0018). The engine computes every number; the LLM may only reword the text, and a verifier rejects any new number (ADR 0019).
+Each move has these parts (`services/api/lifeline_contracts/next_move.py`):
 
-1. **Candidates.** The engine (`lifeline_engine`, no LLM) lists moves the data supports: fix or remortgage, move savings, cancel or switch a subscription, switch energy, pay off debt, build an emergency fund, cut a budget.
-2. **Score.** For each option it simulates 20 similar people ("twins") through 5 matched past periods plus a standard stress period (mortgages: 2021-2023 rate shock). Options are chosen by regret: `expected - 0.5 x worst regret` (ADR 0020).
-3. **Card.** Action, deadline ("Your deal ends in 165 days"), expected £ a year, worst case, confidence ("In 8 of 10 similar cases this was the best choice"), 3 evidence points, sources with live, cached or mock status.
-4. **Test it.** `POST /v1/next-move/test` plays your real profile through the stress period once per option, on the same seed, and stores each run as a life. The card and Test it can disagree; the evidence says why (for example "a tracker saved £4,841 a year, though fixing for 5 years saved £7,828").
-5. **Why?** The lesson for the move's concept, with one sentence about your own numbers.
-6. **Do this.** `POST /v1/plan` adds the move to your plan.
-
-## Accuracy (honest)
-
-All figures below use labelled fixture data and the mock macro table. They describe our sample personas, not real users. Details: [docs/prediction.md](docs/prediction.md). We did not tune the engine to beat the baselines (ADR 0023).
-
-Mortgage choice (fix 2 years, fix 5 years or tracker), walk-forward over 28 past deal-end years, 1995 to 2022:
-
-| Method | Right choice |
-|---|---|
-| Next Move engine | 64.3% |
-| Real-life Decision engine (`/v1/evaluation`) | 71.4% |
-| Baseline: always fix for 2 years | 14.3% |
-| Best constant rule: always take a tracker | 71.4% |
-
-- The engines beat the naive 2-year baseline.
-- Neither beats "always take a tracker" on this data. The Decision engine recommends a tracker in all 28 years, so it only ties that rule. The Next Move engine moves some years away from the tracker because of its stress-period penalty, and loses 7.1 points to the rule.
-
-Daily spend prediction (ridge regression, ADR 0017), walk-forward over 90 days, mean absolute error (MAE):
-
-| Persona | Model MAE | Weekday-average MAE | Result |
-|---|---|---|---|
-| homeowner-leeds | £28.74 | £26.93 | Model loses by £1.81 |
-| renter-saver-london | £17.46 | £20.22 | Model wins by £2.76 |
-| subscription-creep-manchester | £19.28 | £22.37 | Model wins by £3.09 |
-| overspender-bristol | £19.80 | £21.62 | Model wins by £1.82 |
-
-- The model wins for 3 of 4 personas. It loses for homeowner-leeds, which has large weekend spend and 26% of days with no spend.
-- The 10% to 90% range holds 69% to 82% of days (target about 80%).
-
-> **Two plans in one repo.** `BUILD_SPEC.md` defines the product we are building (this section). The team's original README for the "Play yourself" web layer follows below, unchanged. Where the two differ, `BUILD_SPEC.md` wins. `docs/STATUS.md` lists each difference.
-
-## Run it (one command)
-
-Needs Docker (Docker Desktop or Colima with the compose plugin), `make`, and `uv` for local tests.
-
-```bash
-make up          # copies .env.example to .env if missing, builds, starts api + worker + postgres + redis, waits for /v1/health
-make demo-seed   # seeds Next Move, Test it, plan and demo lives for device demo-presenter-01 (see docs/DEMO.md)
-make test        # Python unit, contract and integration tests (offline, recorded fixtures)
-make down        # stop
-```
-
-- API: http://localhost:8000. Contract: `contracts/openapi.yaml`.
-- No keys are needed. A source with a missing key serves clearly labelled mock data with `status: "mock"`.
-- iOS app: `make ios-gen`, then open `apps/ios/Lifeline.xcodeproj`, or run `make ios-test`. Needs Xcode with the iOS 26 SDK and XcodeGen. Default simulator: iPhone 18 Pro Max (`SIM="..."` to override).
-- UI work without a backend: run the `Playground` scheme in Xcode.
-- Other targets: `make help`.
-
-## Architecture
-
-Three layers, joined by a FastAPI service. Full description: [docs/architecture.md](docs/architecture.md).
-
-```mermaid
-flowchart LR
-  subgraph EXP["Experience"]
-    IOS["iOS 26 app<br/>Money, Life, Play, You tabs"]
-  end
-  subgraph SVC["Service"]
-    API["FastAPI /v1<br/>REST + WebSocket rooms"]
-  end
-  subgraph DEC["Decision (pure Python)"]
-    SIM["sim: events, stats, Index, rewind"]
-    ENG["engine: Next Move, twins, periods,<br/>money insights, spend prediction"]
-    EXPL["explain: LLM wording + number verifier"]
-  end
-  subgraph DATA["Data integration"]
-    ADP["adapters to Observation"]
-    MT["annual MacroTable"]
-  end
-  REDIS[("Redis: cache, pub/sub")]
-  PG[("Postgres: snapshots, lives")]
-  WORKER["worker: scheduled refresh"]
-  SRC[["UK public data sources"]]
-
-  IOS -- "generated OpenAPI client" --> API
-  API --> SIM & ENG
-  SIM & ENG --> EXPL
-  API --> MT
-  ADP --> MT
-  ADP <--> REDIS & PG
-  API <--> REDIS & PG
-  WORKER --> ADP
-  ADP -.-> SRC
-```
-
-- The app talks only to our backend. It holds no keys or tokens.
-- iOS code is split into pure Views and ViewModels (ADR 0011). Views and `DesignSystem` are owned by the UI owner (a human); agents own ViewModels, glue and networking, and ask for view changes in [docs/UI_REQUESTS.md](docs/UI_REQUESTS.md).
-- Networking goes through `LifelineClient`: `LiveClient` calls the API, `MockClient` serves contract examples with no backend. The `Playground` scheme opens a gallery of every screen on `MockClient`.
-- `lifeline_engine` and `lifeline_sim` are pure: no network, database or clock. Same data plus same seed gives the same life.
-- The LLM writes wording only. The engine decides every outcome and number. A verifier checks every number in LLM text against engine facts; any mismatch falls back to the template (ADR 0019).
-- Money tab data feeds "Play yourself" and the Next Move through one profile (`/v1/finance/profile`), so the card, the Money tab and the game agree.
-
-## Trade-offs
-
-| Decision | Why | Cost |
+| Part | Field | What the user sees |
 |---|---|---|
-| Contract generated from Pydantic models (ADR 0002) | One source of truth for backend, tests and the Swift client; examples always validate | A model change needs `make contract` and a client regeneration |
-| Pure decision core over an annual `MacroTable` (ADR 0005) | Deterministic lives, fast tests, replay and rewind use the same numbers | Sub-annual detail is lost; one AGE tap is one year |
-| Redis TTL cache plus Postgres last-good snapshot | The game keeps working when a source is slow or down (`cached`) | Data can be up to one TTL old; the UI must show status |
-| Labelled mock data when a key is missing | Runs with zero setup; demo never blocks on keys | Mock numbers are not real; every screen shows `mock` |
-| UK average when a source excludes Scotland | Every region gets a value | Less local accuracy; the event says "UK average used" |
-| Index against an autopilot twin, income-normalised | Fair comparison across rich and poor lives | Harder to explain than raw net worth; documented in `docs/index.md` |
-| LLM for wording only, with a number verifier and templates | Numbers stay auditable; no invented figures | Less varied text when the LLM fails or a number does not match |
-| Native iOS only, no web client | Liquid Glass, StoreKit, Sign in with Apple, widgets | No Android or browser play |
-| Bank OAuth on the backend (state + PKCE) | Tokens never reach the device | Needs a public callback URL for real banks; sandbox only for now |
-| Next Move risk includes a fixed stress period, options chosen by regret (ADR 0020) | The card and "Test it" tell one story; a move that fails a 2022-style shock is penalised openly | Can rank below the best constant rule on calm-period data (see Accuracy) |
-| Ridge regression for daily spend (ADR 0017) | Exact £ reasons per feature group; fits 6 to 12 months of data | Loses to the weekday average for one persona |
-| Fixture bank personas until bank OAuth (ADR 0021) | The Money tab and Next Move work with zero keys | All Money data is sample data, labelled |
-| Two-stage non-root Docker image with `uv sync --frozen` | Reproducible builds from `uv.lock`; smaller attack surface | Image is about 480 MB because of numpy and the Anthropic SDK |
+| Gain | `impact_per_year` (`gain_kind = gbp_per_year`) or `cover_months` (`gain_kind = months_of_cover`) | £ a year, or months of cover |
+| Trade-off | `trade_off.summary`, `trade_off.points` (ADR 0042) | "What you give up: ..." on the card; all points in Why? |
+| Worst case | `worst_case_per_year` | £ a year in the worst matched past period |
+| Confidence | `confidence`, `confidence_label` | For example "7 in 10 twins in similar past periods did better" |
+| Evidence | `evidence` (exactly 3 points, numbers in `facts`) | Three lines on the card, details in Why? |
+| Decision sources | `decision_sources`, `decision_source_count` (ADR 0032) | Sources the engine read for this move, with status |
 
-## API conventions
+How the engine picks the move:
 
-- Versioned under `/v1`. The contract is `contracts/openapi.yaml`, with examples for every endpoint.
-- Success bodies are the resource itself (no envelope).
-- **Errors use one format everywhere, as `BUILD_SPEC.md` requires:**
-  ```json
-  { "error": { "code": "not_found", "message": "Life lf_x not found.", "source": "api" } }
-  ```
-  This replaces the `{data, error, meta}` envelope in the team README below (ADR 0003).
-- Auth: `POST /v1/auth/demo` or `POST /v1/auth/apple` returns a JWT. Send it as `Authorization: Bearer ...`.
+1. **Candidates.** The engine lists only moves that the data supports: fix or remortgage, move savings, cancel or switch a subscription, switch energy, pay off debt, build an emergency fund, cut a budget, spread investments. Spread investments needs ISA holdings; the API does not pass them yet (ADR 0042), so this move is inactive until Yaffy's Trading212 data lands.
+2. **Score.** For each option, it simulates similar synthetic people ("twins") through matched past periods and one standard stress period per move kind. The option with the highest `expected - 0.5 x max regret` wins (ADR 0020).
+3. **Rank.** Moves are ranked by `impact + 0.5 x min(0, worst case)`, scaled by confidence.
+4. **Trade-off.** The engine writes the trade-off per move kind (`lifeline_engine/trade_offs.py`). No LLM writes it.
+5. **Test it.** `POST /v1/next-move/test` plays the user's profile through the stress period once per option, on the same seed.
+6. **Do this.** `POST /v1/plan` adds the move to the user's plan.
 
-## Data sources and attributions
+**The demo follows the engine's actual top move.** There is no planned headline. The presenter narrates what the API returns on the day (ADR 0020, ADR 0043).
 
-Machine-readable list: [`services/api/lifeline_data_attributions.json`](services/api/lifeline_data_attributions.json). Live status: `GET /v1/sources`.
+Accuracy is reported as measured, including where the engine loses to a simple rule: [docs/prediction.md](docs/prediction.md) (ADR 0023).
 
-| Source | Used for | Coverage | Key | Licence | Attribution |
-|---|---|---|---|---|---|
-| Bank of England IADB | Bank Rate (IUMBEDR), 2-year fix (IUMBV34), 5-year fix (IUMBV42), savings rate (IUMB6VJ), card rate (IUMCCTL), revert-to mortgage rate (IUMTLMV), tracker (IUMBV48) | UK | No | Bank of England terms | Source: Bank of England Statistical Interactive Database. |
-| ONS time series and beta API | Inflation (D7G7), energy (D7GT), fuel (D7IO), rents (PIPR from 2016; IPHRP before) | UK | No | OGL v3.0 | Source: Office for National Statistics licensed under the Open Government Licence v3.0. |
-| Nomis | Earnings (ASHE), unemployment (APS), Census 2021 tenure | GB; Census: England and Wales | No | OGL v3.0 | Source: Office for National Statistics via Nomis, OGL v3.0. |
-| HM Land Registry UK HPI | House prices by region | UK incl. Scotland | No | OGL v3.0 | Contains HM Land Registry data © Crown copyright and database right 2026. |
-| postcodes.io | Postcode to region | UK | No | MIT (service); OGL v3.0 (data) | Contains OS data and Royal Mail data © Crown copyright / Royal Mail copyright 2026. |
-| GOV.UK bank holidays | Spend prediction feature | UK | No | OGL v3.0 | Contains public sector information licensed under the OGL v3.0 (GOV.UK). |
-| Frankfurter | GBP exchange rates | Global | No | MIT (service); ECB rates | Exchange rates: European Central Bank, via Frankfurter. |
-| CoinGecko | Crypto prices | Global | No | CoinGecko API terms | Crypto price data provided by CoinGecko. |
-| Yahoo chart (unofficial) | FTSE All-Share (^FTAS) | Global | No | Yahoo terms; blocked from our network, so labelled mock (ADR 0021) | Market index data: Yahoo Finance. |
-| FRED | UK 10-year gilt yield (IRLTLT01GBM156N) | UK | No | FRED terms (OECD series); times out from our network, so labelled mock | Source: OECD, retrieved from FRED, Federal Reserve Bank of St. Louis. |
-| Octopus Energy | Energy tariff (Flexible dual-fuel quotes) | GB | No | Octopus API terms | Energy tariff data: Octopus Energy. |
-| Carbon Intensity API | Grid carbon intensity | GB | No | CC BY 4.0 | Carbon Intensity API, NESO, CC BY 4.0. |
-| Open-Meteo | Weather for the spend prediction | Global | No | CC BY 4.0 | Weather data by Open-Meteo.com. |
-| Police UK | Burglary counts near a region point | England, Wales, NI | No | OGL v3.0 | Contains public sector information from data.police.uk, OGL v3.0. |
-| Environment Agency flood API | Flood warnings | England | No | OGL v3.0 | Environment Agency flood and river level data from the real-time data API (Beta). |
-| Companies House | Employer insolvency | UK | `COMPANIES_HOUSE_KEY` | OGL v3.0 | Contains Companies House data, OGL v3.0. |
-| Adzuna | Job offers and salaries | UK | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | Adzuna API terms | Jobs by Adzuna. |
-| DVLA Vehicle Enquiry | Vehicle tax and emissions | GB | `DVLA_KEY` | DVLA VES API terms | Contains public sector information from DVLA. |
-| DVSA MOT History | MOT fail rates | GB | `DVSA_MOT_KEY` | OGL v3.0 | Contains public sector information from DVSA, OGL v3.0. |
-| DWP Stat-Xplore | Benefits | GB | `DWP_STATXPLORE_KEY` | OGL v3.0 | Source: DWP Stat-Xplore, OGL v3.0. |
-| EPC register | Home energy ratings | England and Wales | `EPC_KEY` | OGL v3.0 (plus Royal Mail and OS for addresses) | Contains public sector information licensed under the OGL v3.0. |
-| The Guardian Open Platform | **Context only** (ADR 0030): real headlines in the Life feed (`GET /v1/news`). Never a decision input | UK and world | `GUARDIAN_API_KEY` | Guardian Open Platform terms; headlines and links only, no body text | Powered by Guardian Open Platform (each headline links to the article). |
-| Bank of England MPC dates | **Context only** (ADR 0030): "Next Bank of England rate decision" line in Next Move "Why?" (`GET /v1/rate-decisions`). Never a decision input | UK | No | Bank of England terms | Source: Bank of England, upcoming MPC dates. |
-| Fixture bank data | Money tab and Next Move until bank OAuth | Synthetic personas | No | Our own synthetic data | Sample data. Not a real bank account. |
-| TrueLayer sandbox | "Play yourself" bank connection | UK sandbox | `OB_CLIENT_ID`, `OB_CLIENT_SECRET`, `OB_REDIRECT_URI` | TrueLayer developer terms | Bank connection powered by the TrueLayer sandbox. |
+## 3. Architecture diagram
 
-Where a source excludes Scotland, the app uses the UK average and says "UK average used" in the event detail.
-
-## Demo
-
-Full script with exact taps, API calls and fallbacks: [docs/DEMO.md](docs/DEMO.md). The demo narrates live engine output, not a fixed answer (ADR 0020).
-
-0. Money tab, then the Next Move card ("Your deal ends in 165 days"), Test it through the 2021-2023 rate shock with all options side by side, Why?, then Do this.
-1. Play a nurse (Leeds) and a banker (London) from 2006 through 2008: same crash, different lives.
-2. A judge joins a Same Life room via QR and plays the 2021 to 2023 rate shock.
-3. Rewind a bad choice. Show the other path and the Index difference.
-4. Play yourself to today. The Real-life Decision screen shows one action, its evidence and source status.
-
-## More docs
-
-- [docs/architecture.md](docs/architecture.md): layers, runtime, request flow.
-- [docs/prediction.md](docs/prediction.md): spend model and Next Move backtests.
-- `docs/index.md`: the Index formula. `docs/RESPONSIBLE_AI.md`: where AI is used and how it is checked.
-- [docs/AI_USAGE.md](docs/AI_USAGE.md): how Claude Code built this, and the AI-usage statement draft.
-- [docs/adr/](docs/adr/): decision records. [docs/STATUS.md](docs/STATUS.md): progress, mocks, known issues.
-- CI: `.github/workflows/ci.yml` runs ruff, mypy, pytest, a contract drift check, `docker compose build`, gitleaks and the iOS tests.
-
----
-
-<!-- Team README (original, kept unchanged below). -->
-
-# One app. Every source. One clear decision.
-
-GUTS Hackathon 2026 (Glasgow, 17–18 Oct) · BlackRock / Aladdin challenge · team of 5
-
-A UK personal-finance app. It pulls your own accounts into one view. Then it lets you **play yourself**: replay your real saving and investing habits through past market shocks, and compare modelled paths forward.
-
-> **Status: early build.** This README describes what we're building. Anything marked *(planned)* doesn't exist yet. See [docs/PLAN.md](docs/PLAN.md) for the build order and open questions.
-
-> **Not financial advice.** Every forward-looking output is a *modelled scenario based on similar past periods*. None of it is a forecast or a recommendation.
-
----
-
-## What it does
-
-| Area | Description | Owner |
-|---|---|---|
-| Dashboard | Bank balance, spending and ISA holdings in one view | Yath |
-| Backtest | Run your real contribution habits through 2008, COVID and 2022 with different allocation splits (DCA vs lump sum, rebalancing rules) | Yath |
-| Future insight | A fan of outcomes from past periods with similar starting conditions | Yath |
-| Friends | Compete on scores and values rebased to 100. Opt-in pie of your invested-assets split. Never £ amounts | Yath |
-| Historical engine | Synthetic UK population, twin matching, past-period replay, gamified life loop | Ash |
-
-## Data sources
-
-All sources are the user's own accounts, accessed **read-only**:
-
-- **Monzo API**: balances, pots and transactions (OAuth 2.0 or playground token)
-- **Trading212 API**: Stocks & Shares ISA holdings and cash
-
-Each source sits behind a `FinanceAdapter`. A `MockAdapter` implements the same interface with deterministic personas, so the app runs fully offline. Mock mode is the default.
-
-## Privacy model
-
-- Raw transactions, balances and holdings **stay on the device**.
-- `habit_vector()` is the only thing that leaves it. It holds ratios and 0–100 scores, never £ amounts:
-  - savings rate
-  - runway (months)
-  - spend stability
-  - discretionary share
-  - subscription creep
-  - ISA diversification (HHI)
-  - shock resilience
-- The friends feature only shows values rebased to 100. Sharing your allocation pie (percentages only) is opt-in.
-
-## Architecture
+Full description: [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
 flowchart TB
-  subgraph EXP[Experience layer]
-    UI[Web UI: dashboard · backtest · scenarios · friends]
+  subgraph EXP["Experience layer: iOS 26 app (apps/ios)"]
+    VIEWS["Views + DesignSystem<br/>pure SwiftUI, Liquid Glass"]
+    VM["ViewModels + Screen glue<br/>@Observable, ViewState"]
+    LC["LifelineClient<br/>LiveClient or MockClient"]
+    CLIENT["Swift client generated by<br/>swift-openapi-generator"]
+    VM -- "ViewState + actions" --> VIEWS
+    VM --> LC --> CLIENT
   end
-  subgraph DEC[Decision layer — pure functions]
-    HV[habit_vector]
-    BT[backtest]
-    SC[scenarios]
-    SCORE[scoring / rebasing]
-    EXPL[explainer — AI, read-only]
+
+  subgraph SVC["Service: FastAPI (services/api/lifeline_api)"]
+    REST["REST /v1/*<br/>contract: contracts/openapi.yaml"]
+    WS["WebSocket /v1/rooms/{code}<br/>Same Life PvP"]
+    AUTH["Sign in with Apple / demo JWT<br/>rate limit, body limit, one error format"]
+    BANK["Bank OAuth on the backend<br/>tokens stay on the backend"]
   end
-  subgraph DATA[Data integration layer]
-    AGG[aggregator: timeouts · retries · cache · staleness]
-    MZ[MonzoAdapter]
-    T2[Trading212Adapter]
-    MK[MockAdapter]
+
+  subgraph DEC["Decision layer: pure Python, no I/O"]
+    SIM["lifeline_sim<br/>life rules, events, stats, Index, rewind"]
+    ENG["lifeline_engine<br/>twins, periods, Next Move, trade-offs,<br/>money insights, spend prediction"]
+    EVAL["lifeline_eval<br/>backtest"]
+    EXPL["lifeline_explain<br/>LLM wording + number verifier + templates"]
   end
-  UI -- "HTTP/JSON (OpenAPI, one envelope)" --> API[FastAPI]
-  API --> HV & BT & SC & SCORE
-  BT & SC --> EXPL
-  HV & BT & SC --> AGG
-  AGG --> MZ & T2 & MK
-  MZ -.-> MonzoAPI[(Monzo API)]
-  T2 -.-> T212API[(Trading212 API)]
-  HV -- "only object leaving device" --> FRIENDS[(Friends service)]
-  ASH[Ash's historical engine] -. "return series, period windows" .-> BT & SC
+
+  subgraph DATA["Data integration layer (services/api/lifeline_data)"]
+    ADP["One adapter per source<br/>timeouts, retries, circuit breaker, validation"]
+    OBS["Observation(series_id, source, date, value,<br/>unit, region, fetched_at, status)"]
+    MACRO["Annual MacroTable<br/>(MacroKey, year, region)"]
+    FIN["FinanceSnapshot<br/>user's own data (encrypted)"]
+    ADP --> OBS --> MACRO
+  end
+
+  WORKER["Worker: python -m lifeline_data.worker<br/>scheduled refresh"]
+  REDIS[("Redis<br/>TTL cache per source,<br/>room pub/sub, rate limit")]
+  PG[("Postgres<br/>last-good snapshots, lives,<br/>encrypted user data")]
+  EXT[["Public UK sources<br/>BoE, ONS, Nomis, Land Registry, ...<br/>live mode: no data = unavailable"]]
+  LLM[["Anthropic API<br/>wording only"]]
+
+  CLIENT -- "HTTPS JSON" --> REST
+  CLIENT -- "WebSocket" --> WS
+  REST --> AUTH
+  REST --> SIM & ENG & EVAL
+  SIM --> EXPL
+  ENG --> EXPL
+  EXPL -.-> LLM
+  REST -- "MacroTable" --> MACRO
+  REST -- "snapshot" --> FIN
+  WS <--> REDIS
+  REST <--> PG
+  ADP <--> REDIS
+  ADP <--> PG
+  ADP -.-> EXT
+  WORKER --> ADP
+  BANK -.-> EXT
 ```
 
-### Trade-offs (draft)
+## 4. Three layers
 
-| Decision | Why | Cost |
+| Layer | Code | What it does |
 |---|---|---|
-| One adapter interface with capability flags, rather than one interface per source type | The mock can stand in for any source, and the aggregator stays simple | Some methods raise `UnsupportedCapability` on some adapters |
-| Money stored as integer pence | No float rounding errors in sums or caps | Values are converted at the edges for display |
-| Decision layer is pure, with no I/O | Fast deterministic tests. Easy to reason about | The aggregator has to fetch everything up front |
-| Partial results plus a stale cache instead of hard failure | The demo survives a slow or failing API | The UI has to show which sources are stale |
-| Time-weighted return index rebased to 100 for comparisons | People with different incomes can be compared fairly and privately | Hides absolute outcomes, which stay local only |
-| Synthetic returns first, real series later | Unblocks the backtest immediately | Early results are illustrative only |
-| AI explains results but never decides | Numbers stay auditable. No hallucinated figures | Explanations are less flexible. Template fallback when offline |
+| Experience | `apps/ios` | SwiftUI app for iOS 26. Tabs: Money (opens first, Next Move card on top), Life (the game), Play (Same Life rooms), You (profile, connections, "How Penny uses AI"). Talks only to our backend. Holds no keys. |
+| Decision | `lifeline_engine`, `lifeline_sim`, `lifeline_eval`, `lifeline_explain` | `lifeline_engine` and `lifeline_sim` are pure: no network, no database, no clock, seeded RNG only. Same data plus same seed gives the same result. `lifeline_explain` rewords text and checks every number. |
+| Data integration | `lifeline_data` | One adapter per source. Each value carries a status (`live`, `cached`, `unavailable`; `mock` only in demo mode). Redis TTL cache, Postgres last-good snapshot, annual `MacroTable`. |
 
-## API conventions *(planned)*
+A FastAPI service (`lifeline_api`) joins the layers. Errors use one format everywhere: `{"error": {"code": "...", "message": "...", "source": "..."}}`.
 
-- Versioned under `/v1`. The spec is served at `/openapi.json` and exported to `docs/openapi.json`.
-- Every response, including errors, uses one envelope:
+## 5. Data sources
 
-```json
-{ "data": { }, "error": null, "meta": { "request_id": "…", "as_of": "…", "stale": false, "sources": { } } }
-```
+Live list from `GET https://api-production-15615.up.railway.app/v1/sources`, fetched on 2026-10-17 at 17:58 UTC. 24 sources: 18 `live`, 6 `unavailable`. Status changes at run time; the endpoint is the source of truth.
 
-```json
-{ "data": null, "error": { "code": "source_timeout", "message": "…", "details": { } }, "meta": { } }
-```
+Role: **Decision** = input to the Next Move (`DECISION_PROVIDERS` in `lifeline_engine/next_move.py`, plus the user's own data). **Context** = shown next to the decision, never an input (ADR 0030). **Game or support** = Life game events, region lookup, spend prediction or bank connection.
 
-## Quick start *(planned)*
+| id | Name | Status | Coverage | Licence | Role |
+|---|---|---|---|---|---|
+| `boe` | Bank of England Database | live | UK | Bank of England terms of use (free reuse with attribution) | Decision |
+| `ons` | Office for National Statistics | live | UK | Open Government Licence v3.0 | Decision |
+| `nomis` | Nomis (ONS labour market and Census) | live | UK; Census tables England and Wales | Open Government Licence v3.0 | Decision |
+| `landregistry` | HM Land Registry UK House Price Index | live | UK | Open Government Licence v3.0 | Decision |
+| `postcodes` | postcodes.io | live | UK | Open Government Licence v3.0 | Game or support |
+| `bankholidays` | GOV.UK bank holidays | live | UK (England and Wales, Scotland, Northern Ireland) | Open Government Licence v3.0 | Game or support |
+| `frankfurter` | Frankfurter FX rates | live | Global | Free to use (ECB reference rates) | Decision |
+| `coingecko` | CoinGecko | live | Global | CoinGecko API terms (attribution required) | Decision |
+| `yahoo` | Yahoo Finance chart endpoint | unavailable | Global | Yahoo terms of service; personal use | Game or support |
+| `fred` | FRED, Federal Reserve Bank of St. Louis | unavailable | UK series (OECD) | FRED terms of use | Game or support |
+| `octopus` | Octopus Energy products API | live | Great Britain | Octopus Energy API terms | Decision |
+| `carbonintensity` | Carbon Intensity API | live | Great Britain | CC BY 4.0 | Game or support |
+| `openmeteo` | Open-Meteo | live | Global | CC BY 4.0 | Game or support |
+| `police` | Police UK data API | live | England, Wales and Northern Ireland | Open Government Licence v3.0 | Game or support |
+| `environmentagency` | Environment Agency flood monitoring API | live | England | Open Government Licence v3.0 | Game or support |
+| `companieshouse` | Companies House API | live | UK | Open Government Licence v3.0 | Decision |
+| `adzuna` | Adzuna jobs API | unavailable | UK | Adzuna API terms | Game or support |
+| `dvla` | DVLA Vehicle Enquiry Service | unavailable | Great Britain | Open Government Licence v3.0 | Game or support |
+| `dvsamot` | DVSA MOT history API | unavailable | Great Britain | Open Government Licence v3.0 | Game or support |
+| `statxplore` | DWP Stat-Xplore | live | Great Britain | Open Government Licence v3.0 | Game or support |
+| `epc` | Energy Performance of Buildings register | live | England and Wales | Open Government Licence v3.0 | Game or support |
+| `guardian` | The Guardian Open Platform | live | UK and world news | Guardian Open Platform terms (headlines and links only) | Context |
+| `boe-mpc` | Bank of England MPC dates | live | UK | Bank of England terms of use (free reuse with attribution) | Context |
+| `openbanking` | Open Banking sandbox (TrueLayer) | unavailable | UK | TrueLayer sandbox terms | Game or support (disabled, ADR 0027) |
+
+Rules (ADR 0027, ADR 0032):
+
+- **No mock data in live mode.** Railway and the iOS Demo configuration run with `DATA_MODE=live`. A source with no live or cached real data reports `unavailable`. Its values are absent from the `MacroTable`. Game events that need it do not fire.
+- **Unavailable sources show "unavailable".** `/v1/sources` gives the status. The app shows "Unavailable".
+- **Money data is the user's own.** In live mode, the fixture personas are not served. With no user data, `GET /v1/finance/home` returns `has_data: false` and a connect prompt.
+- **"Based on N sources" counts decision sources only.** `decision_source_count` counts the decision sources that the engine read for this move. An unavailable source is listed but not counted. Game and context sources are never counted.
+- **Local default is demo mode.** `make up` runs with `DATA_MODE=demo` unless `.env` sets `live`. Demo mode serves fixtures and labelled mock data (`status: "mock"`) for development and tests.
+- Attribution text for each source: `attribution` in `/v1/sources` and [`services/api/lifeline_data_attributions.json`](services/api/lifeline_data_attributions.json).
+
+## 6. API contract
+
+- File: [`contracts/openapi.yaml`](contracts/openapi.yaml), versioned under `/v1`.
+- It is generated from the Pydantic models in `services/api/lifeline_contracts/` (ADR 0002). Do not edit it by hand.
+- Regenerate: `make contract`.
+- The iOS client is generated from the same file by `swift-openapi-generator` (`make ios-gen` copies it into the app).
+- Auth: `POST /v1/auth/demo` or `POST /v1/auth/apple` returns a JWT. Send it as `Authorization: Bearer ...`.
+
+## 7. How to run
+
+Prerequisites:
+
+- Docker (Docker Desktop, or Colima with the compose plugin) and `make`.
+- `uv` for local Python tests and lint.
+- For iOS: Xcode with the iOS 26 SDK, and XcodeGen.
+- No API keys are needed to start. A missing key makes that source `mock` (demo mode) or `unavailable` (live mode).
+
+Backend, one command:
 
 ```bash
-cp .env.example .env   # mock mode by default, no credentials needed
-make run               # installs deps and starts the API + UI on mock data
-make test              # unit + integration tests
-make lint              # ruff lint + format check
+make up          # copies .env.example to .env if missing, builds, starts api + worker + postgres + redis, waits for /v1/health
 ```
 
-## Configuration
+- API: http://localhost:8000. Health: `GET /v1/health`.
+- Stop: `make down`. All targets: `make help`.
 
-All configuration comes from environment variables. No secrets are stored in code. `.env` is gitignored, and `.env.example` lists every variable *(planned)*.
+iOS:
 
-| Variable | Purpose |
+```bash
+make ios-gen     # copies the contract into the app and generates Lifeline.xcodeproj
+```
+
+- Open `apps/ios/Lifeline.xcodeproj`.
+- Schemes:
+  - `Lifeline`: the app (Debug config, local API at `http://localhost:8000`), plus unit and UI tests.
+  - `Playground`: `Mock` config with `-playground`. A gallery of every screen on `MockClient`. No backend.
+- Configurations:
+  - `Mock`: `MockClient`, recorded responses, no backend.
+  - `Demo`: `LiveClient` against Railway.
+  - Also `Debug`, `Dev` and `Release`.
+- Phone build: `make ios-device CONFIG=Mock` or `CONFIG=Demo` (needs `apps/ios/Config/Local.xcconfig` with your team, ADR 0015).
+
+Hosted API (Railway, `DATA_MODE=live`, ADR 0028): https://api-production-15615.up.railway.app
+
+## 8. Tests
+
+| Suite | Path | Command |
+|---|---|---|
+| Unit (Python) | `services/api/tests/unit/{api,data,engine,eval,explain,sim}` | `make test` (runs `uv run pytest` in `services/api`) |
+| Integration (Python, HTTP and WebSocket) | `services/api/tests/integration` | `make test` |
+| Contract (responses against `openapi.yaml`, incl. `test_next_move_trade_offs`) | `services/api/tests/contract` | `make test`; against the running stack: `make test-stack` |
+| Lint and types | ruff, `mypy --strict`, AI disclosure copy in sync | `make lint` |
+| iOS unit and UI | `apps/ios/LifelineTests`, `apps/ios/LifelineUITests` | `make ios-test` |
+| Secrets | gitleaks over the working tree | `make secrets-scan` |
+
+- Python tests never call the network. They use recorded fixtures under `services/api/tests/fixtures/`.
+- Verifiers V1 to V6 are separate agents that check the work and write reports to [docs/verify/](docs/verify/):
+  - V1 contract, V2 engine, V3 resilience, V4 iOS, V5 demo, V6 security.
+
+## 9. Graceful failure
+
+| Failure | What happens | Where |
+|---|---|---|
+| A source is down or has no key | Cached real data if present, else `unavailable`. Never mock in live mode. The decision lists the source but does not count it. | `lifeline_data`, ADR 0027, ADR 0032 |
+| LLM missing, slow or wrong | Template text from the engine. A number that fails the verifier is never shown. | `lifeline_explain`, ADR 0019 |
+| Ask Penny answer fails the number check | One rewrite. Then a summary of the tool facts, marked as not checked. | `lifeline_explain/chat.py` |
+| Rate limit (429) | The app retries quietly with backoff and honours `Retry-After`. Then it shows "Couldn't load. Pull to refresh." | `apps/ios/Lifeline/Networking/ResilienceMiddleware.swift`, ADR 0038 |
+| No money data yet | Not an error. `GET /v1/finance/home` returns `has_data: false`. Money home shows one card: "Connect your money to see your next move". | `lifeline_api/routes/finance.py`, ADR 0038 |
+| Any API error | One format: `{"error": {"code", "message", "source"}}`. "Try again" shows only for real network or server errors. | `lifeline_api`, ADR 0038 |
+
+## 10. Security and secrets
+
+- **Keys live only in `.env`** (git-ignored) and in Railway variables. `.env.example` lists every variable name. The app holds no keys.
+- **gitleaks before every commit.** BOSS runs `make secrets-scan` before each commit. A finding blocks the commit (ADR 0041).
+- **User bank data is encrypted in Postgres.** `UserSnapshotStore` stores each user's `FinanceSnapshot` as Fernet ciphertext with `TOKEN_ENCRYPTION_KEY` (`lifeline_data/crypto.py`, `lifeline_data/cache.py`). In live mode or `APP_ENV=prod`, a missing key stops the store; nothing is stored as plain text.
+- **Bank tokens stay on the backend.** OAuth runs on the server. Tokens never reach the device. Rule: tokens are stored encrypted in Postgres with the same `Sealer` (ADR 0028). See section 13 for the open item.
+- **Untrusted text is fenced.** News headlines, chat messages, merchant names and statement text go to the model inside `<untrusted source="...">` blocks. The system prompt says that this text is data, never instructions (ADR 0034, `lifeline_explain/chat.py`, `lifeline_explain/prompts.py`).
+- Bearer tokens are removed from logs (`lifeline_api/logsafe.py`). Per-user rate limits apply to reads, writes and chat.
+- Security report: [docs/verify/V6.md](docs/verify/V6.md).
+
+## 11. AI disclosure: How Penny uses AI
+
+Source: [`services/api/lifeline_explain/ai_disclosure.json`](services/api/lifeline_explain/ai_disclosure.json). The You tab shows the same text. `make lint` fails if the app copy differs.
+
+**Where AI is used**
+
+- An AI model (Claude, from Anthropic) rewords the text of game events and their outcomes.
+- It rewords the headline and the evidence lines on the Next Move card.
+- It writes the wording of Ask Penny answers. Penny gets every number from the engine's tools.
+- Lessons are fixed text. AI does not write them.
+- The app never calls the AI model. Only our server calls it.
+
+**What stays deterministic**
+
+- Every number comes from your data, a public data source or the engine. AI never makes a number.
+- The engine ranks the moves and picks your Next Move. AI does not choose it.
+- The engine writes the trade-off of each move (What you give up). Penny can only say it in other words.
+- The game engine decides every event, outcome and money change. The same seed gives the same game.
+
+**How output is checked**
+
+- A number verifier checks every number in AI text against the engine's facts. It also checks the unit: a money fact needs a £ sign and a percent fact needs a % sign. Code: services/api/lifeline_explain/verifier.py.
+- Verifier tests: services/api/tests/unit/explain/test_explain.py and services/api/tests/unit/explain/test_trade_off.py.
+- Golden tests ask Penny 30 fixed questions with a fake AI model and check each answer: services/api/tests/unit/explain/test_chat.py.
+- Prompt injection tests put hostile text in news headlines, merchant names and user messages. The model gets this text fenced as data. The tests check that it cannot change a rule or add a number. Same file: test_chat.py.
+
+**What happens when AI fails**
+
+- No AI key, an AI error or a failed check: events, outcomes and the Next Move card show the engine's template text. The template text is complete and correct.
+- If an Ask Penny answer fails the number check, Penny gets one rewrite. If it fails again, Penny shows a summary of the tool facts, marked as not checked.
+- If the AI model is off, Penny shows the facts of your Next Move.
+- By default, each AI call stops after 12 seconds and an Ask Penny answer stops after 24 seconds. Then the fallback text shows.
+- A number that fails the check is never shown.
+
+How we used AI to build Penny (Claude Code agents, verifiers, gates): [docs/AI_USAGE.md](docs/AI_USAGE.md). Product rules: [docs/RESPONSIBLE_AI.md](docs/RESPONSIBLE_AI.md).
+
+## 12. Trade-offs and decisions
+
+Every decision is an Architecture Decision Record (ADR) in [docs/adr/](docs/adr/).
+
+| ADR | Decision |
 |---|---|
-| `MONZO_MODE` / `T212_MODE` | `mock` (default) or `live`, set per source |
-| `MONZO_ACCESS_TOKEN` | Monzo token (live mode only) |
-| `T212_API_KEY` | Trading212 API key (live mode only) |
-| `SOURCE_TIMEOUT_SECONDS` | Timeout for each source fetch |
-| `ISA_ALLOWANCE_PENCE` | Annual ISA allowance used by the backtest |
+| [0001](docs/adr/0001-record-decisions.md) | Record decisions as ADRs |
+| [0002](docs/adr/0002-contract-generated-from-pydantic.md) | Generate `openapi.yaml` from shared Pydantic models |
+| [0003](docs/adr/0003-spec-file-name-and-existing-repo.md) | Spec file name and the existing team repo |
+| [0004](docs/adr/0004-ownership-of-shared-build-files.md) | Who owns Makefile, docker-compose and Dockerfile |
+| [0005](docs/adr/0005-pure-core-macro-table.md) | Engine and sim consume an annual MacroTable |
+| [0006](docs/adr/0006-local-tooling.md) | Local toolchain |
+| [0007](docs/adr/0007-llm-model-opus.md) | LLM model for flavour text |
+| [0008](docs/adr/0008-engine-conventions.md) | Engine conventions |
+| [0009](docs/adr/0009-ios-tab-layout.md) | iOS tab layout and client conventions |
+| [0010](docs/adr/0010-data-fallback-and-mapping.md) | Data fallback order and series mapping |
+| [0011](docs/adr/0011-ios-view-viewmodel-split.md) | iOS split into pure Views and ViewModels |
+| [0012](docs/adr/0012-sim-replay-and-index.md) | Sim replay model and Index edge cases |
+| [0013](docs/adr/0013-index-relative-penalties.md) | Index penalties relative to the autopilot twin |
+| [0014](docs/adr/0014-year-end-values-for-fast-series.md) | Year-end values for fast-moving series |
+| [0015](docs/adr/0015-device-signing-local-xcconfig.md) | Device signing through a git-ignored `Local.xcconfig` |
+| [0016](docs/adr/0016-app-tabs-and-money-tab.md) | App tabs (Money, Life, Play, You) and the Money tab |
+| [0017](docs/adr/0017-spend-prediction-and-guess-my-spend.md) | Daily spend prediction and "Guess my spend" |
+| [0018](docs/adr/0018-next-move.md) | One question: "What is my next money move?" |
+| [0019](docs/adr/0019-explain-layer.md) | Explain layer: LLM wording, number verifier, templates |
+| [0020](docs/adr/0020-stress-period-in-risk.md) | Stress period in Next Move risk; the demo follows the engine |
+| [0021](docs/adr/0021-data-tier1.md) | Tier 1 data choices |
+| [0022](docs/adr/0022-api-tier1.md) | Tier 1 API choices |
+| [0023](docs/adr/0023-confidence-and-honest-accuracy.md) | Confidence for multi-option moves; honest accuracy reporting |
+| [0024](docs/adr/0024-sim-tier1.md) | Tier 1 sim choices |
+| [0025](docs/adr/0025-ios-tier1.md) | Tier 1 iOS structure |
+| [0026](docs/adr/0026-native-design-rebuild.md) | Native SwiftUI rebuild of the design handoff |
+| [0027](docs/adr/0027-no-mock-in-live.md) | No mock data in live mode; disabled sources |
+| [0028](docs/adr/0028-railway-deploy.md) | Railway deployment |
+| [0029](docs/adr/0029-tier2-away-plan.md) | Tier 2 scope |
+| [0030](docs/adr/0030-news-and-rate-dates.md) | News and rate-decision dates are context only |
+| [0031](docs/adr/0031-ask-penny.md) | Ask Penny answers only through engine tools |
+| [0032](docs/adr/0032-decision-sources-count.md) | "Based on N sources" counts decision sources only |
+| [0033](docs/adr/0033-chat-tools-and-facts-table.md) | Engine tools for Penny, cash-flow projection, facts table |
+| [0034](docs/adr/0034-untrusted-text.md) | Untrusted text is data, never instructions |
+| [0035](docs/adr/0035-parallel-backend-tier2.md) | Tier 2 backend in parallel with the Tier 1 iOS gate |
+| [0036](docs/adr/0036-yaffy-merge.md) | Merge of Yaffy's integration branch |
+| [0037](docs/adr/0037-parallel-ios-features.md) | Parallel iOS feature work |
+| [0038](docs/adr/0038-money-empty-state-and-limits.md) | No-data is a normal state; one Money home request; quiet rate limits |
+| [0039](docs/adr/0039-phone-milestones.md) | Phone installs at milestones only |
+| [0040](docs/adr/0040-product-name-penny.md) | Product name "Penny" |
+| [0041](docs/adr/0041-boss-commits.md) | BOSS commits on main |
+| [0042](docs/adr/0042-trade-offs.md) | Every Next Move states its trade-off |
+| [0043](docs/adr/0043-official-brief-alignment.md) | Official GUTS brief alignment |
+| [0044](docs/adr/0044-same-life-room-rules.md) | Same Life room rules |
 
-## Testing
+## 13. Official checklist
 
-- **Unit tests**:
-  - each `habit_vector` factor, with hand-computed fixtures
-  - backtest maths (closed-form checks, ISA cap)
-  - scoring and rebasing
-  - the response envelope
-- **Contract tests**: every adapter satisfies `FinanceAdapter`.
-- **Integration test**: API → aggregator → mock adapters, end to end.
-- **Privacy test**: `habit_vector` output contains no monetary values.
+| | Brief requirement | Evidence |
+|---|---|---|
+| [ ] | Named user | Section 1, [docs/DEMO.md](docs/DEMO.md). **Missing:** Yaffy's age, situation and city (placeholders), and his consent to show his data on stage (ADR 0043). |
+| [x] | One clear decision | Section 2. `GET /v1/next-move`, `lifeline_engine/next_move.py`, ADR 0018 |
+| [x] | Evidence | 3 evidence points with facts, confidence, worst case, decision sources. `lifeline_contracts/next_move.py`, [docs/prediction.md](docs/prediction.md) |
+| [x] | Trade-offs | "What you give up" on every move. `lifeline_engine/trade_offs.py`, `test_next_move_trade_offs`, ADR 0042 |
+| [ ] | Multiple data sources | Section 5: 18 live public sources, 8 of them decision inputs. **Missing:** Yaffy's real Monzo and Trading212 data. It lives on branch `merge/yaffy` and is not on `main` yet (ADR 0036). |
+| [x] | Meaningful version control | Section "Version control" below, [docs/COMMITS.md](docs/COMMITS.md), ADR 0041 |
+| [x] | AI disclosure | Section 11, `ai_disclosure.json`, You tab, [docs/RESPONSIBLE_AI.md](docs/RESPONSIBLE_AI.md), [docs/AI_USAGE.md](docs/AI_USAGE.md) |
+| [x] | How to run | Section 7, `Makefile` |
+| [x] | Tests | Section 8, `services/api/tests/`, `apps/ios/LifelineTests/`, [docs/verify/](docs/verify/) |
+| [ ] | Security | Section 10, [docs/verify/V6.md](docs/verify/V6.md). **Missing:** bank tokens encrypted in Postgres. On `main` no token store exists yet. On `merge/yaffy`, Monzo and Trading212 tokens are plain files under `CREDENTIALS_DIR`; the move to Postgres with `Sealer` is open (ADR 0036, follow-ups). |
 
-## Project layout *(planned)*
+## Version control
 
-```
-src/playyourself/   adapters/ · domain/ · decision/ · api/ · settings.py
-data/mock/          personas and synthetic return series (clearly labelled)
-tests/              unit/ · integration/
-docs/               PLAN.md · architecture.md · openapi.json
-```
-
-## AI use (declaration)
-
-- **In the product**: an LLM turns the engine's structured results into plain-English explanations. It never computes or changes figures, and its output is checked against the input numbers. A template fallback runs when no API key is set.
-- **In development**: we used Claude Code to help with planning, scaffolding, documentation and code. A team member reviews all generated code.
+- `c983e86`: the team's first plan (README and `docs/PLAN.md`).
+- `63e8f1a` to `e58e8f3`: the agent-built foundation, one commit per layer (rules, contract, data, engine, sim, explain, API, iOS, Tier 0 sign-off).
+- `d4f0aa2` and `cb6f847` are combined on purpose: their features share contract models and app wiring, and split commits would not pass the tests. Each message lists the features and their ADRs.
+- One logical change per commit, Conventional Commits style, tests passing on each commit, `make secrets-scan` before each commit (ADR 0041). Messages are also in [docs/COMMITS.md](docs/COMMITS.md).
+- Decisions are in [docs/adr/](docs/adr/).
 
 ## Team
 

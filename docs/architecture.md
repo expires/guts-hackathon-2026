@@ -33,14 +33,14 @@ flowchart TB
     ADP["One adapter per source<br/>timeouts, retries, circuit breaker, validation"]
     OBS["Observation(series_id, source, date, value,<br/>unit, region, fetched_at, status)"]
     MACRO["Annual MacroTable<br/>(MacroKey, year, region)"]
-    FIN["FinanceSnapshot<br/>fixture personas (Tier 1), TrueLayer (Tier 2)"]
+    FIN["FinanceSnapshot<br/>user's own data (encrypted); fixtures in demo mode"]
     ADP --> OBS --> MACRO
   end
 
   WORKER["Worker: python -m lifeline_data.worker<br/>scheduled refresh"]
   REDIS[("Redis<br/>TTL cache per source,<br/>room pub/sub, rate limit")]
   PG[("Postgres<br/>last-good snapshots, lives")]
-  EXT[["Public UK sources<br/>BoE, ONS, Nomis, Land Registry, postcodes.io, ...<br/>keyed sources fall back to mock"]]
+  EXT[["Public UK sources<br/>BoE, ONS, Nomis, Land Registry, postcodes.io, ...<br/>live mode: no data = unavailable"]]
   LLM[["Anthropic API<br/>flavour text only"]]
 
   CLIENT -- "HTTPS JSON" --> REST
@@ -106,11 +106,16 @@ flowchart TB
 2. Redis caches the rows with a TTL per source.
 3. Postgres keeps the last good snapshot.
 4. The hub reduces observations to an annual `MacroTable`.
-5. Every value carries a status: `live`, `cached` or `mock`.
+5. Every value carries a status: `live`, `cached` or `unavailable`. `mock` exists only in demo mode (ADR 0027).
 
 Context-only sources (ADR 0030): Guardian headlines (`GET /v1/news`, headline and link only, no body text) and Bank of England MPC rate-decision dates (`GET /v1/rate-decisions`, the "Next Bank of England rate decision" line in Next Move "Why?"). They never feed the `MacroTable` or any engine result; a test asserts that `next_move` output is identical with and without them. Headlines are untrusted text (ADR 0034).
 
-A source that fails serves `cached` data. A source with no key, or with no cached data, serves labelled `mock` data. A source that excludes Scotland uses the UK value with the note "UK average used".
+A source that fails serves `cached` real data. A source with no key, or with no cached data:
+
+- Live mode (`DATA_MODE=live`, Railway): `unavailable`. Its values are absent from the `MacroTable`, and events that need them do not fire.
+- Demo mode (`DATA_MODE=demo`, local default and tests): labelled `mock` data.
+
+A source that excludes Scotland uses the UK value with the note "UK average used".
 
 ### Service: `lifeline_api`
 
@@ -121,9 +126,9 @@ A source that fails serves `cached` data. A source with no key, or with no cache
 
 ## Money tab (ADR 0016, 0017)
 
-1. `lifeline_data.finance` builds a `FinanceSnapshot` (accounts, transactions, mortgage and energy details, holder) for the signed-in subject. Tier 1: one of four labelled fixture personas, chosen by subject (`demo-presenter-01` maps to `homeowner-leeds`). Tier 2: the TrueLayer sandbox.
+1. `lifeline_data.finance` builds a `FinanceSnapshot` (accounts, transactions, mortgage and energy details, holder) for the signed-in subject. Live mode: only the user's own data (statement upload, manual entry; Monzo and Trading212 after the Yaffy merge, ADR 0036), stored encrypted in Postgres. With no data, `GET /v1/finance/home` returns `has_data: false` (ADR 0038). Demo mode: one of four labelled fixture personas, chosen by subject (`demo-presenter-01` maps to `homeowner-leeds`). TrueLayer is disabled (ADR 0027).
 2. `lifeline_engine.money` computes the insights. The API serves them under `/v1/finance/*`: overview, spending, subscriptions, bills, budgets, goals, profile, prediction, guesses.
-3. Every response has `meta.data_status` (`live`, `cached` or `mock`). Mock data shows "Sample data".
+3. Every response has `meta.data_status`. Mock data (demo mode only) shows "Sample data".
 4. `/v1/finance/profile` returns a `DecisionProfile` and a `CharacterSpec`. The Next Move, the Real-life Decision and "Play yourself" all use this one profile, so they agree.
 
 ## Next Move flow (ADR 0018, 0020, 0022, 0023)

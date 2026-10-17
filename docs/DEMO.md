@@ -1,5 +1,21 @@
 # Demo script
 
+## User story
+
+**Yaffy**, **[age]**, **[student/working]** in **[city]**.
+
+- He banks with Monzo.
+- He holds a Stocks and Shares ISA at Trading212.
+- He rents.
+- His question: **"What is my next money move?"**
+- Penny reads his money, adds live UK data, and gives him one move with its gain, its trade-off ("What you give up"), its worst case, its confidence and its evidence. He can play that move through a past shock before he makes it in real life.
+
+Status (ADR 0043):
+
+- The three bracketed values are placeholders until Yaffy confirms them.
+- The demo runs on Yaffy's real connected data after the Yaffy merge (ADR 0036). Until then, it uses the Mock and test persona Priya Shah (`homeowner-leeds`). Priya is not the named user.
+- There is no planned headline. The demo follows the engine's actual top move.
+
 The demo answers one question: **"What is my next money move?"** It opens with the Next Move story on the Money tab. Then it plays the four life scenes from `BUILD_SPEC.md` section 7. Total time: about 8 minutes.
 
 Rule (ADR 0020): **the demo follows the engine.** Narrate what the API returns on the day. Do not read a fixed answer from this page. The "Expected output" blocks show one run of the stack on 2026-10-17 so you know what to look for.

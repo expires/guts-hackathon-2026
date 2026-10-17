@@ -10,6 +10,8 @@
 
 ## Needs Akshat (do these when back; nothing waits on them)
 
+- [ ] Bank tokens: on `merge/yaffy`, Monzo and Trading212 tokens are plain files under `CREDENTIALS_DIR`. BOSS moves them to encrypted Postgres during the merge (README "Security" stays unticked until then).
+
 - [ ] Trade-off typical ranges (ADR 0042 amendment) were written from memory: early repayment charge 1% to 5%, energy exit fee £25 to £75 per fuel, savings notice 30 to 120 days. Check them or accept them as labelled assumptions.
 
 - [ ] **URGENT: secrets in the public repo.** Branch `integration` (commit 31eaaa6) contains `services/api/data/private/aa298cec…/credentials.json` with Trading212 api_key/api_secret and Monzo access/refresh tokens, plus real Monzo history and a finance snapshot. Revoke the Trading212 key and the Monzo tokens now, purge the files from history (git filter-repo or BFG) and force-push. Our `.gitignore` now ignores `**/data/private/`, `**/data/cache/` and `**/credentials.json` (the old rule only matched the repo root); keep this on merge. Also check `services/api/tests/integration/test_live_data_flow.py` lines 26-27 (gitleaks hit).

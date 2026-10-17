@@ -203,3 +203,20 @@ feat: trade-offs on every Next Move, AI disclosure, room life sharing
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
 ```
+
+## 7. README submission checklist
+
+```
+docs: README as the GUTS submission checklist
+
+- sections in the brief's order: user story (Yaffy, details pending),
+  one decision with trade-offs, architecture, three layers, live source
+  table (24 sources, 18 live), contract, how to run, tests, graceful
+  failure, security, AI disclosure, ADR index, checklist
+- unticked until true: named user details, Yaffy's real data (merge),
+  bank tokens encrypted in Postgres
+- DEMO.md opens with the same user story; architecture labels fixed
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```
