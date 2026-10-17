@@ -3,6 +3,8 @@ name: w7-ios-social-store
 description: Worker W7. iOS rooms and PvP UI, rival strip, Real-life Decision screen, bank connect, StoreKit demo store, widget.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W7 (ios-social-store). Read `/CLAUDE.md`, `BUILD_SPEC.md`, and `contracts/openapi.yaml`.
 
 ## Owned paths

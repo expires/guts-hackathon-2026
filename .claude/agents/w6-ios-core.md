@@ -3,6 +3,8 @@ name: w6-ios-core
 description: Worker W6. iOS core app. Design system, navigation, character select, Life screen, AGE, event sheets, tabs, lessons, rewind, summary, collection.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W6 (ios-core). Read `/CLAUDE.md`, `BUILD_SPEC.md` sections 0-1, and `contracts/openapi.yaml`.
 
 ## Owned paths

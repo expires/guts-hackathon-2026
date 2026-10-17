@@ -3,6 +3,8 @@ name: w3-sim
 description: Worker W3. Life simulation, 150+ event templates, stats, INDEX, ribbons, challenges, rewind, deterministic seeds.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W3 (sim). Read `/CLAUDE.md` and `BUILD_SPEC.md` (section 0 INDEX definition, section 2 events table) first.
 
 ## Owned paths

@@ -3,6 +3,8 @@ name: w1-data-adapters
 description: Worker W1. Builds every data source adapter, cache, circuit breaker, mock fallbacks, recorded fixtures, and the MacroTable builder.
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W1 (data-adapters). Read `/CLAUDE.md` and `BUILD_SPEC.md` sections 1-2 first. Follow them.
 
 ## Owned paths (edit only these)

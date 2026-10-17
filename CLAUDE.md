@@ -1,11 +1,11 @@
 # CLAUDE.md: rules for all agents
 
-Product: "Lifeline", a BitLife-style iOS game about money on real UK data. Full spec: `BUILD_SPEC.md`.
+Product: "Penny" (code name Lifeline), the money app for UK students. Direction: `DIRECTION_V2.md` (wins over `BUILD_SPEC.md` where they conflict; ADRs 0046-0056). Engineering spec: `BUILD_SPEC.md`.
 The product name lives in one constant: `services/api/lifeline_contracts/brand.py` (`PRODUCT_NAME`) and `apps/ios/Lifeline/DesignSystem/Brand.swift`.
 
 ## Hard rules
 
-1. GIT (ADR 0041). Workers and verifiers: no git writes, only `git status` and `git diff`. BOSS only: `git add` and `git commit` on `main`, one commit per accepted milestone or meaningful fix, Conventional Commits style, message from `docs/COMMITS.md`, `make secrets-scan` before every commit. Never `push`, never force, never rewrite history (no amend, rebase, reset). The user pushes.
+1. GIT (ADR 0041). Workers and verifiers: no git writes, only `git status` and `git diff`. BOSS only: `git add` and `git commit` on `main`, one commit per accepted milestone or meaningful fix, Conventional Commits style, message from `docs/COMMITS.md`, `make secrets-scan` before every commit. Never `push`, never force, never rewrite history (no amend, rebase, reset). The user pushes. Each commit is ONE logical change (one feature or one fix, with its tests and docs), the message says what and why, and the full test suite passes on that exact tree before the commit. Split by change, not by folder. After a step passes its verifier, commit it as several small commits, one per feature (e.g. lobby, quiz, Quick Life, Circles), with backend and iOS as separate commits when each still passes the tests. Author time = the real time of the commit.
 2. Edit only the paths you own (see table). Shared files are BOSS-only: `contracts/openapi.yaml`, `CLAUDE.md`, `Makefile`, `docker-compose.yml`, `.env.example`, `.gitignore`, `services/api/pyproject.toml`, `services/api/lifeline_contracts/`, `apps/ios/project.yml`. If you need a change there, put the request in your final report.
 3. Secrets: read keys only from environment (`.env`). Never print, log, or copy key values. Never read `.env` contents into output. A missing key means the adapter serves labelled mock data with `status="mock"`.
 4. Never ask the user questions. Decide, and write the decision in your final report so BOSS can add an ADR.
@@ -47,7 +47,7 @@ The product name lives in one constant: `services/api/lifeline_contracts/brand.p
 - Every screen = pure View (USER-owned, takes a plain `ViewState` plus closures, never calls the network) + `@Observable` ViewModel (agent-owned) + `<Screen>Screen.swift` glue (agent-owned). ViewState structs live in `ViewModels/`.
 - Need a view change? Do not edit `Views/` or `DesignSystem/`. Add an entry to `docs/UI_REQUESTS.md`.
 - Exception (ADR 0016): for a NEW screen with no View file yet, an agent may create the first draft View once (header `// Draft by <agent>. Owned by the UI owner from creation.`) and must log it in `docs/UI_REQUESTS.md`. Never edit it again.
-- Tabs (ADR 0016): Money (default), Life, Play, You. Game menus (Job, Assets, People, Money, Activities) live inside Life.
+- Tabs (ADR 0048): Money (default), Penny, Play, You. Life is Play solo. Compact layout. "Ask Penny" switches to the Penny tab with context.
 - Every View has `#Preview` blocks per fixture state (light, dark, large Dynamic Type). Fixtures live in `Lifeline/Preview/Fixtures.swift`.
 - `Playground` scheme (config `Mock`, `-playground`) opens a gallery of every screen on `MockClient`.
 - No keys or secrets in the app. The app talks only to our backend.
@@ -77,3 +77,19 @@ The product name lives in one constant: `services/api/lifeline_contracts/brand.p
 - Workers never edit shared files. Ask BOSS (SendMessage to "main") with the exact Swift signature or change needed; code against a closure or protocol until it lands.
 - Existing DesignSystem files may be edited only by BOSS. Workers may add view-local helpers inside their own feature folder.
 - All xcodebuild via make targets (shared lock). Each worker uses its own simulator: "W6 iPhone", "W7 iPhone", "W9 iPhone".
+
+## Direction V2 (ADRs 0046-0056, active)
+
+- Cut, do not build: Monzo and Trading212 connections, the Yaffy merge, TrueLayer, receipt photos, HealthKit, Location, Wallet tap, inbound email, presentation mode.
+- Privacy rule (ADR 0052): no £ amount, balance, income, transaction or merchant leaves the user's own view. Circles and rooms share ratios (0-100) only.
+- Chat model `CHAT_MODEL=claude-sonnet-5-5`; engine text rewording keeps `LLM_MODEL`.
+- Extra ownership:
+
+| Owner | Paths |
+|---|---|
+| W1 | `tools/gen_statements.py`, `demo/statements/**` |
+| W3 | Quick Life, Same Decision, Money Quiz question bank, student paths (in `lifeline_sim/`) |
+| W2 | habit score, student options, facts table additions (in `lifeline_engine/`) |
+| W7 | `Features/Penny/**` (Penny tab), `Features/You/**` (judge mode rows) |
+| W9 | `Features/{Rooms,Play}/**` (solo/friends split, lobby, Quiz, Same Decision, Circles UI) |
+| W6 | `Features/{Onboarding,Home,Money,Life,CharacterSelect}/**` |

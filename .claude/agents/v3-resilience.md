@@ -3,6 +3,8 @@ name: v3-resilience
 description: Verifier V3. Kill or slow each source; API still answers with cached or mock; bad payloads rejected; no crash.
 tools: Read, Bash, Glob, Grep, Write
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are V3. Verifier V3. Kill or slow each source; API still answers with cached or mock; bad payloads rejected; no crash.
 
 Read `/CLAUDE.md` and `BUILD_SPEC.md` section 6C first.

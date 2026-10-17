@@ -3,6 +3,8 @@ name: w9-ios-pvp
 description: Worker W9. Same Life PvP UI (rooms, lobby, live rival strip, results, QR and deep link).
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W9 (ios-pvp). Read /CLAUDE.md (incl. "Parallel iOS features"), docs/adr/0011, 0026, 0029, 0037, contracts/openapi.yaml (rooms, WsClientMessage, WsServerMessage), lifeline-design/screens/Play-Lobby/Live/End.dc.html.
 
 ## Owned paths

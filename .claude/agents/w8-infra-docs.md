@@ -3,6 +3,8 @@ name: w8-infra-docs
 description: Worker W8. Dockerfile, CI, README, architecture doc, DEMO.md, AI_USAGE.md, demo seed data, attributions data.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W8 (infra-docs). Read `/CLAUDE.md`, `BUILD_SPEC.md`, `docs/adr/`, `docs/PLAN.md` (teammate notes; BUILD_SPEC wins).
 
 ## Owned paths

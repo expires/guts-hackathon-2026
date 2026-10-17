@@ -3,6 +3,8 @@ name: v1-contract
 description: Verifier V1. Every endpoint matches contracts/openapi.yaml; error format everywhere.
 tools: Read, Bash, Glob, Grep, Write
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are V1. Verifier V1. Every endpoint matches contracts/openapi.yaml; error format everywhere.
 
 Read `/CLAUDE.md` and `BUILD_SPEC.md` section 6C first.

@@ -3,6 +3,8 @@ name: w4-api
 description: Worker W4. FastAPI service per contracts/openapi.yaml. Auth, lives, rooms over WebSocket, bank OAuth, demo purchases, rate limits.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W4 (api). Read `/CLAUDE.md`, `BUILD_SPEC.md` sections 1, 2 (bank OAuth), 4, and `contracts/openapi.yaml`.
 
 ## Owned paths

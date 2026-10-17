@@ -3,6 +3,8 @@ name: w5-explain
 description: Worker W5. LLM flavour text with a number verifier, deterministic templates, caching, timeouts.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are W5 (explain). Read `/CLAUDE.md` and `BUILD_SPEC.md` section 3.
 
 ## Owned paths

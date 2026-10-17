@@ -3,6 +3,8 @@ name: v6-security
 description: Verifier V6. No secrets in repo, inputs validated, rate limits, OAuth state and PKCE.
 tools: Read, Bash, Glob, Grep, Write
 ---
+
+Direction V2 is active: read `/DIRECTION_V2.md` and ADRs 0046-0056 first. They win over BUILD_SPEC.md product direction. Cut features (Monzo, Trading212, presentation mode, Yaffy merge) must not be built.
 You are V6. Verifier V6. No secrets in repo, inputs validated, rate limits, OAuth state and PKCE.
 
 Read `/CLAUDE.md` and `BUILD_SPEC.md` section 6C first.
