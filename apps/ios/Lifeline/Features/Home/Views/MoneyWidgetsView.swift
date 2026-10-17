@@ -70,10 +70,12 @@ private struct NetWorthCard: View {
             .chartYAxis { AxisMarks { _ in AxisGridLine().foregroundStyle(Theme.Palette.rule) } }
             .frame(height: 84)
             .accessibilityLabel(overview.netWorthChangeText ?? "Net worth over time")
-            HStack {
-                ForEach(overview.monthLabels.indices, id: \.self) { index in
-                    Text(overview.monthLabels[index]).font(.llLabel).foregroundStyle(Theme.Palette.muted)
-                    if index < overview.monthLabels.count - 1 { Spacer() }
+            // At most 4 month labels (first, last and 2 between), so the row never gets wider than the card.
+            let labels = Self.axisLabels(overview.monthLabels)
+            HStack(spacing: 0) {
+                ForEach(labels.indices, id: \.self) { index in
+                    Text(labels[index]).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1)
+                    if index < labels.count - 1 { Spacer(minLength: Theme.Spacing.s) }
                 }
             }
             if let change = overview.netWorthChangeText {
@@ -82,7 +84,14 @@ private struct NetWorthCard: View {
         }
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .inkSurface(HandCut((18, 24, 16, 22), (22, 16, 24, 18)))
+    }
+
+    static func axisLabels(_ all: [String]) -> [String] {
+        guard all.count > 4 else { return all }
+        let last = all.count - 1
+        return [0, last / 3, (2 * last) / 3, last].map { all[$0] }
     }
 }
 

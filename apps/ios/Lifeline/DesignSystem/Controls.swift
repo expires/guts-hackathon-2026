@@ -40,13 +40,19 @@ struct LLSheetFrame<Content: View>: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.top, Theme.Spacing.xs)
+            // Scrolled content stays inside the hand-cut corners.
+            .clipShape(HandCut.sheet)
             .background {
-                ZStack {
-                    HandCut.sheet.fill(Theme.Palette.paper)
-                    HandCut.sheet.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline)
-                }
-                .padding(.bottom, -Theme.Spacing.xxl)
-                .ignoresSafeArea(edges: .bottom)
+                HandCut.sheet.fill(Theme.Palette.paper)
+                    .padding(.bottom, -Theme.Spacing.xxl)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+            // The ink edge draws above the content.
+            .overlay {
+                HandCut.sheet.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline)
+                    .padding(.bottom, -Theme.Spacing.xxl)
+                    .ignoresSafeArea(edges: .bottom)
+                    .allowsHitTesting(false)
             }
             .padding(.top, Theme.Spacing.s)
             .background(Color.black.opacity(0.35).ignoresSafeArea())

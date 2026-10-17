@@ -36,7 +36,7 @@ struct YouScreen: View {
                 model.conceptsUnlocked = session.life?.conceptsUnlocked.count
                 await model.load()
             }
-            .fullScreenCover(item: $sheet) { sheet in
+            .llSheet(item: $sheet) { sheet in
                 let close: @MainActor () -> Void = { self.sheet = nil }
                 switch sheet {
                 case .bank: BankConnectScreen(client: session.client, onUseProfile: { _, _ in close() }, onClose: close)

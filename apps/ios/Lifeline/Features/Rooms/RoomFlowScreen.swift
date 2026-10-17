@@ -33,7 +33,7 @@ struct RoomFlowScreen: View {
             results.onClose = onClose
             results.onPlayAgain = onClose
         }
-        .fullScreenCover(isPresented: $showsLesson) {
+        .llCover(isPresented: $showsLesson) {
             LessonScreen(lesson: LessonFixtures.rateShockLesson, isNewConcept: false) { showsLesson = false }
         }
     }

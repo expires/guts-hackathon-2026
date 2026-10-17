@@ -50,7 +50,7 @@ struct PlayScreen: View {
             }
             .task { await model.load() }
             .refreshable { await model.load() }
-            .fullScreenCover(item: $sheet) { sheet in
+            .llCover(item: $sheet) { sheet in
                 let close: @MainActor () -> Void = { self.sheet = nil }
                 switch sheet {
                 case .room: RoomFlowScreen(demo: RoomsFixtures.demo, onClose: close)
