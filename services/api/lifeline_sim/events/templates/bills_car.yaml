@@ -1,0 +1,221 @@
+# Bills and car events. Schema: lifeline_sim/events/schema.py
+
+- id: bills.energy_shock
+  area: bills
+  tags: [energy_bill]
+  emoji: "⚡"
+  title: Energy bills jump
+  text: "Energy prices rose {energy_pct:.0f}% this year. Your bills go up about £{extra_monthly:,.0f} a month, £{extra_annual:,.0f} over the year."
+  concept_id: budgeting
+  eligible:
+    age: [18, 110]
+    when: not energy_fixed
+  probability: clamp(energy_price_change / 30, 0, 1)
+  facts:
+    energy_pct: energy_price_change
+    extra_monthly: round(110 * price_level * energy_price_change / 100)
+    extra_annual: extra_monthly * 12
+    insulation_cost: round(450 * price_level)
+    insulated_annual: round(extra_annual * 0.6)
+    insulated_total: insulation_cost + insulated_annual
+    insulation_saving: round(extra_monthly * 0.2)
+    cold_annual: round(extra_annual * 0.5)
+  choices:
+    - id: pay
+      aliases: [keep]
+      label: Pay the higher bills
+      emoji: "💡"
+      hint: "-£{extra_annual:,.0f} this year"
+      default: true
+      text: "You paid £{extra_annual:,.0f} more for energy this year."
+      good: false
+      effects: { cash: -extra_annual }
+    - id: insulate
+      label: Insulate the loft
+      emoji: "🧱"
+      hint: "-£{insulation_cost:,.0f} now, smaller bills for good"
+      text: "Insulation cost £{insulation_cost:,.0f}. This year's extra bills were £{insulated_annual:,.0f}, and bills stay £{insulation_saving:,.0f} a month lower."
+      good: true
+      effects: { cash: -insulated_total, living: -insulation_saving }
+    - id: cold
+      label: Turn the heating down
+      emoji: "🥶"
+      hint: "-£{cold_annual:,.0f} this year, chilly"
+      text: "Jumpers on. You paid only £{cold_annual:,.0f} extra this year."
+      good: true
+      effects: { cash: -cold_annual, health: -3, happiness: -2 }
+
+- id: bills.fuel_jump
+  area: bills
+  emoji: "⛽"
+  title: Fuel prices jump
+  text: "Fuel costs {fuel_pct:.0f}% more than last year. Driving costs you £{extra_monthly:,.0f} more a month."
+  concept_id: budgeting
+  eligible:
+    when: has_car
+  probability: clamp(fuel_price_change / 25, 0, 0.9)
+  facts:
+    fuel_pct: fuel_price_change
+    extra_monthly: round(140 * price_level * fuel_price_change / 100)
+    extra_annual: extra_monthly * 12
+    bus_annual: round(extra_annual * 0.2)
+  choices:
+    - id: pay
+      label: Keep driving
+      emoji: "🚗"
+      hint: "-£{extra_annual:,.0f} this year"
+      default: true
+      text: "You paid £{extra_annual:,.0f} more for fuel this year."
+      good: false
+      effects: { cash: -extra_annual }
+    - id: bus
+      label: Bus and bike more
+      emoji: "🚲"
+      hint: "-£{bus_annual:,.0f} this year"
+      text: "You drive less. Travel cost just £{bus_annual:,.0f} more this year."
+      good: true
+      effects: { cash: -bus_annual, health: 2, happiness: -1 }
+
+- id: bills.switch_deal
+  area: bills
+  tags: [subscription]
+  emoji: "🔁"
+  title: Your deals are up for renewal
+  text: "Phone, broadband and insurance renew this month. Switching could save £{saving_annual:,.0f} a year."
+  concept_id: budgeting
+  eligible:
+    age: [18, 110]
+  probability: 0.15
+  facts:
+    saving_annual: round(260 * price_level)
+    saving_monthly: round(saving_annual / 12)
+    hassle_cost: round(60 * price_level)
+  choices:
+    - id: stay
+      aliases: [keep]
+      label: Let them renew
+      emoji: "😴"
+      hint: Pay the loyalty price
+      default: true
+      text: "Everything renews at the higher price."
+      good: false
+      effects: { }
+    - id: switch
+      label: Switch providers
+      emoji: "🔁"
+      hint: "Save about £{saving_annual:,.0f} a year"
+      branches:
+        - p: 0.85
+          text: "You switched and save £{saving_monthly:,.0f} a month."
+          good: true
+          effects: { living: -saving_monthly, smarts: 1 }
+        - text: "The switch went wrong. You paid £{hassle_cost:,.0f} in fees, but saved in the end."
+          good: false
+          effects: { cash: -hassle_cost, living: -saving_monthly, happiness: -2 }
+
+- id: car.mot_fail
+  area: car
+  tags: [emergency_fund]
+  emoji: "🛠️"
+  title: Your car fails its MOT
+  text: "The garage quotes £{repair_cost:,.0f} to get it through. A cheap used car is £{used_car:,.0f}."
+  concept_id: emergency-fund
+  eligible:
+    when: has_car
+  probability: 0.12
+  facts:
+    repair_cost: round(480 * price_level)
+    used_car: round(3500 * price_level)
+    scrap_value: round(150 * price_level)
+    bus_monthly: round(70 * price_level)
+    flag_off: 0
+  choices:
+    - id: fix
+      label: Fix it
+      emoji: "🔧"
+      hint: "-£{repair_cost:,.0f}"
+      default: true
+      text: "Fixed and back on the road for £{repair_cost:,.0f}."
+      good: true
+      effects: { cash: -repair_cost }
+    - id: replace
+      label: Buy a used car
+      emoji: "🚙"
+      hint: "-£{used_car:,.0f}"
+      text: "You bought a used car for £{used_car:,.0f}."
+      good: false
+      effects: { cash: scrap_value - used_car, happiness: 3 }
+    - id: scrap
+      label: Scrap it and go car-free
+      emoji: "🚲"
+      hint: "+£{scrap_value:,.0f}, bus fares £{bus_monthly:,.0f} a month"
+      text: "You scrapped it for £{scrap_value:,.0f} and take the bus."
+      good: true
+      effects: { cash: scrap_value, living: bus_monthly, set_has_car: flag_off, happiness: -3 }
+
+- id: car.repair_bill
+  area: car
+  tags: [emergency_fund]
+  emoji: "🚗"
+  title: Warning light on the dash
+  text: "The main dealer quotes £{dealer_cost:,.0f}. A back-street garage says £{cheap_cost:,.0f}."
+  concept_id: emergency-fund
+  eligible:
+    when: has_car
+  probability: 0.1
+  facts:
+    dealer_cost: round(850 * price_level)
+    cheap_cost: round(dealer_cost * 0.5)
+    redo_cost: round(dealer_cost * 1.3)
+  choices:
+    - id: dealer
+      label: Main dealer
+      emoji: "🏢"
+      hint: "-£{dealer_cost:,.0f}"
+      default: true
+      text: "Fixed properly for £{dealer_cost:,.0f}."
+      good: true
+      effects: { cash: -dealer_cost }
+    - id: cheap
+      label: Cheap garage
+      emoji: "🔩"
+      hint: "-£{cheap_cost:,.0f}, a gamble"
+      branches:
+        - p: 0.6
+          text: "Good job for £{cheap_cost:,.0f}."
+          good: true
+          effects: { cash: -cheap_cost }
+        - text: "It failed a month later. In total you paid £{redo_cost:,.0f}."
+          good: false
+          effects: { cash: -redo_cost, happiness: -3 }
+
+- id: car.insurance_renewal
+  area: car
+  emoji: "📄"
+  title: Car insurance renewal
+  text: "Your renewal is up {rise_pct:.0f}%, an extra £{extra_annual:,.0f} a year. Prices overall rose {cpi_pct:.1f}%."
+  concept_id: insurance
+  eligible:
+    when: has_car
+  probability: 0.2
+  facts:
+    cpi_pct: cpi_inflation
+    rise_pct: clamp(cpi_inflation * 2.5, 4, 40)
+    extra_annual: round(620 * price_level * rise_pct / 100)
+    shopped_annual: round(extra_annual * 0.2)
+  choices:
+    - id: renew
+      label: Auto-renew
+      emoji: "🔄"
+      hint: "+£{extra_annual:,.0f} a year"
+      default: true
+      text: "Renewed. You paid £{extra_annual:,.0f} more this year."
+      good: false
+      effects: { cash: -extra_annual }
+    - id: shop
+      label: Shop around
+      emoji: "🔍"
+      hint: Most of the rise avoided
+      text: "A comparison site found a deal. You paid just £{shopped_annual:,.0f} more."
+      good: true
+      effects: { cash: -shopped_annual, smarts: 1 }

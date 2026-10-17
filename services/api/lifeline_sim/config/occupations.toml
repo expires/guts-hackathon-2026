@@ -1,0 +1,59 @@
+# Occupation profiles. Matched on CharacterSpec.occupation (lower case): exact name, then
+# `aliases`, then the first profile whose name is contained in the occupation, else [default].
+#
+# bonus_share         bonus as a share of base pay when STOCK_RETURN = 0
+# bonus_stock_beta    change in bonus share per 1 percentage point of STOCK_RETURN (floor 0, cap bonus_cap)
+# redundancy_mult     multiplier on the unemployment-based redundancy odds
+# redundancy_stock    extra yearly redundancy odds per 1 point of stock market fall
+# public_sector       true: pay follows the public sector pay policy table below
+#
+# Sources and labels:
+# - Bonus link to markets: City bonus pools fell sharply in 2008-2009 (ONS bonus series, finance
+#   sector). Modelled as a share of base pay that moves with the FTSE proxy (MacroKey.STOCK_RETURN).
+# - Public pay: UK public sector pay freeze 2011-2012 (pay over GBP 21,000) and 1% cap 2013-2017
+#   (HM Treasury spending reviews 2010 and 2013).
+
+[default]
+bonus_share = 0.0
+bonus_stock_beta = 0.0
+bonus_cap = 0.0
+redundancy_mult = 1.0
+redundancy_stock = 0.0
+public_sector = false
+
+[banker]
+aliases = ["investment banker", "trader", "fund manager", "financial analyst"]
+bonus_share = 0.2
+bonus_stock_beta = 0.012
+bonus_cap = 0.6
+redundancy_mult = 1.2
+redundancy_stock = 0.012
+public_sector = false
+
+[nurse]
+aliases = ["staff nurse", "midwife", "paramedic", "care worker", "doctor"]
+redundancy_mult = 0.25
+public_sector = true
+
+[teacher]
+aliases = ["teaching assistant", "lecturer", "civil servant", "police officer"]
+redundancy_mult = 0.3
+public_sector = true
+
+["software developer"]
+aliases = ["developer", "engineer", "marketing manager"]
+bonus_share = 0.05
+bonus_stock_beta = 0.003
+bonus_cap = 0.2
+redundancy_mult = 1.1
+redundancy_stock = 0.002
+
+# Public sector pay policy: yearly pay growth cap in percent (min with regional median pay growth).
+[public_pay_cap]
+2011 = 0.0
+2012 = 0.0
+2013 = 1.0
+2014 = 1.0
+2015 = 1.0
+2016 = 1.0
+2017 = 1.0

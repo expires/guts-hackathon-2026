@@ -1,0 +1,40 @@
+"DATE_NAME","GEOGRAPHY_NAME","GEOGRAPHY_CODE","OBS_VALUE"
+"2023","North East","E12000001",31435
+"2023","North West","E12000002",33127
+"2023","Yorkshire and The Humber","E12000003",32075
+"2023","East Midlands","E12000004",32611
+"2023","West Midlands","E12000005",33351
+"2023","East","E12000006",36538
+"2023","London","E12000007",42083
+"2023","South East","E12000008",37434
+"2023","South West","E12000009",34140
+"2023","Wales","W92000004",32963
+"2023","Scotland","S92000003",35549
+"2023","Northern Ireland","N92000002",32752
+"2023","United Kingdom","K02000001",35004
+"2024","North East","E12000001",33380
+"2024","North West","E12000002",35304
+"2024","Yorkshire and The Humber","E12000003",34723
+"2024","East Midlands","E12000004",34834
+"2024","West Midlands","E12000005",35000
+"2024","East","E12000006",39098
+"2024","London","E12000007",44796
+"2024","South East","E12000008",40350
+"2024","South West","E12000009",36109
+"2024","Wales","W92000004",34898
+"2024","Scotland","S92000003",38321
+"2024","Northern Ireland","N92000002",34249
+"2024","United Kingdom","K02000001",37439
+"2025","North East","E12000001",34833
+"2025","North West","E12000002",37445
+"2025","Yorkshire and The Humber","E12000003",35990
+"2025","East Midlands","E12000004",36194
+"2025","West Midlands","E12000005",37048
+"2025","East","E12000006",40863
+"2025","London","E12000007",46414
+"2025","South East","E12000008",41618
+"2025","South West","E12000009",37543
+"2025","Wales","W92000004",36354
+"2025","Scotland","S92000003",39905
+"2025","Northern Ireland","N92000002",37129
+"2025","United Kingdom","K02000001",39039

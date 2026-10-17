@@ -1,0 +1,249 @@
+# Money events. Schema: lifeline_sim/events/schema.py
+
+- id: money.market_crash
+  area: money
+  priority: 2
+  emoji: "📉"
+  title: The stock market crashes
+  text: "Shares fell {drop_pct:.1f}% this year. Your shares and pension are worth £{pot:,.0f}."
+  concept_id: diversification
+  eligible:
+    when: investments + pension > 1000
+  probability: clamp((-stock_return - 8) / 10, 0, 1)
+  facts:
+    drop_pct: -stock_return
+    pot: round(investments + pension)
+    shares: round(investments)
+    sell_loss: round(investments * 0.12)
+    top_up: round(min(savings * 0.2, 5000))
+  choices:
+    - id: hold
+      label: Hold on
+      emoji: "🧘"
+      hint: Ride it out
+      default: true
+      text: "You held on. Markets usually recover, though nobody knows when."
+      good: true
+      effects: { happiness: -2 }
+    - id: sell
+      label: Sell everything
+      emoji: "🏃"
+      hint: "Lock in losses and miss any bounce, about -£{sell_loss:,.0f}"
+      text: "You sold your shares and moved £{shares:,.0f} to cash, missing the bounce."
+      good: false
+      effects: { investments: -shares, cash: shares - sell_loss, happiness: 1 }
+    - id: buy_more
+      label: Buy more while cheap
+      emoji: "🛒"
+      hint: "Move £{top_up:,.0f} of savings into shares"
+      text: "You put £{top_up:,.0f} into shares at low prices."
+      good: true
+      effects: { savings: -top_up, investments: top_up, happiness: -1 }
+
+- id: money.inflation_bite
+  area: money
+  tags: [budget_overspend]
+  emoji: "🛒"
+  title: Your shopping costs more
+  text: "Prices rose {cpi_pct:.1f}% this year. Your weekly shop and bills cost about £{extra_monthly:,.0f} more a month."
+  concept_id: inflation
+  eligible:
+    age: [18, 110]
+  probability: clamp((cpi_inflation - 3) / 4, 0, 0.9)
+  facts:
+    cpi_pct: cpi_inflation
+    extra_monthly: round(living * cpi_inflation / 100)
+    cut_back: round(extra_monthly * 0.8)
+    card_amount: round(extra_monthly * 12)
+  choices:
+    - id: carry_on
+      aliases: [keep]
+      label: Carry on as normal
+      emoji: "🤷"
+      hint: Spend more
+      default: true
+      text: "You absorb the higher prices."
+      good: false
+      effects: { happiness: -1 }
+    - id: cut_back
+      aliases: [cut, cut_budget]
+      label: Cut back and shop around
+      emoji: "✂️"
+      hint: "Save £{cut_back:,.0f} a month"
+      text: "Own-brand and fewer takeaways save £{cut_back:,.0f} a month."
+      good: true
+      effects: { living: -cut_back, happiness: -3 }
+    - id: card
+      label: Put it on a credit card
+      emoji: "💳"
+      hint: "£{card_amount:,.0f} on a card at high interest"
+      text: "You put £{card_amount:,.0f} on a card. The interest adds up."
+      good: false
+      effects: { other_debt: card_amount, cash: card_amount, happiness: 1 }
+
+- id: money.crypto_tip
+  area: money
+  emoji: "🪙"
+  title: A friend swears by crypto
+  text: "Bitcoin returned {crypto_pct:.0f}% last year. Your friend says put in £{stake:,.0f}."
+  concept_id: crypto-risk
+  eligible:
+    age: [18, 60]
+    years: [2013, 2100]
+    when: liquid > 2000
+  probability: clamp(0.06 + max(prev_crypto_return, 0) / 1000, 0.04, 0.3)
+  facts:
+    crypto_pct: prev_crypto_return
+    stake: round(min(1000 * price_level + liquid * 0.1, 5000 * price_level))
+  choices:
+    - id: skip
+      label: Not for me
+      emoji: "🙅"
+      hint: Keep your cash
+      default: true
+      text: "You keep your money where it is."
+      good: true
+      effects: { }
+    - id: buy
+      label: Buy some
+      emoji: "🚀"
+      hint: "£{stake:,.0f} that can double or halve"
+      text: "You bought £{stake:,.0f} of crypto. Hold on tight."
+      good: false
+      effects: { cash: -stake, crypto: stake, happiness: 2 }
+
+- id: money.rates_up_savings
+  area: money
+  tags: [savings_rate_change]
+  emoji: "🏦"
+  title: Savings rates are up
+  text: "The Bank Rate rose to {bank_rate_pct:.2f}%. Your £{cash_now:,.0f} in a current account earns nothing. A savings account would earn about £{extra_interest:,.0f} a year."
+  concept_id: compound-interest
+  eligible:
+    when: cash > 1500
+  probability: clamp((bank_rate - prev_bank_rate) * 0.8, 0, 0.8)
+  facts:
+    bank_rate_pct: bank_rate
+    cash_now: round(cash)
+    move_amount: round(cash * 0.7)
+    extra_interest: round(move_amount * max(bank_rate - 0.5, 0.1) / 100)
+  choices:
+    - id: leave
+      aliases: [keep]
+      label: Leave it
+      emoji: "😴"
+      hint: Earns nothing
+      default: true
+      text: "Your cash stays put and earns nothing."
+      good: false
+      effects: { }
+    - id: move
+      aliases: [switch, move_savings]
+      label: Move it to savings
+      emoji: "➡️"
+      hint: "Move £{move_amount:,.0f}, earn about £{extra_interest:,.0f} a year"
+      text: "You moved £{move_amount:,.0f} to a savings account."
+      good: true
+      effects: { cash: -move_amount, savings: move_amount, smarts: 1 }
+
+- id: money.rates_cut_savings
+  area: money
+  tags: [savings_rate_change]
+  priority: 1
+  emoji: "📉"
+  title: Savings rates fall
+  text: "The Bank Rate fell from {old_rate:.2f}% to {new_rate:.2f}%. Your £{savings_now:,.0f} of savings will earn about £{lost_interest:,.0f} less a year."
+  concept_id: interest-rates
+  eligible:
+    when: savings > 1000
+  probability: 1 if bank_rate - prev_bank_rate <= -0.5 else 0
+  facts:
+    old_rate: prev_bank_rate
+    new_rate: bank_rate
+    savings_now: round(savings)
+    lost_interest: round(savings * (prev_bank_rate - bank_rate) / 100)
+    move: round(savings * 0.25)
+    debt_pay: round(min(savings * 0.5, other_debt))
+  choices:
+    - id: keep
+      label: Keep it in savings
+      emoji: "🏦"
+      hint: Safe, but earns less
+      default: true
+      text: "Your savings stay put and earn less."
+      good: true
+      effects: { }
+    - id: shares
+      label: Move a quarter into shares
+      emoji: "📈"
+      hint: "Move £{move:,.0f}, can rise or fall"
+      text: "You moved £{move:,.0f} into a shares fund."
+      good: true
+      effects: { savings: -move, investments: move }
+    - id: spend
+      label: Spend some instead
+      emoji: "🛍️"
+      hint: "Spend £{move:,.0f}"
+      text: "Low rates make saving feel pointless. You spent £{move:,.0f}."
+      good: false
+      effects: { savings: -move, happiness: 4 }
+
+- id: money.scam_call
+  area: money
+  emoji: "🎣"
+  title: A call from your 'bank'
+  text: "A caller says your account is at risk and asks you to move £{at_risk:,.0f} to a 'safe account'."
+  concept_id: scams
+  eligible:
+    when: liquid > 500
+  probability: 0.025 + (0.04 if age >= 70 else 0)
+  facts:
+    at_risk: round(min(liquid * 0.5, 4000 * price_level))
+  choices:
+    - id: hang_up
+      label: Hang up and call the bank
+      emoji: "☎️"
+      hint: Check first
+      default: true
+      text: "It was a scam. Your bank thanks you for checking."
+      good: true
+      effects: { smarts: 2 }
+    - id: transfer
+      label: Move the money
+      emoji: "💸"
+      hint: "Send £{at_risk:,.0f}"
+      text: "The money is gone. You lost £{at_risk:,.0f}."
+      good: false
+      effects: { cash: -at_risk, happiness: -10 }
+
+- id: money.card_offer
+  area: money
+  tags: [card_debt]
+  emoji: "💳"
+  title: A credit card offer arrives
+  text: "A card offers £{limit:,.0f} to spend. The rate is {apr:.1f}% a year after the intro period."
+  concept_id: debt
+  eligible:
+    age: [18, 75]
+  probability: 0.1
+  facts:
+    limit: round(3000 * price_level)
+    apr: bank_rate + 18
+    spend: round(limit * 0.6)
+  choices:
+    - id: bin
+      aliases: [keep, decline]
+      label: Bin it
+      emoji: "🗑️"
+      hint: No debt
+      default: true
+      text: "You bin the letter."
+      good: true
+      effects: { }
+    - id: spend
+      label: Use it for a holiday
+      emoji: "🏝️"
+      hint: "£{spend:,.0f} of new debt at {apr:.1f}%"
+      text: "Great holiday. You now owe £{spend:,.0f} at {apr:.1f}%."
+      good: false
+      effects: { other_debt: spend, happiness: 6 }
