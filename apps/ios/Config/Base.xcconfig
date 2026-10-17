@@ -1,0 +1,5 @@
+// BOSS-owned. Shared build settings. Personal overrides go in Config/Local.xcconfig (git-ignored).
+// Copy Config/Local.xcconfig.example to Config/Local.xcconfig and set your Team ID to build to a device.
+LIFELINE_BUNDLE_ID = com.lifeline.app
+LIFELINE_API_BASE_URL = http:/$()/localhost:8000
+#include? "Local.xcconfig"

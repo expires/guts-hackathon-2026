@@ -1,0 +1,112 @@
+# Lifeline CI. Owned by W8.
+# Jobs: python (ruff, mypy, pytest unit/contract/integration, contract drift), docker (compose build),
+# secrets (gitleaks), ios (XcodeGen + xcodebuild test via `make ios-test`).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      APP_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.1"
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+
+      - name: Install Python 3.12 and dependencies
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: mypy (strict on contracts, engine, sim)
+        run: uv run mypy
+
+      # pytest exit code 5 means "no tests collected". Accept it only while a suite is still empty.
+      - name: pytest unit
+        run: uv run pytest tests/unit || [ $? -eq 5 ]
+
+      - name: pytest contract
+        run: uv run pytest tests/contract || [ $? -eq 5 ]
+
+      - name: pytest integration
+        run: uv run pytest tests/integration || [ $? -eq 5 ]
+
+      - name: contracts/openapi.yaml matches lifeline_contracts
+        run: |
+          uv run python ../../contracts/build_openapi.py
+          git diff --exit-code -- ../../contracts/openapi.yaml
+
+  docker:
+    name: docker compose build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build api and worker images
+        run: docker compose build
+
+  secrets:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: gitleaks over the working tree
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.24.0 \
+            dir . --no-banner --redact -c .gitleaks.toml
+
+  ios:
+    name: ios (xcodebuild test)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Show Xcode and simulators
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | head -40
+      # Do not hardcode a device: runner images change. Take the first available iPhone on the newest iOS runtime.
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          name=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          names = [d["name"] for rt, devs in sorted(devices.items(), reverse=True) if ".iOS-" in rt
+                   for d in devs if d["name"].startswith("iPhone")]
+          print(names[0] if names else "")')
+          if [ -z "$name" ]; then echo "::error::No available iPhone simulator on this runner"; exit 1; fi
+          echo "Using simulator: $name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - name: Generate project and run tests
+        env:
+          SIM: ${{ steps.sim.outputs.name }}
+        run: make ios-test SIM="$SIM"

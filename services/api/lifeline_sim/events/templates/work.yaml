@@ -1,0 +1,291 @@
+# Work and employer events. Schema: lifeline_sim/events/schema.py
+# Formulas: lifeline_sim/expr.py. Variables: macro keys for this region and year, prev_<key>,
+# price_level (2024 = 1.0), and life state (see STATE_VARS in events/engine.py).
+
+- id: work.pay_rise
+  area: work
+  emoji: "💷"
+  title: Your boss offers a pay rise
+  text: "You are offered {rise_pct:.1f}% more, worth £{rise_amount:,.0f} a year. Typical pay in your area grew {pay_growth_pct:.1f}%."
+  concept_id: inflation
+  eligible:
+    age: [18, 65]
+    when: employed and income > 0
+  probability: clamp(0.18 + pay_growth * 0.03, 0.05, 0.4)
+  facts:
+    pay_growth_pct: pay_growth
+    rise_pct: clamp(pay_growth_pct + 1.5, 1, 8)
+    rise_amount: round(income * rise_pct / 100)
+    push_amount: round(rise_amount * 2)
+    happiness_cost: 4
+  choices:
+    - id: accept
+      label: Say thank you
+      emoji: "🤝"
+      hint: "+£{rise_amount:,.0f} a year"
+      default: true
+      text: "Your pay goes up £{rise_amount:,.0f} a year."
+      good: true
+      effects: { income: rise_amount, happiness: 2 }
+    - id: push
+      label: Push for double
+      emoji: "💪"
+      hint: Could get £{push_amount:,.0f}, or nothing
+      branches:
+        - p: 0.45
+          text: "Bold move. Your pay goes up £{push_amount:,.0f} a year."
+          good: true
+          effects: { income: push_amount, happiness: 4 }
+        - text: "They say no and withdraw the offer. Your pay stays the same."
+          good: false
+          effects: { happiness: -happiness_cost }
+
+- id: work.redundancy
+  area: work
+  priority: 3
+  emoji: "📦"
+  title: You are made redundant
+  text: "Your employer is cutting jobs. Unemployment in your area is {unemployment_pct:.1f}%. Your payout is £{payout:,.0f}, and finding work could take {months_out:.0f} months."
+  concept_id: job-security
+  eligible:
+    age: [18, 64]
+    when: employed and income > 10000
+  probability: clamp((unemployment / 100 * 0.6 + max(unemployment - prev_unemployment, 0) * 0.03) * occ_redundancy_mult + occ_redundancy_stock * max(-stock_return, 0), 0.002, 0.6)
+  facts:
+    unemployment_pct: unemployment
+    payout: round(min(years_in_role, 20) * min(income / 52, 719))
+    months_out: clamp(round(2 + unemployment / 1.5), 2, 12)
+    lost_pay: round(net_income / 12 * months_out)
+    retrain_cost: round(1500 * price_level)
+    retrain_raise: round(income * 0.06)
+    lower_pay: round(-income * 0.05)
+  choices:
+    - id: search
+      label: Take the payout and job hunt
+      emoji: "🔎"
+      hint: "+£{payout:,.0f} payout, about {months_out:.0f} months without pay"
+      default: true
+      text: "You found a new job after {months_out:.0f} months. It pays a little less."
+      good: false
+      effects: { cash: payout - lost_pay, income: lower_pay, happiness: -6 }
+    - id: retrain
+      label: Retrain for a new career
+      emoji: "🎓"
+      hint: "-£{retrain_cost:,.0f} course, chance of better pay"
+      branches:
+        - p: 0.6
+          text: "The course paid off. Your new job pays £{retrain_raise:,.0f} more."
+          good: true
+          effects: { cash: payout - lost_pay - retrain_cost, income: retrain_raise, smarts: 6, happiness: 2 }
+        - text: "The course did not lead to a better job. You took a similar one."
+          good: false
+          effects: { cash: payout - lost_pay - retrain_cost, income: lower_pay, smarts: 4, happiness: -4 }
+
+- id: work.job_offer
+  area: work
+  emoji: "📨"
+  title: A rival firm wants you
+  text: "Another employer offers {offer_pct:.0f}% more pay, £{offer_amount:,.0f} a year extra. Unemployment is {unemployment_pct:.1f}%, so new jobs carry some risk."
+  concept_id: job-security
+  eligible:
+    age: [20, 60]
+    when: employed and income > 0 and years_in_role >= 2
+  probability: clamp(0.14 - unemployment / 100, 0.02, 0.12)
+  facts:
+    unemployment_pct: unemployment
+    offer_pct: clamp(12 - unemployment / 2, 5, 15)
+    offer_amount: round(income * offer_pct / 100)
+    reset_years: 0
+  choices:
+    - id: stay
+      label: Stay where you are
+      emoji: "🏠"
+      hint: No change
+      default: true
+      text: "You stay put. Better the devil you know."
+      good: false
+      effects: { happiness: -1 }
+    - id: move
+      label: Take the new job
+      emoji: "🚀"
+      hint: "+£{offer_amount:,.0f} a year, some risk"
+      branches:
+        - p: 0.8
+          text: "Good move. You earn £{offer_amount:,.0f} more a year."
+          good: true
+          effects: { income: offer_amount, happiness: 3 }
+        - text: "The new place is rough. More money, but you are miserable."
+          good: true
+          effects: { income: offer_amount, happiness: -8, health: -3 }
+
+- id: work.bonus
+  area: work
+  priority: 1
+  emoji: "🎉"
+  title: Bonus season
+  text: "Markets returned {stock_return_pct:.1f}% this year. Your bonus is £{bonus_after_tax:,.0f} after tax."
+  concept_id: compound-interest
+  eligible:
+    age: [18, 65]
+    when: employed and bonus_net > 500
+  probability: 1
+  facts:
+    stock_return_pct: stock_return
+    bonus_after_tax: round(bonus_net)
+    splurge: round(bonus_after_tax * 0.9)
+  choices:
+    - id: save
+      label: Put it in savings
+      emoji: "🏦"
+      hint: "£{bonus_after_tax:,.0f} to savings"
+      default: true
+      text: "Your £{bonus_after_tax:,.0f} bonus goes into savings."
+      good: true
+      effects: { cash: -bonus_after_tax, savings: bonus_after_tax }
+    - id: invest
+      label: Invest it in shares
+      emoji: "📈"
+      hint: Grows with the market, up or down
+      text: "You invest £{bonus_after_tax:,.0f} in a shares fund."
+      good: true
+      effects: { cash: -bonus_after_tax, investments: bonus_after_tax }
+    - id: splurge
+      label: Treat yourself
+      emoji: "🛍️"
+      hint: "Spend £{splurge:,.0f}"
+      text: "You spend £{splurge:,.0f} on a watch and a holiday."
+      good: false
+      effects: { cash: -splurge, happiness: 6 }
+
+- id: work.bonus_cut
+  area: work
+  priority: 2
+  emoji: "✂️"
+  title: No bonus this year
+  text: "Markets fell {drop_pct:.1f}%. Your firm cancels bonuses. In a flat year a typical bonus here is {usual_pct:.0f}% of pay."
+  concept_id: job-security
+  eligible:
+    age: [18, 65]
+    when: employed and bonus < 1 and occ_bonus_share > 0
+  probability: 1 if stock_return < -5 else 0
+  facts:
+    drop_pct: -stock_return
+    usual_pct: occ_bonus_share * 100
+    cut_back: round(living * 0.15)
+  choices:
+    - id: carry_on
+      label: Spend as normal
+      emoji: "🤷"
+      hint: Savings take the hit
+      default: true
+      text: "You keep spending as before. Your savings cover the gap."
+      good: false
+      effects: { happiness: -4 }
+    - id: cut_back
+      label: Cut back spending
+      emoji: "✂️"
+      hint: "Save £{cut_back:,.0f} a month"
+      text: "You cut £{cut_back:,.0f} a month from your spending."
+      good: true
+      effects: { living: -cut_back, happiness: -6 }
+
+- id: work.overtime
+  area: work
+  emoji: "⏰"
+  title: Extra shifts on offer
+  text: "Your manager offers overtime worth £{extra:,.0f} after tax this year."
+  concept_id: budgeting
+  eligible:
+    age: [18, 65]
+    when: employed and income > 0 and income < 45000
+  probability: 0.15
+  facts:
+    extra: round(income * 0.08 * 0.68)
+  choices:
+    - id: decline
+      label: Keep your evenings
+      emoji: "🛋️"
+      hint: No extra money
+      default: true
+      text: "You keep your free time."
+      good: false
+      effects: { happiness: 2 }
+    - id: accept
+      label: Take the shifts
+      emoji: "💪"
+      hint: "+£{extra:,.0f}, but tiring"
+      text: "You earn an extra £{extra:,.0f}. You are tired."
+      good: true
+      effects: { cash: extra, health: -3, happiness: -2 }
+
+- id: work.pay_freeze
+  area: work
+  emoji: "🧊"
+  title: Your pay is frozen
+  text: "No pay rise this year, while prices rose {cpi_pct:.1f}%. In real terms that is a cut of about £{real_cut:,.0f}."
+  concept_id: inflation
+  eligible:
+    age: [18, 65]
+    when: employed and income > 0
+  probability: clamp((cpi_inflation - pay_growth) / 10 + pay_cap_active * 0.8, 0, 0.9)
+  facts:
+    cpi_pct: cpi_inflation
+    real_cut: round(income * cpi_inflation / 100)
+    raise_if_move: round(income * 0.07)
+    lost_pay: round(net_income / 12 * 2)
+  choices:
+    - id: accept
+      label: Accept it
+      emoji: "😐"
+      hint: Pay stays the same
+      default: true
+      text: "You accept the freeze. Prices keep rising."
+      good: false
+      effects: { happiness: -3 }
+    - id: look
+      label: Look for a better-paid job
+      emoji: "🔎"
+      hint: "Maybe +£{raise_if_move:,.0f} a year"
+      branches:
+        - p: 0.55
+          text: "You land a job paying £{raise_if_move:,.0f} more."
+          good: true
+          effects: { income: raise_if_move, happiness: 3 }
+        - text: "Nothing better came up, and two unpaid weeks between interviews cost you £{lost_pay:,.0f}."
+          good: false
+          effects: { cash: -lost_pay, happiness: -2 }
+
+- id: employer.insolvency
+  area: employer
+  priority: 3
+  emoji: "🏚️"
+  title: Your employer goes bust
+  text: "Your company has gone into administration. Unemployment is {unemployment_pct:.1f}%. The government scheme pays up to £{statutory:,.0f} of what you are owed."
+  concept_id: job-security
+  eligible:
+    age: [18, 64]
+    when: employed and income > 10000
+  probability: clamp((unemployment / 250 + max(unemployment - prev_unemployment, 0) / 100) * occ_redundancy_mult, 0.001, 0.05)
+  facts:
+    unemployment_pct: unemployment
+    statutory: round(min(years_in_role, 20) * min(income / 52, 719))
+    months_out: clamp(round(2 + unemployment / 2), 2, 10)
+    lost_pay: round(net_income / 12 * months_out)
+    lower_pay: round(-income * 0.08)
+    gig_pay: round(net_income / 12 * months_out * 0.5)
+  choices:
+    - id: claim
+      label: Claim and job hunt
+      emoji: "📝"
+      hint: "+£{statutory:,.0f}, then {months_out:.0f} months to find work"
+      default: true
+      text: "You claim £{statutory:,.0f} and find a new job after {months_out:.0f} months."
+      good: false
+      effects: { cash: statutory - lost_pay, income: lower_pay, happiness: -6 }
+    - id: gig
+      label: Take gig work right away
+      emoji: "🛵"
+      hint: "Some pay now, long hours"
+      text: "Gig work covers half your lost pay, about £{gig_pay:,.0f}, while you look."
+      good: true
+      effects: { cash: statutory - lost_pay + gig_pay, income: lower_pay, health: -3, happiness: -4 }

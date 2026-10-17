@@ -1,0 +1,40 @@
+"DATE_NAME","DATE_CODE","GEOGRAPHY_NAME","GEOGRAPHY_CODE","OBS_VALUE"
+"Jan 2024-Dec 2024","2024-12","North East","E12000001",4.5
+"Jan 2024-Dec 2024","2024-12","North West","E12000002",4.1
+"Jan 2024-Dec 2024","2024-12","Yorkshire and The Humber","E12000003",2.9
+"Jan 2024-Dec 2024","2024-12","East Midlands","E12000004",4.5
+"Jan 2024-Dec 2024","2024-12","West Midlands","E12000005",4.4
+"Jan 2024-Dec 2024","2024-12","East","E12000006",3.5
+"Jan 2024-Dec 2024","2024-12","London","E12000007",4.8
+"Jan 2024-Dec 2024","2024-12","South East","E12000008",3.5
+"Jan 2024-Dec 2024","2024-12","South West","E12000009",3.2
+"Jan 2024-Dec 2024","2024-12","Wales","W92000004",3.3
+"Jan 2024-Dec 2024","2024-12","Scotland","S92000003",3.3
+"Jan 2024-Dec 2024","2024-12","Northern Ireland","N92000002",1.8
+"Jan 2024-Dec 2024","2024-12","United Kingdom","K02000001",3.8
+"Jan 2025-Dec 2025","2025-12","North East","E12000001",4.6
+"Jan 2025-Dec 2025","2025-12","North West","E12000002",4.3
+"Jan 2025-Dec 2025","2025-12","Yorkshire and The Humber","E12000003",4.6
+"Jan 2025-Dec 2025","2025-12","East Midlands","E12000004",4.2
+"Jan 2025-Dec 2025","2025-12","West Midlands","E12000005",5.7
+"Jan 2025-Dec 2025","2025-12","East","E12000006",4.0
+"Jan 2025-Dec 2025","2025-12","London","E12000007",6.1
+"Jan 2025-Dec 2025","2025-12","South East","E12000008",3.6
+"Jan 2025-Dec 2025","2025-12","South West","E12000009",3.2
+"Jan 2025-Dec 2025","2025-12","Wales","W92000004",4.5
+"Jan 2025-Dec 2025","2025-12","Scotland","S92000003",3.7
+"Jan 2025-Dec 2025","2025-12","Northern Ireland","N92000002",2.1
+"Jan 2025-Dec 2025","2025-12","United Kingdom","K02000001",4.4
+"Apr 2025-Mar 2026","2026-03","North East","E12000001",4.7
+"Apr 2025-Mar 2026","2026-03","North West","E12000002",4.4
+"Apr 2025-Mar 2026","2026-03","Yorkshire and The Humber","E12000003",4.6
+"Apr 2025-Mar 2026","2026-03","East Midlands","E12000004",4.4
+"Apr 2025-Mar 2026","2026-03","West Midlands","E12000005",5.7
+"Apr 2025-Mar 2026","2026-03","East","E12000006",3.9
+"Apr 2025-Mar 2026","2026-03","London","E12000007",6.2
+"Apr 2025-Mar 2026","2026-03","South East","E12000008",3.5
+"Apr 2025-Mar 2026","2026-03","South West","E12000009",3.2
+"Apr 2025-Mar 2026","2026-03","Wales","W92000004",4.3
+"Apr 2025-Mar 2026","2026-03","Scotland","S92000003",4.0
+"Apr 2025-Mar 2026","2026-03","Northern Ireland","N92000002",2.1
+"Apr 2025-Mar 2026","2026-03","United Kingdom","K02000001",4.4

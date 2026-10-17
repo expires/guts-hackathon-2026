@@ -1,3 +1,40 @@
+# Secrets (spec section 5)
+.env
+.env.*
+!.env.example
+*.p8
+*.mobileprovision
+*.pem
+*.key
+
+# Xcode
+xcuserdata/
+DerivedData/
+.build/
+build/
+*.xcresult
+apps/ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/configuration/
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local caches
+services/api/.cache/
+
+# ---- From team .gitignore (origin/main) ----
 # ---- Secrets & credentials (never commit) ----
 .env
 .env.*
@@ -61,3 +98,4 @@ Thumbs.db
 # ---- Logs ----
 *.log
 logs/
+apps/ios/Config/Local.xcconfig

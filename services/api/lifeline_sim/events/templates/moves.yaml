@@ -1,0 +1,354 @@
+# Events behind the Next Move kinds (ADR 0018). Each one has a `tags` entry that a "Test it"
+# policy can name. Choice ids match the Next Move option ids where they exist.
+# Schema: lifeline_sim/events/schema.py
+
+- id: home.variable_rate_rise
+  area: home
+  priority: 2
+  tags: [mortgage_rate_change]
+  emoji: "⬆️"
+  title: Your mortgage payment rises
+  text: "The Bank Rate rose from {old_rate:.2f}% to {new_rate:.2f}%. Your rate follows it to {rate_now:.2f}%, about £{extra_monthly:,.0f} a month more. A 2-year fix is {rate_2y:.2f}% and a 5-year fix is {rate_5y:.2f}%."
+  concept_id: interest-rates
+  eligible:
+    housing: [mortgage]
+    when: has_mortgage and (on_tracker or (on_variable and fixed_until == 0))
+  probability: 1 if bank_rate - prev_bank_rate >= 0.25 else 0
+  facts:
+    old_rate: prev_bank_rate
+    new_rate: bank_rate
+    rate_now: (bank_rate + tracker_margin) if on_tracker else svr_rate
+    extra_monthly: round(mortgage_balance * (bank_rate - prev_bank_rate) / 1200)
+    rate_2y: mortgage_2y_fix
+    rate_5y: mortgage_5y_fix
+    two: 2
+    five: 5
+  choices:
+    - id: keep
+      label: Stay where you are
+      emoji: "🤷"
+      aliases: [svr, tracker, do_nothing]
+      hint: "{rate_now:.2f}% and it can rise again"
+      default: true
+      text: "You stay on {rate_now:.2f}%. Your payment rose about £{extra_monthly:,.0f} a month."
+      good: rate_now <= rate_2y
+      effects: { happiness: -2 }
+    - id: fix_2y
+      label: Fix for 2 years now
+      emoji: "2️⃣"
+      hint: "{rate_2y:.2f}% for 2 years"
+      text: "You fixed at {rate_2y:.2f}% for 2 years."
+      good: rate_2y <= rate_now
+      effects: { set_mortgage_rate: rate_2y, set_mortgage_fix_years: two }
+    - id: fix_5y
+      label: Fix for 5 years now
+      emoji: "5️⃣"
+      hint: "{rate_5y:.2f}% for 5 years"
+      text: "You fixed at {rate_5y:.2f}% for 5 years."
+      good: rate_5y <= rate_now
+      effects: { set_mortgage_rate: rate_5y, set_mortgage_fix_years: five }
+
+- id: money.savings_best_buy
+  area: money
+  tags: [savings_rate_change]
+  emoji: "🏦"
+  title: Your savings rate is behind
+  text: "Your bank pays {avg_rate:.2f}% on easy-access savings, the UK average. Top easy-access accounts pay {best_rate:.2f}%. On £{savings_now:,.0f} that is £{gap:,.0f} a year."
+  concept_id: compound-interest
+  eligible:
+    when: savings > 2000 and best_savings_rate - savings_rate >= 0.25
+  probability: 0.3
+  facts:
+    avg_rate: savings_rate
+    best_rate: best_savings_rate
+    savings_now: round(savings)
+    gap: round(savings * (best_rate - avg_rate) / 100)
+  choices:
+    - id: keep
+      label: Leave it where it is
+      emoji: "😴"
+      aliases: [stay, leave]
+      hint: "Earn about £{gap:,.0f} less this year"
+      default: true
+      text: "You stayed. Your savings earned £{gap:,.0f} less than a top account would pay."
+      good: false
+      effects: { savings: -gap }
+    - id: switch
+      label: Move to a top account
+      emoji: "➡️"
+      aliases: [move, move_savings]
+      hint: "{best_rate:.2f}% instead of {avg_rate:.2f}%"
+      text: "You moved £{savings_now:,.0f} to an account paying {best_rate:.2f}%."
+      good: true
+      effects: { smarts: 1 }
+
+- id: money.card_balance
+  area: money
+  tags: [card_debt]
+  emoji: "💳"
+  title: Your card balance is growing
+  text: "You owe £{owed:,.0f} on a card. Card rates average {apr:.1f}%, so that costs about £{interest:,.0f} a year. You have £{savings_now:,.0f} in savings."
+  concept_id: debt
+  eligible:
+    age: [18, 110]
+    when: other_debt > 300
+  probability: 0.5
+  facts:
+    owed: round(other_debt)
+    apr: card_rate
+    interest: round(owed * apr / 100)
+    savings_now: round(savings)
+    pay: round(min(owed, savings))
+    fee: round(owed * 0.03)
+  choices:
+    - id: keep
+      label: Pay the minimum
+      emoji: "🐢"
+      aliases: [minimum, do_nothing]
+      hint: "About £{interest:,.0f} of interest a year"
+      default: true
+      text: "You paid the minimum. The interest keeps adding up, about £{interest:,.0f} a year."
+      good: false
+      effects: { other_debt: interest, happiness: -1 }
+    - id: pay_off
+      label: Clear it from savings
+      emoji: "🧹"
+      aliases: [pay_off_debt, pay]
+      hint: "Use £{pay:,.0f} of savings"
+      text: "You paid £{pay:,.0f} off the card from savings."
+      good: true
+      effects: { savings: -pay, other_debt: -pay, happiness: 2 }
+    - id: balance_transfer
+      label: Move it to a 0% card
+      emoji: "🔁"
+      aliases: [switch]
+      hint: "£{fee:,.0f} fee, no interest for a year"
+      text: "You moved the balance to a 0% card for a £{fee:,.0f} fee."
+      good: true
+      effects: { other_debt: fee, smarts: 1 }
+
+- id: money.subscription_price_rise
+  area: money
+  tags: [subscription]
+  emoji: "📺"
+  title: A subscription price goes up
+  text: "Your streaming and music bundle rises {rise_pct:.0f}% to £{new_price:,.0f} a month, £{annual:,.0f} a year. Prices overall rose {cpi_pct:.1f}%."
+  concept_id: subscriptions
+  eligible:
+    age: [16, 90]
+  probability: 0.2
+  facts:
+    cpi_pct: cpi_inflation
+    rise_pct: clamp(cpi_inflation + 6, 5, 25)
+    old_price: round(24 * price_level)
+    new_price: round(old_price * (1 + rise_pct / 100))
+    rise_monthly: new_price - old_price
+    annual: new_price * 12
+    cheaper: round(new_price * 0.45)
+  choices:
+    - id: keep
+      label: Keep it
+      emoji: "🍿"
+      aliases: [stay]
+      hint: "+£{rise_monthly:,.0f} a month"
+      default: true
+      text: "You keep the bundle at £{new_price:,.0f} a month."
+      good: false
+      effects: { living: rise_monthly }
+    - id: switch
+      label: Switch to the basic plan
+      emoji: "🔁"
+      aliases: [switch_subscription, downgrade]
+      hint: "Save £{cheaper:,.0f} a month"
+      text: "You moved to the basic plan and save £{cheaper:,.0f} a month."
+      good: true
+      effects: { living: -cheaper, happiness: -1 }
+    - id: cancel
+      label: Cancel it
+      emoji: "✂️"
+      aliases: [cancel_subscription]
+      hint: "Save £{old_price:,.0f} a month"
+      text: "You cancelled and save £{old_price:,.0f} a month."
+      good: true
+      effects: { living: -old_price, happiness: -2 }
+
+- id: money.unused_subscription
+  area: money
+  tags: [subscription]
+  emoji: "🏋️"
+  title: A membership you do not use
+  text: "You pay £{monthly:,.0f} a month for a gym you went to {visits:.0f} times this year. That is £{per_visit:,.0f} a visit."
+  concept_id: subscriptions
+  eligible:
+    age: [18, 80]
+  probability: 0.12
+  facts:
+    monthly: round(32 * price_level)
+    visits: 4
+    per_visit: round(monthly * 12 / visits)
+  choices:
+    - id: keep
+      label: Keep it, you will go
+      emoji: "🙏"
+      hint: "£{monthly:,.0f} a month"
+      default: true
+      text: "You keep paying £{monthly:,.0f} a month."
+      good: false
+      effects: { happiness: -1 }
+    - id: cancel
+      label: Cancel it
+      emoji: "✂️"
+      aliases: [cancel_subscription]
+      hint: "Save £{monthly:,.0f} a month"
+      text: "You cancelled. You run in the park instead."
+      good: true
+      effects: { living: -monthly, health: 1 }
+
+- id: money.budget_overspend
+  area: money
+  tags: [budget_overspend]
+  emoji: "🧾"
+  title: You went over budget
+  text: "Eating out and shopping cost £{over:,.0f} more than you planned this year. Prices rose {cpi_pct:.1f}%."
+  concept_id: budgeting
+  eligible:
+    age: [18, 90]
+    when: employed or retired
+  probability: 0.15
+  facts:
+    cpi_pct: cpi_inflation
+    over: round(living * 12 * 0.06)
+    over_monthly: round(over / 12)
+    cut: round(living * 0.05)
+  choices:
+    - id: keep
+      label: It is fine
+      emoji: "🤷"
+      aliases: [carry_on]
+      hint: "Keep spending £{over_monthly:,.0f} a month extra"
+      default: true
+      text: "Your spending stays £{over_monthly:,.0f} a month higher."
+      good: false
+      effects: { living: over_monthly }
+    - id: cut
+      label: Set a budget and stick to it
+      emoji: "✂️"
+      aliases: [cut_budget]
+      hint: "Spend £{cut:,.0f} a month less"
+      text: "You set a budget. You now spend £{cut:,.0f} a month less."
+      good: true
+      effects: { living: -cut, happiness: -2, smarts: 1 }
+    - id: card
+      label: Put it on a card
+      emoji: "💳"
+      hint: "£{over:,.0f} of new card debt"
+      text: "You put £{over:,.0f} on a card."
+      good: false
+      effects: { other_debt: over, cash: over, happiness: 1 }
+
+- id: money.emergency_fund_check
+  area: money
+  tags: [emergency_fund]
+  emoji: "🛟"
+  title: How long could you last?
+  text: "Your cash and savings cover {months:.1f} months of costs. Many people aim for 3 to 6 months. Saving £{monthly_save:,.0f} a month gets you to 3 months in a year."
+  concept_id: emergency-fund
+  eligible:
+    age: [18, 75]
+    when: employed and liquid < monthly_costs * 3
+  probability: 0.15
+  facts:
+    months: liquid / max(monthly_costs, 1)
+    target: round(monthly_costs * 3)
+    gap: round(max(target - liquid, 0))
+    monthly_save: round(gap / 12)
+    spend_cut: round(min(gap / 12, living * 0.08))
+  choices:
+    - id: keep
+      label: Not now
+      emoji: "😬"
+      hint: "A surprise bill goes on a card"
+      default: true
+      text: "You leave it for now."
+      good: false
+      effects: { }
+    - id: save
+      label: Save a little each month
+      emoji: "🐖"
+      aliases: [build_emergency_fund, build]
+      hint: "Spend £{spend_cut:,.0f} a month less and save it"
+      text: "You set up a £{spend_cut:,.0f} standing order to savings."
+      good: true
+      effects: { living: -spend_cut, smarts: 1, happiness: 1 }
+
+- id: bills.energy_fix_offer
+  area: bills
+  tags: [energy_bill]
+  emoji: "🔒"
+  title: Fix your energy price?
+  text: "A typical bill is £{cap_bill:,.0f} a year this year. A supplier offers a 2-year fix at £{fix_bill:,.0f}, {premium_pct:.0f}% more. Energy prices changed {energy_pct:.0f}% this year."
+  concept_id: energy-bills
+  eligible:
+    age: [18, 110]
+    when: not energy_fixed
+  probability: 0.15
+  facts:
+    cap_bill: round(energy_tariff)
+    energy_pct: energy_price_change
+    premium_pct: 8
+    fix_bill: round(cap_bill * (1 + premium_pct / 100))
+    premium: fix_bill - cap_bill
+    two: 2
+  choices:
+    - id: keep
+      label: Stay on the standard price
+      emoji: "🤷"
+      aliases: [stay, variable]
+      hint: Pay what the cap says each year
+      default: true
+      text: "You stay on the standard price. It moves with the market."
+      good: false
+      effects: { }
+    - id: fix
+      label: Fix for 2 years
+      emoji: "🔒"
+      aliases: [switch, switch_energy]
+      hint: "£{premium:,.0f} a year more now, no rises for 2 years"
+      text: "You fixed at £{fix_bill:,.0f} a year for 2 years."
+      good: true
+      effects: { cash: -premium, set_energy_fix_years: two }
+
+- id: bills.energy_shock_fixed
+  area: bills
+  tags: [energy_bill]
+  emoji: "🛡️"
+  title: Your energy fix protects you
+  text: "Energy prices rose {energy_pct:.0f}% this year. Your fixed deal saves you about £{saved_annual:,.0f}. Leaving early costs £{exit_fee:,.0f}."
+  concept_id: energy-bills
+  eligible:
+    age: [18, 110]
+    when: energy_fixed
+  probability: clamp(energy_price_change / 30, 0, 1)
+  facts:
+    energy_pct: energy_price_change
+    saved_annual: round(110 * price_level * energy_price_change / 100) * 12
+    exit_fee: round(150 * price_level)
+    leave_cost: exit_fee + saved_annual
+    zero: 0
+  choices:
+    - id: keep
+      label: Stay on the fix
+      emoji: "🔒"
+      aliases: [fix, stay]
+      hint: "Save about £{saved_annual:,.0f}"
+      default: true
+      text: "You stay on the fix and save about £{saved_annual:,.0f} this year."
+      good: true
+      effects: { happiness: 2 }
+    - id: leave
+      label: Leave the fix
+      emoji: "🚪"
+      hint: "£{exit_fee:,.0f} fee and the higher price"
+      text: "You left the fix. The fee and the higher price cost £{leave_cost:,.0f}."
+      good: false
+      effects: { cash: -leave_cost, set_energy_fix_years: zero }
