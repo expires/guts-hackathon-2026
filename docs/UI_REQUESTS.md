@@ -65,3 +65,11 @@ An agent that needs a view change adds one entry below. The UI owner marks it do
 - Why: ADR 0018. The screen now opens from "Why?" on a mortgage move (title "Why this move?") and from a "Play yourself" life that reaches today (title "You reached today").
 - ViewState change: added `context`, `title`, `actionID`, `successText`, `basisSentence`, `canTestIt`, `isSampleData` (all with defaults); `RealLifeDecisionActions.onTestIt`.
 - Status: open
+
+### UIR-7: Drafts created, please review: Money tab, You tab, Accounts, Investments, Habits
+- From: W6 (integration branch, user allowed View edits)
+- Screen / file: `Features/Home/Views/MoneyHomeView.swift`, `MoneyWidgetsView.swift`, `Features/You/Views/YouView.swift`, `Features/{Accounts,Investments,Habits}/Views/*View.swift`
+- Need: Review the drafts. Open items: the "Why?" button on the Next Move card has no destination yet (no Why screen); Play tab, Plan, Evaluation and Spend accuracy have ViewModels but no screens; the Life tab hides the app tab bar while a life runs and shows a "Back to Money" button instead.
+- Why: Live Monzo and Trading212 connections, investments replay, habits.
+- ViewState change: new `AccountsViewState`, `InvestmentsViewState`, `HabitsViewState`; `MoneyHomeViewState.connections`, `.investmentsLink`.
+- Status: open

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import secrets
+import sys
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -11,12 +13,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 log = logging.getLogger(__name__)
 
+# `make dev` runs from services/api, so look for .env in the repo root first, then here (later files win).
+# Real environment variables always beat both files. Pytest never reads .env files (tests stay hermetic).
+_API_DIR = Path(__file__).resolve().parents[1]
+ENV_FILES: tuple[Path, ...] | None = (
+    None if "pytest" in sys.modules else (_API_DIR.parent.parent / ".env", _API_DIR / ".env")
+)
+
 # Used only when APP_ENV=test and JWT_SECRET is not set. Never used in dev or prod.
 _TEST_JWT_SECRET = "test-only-jwt-secret-not-for-production-use"  # noqa: S105
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=ENV_FILES, extra="ignore", case_sensitive=False)
 
     app_env: Literal["dev", "test", "prod"] = "dev"
     version: str = "0.1.0"

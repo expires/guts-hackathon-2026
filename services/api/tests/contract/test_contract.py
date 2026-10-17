@@ -44,6 +44,17 @@ TIER1 = {
     "testNextMove",
     "getPlan",
     "addPlanItem",
+    # Connected accounts, investments and the ISA replay (ADR 0018, live data).
+    "getInvestments",
+    "getHabits",
+    "getIsaPeriods",
+    "postIsaBacktest",
+    "postIsaScenarios",
+    "listConnections",
+    "connectTrading212",
+    "connectMonzoToken",
+    "syncMonzo",
+    "disconnectProvider",
 }
 TIER2 = {
     "listChallenges",
@@ -355,7 +366,7 @@ async def test_later_tier_ops_answer_inside_contract(
 ) -> None:
     """Whether built (2xx) or stubbed (501), every response is a declared status with a valid body."""
     life = await new_life(client, auth)
-    concrete = path.replace("{id}", life["id"]).replace("{code}", "ZZZZZZ")
+    concrete = path.replace("{id}", life["id"]).replace("{code}", "ZZZZZZ").replace("{provider}", "monzo")
     op = spec()["paths"][path][method.lower()]
     params = {"session": "missing-session"} if op_id == "getBankSummary" else None
     body = _example_body(op)

@@ -28,6 +28,7 @@ import numpy as np
 
 from lifeline_contracts.domain import DecisionProfile, SourceRef
 from lifeline_contracts.finance import FinanceSnapshot
+from lifeline_contracts.investing import IsaBacktestRequest, ReturnSeries
 from lifeline_contracts.macro import MacroKey, MacroTable
 from lifeline_contracts.next_move import (
     EvidencePoint,
@@ -38,11 +39,10 @@ from lifeline_contracts.next_move import (
     NextMoveResponse,
     TestPeriod,
 )
-from lifeline_engine.decision import candidate_starts, mortgage_interest
 from lifeline_engine.decision import _twins as nearest_twins
+from lifeline_engine.decision import candidate_starts, mortgage_interest
 from lifeline_engine.macro_access import latest_year, source_ref, value_or
-from lifeline_engine.money import finance_meta
-from lifeline_engine.money import dates
+from lifeline_engine.money import dates, finance_meta
 from lifeline_engine.money.categorise import label as category_label
 from lifeline_engine.money.profile import (
     debt_total,
@@ -58,6 +58,14 @@ from lifeline_engine.money.spending import by_category
 from lifeline_engine.money.text import digit_facts, gbp, money_value, pct, pct_value, unsupported_numbers
 from lifeline_engine.periods import similar_years
 from lifeline_engine.population import Person
+from lifeline_eval.isa_backtest import (
+    NAMED_PERIODS,
+    PERIOD_LABELS,
+    PERIODS,
+    isa_backtest,
+    period_drawdowns,
+    weights_from_holdings,
+)
 
 K_TWINS = 20
 K_PERIODS = 5
@@ -98,6 +106,7 @@ KIND_ORDER: tuple[MoveKind, ...] = (
     "cancel_subscription",
     "switch_subscription",
     "cut_budget",
+    "spread_isa",
 )
 
 # Sim template tag per move kind (lifeline_sim templates, ADR 0018). Every option of a move uses the same tag.
@@ -111,6 +120,7 @@ MOVE_TAG: dict[MoveKind, str] = {
     "switch_subscription": "subscription",
     "cut_budget": "budget_overspend",
     "build_emergency_fund": "emergency_fund",
+    "spread_isa": "isa_mix",  # not testable in the sim: spread_isa moves carry no test_period
 }
 POLICY_DEAL_END = "__deal_end_year"
 
@@ -126,6 +136,7 @@ OPTION_LABEL: dict[str, str] = {
     "cancel": "Cancel it",
     "cut": "Cut back",
     "save": "Build a safety net",
+    "spread": "Spread your investments",
 }
 FIX_YEARS = {"fix_5y": 5, "fix_2y": 2}
 
@@ -212,6 +223,7 @@ class Context:
     profile: DecisionProfile
     seed: int
     twins: list[Person] = field(default_factory=list)
+    returns: ReturnSeries | None = None
     _periods: dict[int, list[int]] = field(default_factory=dict)
 
     def periods(self, horizon: int) -> list[int]:
@@ -434,8 +446,9 @@ def _mortgage(ctx: Context) -> Candidate | None:
         source_ref(ctx.macro, MacroKey.MORTGAGE_5Y_FIX, ctx.year),
     )
     worst_txt = (
-        f"and {gbp(worst)} a year in the worst period" if worst >= 0 else f"but cost {gbp(worst)} a year more in the worst"
-        " period"
+        f"and {gbp(worst)} a year in the worst period"
+        if worst >= 0
+        else f"but cost {gbp(worst)} a year more in the worst period"
     )
     e3 = _ev(
         f"We tested {len(ctx.twins) or 1} people like you in {len(starts)} similar past periods. "
@@ -801,13 +814,14 @@ def _budget(ctx: Context) -> Candidate | None:
         spent = by_month[last].get(c, (0.0, 0))[0]  # type: ignore[call-overload]
         avg = float(np.mean([by_month[m].get(c, (0.0, 0))[0] for m in before]))  # type: ignore[call-overload]
         excess = spent - avg
-        if avg >= CUT_MIN_AVERAGE and excess >= max(CUT_MIN_GBP, CUT_MIN_SHARE * avg) and (best is None or excess > best[0]):
+        big = avg >= CUT_MIN_AVERAGE and excess >= max(CUT_MIN_GBP, CUT_MIN_SHARE * avg)
+        if big and (best is None or excess > best[0]):
             best = (excess, c, spent, avg)
     if best is None:
         return None
     excess, cat, spent, avg = best
     impact = excess * 12
-    under = sum(1 for m in history if by_month[m].get(cat, (0.0, 0))[0] <= avg)  # type: ignore[call-overload]
+    under = len([m for m in history if by_month[m].get(cat, (0.0, 0))[0] <= avg])  # type: ignore[call-overload]
     conf = under / len(history)
     name = category_label(cat).lower()  # type: ignore[arg-type]
     e1 = _ev(f"You spent {gbp(spent)} on {name} last month.", {"spent": money_value(spent)}, _bank_ref(ctx.snapshot))
@@ -827,6 +841,73 @@ def _budget(ctx: Context) -> Candidate | None:
         f"You spent {gbp(excess)} more than usual on {name}", impact, 0.0, conf,
         f"You spent this little in {under} of the last {len(history)} months",
         [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("cut", ["keep"]), ctx.matched_test_period(), "budgeting",
+    )
+
+
+# ---------- spread the ISA ----------
+
+SPREAD_MIX = {"global_equity": 0.5, "uk_equity": 0.1, "gilts": 0.3, "cash": 0.1}  # labelled assumption
+SPREAD_MIN_HHI = 0.35  # holdings this concentrated score 50 or less (habits bands)
+SPREAD_MIN_INVESTED = 1_000.0
+
+
+def _period_years(period: str) -> float:
+    start, end = PERIODS[period]
+    return ((int(end[:4]) - int(start[:4])) * 12 + int(end[5:]) - int(start[5:]) + 1) / 12
+
+
+def _buy_and_hold_cagr(weights: dict[str, float], returns: ReturnSeries) -> float:
+    req = IsaBacktestRequest(
+        weights=weights, technique="lump_sum", rebalance="none", period="full", monthly_contribution=1.0
+    )
+    return isa_backtest(req, returns).metrics.cagr
+
+
+def _spread_isa(ctx: Context) -> Candidate | None:
+    holdings = ctx.snapshot.holdings
+    returns = ctx.returns
+    total = sum(h.value for h in holdings)
+    if returns is None or total < SPREAD_MIN_INVESTED:
+        return None
+    weights = weights_from_holdings(holdings)
+    conc = sum((h.value / total) ** 2 for h in holdings)
+    if weights is None or conc < SPREAD_MIN_HHI:
+        return None
+    mine = period_drawdowns(weights, returns)
+    spread = period_drawdowns(SPREAD_MIX, returns)
+    better = [p for p in NAMED_PERIODS if spread[p] < mine[p]]
+    if not better:
+        return None
+    worst = max(NAMED_PERIODS, key=lambda p: (mine[p], p))
+    saved = total * (mine[worst] - spread[worst])
+    if saved <= 0:
+        return None
+    impact = saved / _period_years(worst)
+    give_up = total * max(0.0, _buy_and_hold_cagr(weights, returns) - _buy_and_hold_cagr(SPREAD_MIX, returns))
+    conf = len(better) / len(NAMED_PERIODS)
+    top_share = round(max(h.value for h in holdings) / total * 100)
+    fell = round(mine[worst] * 100)
+    fell_spread = round(spread[worst] * 100)
+    when = PERIOD_LABELS[worst]
+    e1 = _ev(
+        f"Your biggest holding is {top_share}% of your investments.",
+        {"top_share": float(top_share)},
+        _bank_ref(ctx.snapshot),
+    )
+    e2 = _ev(
+        f"In {when}, your current mix fell {fell}% at its worst. A spread mix fell {fell_spread}%.",
+        {"fell": float(fell), "fell_spread": float(fell_spread), **digit_facts(when)},
+    )
+    e3 = _ev(
+        f"On {gbp(total)} invested, that is {gbp(saved)} less lost. Over the long run the spread mix may grow "
+        f"{gbp(give_up)} a year less.",
+        {"invested": money_value(total), "saved": money_value(saved), "give_up": money_value(give_up)},
+    )
+    return _move(
+        ctx, "spread_isa", "spread_isa", "Spread your investments",
+        f"Your investments fell harder than a spread mix in {when}", impact, -give_up, conf,
+        f"The spread mix fell less in {len(better)} of {len(NAMED_PERIODS)} past crashes",
+        [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("spread", ["keep"]), None, "diversification",
     )
 
 
@@ -858,6 +939,7 @@ BUILDERS: tuple[Callable[[Context], Candidate | None], ...] = (
     _emergency,
     _subscription,
     _budget,
+    _spread_isa,
 )
 
 
@@ -871,16 +953,30 @@ def candidates(ctx: Context) -> list[Candidate]:
     return sorted(out, key=key)
 
 
-def build_context(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> Context:
+def build_context(
+    snapshot: FinanceSnapshot,
+    macro: MacroTable,
+    today: dates.date,
+    seed: int = 0,
+    returns: ReturnSeries | None = None,
+) -> Context:
     year = min(today.year, latest_year(macro))
     prof, _ = profile(snapshot, today)
     twins = nearest_twins(prof, macro, year)[:K_TWINS]
-    return Context(snapshot=snapshot, macro=macro, today=today, year=year, profile=prof, seed=seed, twins=twins)
+    return Context(
+        snapshot=snapshot, macro=macro, today=today, year=year, profile=prof, seed=seed, twins=twins, returns=returns
+    )
 
 
-def next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> NextMoveResponse:
+def next_move(
+    snapshot: FinanceSnapshot,
+    macro: MacroTable,
+    today: dates.date,
+    seed: int = 0,
+    returns: ReturnSeries | None = None,
+) -> NextMoveResponse:
     """ONE top move and up to 2 runners-up. `generated_at` is a placeholder: the API sets server time."""
-    ctx = build_context(snapshot, macro, today, seed)
+    ctx = build_context(snapshot, macro, today, seed, returns)
     ranked = candidates(ctx)
     if not ranked:
         ranked = [_fallback(ctx)]

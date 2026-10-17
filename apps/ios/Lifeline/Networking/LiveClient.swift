@@ -188,6 +188,55 @@ struct LiveClient: LifelineClient {
         try await call { try await client.getRoom(path: .init(code: code)).ok.body.json }
     }
 
+    // MARK: Connections
+
+    func listConnections() async throws -> ConnectionsResponse {
+        try await call { try await client.listConnections().ok.body.json }
+    }
+
+    func connectTrading212(apiKey: String, apiSecret: String) async throws -> ProviderConnection {
+        try await call {
+            try await client.connectTrading212(body: .json(.init(apiKey: apiKey, apiSecret: apiSecret))).ok.body.json
+        }
+    }
+
+    func connectMonzoToken(_ accessToken: String) async throws -> ProviderConnection {
+        try await call { try await client.connectMonzoToken(body: .json(.init(accessToken: accessToken))).ok.body.json }
+    }
+
+    func syncMonzo() async throws -> HistoryStatus {
+        try await call { try await client.syncMonzo().ok.body.json }
+    }
+
+    func disconnect(_ provider: ProviderID) async throws -> ConnectionsResponse {
+        guard let payload = Operations.DisconnectProvider.Input.Path.ProviderPayload(rawValue: provider.rawValue) else {
+            throw APIError.unexpected(status: 0)
+        }
+        return try await call { try await client.disconnectProvider(path: .init(provider: payload)).ok.body.json }
+    }
+
+    // MARK: Investing and habits
+
+    func investments() async throws -> InvestmentsResponse {
+        try await call { try await client.getInvestments().ok.body.json }
+    }
+
+    func habits() async throws -> HabitFactors {
+        try await call { try await client.getHabits().ok.body.json }
+    }
+
+    func isaPeriods() async throws -> IsaPeriodsResponse {
+        try await call { try await client.getIsaPeriods().ok.body.json }
+    }
+
+    func isaBacktest(_ query: IsaBacktestQuery) async throws -> IsaBacktestResponse {
+        try await call { try await client.postIsaBacktest(body: .json(query)).ok.body.json }
+    }
+
+    func isaScenarios(_ query: IsaScenariosQuery) async throws -> IsaScenariosResult {
+        try await call { try await client.postIsaScenarios(body: .json(query)).ok.body.json }
+    }
+
     // MARK: Bank
 
     func bankAuthLink() async throws -> BankAuthLink {

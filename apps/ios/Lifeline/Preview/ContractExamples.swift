@@ -44,6 +44,16 @@ enum ContractExamples {
     static let planItem: PlanItem = decode(PreviewJSON.planItem)
     static let plan: PlanResponse = decode(PreviewJSON.plan)
 
+    // Connections, investing, habits
+    static let connections: ConnectionsResponse = decode(PreviewJSON.connections)
+    static let providerConnection: ProviderConnection = decode(PreviewJSON.providerConnection)
+    static let historyStatus: HistoryStatus = decode(PreviewJSON.historyStatus)
+    static let investments: InvestmentsResponse = decode(PreviewJSON.investments)
+    static let habitFactors: HabitFactors = decode(PreviewJSON.habitFactors)
+    static let isaPeriods: IsaPeriodsResponse = decode(PreviewJSON.isaPeriods)
+    static let isaBacktest: IsaBacktestResponse = decode(PreviewJSON.isaBacktestResponse)
+    static let isaScenarios: IsaScenariosResult = decode(PreviewJSON.isaScenarios)
+
     /// Today's prediction before the user guesses: the number, range and reasons stay hidden in the UI.
     static var spendPredictionBeforeGuess: SpendPrediction {
         var prediction = spendPrediction

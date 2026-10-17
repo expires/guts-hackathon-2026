@@ -62,7 +62,9 @@ async def _compute(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
     table = await state.hub.macro_table()
     digest = macro_hash(table)
     await state.store.put_macro(digest, table)
-    resp = await call_pure(next_move_engine.next_move, snap, table, money.today(snap), subject_seed(sub))
+    resp = await call_pure(
+        next_move_engine.next_move, snap, table, money.today(snap), subject_seed(sub), money.returns()
+    )
     resp = resp.model_copy(update={"meta": money.meta(snap), "generated_at": _utc_now()})
     await state.store.put_doc(sub, DOC_NEXT_MOVE, {"response": resp.model_dump(mode="json"), "macro_hash": digest})
     return resp, digest

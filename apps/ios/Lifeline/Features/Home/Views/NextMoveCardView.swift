@@ -40,7 +40,7 @@ struct NextMoveCardView: View {
                 .frame(minHeight: Theme.minTarget)
                 .accessibilityIdentifier("nextMove.backToTop")
         }
-        Text(move.headline)
+        Label(move.headline, systemImage: MoveKindStyle.systemImage(move.kind))
             .font(.headline)
             .accessibilityIdentifier("nextMove.headline")
         Text(move.action)

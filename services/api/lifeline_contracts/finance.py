@@ -12,6 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lifeline_contracts.accounts import Holding
 from lifeline_contracts.domain import CharacterSpec, DecisionProfile
 from lifeline_contracts.observation import Status
 
@@ -91,13 +92,14 @@ class FinanceSnapshot(_M):
     """Everything the insight code needs. Produced by lifeline_data, consumed by lifeline_engine.money."""
 
     status: Status
-    source: str = Field(description="'fixtures' or 'truelayer'")
+    source: str = Field(description="'fixtures', 'truelayer', 'monzo', 'trading212' or 'monzo+trading212'")
     persona: str | None = Field(default=None, description="Fixture persona id when status is mock")
     as_of: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     accounts: list[Account]
     transactions: list[Transaction]
     mortgage: MortgageDetails | None = None
     energy: EnergyDetails | None = None
+    holdings: list[Holding] = Field(default_factory=list, description="Investment positions (Trading212)")
 
 
 # ---------- API responses ----------
@@ -229,6 +231,16 @@ class CreateGoalRequest(_M):
     target: float = Field(gt=0, le=10_000_000)
     saved: float = Field(default=0, ge=0, le=10_000_000)
     target_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+class InvestmentsResponse(_M):
+    """Connected investment positions (Trading212). Empty on sample data."""
+
+    meta: FinanceMeta
+    holdings: list[Holding]
+    total_value: float = Field(ge=0, description="gbp, sum of holdings")
+    cash: float = Field(ge=0, description="gbp held as cash in the investment account")
+    allocation: dict[str, float] = Field(description="asset_class to percent of total_value (0-100)")
 
 
 class PersonalFact(_M):

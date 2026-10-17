@@ -60,7 +60,7 @@ final class MoneyWidgetsViewModel {
     // MARK: Move links (ADR 0018)
 
     enum Widget: CaseIterable {
-        case overview, spending, subscriptions, bills, budgets, goals, guess
+        case overview, spending, subscriptions, bills, budgets, goals, guess, investments
 
         /// Move kinds that relate to this widget, in order of preference.
         var moveKinds: [String] {
@@ -72,6 +72,7 @@ final class MoneyWidgetsViewModel {
             case .budgets: ["cut_budget"]
             case .goals: ["build_emergency_fund", "move_savings"]
             case .guess: ["cut_budget"]
+            case .investments: ["spread_isa"]
             }
         }
     }

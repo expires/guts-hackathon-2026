@@ -17,6 +17,26 @@ struct PlaygroundScreen: View {
     private func destination(_ id: String) -> some View {
         switch id {
         case "app.flow": RootScreen(session: appSession)
+        case "money.home": NavigationStack { MoneyHomeView(state: Fixtures.MoneyHome.ready) }
+        case "money.live": NavigationStack { MoneyHomeView(state: Fixtures.MoneyHome.connectedLive) }
+        case "money.loading": NavigationStack { MoneyHomeView(state: Fixtures.MoneyHome.loading) }
+        case "money.offline": NavigationStack { MoneyHomeView(state: Fixtures.MoneyHome.offline) }
+        case "accounts.none": AccountsView(state: Fixtures.Accounts.none)
+        case "accounts.connected": AccountsView(state: Fixtures.Accounts.connected)
+        case "accounts.waiting": AccountsView(state: Fixtures.Accounts.waitingForApproval)
+        case "accounts.t212error": AccountsView(state: Fixtures.Accounts.trading212Error)
+        case "accounts.loading": AccountsView(state: Fixtures.Accounts.loading)
+        case "accounts.error": AccountsView(state: Fixtures.Accounts.error)
+        case "investments.sample": InvestmentsView(state: Fixtures.Investments.sample)
+        case "investments.live": InvestmentsView(state: Fixtures.Investments.live)
+        case "investments.replaying": InvestmentsView(state: Fixtures.Investments.replaying)
+        case "investments.loading": InvestmentsView(state: Fixtures.Investments.loading)
+        case "investments.error": InvestmentsView(state: Fixtures.Investments.error)
+        case "habits.ready": HabitsView(state: Fixtures.Habits.ready)
+        case "habits.live": HabitsView(state: Fixtures.Habits.live)
+        case "habits.loading": HabitsView(state: Fixtures.Habits.loading)
+        case "habits.error": HabitsView(state: Fixtures.Habits.error)
+        case "you.ready": NavigationStack { YouView(state: Fixtures.You.ready) }
         case "select.ready": CharacterSelectView(state: Fixtures.CharacterSelect.ready)
         case "select.godOwned": CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned)
         case "select.loading": CharacterSelectView(state: Fixtures.CharacterSelect.loading)

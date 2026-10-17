@@ -89,6 +89,28 @@ final class GalleryViewModel {
                 .init(id: "common.startAge", title: "Error state", detail: "Start age too low (422)"),
                 .init(id: "common.loading", title: "Loading state", detail: "Generic"),
             ]),
+            .init(id: "money", title: "Money, accounts, investing", entries: [
+                .init(id: "money.home", title: "Money tab", detail: "Nothing connected, sample data"),
+                .init(id: "money.live", title: "Money tab", detail: "Connected, live data"),
+                .init(id: "money.loading", title: "Money tab", detail: "Loading"),
+                .init(id: "money.offline", title: "Money tab", detail: "Offline"),
+                .init(id: "accounts.none", title: "Accounts", detail: "Nothing connected"),
+                .init(id: "accounts.connected", title: "Accounts", detail: "Monzo and Trading212 live"),
+                .init(id: "accounts.waiting", title: "Accounts", detail: "Monzo waiting for approval"),
+                .init(id: "accounts.t212error", title: "Accounts", detail: "Trading212 key rejected"),
+                .init(id: "accounts.loading", title: "Accounts", detail: "Loading"),
+                .init(id: "accounts.error", title: "Accounts", detail: "Error"),
+                .init(id: "investments.sample", title: "Your investments", detail: "Sample data, replay and paths"),
+                .init(id: "investments.live", title: "Your investments", detail: "Live holdings"),
+                .init(id: "investments.replaying", title: "Your investments", detail: "Replay loading"),
+                .init(id: "investments.loading", title: "Your investments", detail: "Loading"),
+                .init(id: "investments.error", title: "Your investments", detail: "Error"),
+                .init(id: "habits.ready", title: "Your money habits", detail: "Sample data, one factor missing"),
+                .init(id: "habits.live", title: "Your money habits", detail: "Live"),
+                .init(id: "habits.loading", title: "Your money habits", detail: "Loading"),
+                .init(id: "habits.error", title: "Your money habits", detail: "Error"),
+                .init(id: "you.ready", title: "You tab", detail: "Debug build"),
+            ]),
         ]
     )
 }

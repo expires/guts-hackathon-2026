@@ -34,6 +34,7 @@ enum LifeSheet: String, Identifiable {
 /// Glue for a running life. Owns the tab bar and the event sheet, so an open event shows on any tab.
 struct LifeShellScreen: View {
     let session: GameSession
+    @Environment(AppCoordinator.self) private var coordinator
     @State private var selection: LifeTab = .life
     @State private var sheet: LifeSheet?
 
@@ -43,6 +44,15 @@ struct LifeShellScreen: View {
             Tab(LifeTab.life.title, systemImage: LifeTab.life.systemImage, value: LifeTab.life) {
                 NavigationStack {
                     LifeScreen(session: session) { route in sheet = Self.sheet(for: route) }
+                        .toolbar {
+                            // The game hides the app tab bar. This is the way back to Money and You.
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Back to Money", systemImage: "sterlingsign.circle") { coordinator.selectedTab = .money }
+                                    .labelStyle(.iconOnly)
+                                    .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
+                                    .accessibilityIdentifier("life.backToMoney")
+                            }
+                        }
                 }
             }
             Tab(LifeTab.job.title, systemImage: LifeTab.job.systemImage, value: LifeTab.job) {

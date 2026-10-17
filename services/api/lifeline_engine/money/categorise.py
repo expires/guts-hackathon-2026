@@ -207,7 +207,9 @@ _TRANSFER_WORDS = (
     "payment received",
 )
 _SAVINGS_OUT_WORDS = ("to savings", " isa ", "saver", "save the change", "savings pot", "round up")
-_CARD_LOAN_WORDS = ("credit card", "card payment to", "barclaycard", "amex", "american express", "vanquis payment", "loan")
+_CARD_LOAN_WORDS = (
+    "credit card", "card payment to", "barclaycard", "amex", "american express", "vanquis payment", "loan",
+)
 _CASH_WORDS = ("atm", "cash withdrawal", "cashpoint")
 _FEE_WORDS = ("fee", "overdraft", "charge")
 

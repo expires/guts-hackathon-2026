@@ -110,7 +110,7 @@ schemes:
         LifelineUITests: [test]
     run:
       config: Debug
-      storeKitConfiguration: Lifeline.storekit
+      # storeKitConfiguration: Lifeline.storekit  # re-enable once the .storekit file exists
     test:
       config: Debug
       targets:

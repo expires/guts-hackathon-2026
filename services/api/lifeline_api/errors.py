@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lifeline_contracts.api_models import Error, ErrorBody
+from lifeline_data.providers._http import ProviderError
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +31,23 @@ _STATUS_CODES: dict[int, str] = {
     429: "rate_limited",
     500: "internal",
     501: "not_implemented",
+    502: "bad_gateway",
     503: "unavailable",
+    504: "gateway_timeout",
+}
+
+# ProviderError.code -> (HTTP status, API error code). A provider rejecting OUR stored credentials is
+# `provider_auth` (400), never `unauthorized` (401), which means "the app's own bearer token is bad".
+PROVIDER_STATUS: dict[str, tuple[int, str]] = {
+    "auth": (400, "provider_auth"),
+    "rate_limited": (429, "rate_limited"),
+    "timeout": (504, "timeout"),
+    "unavailable": (502, "unavailable"),
+    "bad_data": (502, "bad_data"),
+    "not_configured": (503, "not_configured"),
+    "offline": (503, "offline"),
+    "bad_state": (400, "bad_state"),
+    "not_connected": (409, "not_connected"),
 }
 
 
@@ -44,6 +62,37 @@ class ApiError(Exception):
         self.message = message
         self.source = source
         self.headers = headers
+
+
+PROVIDER_NAMES = {"monzo": "Monzo", "trading212": "Trading212"}
+
+
+def provider_message(code: str, source: str) -> str:
+    """Plain English text for a ProviderError code. Never includes anything from the provider's reply."""
+    name = PROVIDER_NAMES.get(source, "Your provider")
+    return {
+        "auth": f"{name} did not accept those details. If you just connected Monzo, open the Monzo app and approve "
+        "access, then try again."
+        if source == "monzo"
+        else f"{name} did not accept those details. Check them and try again.",
+        "rate_limited": f"{name} is busy. Try again in a minute.",
+        "timeout": f"{name} took too long to answer. Try again.",
+        "unavailable": f"{name} is not answering right now. Try again soon.",
+        "bad_data": f"{name} sent something we could not read.",
+        "not_configured": f"{name} sign-in is not set up on this server.",
+        "offline": "Live connections are switched off on this server.",
+        "bad_state": "That sign-in link has expired. Start again.",
+        "not_connected": f"{name} is not connected.",
+    }.get(code, f"{name} could not be reached.")
+
+
+def provider_error_to_api(exc: ProviderError) -> ApiError:
+    """Map a data-layer ProviderError to the shared error format with fixed plain-English copy."""
+    status, code = PROVIDER_STATUS.get(exc.code, (502, "unavailable"))
+    headers = None
+    if status == 429:
+        headers = {"Retry-After": str(max(1, math.ceil(exc.retry_after or 30)))}
+    return ApiError(status, code, provider_message(exc.code, exc.source), exc.source, headers)
 
 
 def error_body(code: str, message: str, source: str = "api") -> dict[str, Any]:
@@ -81,6 +130,11 @@ async def _api_error_handler(_: Request, exc: Exception) -> JSONResponse:
     return error_response(exc.status, exc.code, exc.message, exc.source, exc.headers)
 
 
+async def _provider_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, ProviderError)
+    return await _api_error_handler(_, provider_error_to_api(exc))
+
+
 async def _http_error_handler(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
     code = _STATUS_CODES.get(exc.status_code, "error")
@@ -96,6 +150,7 @@ async def _validation_error_handler(_: Request, exc: Exception) -> JSONResponse:
 
 def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ApiError, _api_error_handler)
+    app.add_exception_handler(ProviderError, _provider_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
 

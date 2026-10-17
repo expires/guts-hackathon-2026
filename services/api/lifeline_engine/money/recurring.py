@@ -235,7 +235,7 @@ def upcoming_bills(txs: Iterable[Transaction], today: dates.date) -> list[Bill]:
                 id=f"bill_{_slug(r.key)}",
                 name=r.name,
                 emoji=_KIND_EMOJI.get(kind, emoji(r.category)),
-                kind=kind,  # type: ignore[arg-type]
+                kind=kind,
                 amount=round(r.amount, 2),
                 due_date=dates.iso(due),
                 status=status,

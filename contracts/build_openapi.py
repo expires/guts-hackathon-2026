@@ -20,8 +20,11 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "services" / "api"))
 
 from lifeline_contracts import api_models as A  # noqa: E402
+from lifeline_contracts import accounts as ACC  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
+from lifeline_contracts import habits as H  # noqa: E402
+from lifeline_contracts import investing as I  # noqa: E402,E741
 from lifeline_contracts import next_move as N  # noqa: E402
 from lifeline_contracts.observation import Observation, SourceStatus  # noqa: E402
 
@@ -80,6 +83,18 @@ MODELS: list[type[BaseModel]] = [
     N.AddPlanItemRequest,
     N.PlanItem,
     N.PlanResponse,
+    ACC.ConnectionsResponse,
+    ACC.ProviderConnection,
+    ACC.Trading212ConnectRequest,
+    ACC.MonzoTokenRequest,
+    ACC.HistoryStatus,
+    F.InvestmentsResponse,
+    H.HabitFactors,
+    I.IsaBacktestQuery,
+    I.IsaBacktestResponse,
+    I.IsaScenariosQuery,
+    I.IsaScenariosResult,
+    I.IsaPeriodsResponse,
 ]
 
 
@@ -429,12 +444,13 @@ def examples() -> dict[str, Any]:
         "CreateRoom": A.CreateRoomRequest(mode="duel", host_name="Ash", preset_id="nurse-leeds", start_year=2021),
         "Room": room,
         "BankAuthLink": A.BankAuthLink(
-            url="https://auth.truelayer-sandbox.com/?response_type=code&state=abc",
+            url="https://auth.monzo.com/?client_id=oauth2client_demo&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fv1%2Fbank%2Fcallback&response_type=code&state=abc",
             state="abc",
-            provider="truelayer",
-            status="mock",
+            provider="monzo",
+            status="live",
         ),
-        "BankSummary": A.BankSummary(status="mock", provider="truelayer", profile=profile, accounts=2),
+        "BankSummary": A.BankSummary(status="live", provider="monzo", profile=profile, accounts=2),
+        **connection_examples(),
         "PurchaseVerify": A.PurchaseVerifyRequest(product_id="lifeline.rewindpass", demo=True),
         "PurchaseVerifyResponse": A.PurchaseVerifyResponse(
             product_id="lifeline.rewindpass", entitlement="rewind_pass", active=True, demo=True, label="Demo payment"
@@ -605,6 +621,72 @@ def next_move_examples() -> dict[str, Any]:
                 )
             ],
             total_impact_per_year=1240.0,
+        ),
+    }
+
+
+def connection_examples() -> dict[str, Any]:
+    """Connected accounts, investments, habits and the ISA replay. No example holds a secret."""
+    meta = F.FinanceMeta(data_status="live", source="monzo+trading212", as_of="2026-10-17")
+    monzo = ACC.ProviderConnection(
+        provider="monzo",
+        connected=True,
+        data_status="live",
+        hint="…a1b2",
+        oauth_available=True,
+        history=ACC.HistoryStatus(synced=True, oldest="2024-10-18", count=1342),
+    )
+    t212 = ACC.ProviderConnection(provider="trading212", connected=False, data_status="mock", oauth_available=False)
+    holdings = [
+        ACC.Holding(instrument_id="VUSAl_EQ", name="Vanguard S&P 500", quantity=10, value=900.0, asset_class="equity",
+                    region="US"),
+        ACC.Holding(instrument_id="VGOV_EQ", name="Vanguard UK Gilts", quantity=20, value=380.5, asset_class="bond",
+                    region="UK"),
+    ]
+    factor = H.HabitFactor(
+        id="savings_rate",
+        label="Money you keep",
+        explainer="The share of what you earn that you do not spend.",
+        raw=0.18,
+        score=70,
+    )
+    result = I.IsaBacktestResult(
+        period="gfc_2008",
+        label="the 2008 financial crisis",
+        months=["2007-09", "2007-10", "2007-11"],
+        index=[100.0, 101.2, 99.5],
+        metrics=I.IsaBacktestMetrics(cagr=0.042, volatility=0.13, max_drawdown=0.31, months_to_recover=38,
+                                     worst_12m=-0.27),
+        contributed=3600.0,
+        final_value=4310.4,
+        money_weighted_return=0.051,
+    )
+    strategy = I.IsaStrategy(weights={"global_equity": 0.8, "gilts": 0.2})
+    return {
+        "Connections": ACC.ConnectionsResponse(providers=[monzo, t212]),
+        "ProviderConnection": monzo,
+        "Trading212Connect": ACC.Trading212ConnectRequest(api_key="your-trading212-key", api_secret="your-secret"),  # noqa: S106
+        "MonzoToken": ACC.MonzoTokenRequest(access_token="your-monzo-playground-token"),  # noqa: S106
+        "HistoryStatus": ACC.HistoryStatus(synced=False, count=0, last_error="auth"),
+        "Investments": F.InvestmentsResponse(
+            meta=meta, holdings=holdings, total_value=1280.5, cash=42.0, allocation={"bond": 29.71, "equity": 70.29}
+        ),
+        "HabitFactors": H.HabitFactors(
+            window=H.HabitWindow(months=6, end="2026-09-30"), factors=[factor], overall=70
+        ),
+        "IsaBacktestQuery": I.IsaBacktestQuery(strategies=[strategy], monthly_contribution=150.0),
+        "IsaBacktestResponse": I.IsaBacktestResponse(
+            results=[result], monthly_contribution=150.0, contribution_source="request"
+        ),
+        "IsaScenariosQuery": I.IsaScenariosQuery(strategy=strategy, horizon_months=36),
+        "IsaScenarios": I.IsaScenariosResult(
+            paths=[I.ScenarioPath(start_month="2009-03", index=[100.0, 101.5, 103.2])],
+            fan=I.ScenarioFan(p10=[100.0, 98.0, 97.1], p50=[100.0, 101.5, 103.2], p90=[100.0, 104.0, 107.9]),
+            horizon_months=2,
+        ),
+        "IsaPeriods": I.IsaPeriodsResponse(
+            periods=[I.IsaPeriod(id="gfc_2008", label="The 2008 financial crisis", start="2007-10", end="2012-12")],
+            assets=list(I.ASSETS),
         ),
     }
 
@@ -874,6 +956,12 @@ ERR_EXAMPLES = {
         "error": {"code": "store_unavailable", "message": "Saving is down. Try again in a minute.", "source": "api"}
     },
     "Unauthorized": {"error": {"code": "unauthorized", "message": "Missing or invalid token.", "source": "api"}},
+    "BadGateway": {
+        "error": {"code": "unavailable", "message": "Trading212 is not answering. Try again soon.", "source": "trading212"}
+    },
+    "GatewayTimeout": {
+        "error": {"code": "timeout", "message": "Monzo took too long to answer.", "source": "monzo"}
+    },
     "PaymentRequired": {
         "error": {
             "code": "payment_required",
@@ -925,7 +1013,9 @@ def errs(*codes: str) -> dict[str, Any]:
         "422": "ValidationError",
         "429": "RateLimited",
         "501": "NotImplemented",
+        "502": "BadGateway",
         "503": "StoreUnavailable",
+        "504": "GatewayTimeout",
     }
     return {c: {"$ref": f"#/components/responses/{names[c]}"} for c in codes}
 
@@ -1159,7 +1249,7 @@ def paths() -> dict[str, Any]:
         "/v1/bank/auth-link": {
             "get": op(
                 "getBankAuthLink",
-                "Backend-generated consent link (state + PKCE)",
+                "Monzo sign-in link. status live when Monzo OAuth is configured, otherwise a labelled mock link",
                 "bank",
                 {**ok("BankAuthLink", "BankAuthLink"), **errs(*STD)},
             )
@@ -1167,11 +1257,11 @@ def paths() -> dict[str, Any]:
         "/v1/bank/callback": {
             "get": op(
                 "bankCallback",
-                "Provider redirect target. Exchanges the code on the backend.",
+                "Monzo redirect target (no bearer token). Exchanges the code, stores tokens and imports history.",
                 "bank",
                 {
                     "302": {
-                        "description": "Redirect to lifeline://connected?status=ok|error&session=...",
+                        "description": "Redirect to lifeline://connected?status=ok&provider=monzo&session=<state>, or lifeline://connected?status=error&code=<code>. The body is a small HTML page for browsers that do not follow the custom scheme.",
                         "headers": {"Location": {"schema": {"type": "string"}}},
                     },
                     **errs("400", "422", "429"),
@@ -1196,6 +1286,8 @@ def paths() -> dict[str, Any]:
             )
         },
         **finance_paths(),
+        **investing_paths(),
+        **connection_paths(),
         **next_move_paths(),
         "/v1/purchases/verify": {
             "post": op(
@@ -1217,6 +1309,114 @@ MONTH = {
     "description": "YYYY-MM; default this month",
 }
 FIN = ("401", "422", "429")
+
+
+FIN_LIVE = ("401", "422", "429", "503")
+PROVIDER_ERRS = ("400", "409", "429", "502", "503", "504")
+
+
+def investing_paths() -> dict[str, Any]:
+    """Investments, money habits and the ISA replay. Return series are synthetic and labelled."""
+    return {
+        "/v1/finance/investments": {
+            "get": op(
+                "getInvestments",
+                "Connected investment positions, value, cash and allocation",
+                "finance",
+                {**ok("InvestmentsResponse", "Investments"), **errs(*FIN)},
+            )
+        },
+        "/v1/finance/habits": {
+            "get": op(
+                "getHabits",
+                "Money habit factors (ratios and 0-100 scores, no amounts)",
+                "investing",
+                {**ok("HabitFactors", "HabitFactors"), **errs(*FIN)},
+            )
+        },
+        "/v1/finance/isa/periods": {
+            "get": op(
+                "getIsaPeriods",
+                "Named past periods and assets for the ISA replay",
+                "investing",
+                {**ok("IsaPeriodsResponse", "IsaPeriods"), **errs(*FIN)},
+            )
+        },
+        "/v1/finance/isa/backtest": {
+            "post": op(
+                "postIsaBacktest",
+                "Replay up to 4 ISA strategies through a past period. Leave monthly_contribution out to use your own habit",
+                "investing",
+                {**ok("IsaBacktestResponse", "IsaBacktestResponse"), **errs(*FIN)},
+                requestBody=body("IsaBacktestQuery", "IsaBacktestQuery"),
+            )
+        },
+        "/v1/finance/isa/scenarios": {
+            "post": op(
+                "postIsaScenarios",
+                "Modelled paths from similar past periods. Not a forecast.",
+                "investing",
+                {**ok("IsaScenariosResult", "IsaScenarios"), **errs(*FIN)},
+                requestBody=body("IsaScenariosQuery", "IsaScenariosQuery"),
+            )
+        },
+    }
+
+
+def connection_paths() -> dict[str, Any]:
+    """Connected accounts (Monzo, Trading212). Provider failures map to 400/409/429/502/503/504."""
+    return {
+        "/v1/connections": {
+            "get": op(
+                "listConnections",
+                "Which providers are connected (masked hints only, never a secret)",
+                "connections",
+                {**ok("ConnectionsResponse", "Connections"), **errs("401", "429")},
+            )
+        },
+        "/v1/connections/trading212": {
+            "post": op(
+                "connectTrading212",
+                "Connect Trading212. The key is checked with Trading212 before it is stored.",
+                "connections",
+                {**ok("ProviderConnection", "ProviderConnection"), **errs("401", "422", *PROVIDER_ERRS)},
+                requestBody=body("Trading212ConnectRequest", "Trading212Connect"),
+            )
+        },
+        "/v1/connections/monzo/token": {
+            "post": op(
+                "connectMonzoToken",
+                "Dev convenience: connect Monzo with a playground access token",
+                "connections",
+                {**ok("ProviderConnection", "ProviderConnection"), **errs("401", "422", *PROVIDER_ERRS)},
+                requestBody=body("MonzoTokenRequest", "MonzoToken"),
+            )
+        },
+        "/v1/connections/monzo/sync": {
+            "post": op(
+                "syncMonzo",
+                "Retry the Monzo history import (after approving access in the Monzo app)",
+                "connections",
+                {**ok("HistoryStatus", "HistoryStatus"), **errs("401", *PROVIDER_ERRS)},
+            )
+        },
+        "/v1/connections/{provider}": {
+            "delete": op(
+                "disconnectProvider",
+                "Forget a provider's credentials and imported data",
+                "connections",
+                {**ok("ConnectionsResponse", "Connections"), **errs("401", "422", "429")},
+                parameters=[
+                    {
+                        "name": "provider",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "enum": ["monzo", "trading212"]},
+                    }
+                ],
+            )
+        },
+    }
 
 
 def next_move_paths() -> dict[str, Any]:
@@ -1379,7 +1579,10 @@ def build() -> dict[str, Any]:
         "Conflict": ("State conflict", "Conflict"),
         "PayloadTooLarge": ("Body over 64 KB", "PayloadTooLarge"),
         "NotImplemented": ("Endpoint not built yet in this tier", "NotImplemented"),
-        "StoreUnavailable": ("Life store unavailable", "StoreUnavailable"),
+        "StoreUnavailable": ("Service unavailable (life store down, or the provider is not configured or offline)",
+                             "StoreUnavailable"),
+        "BadGateway": ("A provider (Monzo, Trading212) failed or sent bad data", "BadGateway"),
+        "GatewayTimeout": ("A provider (Monzo, Trading212) took too long", "GatewayTimeout"),
         "ValidationError": ("Input failed validation", "Validation"),
         "RateLimited": ("Rate limited", "RateLimited"),
     }
@@ -1422,7 +1625,10 @@ def build() -> dict[str, Any]:
         "security": [{"bearer": []}],
         "tags": [
             {"name": t}
-            for t in ("meta", "auth", "next-move", "lives", "learn", "decision", "finance", "rooms", "bank", "store")
+            for t in (
+                "meta", "auth", "next-move", "lives", "learn", "decision", "finance", "investing", "connections",
+                "rooms", "bank", "store",
+            )
         ],
         "paths": p,
         "components": {

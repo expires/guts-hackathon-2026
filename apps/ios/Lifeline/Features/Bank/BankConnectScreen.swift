@@ -4,6 +4,7 @@ import SwiftUI
 struct BankConnectScreen: View {
     @State private var model: BankConnectViewModel
     @Environment(\.openURL) private var openURL
+    @Environment(AppCoordinator.self) private var coordinator
     private let onUseProfile: @MainActor (DecisionProfile, DataStatus) -> Void
     private let onClose: @MainActor () -> Void
 
@@ -24,7 +25,16 @@ struct BankConnectScreen: View {
                 model.onClose = onClose
             }
             .onChange(of: model.consentURL) { _, url in
-                if let url { openURL(url) }
+                guard let url else { return }
+                // Monzo emails a sign-in link, so this opens in Safari. The return lands in `AppCoordinator`.
+                coordinator.bankFlowAwaitingReturn = true
+                openURL(url)
             }
+            .onChange(of: coordinator.returnCount) {
+                guard let result = coordinator.takeBankFlowReturn() else { return }
+                coordinator.bankFlowAwaitingReturn = false
+                Task { await model.handle(result) }
+            }
+            .onDisappear { coordinator.bankFlowAwaitingReturn = false }
     }
 }

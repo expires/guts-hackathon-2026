@@ -39,6 +39,7 @@ final class BankConnectViewModel {
     /// Gets the consent link. With a mock provider there is no redirect, so it loads the summary at once.
     func connect() async {
         step = .connecting
+        consentURL = nil
         do {
             let link = try await client.bankAuthLink()
             self.link = link
@@ -60,6 +61,16 @@ final class BankConnectViewModel {
             step = .connected
         } catch {
             step = .failed(.from(APIError.map(error)))
+        }
+    }
+
+    /// Handles the `lifeline://connected` return from Safari for the "Play yourself" form.
+    func handle(_ result: ConnectionReturn) async {
+        switch result {
+        case let .connected(_, session):
+            await finish(session: session ?? link?.state ?? "")
+        case let .failed(code):
+            step = .failed(ErrorViewState(title: "Could not connect", message: ConnectionReturn.message(for: code), canRetry: true))
         }
     }
 

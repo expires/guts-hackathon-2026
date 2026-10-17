@@ -56,6 +56,40 @@ typealias OptionOutcome = Components.Schemas.OptionOutcome
 typealias PlanItem = Components.Schemas.PlanItem
 typealias PlanResponse = Components.Schemas.PlanResponse
 
+// Connections, investing and habits
+typealias ConnectionsResponse = Components.Schemas.ConnectionsResponse
+typealias ProviderConnection = Components.Schemas.ProviderConnection
+typealias HistoryStatus = Components.Schemas.HistoryStatus
+typealias InvestmentsResponse = Components.Schemas.InvestmentsResponse
+typealias Holding = Components.Schemas.Holding
+typealias HabitFactors = Components.Schemas.HabitFactors
+typealias HabitFactor = Components.Schemas.HabitFactor
+typealias IsaPeriodsResponse = Components.Schemas.IsaPeriodsResponse
+typealias IsaStrategy = Components.Schemas.IsaStrategy
+typealias IsaPeriod = Components.Schemas.IsaPeriod
+typealias IsaBacktestMetrics = Components.Schemas.IsaBacktestMetrics
+typealias ScenarioPath = Components.Schemas.ScenarioPath
+typealias ScenarioFan = Components.Schemas.ScenarioFan
+typealias HabitWindow = Components.Schemas.HabitWindow
+typealias IsaBacktestQuery = Components.Schemas.IsaBacktestQuery
+typealias IsaBacktestResponse = Components.Schemas.IsaBacktestResponse
+typealias IsaBacktestResult = Components.Schemas.IsaBacktestResult
+typealias IsaScenariosQuery = Components.Schemas.IsaScenariosQuery
+typealias IsaScenariosResult = Components.Schemas.IsaScenariosResult
+
+/// Providers the app can connect. Raw values match the contract path parameter.
+enum ProviderID: String, Sendable, CaseIterable, Hashable {
+    case monzo
+    case trading212
+
+    var displayName: String {
+        switch self {
+        case .monzo: "Monzo"
+        case .trading212: "Trading212"
+        }
+    }
+}
+
 /// Every backend operation the app uses now or later. See ADR 0011.
 /// `LiveClient` calls the backend. `MockClient` returns contract examples with no network.
 protocol LifelineClient: Sendable {
@@ -104,6 +138,20 @@ protocol LifelineClient: Sendable {
     func testNextMove(moveID: String, optionIDs: [String]?) async throws -> TestMoveResult
     func plan() async throws -> PlanResponse
     func addPlanItem(moveID: String) async throws -> PlanItem
+
+    // Connections (Monzo, Trading212). Keys are sent once and never stored on the device.
+    func listConnections() async throws -> ConnectionsResponse
+    func connectTrading212(apiKey: String, apiSecret: String) async throws -> ProviderConnection
+    func connectMonzoToken(_ accessToken: String) async throws -> ProviderConnection
+    func syncMonzo() async throws -> HistoryStatus
+    func disconnect(_ provider: ProviderID) async throws -> ConnectionsResponse
+
+    // Investing and habits
+    func investments() async throws -> InvestmentsResponse
+    func habits() async throws -> HabitFactors
+    func isaPeriods() async throws -> IsaPeriodsResponse
+    func isaBacktest(_ query: IsaBacktestQuery) async throws -> IsaBacktestResponse
+    func isaScenarios(_ query: IsaScenariosQuery) async throws -> IsaScenariosResult
 
     // Rooms
     func createRoom(_ request: CreateRoomRequest) async throws -> Room

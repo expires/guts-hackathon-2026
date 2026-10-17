@@ -25,6 +25,7 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from lifeline_contracts.accounts import ConnectionsResponse, HistoryStatus, Provider, ProviderConnection
 from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.observation import Observation, SourceStatus, Status
@@ -35,6 +36,7 @@ from lifeline_data.cache import ObservationCache, SnapshotStore, obs_key
 from lifeline_data.finance import DEMO_PERSONA_ID, fixture_snapshot
 from lifeline_data.macro import build_macro_table, mock_macro_table
 from lifeline_data.mocks import mock_postcode, mock_series
+from lifeline_data.providers.service import ProviderService
 from lifeline_data.settings import DataSettings
 from lifeline_data.sources import SOURCES, missing_keys
 
@@ -103,6 +105,10 @@ class DataHub:
         self._state: dict[str, SourceState] = {}
         self._macro: tuple[float, MacroTable] | None = None
         self._macro_lock = asyncio.Lock()
+        # Connected personal accounts (Monzo, Trading212): per-subject credentials, sync, live snapshot.
+        self.providers = ProviderService(
+            self.settings, self._http, live_enabled=lambda: self.live_enabled, clock=clock
+        )
 
     # --- plumbing ---------------------------------------------------------------------------
 
@@ -336,15 +342,44 @@ class DataHub:
     # --- finance (ADR 0016, ADR 0018) ---------------------------------------------------------
 
     async def finance_snapshot(self, subject: str) -> FinanceSnapshot:
-        """Accounts, 12 months of transactions, mortgage and energy for one user. Never raises.
+        """Accounts, transactions, mortgage and energy for one user. Never raises.
 
-        Tier 1: labelled fixture persona (status "mock", source "fixtures"), chosen per subject.
+        Order: live data from the subject's connected Monzo/Trading212 (status "live"), else the last good
+        live snapshot (status "cached"), else the labelled fixture persona (status "mock", source
+        "fixtures"), chosen per subject. Sample data is never mixed into live data.
         """
+        try:
+            live = await self.providers.live_snapshot(subject)
+            if live is not None:
+                return live
+        except Exception:
+            log.exception("live finance snapshot failed; using the fixture")
         try:
             return fixture_snapshot(subject)
         except Exception:
             log.exception("finance snapshot failed; using the demo persona")
             return fixture_snapshot(DEMO_PERSONA_ID)
+
+    async def connections(self, subject: str) -> ConnectionsResponse:
+        return self.providers.connections(subject)
+
+    async def connect_trading212(self, subject: str, key: str, secret: str) -> ProviderConnection:
+        return await self.providers.connect_trading212(subject, key, secret)
+
+    async def connect_monzo_token(self, subject: str, token: str) -> ProviderConnection:
+        return await self.providers.connect_monzo_token(subject, token)
+
+    async def monzo_start(self, subject: str) -> str:
+        return self.providers.monzo_start(subject)
+
+    async def monzo_callback(self, state: str | None, code: str) -> str:
+        return await self.providers.monzo_callback(state, code)
+
+    async def monzo_sync(self, subject: str) -> HistoryStatus:
+        return await self.providers.monzo_sync(subject)
+
+    async def disconnect(self, subject: str, provider: Provider) -> None:
+        self.providers.disconnect(subject, provider)
 
     # --- worker support ---------------------------------------------------------------------
 

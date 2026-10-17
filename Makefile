@@ -8,7 +8,7 @@ COMPOSE := docker compose
 # CLI iOS builds never share Xcode GUI DerivedData (path is relative to $(IOS)).
 IOS_DD := .build/DerivedData
 
-.PHONY: ios-playground help up down logs ps test test-stack lint fmt contract ios-gen ios-build ios-test ios-screens demo-seed secrets-scan dev
+.PHONY: ios-playground help up down logs ps test test-stack lint fmt contract ios-gen ios-build ios-test ios-screens demo-seed secrets-scan dev dev-lan
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n",$$1,$$2}'
@@ -27,8 +27,13 @@ logs: ## Tail stack logs
 ps: ## Stack status
 	$(COMPOSE) ps
 
-dev: ## Run the API locally with reload (no Docker; in-memory store, fakeredis)
-	cd $(API) && APP_ENV=test uv run uvicorn lifeline_api.main:app --reload --port 8000
+dev: ## Run the API locally with reload (no Docker; in-memory store, live provider data). Reads the repo-root .env
+	cd $(API) && APP_ENV=$${APP_ENV:-dev} DATABASE_URL= REDIS_URL= uv run uvicorn lifeline_api.main:app --reload --port 8000
+
+# WARNING: --host 0.0.0.0 exposes the API (and your connected accounts) to everyone on your local network.
+# Use it only to run the app on a physical iPhone on the same Wi-Fi.
+dev-lan: ## Same as dev but listens on the local network (for a physical iPhone). Exposes the API on your LAN
+	cd $(API) && APP_ENV=$${APP_ENV:-dev} DATABASE_URL= REDIS_URL= uv run uvicorn lifeline_api.main:app --reload --host 0.0.0.0 --port 8000
 
 test: ## Python tests: unit, contract, integration (offline, recorded fixtures)
 	cd $(API) && uv run pytest

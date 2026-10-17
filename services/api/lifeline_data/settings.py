@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field
@@ -12,9 +14,16 @@ BROWSER_USER_AGENT = (
     "Chrome/129.0 Safari/537.36"
 )
 
+# `make dev` runs from services/api, so look for .env in the repo root first, then here (later files win).
+# Real environment variables always beat both files. Pytest never reads .env files (tests stay hermetic).
+_API_DIR = Path(__file__).resolve().parents[1]
+ENV_FILES: tuple[Path, ...] | None = (
+    None if "pytest" in sys.modules else (_API_DIR.parent.parent / ".env", _API_DIR / ".env")
+)
+
 
 class DataSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=ENV_FILES, extra="ignore", case_sensitive=False)
 
     app_env: str = "dev"
     redis_url: str = ""
@@ -29,6 +38,20 @@ class DataSettings(BaseSettings):
     data_refresh_interval_seconds: float = Field(default=6 * 3600, gt=0)
     # How long DataHub reuses a built MacroTable before it rebuilds it (online mode only).
     macro_table_ttl_seconds: float = Field(default=3600, ge=0)
+
+    # Personal accounts (Monzo OAuth, Trading212). Secrets are excluded from repr.
+    monzo_client_id: str = ""
+    monzo_client_secret: str = Field(default="", repr=False)
+    monzo_redirect_uri: str = "http://localhost:8000/v1/bank/callback"
+    monzo_auth_url: str = "https://auth.monzo.com/"
+    monzo_token_url: str = "https://api.monzo.com/oauth2/token"  # noqa: S105 - a URL, not a secret
+    monzo_base_url: str = "https://api.monzo.com"
+    monzo_initial_sync_timeout_seconds: float = Field(default=60.0, gt=0)
+    # Env fallback for Trading212 (dev only; a stored per-user credential always wins).
+    t212_api_key: str = Field(default="", repr=False)
+    t212_api_secret: str = Field(default="", repr=False)
+    t212_base_url: str = "https://live.trading212.com/api/v0"
+    credentials_dir: str = "data/private"
 
     @property
     def offline(self) -> bool:

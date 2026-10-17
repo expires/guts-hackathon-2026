@@ -6,6 +6,7 @@ APP_ENV=test: in-memory lives store, fakeredis, data hub offline (mock and fixtu
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -18,8 +19,8 @@ from lifeline_api.auth import bearer_subject
 from lifeline_api.bodylimit import BodySizeLimitMiddleware
 from lifeline_api.errors import CatchAllMiddleware, install_error_handlers
 from lifeline_api.ratelimit import Limiter, MemoryBucket, RateLimitMiddleware, RedisBucket
-from lifeline_api.routes import auth, finance, later, learn, lives, meta, next_move
-from lifeline_api.settings import Settings
+from lifeline_api.routes import auth, connections, finance, investing, later, learn, lives, meta, next_move
+from lifeline_api.settings import ENV_FILES, Settings
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeStore, MemoryLifeStore, PostgresLifeStore
 from lifeline_contracts.brand import PRODUCT_NAME
@@ -52,7 +53,16 @@ def _store(settings: Settings) -> LifeStore:
 
 
 def _hub(settings: Settings, redis: Any | None) -> DataHub:
-    return DataHubImpl(settings, redis=redis)
+    # Adapter keys (COMPANIES_HOUSE_KEY, ...) are read from this mapping: real env wins over .env files.
+    env: dict[str, str] | None = None
+    if ENV_FILES is not None:
+        from dotenv import dotenv_values
+
+        merged: dict[str, str] = {}
+        for f in ENV_FILES:
+            merged.update({k: v for k, v in dotenv_values(f).items() if v is not None})
+        env = {**merged, **os.environ}
+    return DataHubImpl(settings, redis=redis, env=env)
 
 
 def build_state(settings: Settings) -> AppState:
@@ -104,7 +114,8 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
     install_error_handlers(app)
-    for r in (meta.router, auth.router, lives.router, finance.router, next_move.router, learn.router, later.router):
+    routers = (meta, auth, lives, finance, investing, connections, next_move, learn, later)
+    for r in (m.router for m in routers):
         app.include_router(r)
     # Order: last added runs first. Outermost: catch-all, then body limit, then rate limit.
     app.add_middleware(RateLimitMiddleware, subject_of=_subject_from_scope)

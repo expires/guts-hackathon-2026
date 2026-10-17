@@ -83,7 +83,6 @@ async def test_characters_without_auth_and_deterministic(client: httpx.AsyncClie
         ("GET", "/v1/challenges", None),
         ("POST", "/v1/purchases/verify", {"product_id": "lifeline.rewindpass", "demo": True}),
         ("GET", "/v1/rooms/ABC123", None),
-        ("GET", "/v1/bank/auth-link", None),
     ],
 )
 async def test_later_tiers_answer_501(client: httpx.AsyncClient, method: str, path: str, body: object) -> None:

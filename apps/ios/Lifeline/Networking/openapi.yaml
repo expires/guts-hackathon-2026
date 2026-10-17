@@ -17,6 +17,8 @@ tags:
 - name: learn
 - name: decision
 - name: finance
+- name: investing
+- name: connections
 - name: rooms
 - name: bank
 - name: store
@@ -631,7 +633,7 @@ paths:
   /v1/bank/auth-link:
     get:
       operationId: getBankAuthLink
-      summary: Backend-generated consent link (state + PKCE)
+      summary: Monzo sign-in link. status live when Monzo OAuth is configured, otherwise a labelled mock link
       tags:
       - bank
       responses:
@@ -657,12 +659,13 @@ paths:
   /v1/bank/callback:
     get:
       operationId: bankCallback
-      summary: Provider redirect target. Exchanges the code on the backend.
+      summary: Monzo redirect target (no bearer token). Exchanges the code, stores tokens and imports history.
       tags:
       - bank
       responses:
         '302':
-          description: Redirect to lifeline://connected?status=ok|error&session=...
+          description: Redirect to lifeline://connected?status=ok&provider=monzo&session=<state>, or lifeline://connected?status=error&code=<code>.
+            The body is a small HTML page for browsers that do not follow the custom scheme.
           headers:
             Location:
               schema:
@@ -1099,6 +1102,327 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '501':
           $ref: '#/components/responses/NotImplemented'
+  /v1/finance/investments:
+    get:
+      operationId: getInvestments
+      summary: Connected investment positions, value, cash and allocation
+      tags:
+      - finance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentsResponse'
+              examples:
+                Investments:
+                  $ref: '#/components/examples/Investments'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/finance/habits:
+    get:
+      operationId: getHabits
+      summary: Money habit factors (ratios and 0-100 scores, no amounts)
+      tags:
+      - investing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HabitFactors'
+              examples:
+                HabitFactors:
+                  $ref: '#/components/examples/HabitFactors'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/finance/isa/periods:
+    get:
+      operationId: getIsaPeriods
+      summary: Named past periods and assets for the ISA replay
+      tags:
+      - investing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsaPeriodsResponse'
+              examples:
+                IsaPeriods:
+                  $ref: '#/components/examples/IsaPeriods'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/finance/isa/backtest:
+    post:
+      operationId: postIsaBacktest
+      summary: Replay up to 4 ISA strategies through a past period. Leave monthly_contribution out to use your own habit
+      tags:
+      - investing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsaBacktestResponse'
+              examples:
+                IsaBacktestResponse:
+                  $ref: '#/components/examples/IsaBacktestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IsaBacktestQuery'
+            examples:
+              IsaBacktestQuery:
+                $ref: '#/components/examples/IsaBacktestQuery'
+  /v1/finance/isa/scenarios:
+    post:
+      operationId: postIsaScenarios
+      summary: Modelled paths from similar past periods. Not a forecast.
+      tags:
+      - investing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsaScenariosResult'
+              examples:
+                IsaScenarios:
+                  $ref: '#/components/examples/IsaScenarios'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IsaScenariosQuery'
+            examples:
+              IsaScenariosQuery:
+                $ref: '#/components/examples/IsaScenariosQuery'
+  /v1/connections:
+    get:
+      operationId: listConnections
+      summary: Which providers are connected (masked hints only, never a secret)
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionsResponse'
+              examples:
+                Connections:
+                  $ref: '#/components/examples/Connections'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/connections/trading212:
+    post:
+      operationId: connectTrading212
+      summary: Connect Trading212. The key is checked with Trading212 before it is stored.
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderConnection'
+              examples:
+                ProviderConnection:
+                  $ref: '#/components/examples/ProviderConnection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Trading212ConnectRequest'
+            examples:
+              Trading212Connect:
+                $ref: '#/components/examples/Trading212Connect'
+  /v1/connections/monzo/token:
+    post:
+      operationId: connectMonzoToken
+      summary: 'Dev convenience: connect Monzo with a playground access token'
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderConnection'
+              examples:
+                ProviderConnection:
+                  $ref: '#/components/examples/ProviderConnection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonzoTokenRequest'
+            examples:
+              MonzoToken:
+                $ref: '#/components/examples/MonzoToken'
+  /v1/connections/monzo/sync:
+    post:
+      operationId: syncMonzo
+      summary: Retry the Monzo history import (after approving access in the Monzo app)
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryStatus'
+              examples:
+                HistoryStatus:
+                  $ref: '#/components/examples/HistoryStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /v1/connections/{provider}:
+    delete:
+      operationId: disconnectProvider
+      summary: Forget a provider's credentials and imported data
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionsResponse'
+              examples:
+                Connections:
+                  $ref: '#/components/examples/Connections'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - monzo
+          - trading212
   /v1/next-move:
     get:
       operationId: getNextMove
@@ -2017,6 +2341,16 @@ components:
       required:
       - concepts
       type: object
+    ConnectionsResponse:
+      additionalProperties: false
+      properties:
+        providers:
+          items:
+            $ref: '#/components/schemas/ProviderConnection'
+          type: array
+      required:
+      - providers
+      type: object
     CreateGoalRequest:
       additionalProperties: false
       properties:
@@ -2610,6 +2944,76 @@ components:
       - best_streak
       - items
       type: object
+    HabitFactor:
+      additionalProperties: false
+      properties:
+        id:
+          enum:
+          - savings_rate
+          - runway_months
+          - spend_stability
+          - discretionary_share
+          - subscription_creep
+          - isa_concentration
+          - shock_resilience
+          type: string
+        label:
+          description: Plain English name
+          type: string
+        explainer:
+          description: One line, plain English
+          type: string
+        raw:
+          description: Ratio or months, rounded to 3 decimals; null if not computable
+          type: number
+        score:
+          description: 0-100, higher is better
+          maximum: 100
+          minimum: 0
+          type: integer
+        reason:
+          description: Why raw is null
+          type: string
+      required:
+      - id
+      - label
+      - explainer
+      type: object
+    HabitFactors:
+      additionalProperties: false
+      properties:
+        version:
+          const: hf-1
+          default: hf-1
+          type: string
+        window:
+          $ref: '#/components/schemas/HabitWindow'
+        factors:
+          items:
+            $ref: '#/components/schemas/HabitFactor'
+          type: array
+        overall:
+          description: Mean of the factor scores; null if none
+          maximum: 100
+          minimum: 0
+          type: integer
+      required:
+      - window
+      - factors
+      type: object
+    HabitWindow:
+      additionalProperties: false
+      properties:
+        months:
+          minimum: 1
+          type: integer
+        end:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      required:
+      - months
+      - end
+      type: object
     Health:
       additionalProperties: false
       properties:
@@ -2639,6 +3043,56 @@ components:
       - time
       - checks
       type: object
+    HistoryStatus:
+      additionalProperties: false
+      description: State of the imported Monzo history. No amounts, merchants or ids.
+      properties:
+        synced:
+          type: boolean
+        oldest:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        count:
+          minimum: 0
+          type: integer
+        last_error:
+          type: string
+      required:
+      - synced
+      - count
+      type: object
+    Holding:
+      additionalProperties: false
+      description: One investment position, valued in GBP (the account currency, never the instrument currency).
+      properties:
+        instrument_id:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: number
+        value:
+          description: gbp
+          minimum: 0
+          type: number
+        asset_class:
+          enum:
+          - equity
+          - bond
+          - cash
+          - property
+          - commodity
+          - other
+          type: string
+        region:
+          type: string
+      required:
+      - instrument_id
+      - name
+      - quantity
+      - value
+      - asset_class
+      type: object
     IndexState:
       additionalProperties: false
       properties:
@@ -2662,6 +3116,276 @@ components:
       - r_autopilot
       - missed_payments
       - max_drawdown
+      type: object
+    InvestmentsResponse:
+      additionalProperties: false
+      description: Connected investment positions (Trading212). Empty on sample data.
+      properties:
+        meta:
+          $ref: '#/components/schemas/FinanceMeta'
+        holdings:
+          items:
+            $ref: '#/components/schemas/Holding'
+          type: array
+        total_value:
+          description: gbp, sum of holdings
+          minimum: 0
+          type: number
+        cash:
+          description: gbp held as cash in the investment account
+          minimum: 0
+          type: number
+        allocation:
+          additionalProperties:
+            type: number
+          description: asset_class to percent of total_value (0-100)
+          type: object
+      required:
+      - meta
+      - holdings
+      - total_value
+      - cash
+      - allocation
+      type: object
+    IsaBacktestMetrics:
+      additionalProperties: false
+      description: Computed on the time-weighted index.
+      properties:
+        cagr:
+          type: number
+        volatility:
+          description: annualised
+          type: number
+        max_drawdown:
+          description: positive fraction
+          type: number
+        months_to_recover:
+          description: trough to new peak; null if never recovered
+          type: integer
+        worst_12m:
+          type: number
+      required:
+      - cagr
+      - volatility
+      - max_drawdown
+      - worst_12m
+      type: object
+    IsaBacktestQuery:
+      additionalProperties: false
+      description: POST /v1/finance/isa/backtest. Leave monthly_contribution out to use the user's own habit.
+      properties:
+        strategies:
+          items:
+            $ref: '#/components/schemas/IsaStrategy'
+          maxItems: 4
+          minItems: 1
+          type: array
+        monthly_contribution:
+          description: gbp per month
+          exclusiveMinimum: 0
+          maximum: 1000000
+          type: number
+      required:
+      - strategies
+      type: object
+    IsaBacktestResponse:
+      additionalProperties: false
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/IsaBacktestResult'
+          type: array
+        monthly_contribution:
+          description: gbp per month used for every strategy
+          type: number
+        contribution_source:
+          description: 'request: sent by the client. derived: mean of the last 6 months of ISA and savings transfers. default:
+            not enough history, 100 used'
+          enum:
+          - request
+          - derived
+          - default
+          type: string
+        label:
+          default: Synthetic illustrative returns
+          type: string
+        data_status:
+          const: mock
+          default: mock
+          type: string
+      required:
+      - results
+      - monthly_contribution
+      - contribution_source
+      type: object
+    IsaBacktestResult:
+      additionalProperties: false
+      properties:
+        period:
+          type: string
+        label:
+          description: Plain English name of the replay period
+          type: string
+        months:
+          description: months[0] is the month before the start (index 100)
+          items:
+            type: string
+          type: array
+        index:
+          items:
+            type: number
+          type: array
+        metrics:
+          $ref: '#/components/schemas/IsaBacktestMetrics'
+        contributed:
+          description: gbp
+          type: number
+        final_value:
+          description: gbp
+          type: number
+        money_weighted_return:
+          description: annual; null if undefined
+          type: number
+        data_status:
+          const: mock
+          default: mock
+          type: string
+        data_label:
+          default: Synthetic illustrative returns
+          type: string
+      required:
+      - period
+      - label
+      - months
+      - index
+      - metrics
+      - contributed
+      - final_value
+      type: object
+    IsaPeriod:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        label:
+          description: Plain English name of the period
+          type: string
+        start:
+          pattern: ^\d{4}-\d{2}$
+          type: string
+        end:
+          pattern: ^\d{4}-\d{2}$
+          type: string
+      required:
+      - id
+      - label
+      - start
+      - end
+      type: object
+    IsaPeriodsResponse:
+      additionalProperties: false
+      properties:
+        periods:
+          items:
+            $ref: '#/components/schemas/IsaPeriod'
+          type: array
+        assets:
+          items:
+            type: string
+          type: array
+        label:
+          default: Synthetic illustrative returns
+          type: string
+        data_status:
+          const: mock
+          default: mock
+          type: string
+      required:
+      - periods
+      - assets
+      type: object
+    IsaScenariosQuery:
+      additionalProperties: false
+      description: POST /v1/finance/isa/scenarios.
+      properties:
+        strategy:
+          $ref: '#/components/schemas/IsaStrategy'
+        monthly_contribution:
+          description: gbp per month
+          exclusiveMinimum: 0
+          maximum: 1000000
+          type: number
+        horizon_months:
+          default: 36
+          maximum: 60
+          minimum: 6
+          type: integer
+      required:
+      - strategy
+      type: object
+    IsaScenariosResult:
+      additionalProperties: false
+      properties:
+        paths:
+          items:
+            $ref: '#/components/schemas/ScenarioPath'
+          type: array
+        fan:
+          $ref: '#/components/schemas/ScenarioFan'
+        horizon_months:
+          minimum: 1
+          type: integer
+        label:
+          default: Modelled scenarios from similar past periods. Not a forecast. Not financial advice.
+          description: Always shown with the chart
+          type: string
+        data_status:
+          const: mock
+          default: mock
+          type: string
+        data_label:
+          default: Synthetic illustrative returns
+          type: string
+      required:
+      - paths
+      - fan
+      - horizon_months
+      type: object
+    IsaStrategy:
+      additionalProperties: false
+      description: One mix to replay. Same rules as IsaBacktestRequest, without the contribution.
+      properties:
+        weights:
+          additionalProperties:
+            type: number
+          type: object
+        technique:
+          default: dca
+          enum:
+          - dca
+          - lump_sum
+          type: string
+        rebalance:
+          default: annual
+          enum:
+          - none
+          - annual
+          - threshold
+          type: string
+        threshold_pp:
+          default: 5.0
+          minimum: 0
+          type: number
+        period:
+          default: gfc_2008
+          type: string
+        isa_allowance:
+          default: 20000.0
+          description: gbp per tax year
+          minimum: 0
+          type: number
+      required:
+      - weights
       type: object
     Job:
       additionalProperties: false
@@ -2945,6 +3669,16 @@ components:
       - baseline_mae
       - interval_coverage
       type: object
+    MonzoTokenRequest:
+      additionalProperties: false
+      description: 'Dev convenience: paste a Monzo playground access token.'
+      properties:
+        access_token:
+          minLength: 1
+          type: string
+      required:
+      - access_token
+      type: object
     Move:
       additionalProperties: false
       properties:
@@ -2961,6 +3695,7 @@ components:
           - pay_off_debt
           - build_emergency_fund
           - cut_budget
+          - spread_isa
           type: string
         action:
           description: The move in a few words, e.g. 'Fix for 5 years'
@@ -3239,6 +3974,7 @@ components:
           - pay_off_debt
           - build_emergency_fund
           - cut_budget
+          - spread_isa
           type: string
         action:
           type: string
@@ -3362,6 +4098,36 @@ components:
       - from_amount
       - to_amount
       - since
+      type: object
+    ProviderConnection:
+      additionalProperties: false
+      properties:
+        provider:
+          enum:
+          - monzo
+          - trading212
+          type: string
+        connected:
+          type: boolean
+        data_status:
+          enum:
+          - live
+          - mock
+          type: string
+        hint:
+          description: Masked credential suffix, for example '…a1b2'
+          type: string
+        oauth_available:
+          default: false
+          type: boolean
+        history:
+          $ref: '#/components/schemas/HistoryStatus'
+        last_error:
+          type: string
+      required:
+      - provider
+      - connected
+      - data_status
       type: object
     PurchaseVerifyRequest:
       additionalProperties: false
@@ -3603,6 +4369,41 @@ components:
       - target
       - saved
       - progress
+      type: object
+    ScenarioFan:
+      additionalProperties: false
+      properties:
+        p10:
+          items:
+            type: number
+          type: array
+        p50:
+          items:
+            type: number
+          type: array
+        p90:
+          items:
+            type: number
+          type: array
+      required:
+      - p10
+      - p50
+      - p90
+      type: object
+    ScenarioPath:
+      additionalProperties: false
+      properties:
+        start_month:
+          description: The analog month; the strategy runs over the months after it
+          type: string
+        index:
+          description: Rebased to 100, horizon + 1 points
+          items:
+            type: number
+          type: array
+      required:
+      - start_month
+      - index
       type: object
     SourceRef:
       additionalProperties: false
@@ -3934,6 +4735,19 @@ components:
       - token_type
       - expires_in
       type: object
+    Trading212ConnectRequest:
+      additionalProperties: false
+      properties:
+        api_key:
+          minLength: 1
+          type: string
+        api_secret:
+          minLength: 1
+          type: string
+      required:
+      - api_key
+      - api_secret
+      type: object
     UpdateBudgetsRequest:
       additionalProperties: false
       properties:
@@ -4110,7 +4924,7 @@ components:
             NotImplemented:
               $ref: '#/components/examples/ErrorNotImplemented'
     StoreUnavailable:
-      description: Life store unavailable
+      description: Service unavailable (life store down, or the provider is not configured or offline)
       content:
         application/json:
           schema:
@@ -4118,6 +4932,24 @@ components:
           examples:
             StoreUnavailable:
               $ref: '#/components/examples/ErrorStoreUnavailable'
+    BadGateway:
+      description: A provider (Monzo, Trading212) failed or sent bad data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            BadGateway:
+              $ref: '#/components/examples/ErrorBadGateway'
+    GatewayTimeout:
+      description: A provider (Monzo, Trading212) took too long
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            GatewayTimeout:
+              $ref: '#/components/examples/ErrorGatewayTimeout'
     ValidationError:
       description: Input failed validation
       content:
@@ -5214,14 +6046,14 @@ components:
         status: lobby
     BankAuthLink:
       value:
-        url: https://auth.truelayer-sandbox.com/?response_type=code&state=abc
+        url: https://auth.monzo.com/?client_id=oauth2client_demo&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fv1%2Fbank%2Fcallback&response_type=code&state=abc
         state: abc
-        provider: truelayer
-        status: mock
+        provider: monzo
+        status: live
     BankSummary:
       value:
-        status: mock
-        provider: truelayer
+        status: live
+        provider: monzo
         profile:
           age: 34
           region: yorkshire-and-the-humber
@@ -5234,6 +6066,173 @@ components:
           mortgage_years_left: 25
           deal_ends_in_months: 3
         accounts: 2
+    Connections:
+      value:
+        providers:
+        - provider: monzo
+          connected: true
+          data_status: live
+          hint: …a1b2
+          oauth_available: true
+          history:
+            synced: true
+            oldest: '2024-10-18'
+            count: 1342
+        - provider: trading212
+          connected: false
+          data_status: mock
+          oauth_available: false
+    ProviderConnection:
+      value:
+        provider: monzo
+        connected: true
+        data_status: live
+        hint: …a1b2
+        oauth_available: true
+        history:
+          synced: true
+          oldest: '2024-10-18'
+          count: 1342
+    Trading212Connect:
+      value:
+        api_key: your-trading212-key
+        api_secret: your-secret
+    MonzoToken:
+      value:
+        access_token: your-monzo-playground-token
+    HistoryStatus:
+      value:
+        synced: false
+        count: 0
+        last_error: auth
+    Investments:
+      value:
+        meta:
+          data_status: live
+          source: monzo+trading212
+          as_of: '2026-10-17'
+        holdings:
+        - instrument_id: VUSAl_EQ
+          name: Vanguard S&P 500
+          quantity: 10.0
+          value: 900.0
+          asset_class: equity
+          region: US
+        - instrument_id: VGOV_EQ
+          name: Vanguard UK Gilts
+          quantity: 20.0
+          value: 380.5
+          asset_class: bond
+          region: UK
+        total_value: 1280.5
+        cash: 42.0
+        allocation:
+          bond: 29.71
+          equity: 70.29
+    HabitFactors:
+      value:
+        version: hf-1
+        window:
+          months: 6
+          end: '2026-09-30'
+        factors:
+        - id: savings_rate
+          label: Money you keep
+          explainer: The share of what you earn that you do not spend.
+          raw: 0.18
+          score: 70
+        overall: 70
+    IsaBacktestQuery:
+      value:
+        strategies:
+        - weights:
+            global_equity: 0.8
+            gilts: 0.2
+          technique: dca
+          rebalance: annual
+          threshold_pp: 5.0
+          period: gfc_2008
+          isa_allowance: 20000.0
+        monthly_contribution: 150.0
+    IsaBacktestResponse:
+      value:
+        results:
+        - period: gfc_2008
+          label: the 2008 financial crisis
+          months:
+          - 2007-09
+          - 2007-10
+          - 2007-11
+          index:
+          - 100.0
+          - 101.2
+          - 99.5
+          metrics:
+            cagr: 0.042
+            volatility: 0.13
+            max_drawdown: 0.31
+            months_to_recover: 38
+            worst_12m: -0.27
+          contributed: 3600.0
+          final_value: 4310.4
+          money_weighted_return: 0.051
+          data_status: mock
+          data_label: Synthetic illustrative returns
+        monthly_contribution: 150.0
+        contribution_source: request
+        label: Synthetic illustrative returns
+        data_status: mock
+    IsaScenariosQuery:
+      value:
+        strategy:
+          weights:
+            global_equity: 0.8
+            gilts: 0.2
+          technique: dca
+          rebalance: annual
+          threshold_pp: 5.0
+          period: gfc_2008
+          isa_allowance: 20000.0
+        horizon_months: 36
+    IsaScenarios:
+      value:
+        paths:
+        - start_month: 2009-03
+          index:
+          - 100.0
+          - 101.5
+          - 103.2
+        fan:
+          p10:
+          - 100.0
+          - 98.0
+          - 97.1
+          p50:
+          - 100.0
+          - 101.5
+          - 103.2
+          p90:
+          - 100.0
+          - 104.0
+          - 107.9
+        horizon_months: 2
+        label: Modelled scenarios from similar past periods. Not a forecast. Not financial advice.
+        data_status: mock
+        data_label: Synthetic illustrative returns
+    IsaPeriods:
+      value:
+        periods:
+        - id: gfc_2008
+          label: The 2008 financial crisis
+          start: 2007-10
+          end: 2012-12
+        assets:
+        - global_equity
+        - uk_equity
+        - gilts
+        - cash
+        label: Synthetic illustrative returns
+        data_status: mock
     PurchaseVerify:
       value:
         product_id: lifeline.rewindpass
@@ -5817,6 +6816,18 @@ components:
           code: unauthorized
           message: Missing or invalid token.
           source: api
+    ErrorBadGateway:
+      value:
+        error:
+          code: unavailable
+          message: Trading212 is not answering. Try again soon.
+          source: trading212
+    ErrorGatewayTimeout:
+      value:
+        error:
+          code: timeout
+          message: Monzo took too long to answer.
+          source: monzo
     ErrorPaymentRequired:
       value:
         error:

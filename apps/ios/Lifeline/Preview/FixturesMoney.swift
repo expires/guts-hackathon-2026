@@ -254,12 +254,52 @@ extension Fixtures {
 
     @MainActor
     enum MoneyHome {
+        /// Nothing connected: sample data and the "Connect your accounts" card.
         static var ready: MoneyHomeViewState {
-            .init(nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess)
+            .init(
+                nextMove: NextMove.ready, widgets: Widgets.ready, guess: Guess.beforeGuess,
+                connections: .from(SampleInvesting.connections()),
+                investmentsLink: MoneyWidgetsViewModel.moveLink(for: .investments, moves: Fixtures.allMoves)
+            )
         }
 
         static var revealed: MoneyHomeViewState {
-            .init(nextMove: NextMove.inPlan, widgets: Widgets.ready, guess: Guess.revealed)
+            .init(
+                nextMove: NextMove.inPlan, widgets: Widgets.ready, guess: Guess.revealed,
+                connections: .from(SampleInvesting.connections())
+            )
+        }
+
+        /// Monzo and Trading212 connected, every response labelled live.
+        static var connectedLive: MoneyHomeViewState {
+            func live(_ meta: inout FinanceMeta) {
+                meta.dataStatus = .live
+                meta.label = nil
+            }
+            var overview = ContractExamples.financeOverview; live(&overview.meta)
+            var spending = ContractExamples.spending; live(&spending.meta)
+            var subscriptions = ContractExamples.subscriptions; live(&subscriptions.meta)
+            var bills = ContractExamples.bills; live(&bills.meta)
+            var budgets = ContractExamples.budgets; live(&budgets.meta)
+            var goals = ContractExamples.goals; live(&goals.meta)
+            var nextMove = ContractExamples.nextMove; live(&nextMove.meta)
+            var prediction = ContractExamples.spendPredictionBeforeGuess; live(&prediction.meta)
+            var guesses = ContractExamples.guesses; live(&guesses.meta)
+            let widgets = MoneyWidgetsViewModel.makeState(
+                overview: .success(overview), spending: .success(spending), subscriptions: .success(subscriptions),
+                bills: .success(bills), budgets: .success(budgets), goals: .success(goals), moves: Fixtures.allMoves
+            )
+            return .init(
+                nextMove: NextMoveViewModel.makeState(response: nextMove, phase: .ready),
+                widgets: widgets,
+                guess: GuessSpendViewModel.makeState(
+                    prediction: prediction, guesses: guesses, phase: .ready, today: prediction.date, moveLink: nil
+                ),
+                connections: .from(SampleInvesting.connections(
+                    monzo: SampleInvesting.monzoConnected, trading212: SampleInvesting.trading212Connected
+                )),
+                investmentsLink: nil
+            )
         }
 
         static var loading: MoneyHomeViewState {

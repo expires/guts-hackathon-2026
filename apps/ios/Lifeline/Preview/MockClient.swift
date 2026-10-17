@@ -15,8 +15,15 @@ actor MockClient: LifelineClient {
     /// Guesses made in this session, by date (YYYY-MM-DD). One per day (ADR 0017).
     private var guessesByDate: [String: Double] = [:]
     private var planItems: [PlanItem] = []
+    private var monzo: ProviderConnection?
+    private var trading212: ProviderConnection?
+    /// Monzo refuses the history import until the user approves in the app. This many syncs fail first.
+    private var monzoSyncsBeforeApproval: Int
+    private(set) var syncCalls = 0
 
-    init() {}
+    init(monzoSyncsBeforeApproval: Int = 0) {
+        self.monzoSyncsBeforeApproval = monzoSyncsBeforeApproval
+    }
 
     // MARK: Lives
 
@@ -386,6 +393,58 @@ actor MockClient: LifelineClient {
         room.code = code
         return room
     }
+
+    // MARK: Connections (sample data, labelled mock)
+
+    func listConnections() async throws -> ConnectionsResponse {
+        SampleInvesting.connections(monzo: monzo, trading212: trading212)
+    }
+
+    func connectTrading212(apiKey: String, apiSecret: String) async throws -> ProviderConnection {
+        guard !apiKey.isEmpty, !apiSecret.isEmpty, apiKey != "invalid" else {
+            throw APIError.server(status: 400, code: "provider_auth", message: "Trading212 did not accept those details. Check them and try again.", source: "trading212")
+        }
+        var connection = SampleInvesting.trading212Connected
+        connection.dataStatus = .mock
+        connection.hint = "…" + String(apiKey.suffix(4))
+        trading212 = connection
+        return connection
+    }
+
+    func connectMonzoToken(_ accessToken: String) async throws -> ProviderConnection {
+        var connection = monzoSyncsBeforeApproval > 0 ? SampleInvesting.monzoWaitingForApproval : SampleInvesting.monzoConnected
+        connection.dataStatus = .mock
+        monzo = connection
+        return connection
+    }
+
+    func syncMonzo() async throws -> HistoryStatus {
+        guard monzo != nil else {
+            throw APIError.server(status: 409, code: "not_connected", message: "Monzo is not connected.", source: "monzo")
+        }
+        syncCalls += 1
+        if syncCalls <= monzoSyncsBeforeApproval {
+            return HistoryStatus(synced: false, count: 0, lastError: "auth")
+        }
+        monzo?.history = SampleInvesting.monzoConnected.history
+        return SampleInvesting.monzoConnected.history!
+    }
+
+    func disconnect(_ provider: ProviderID) async throws -> ConnectionsResponse {
+        switch provider {
+        case .monzo: monzo = nil
+        case .trading212: trading212 = nil
+        }
+        return SampleInvesting.connections(monzo: monzo, trading212: trading212)
+    }
+
+    // MARK: Investing and habits (sample data, labelled mock)
+
+    func investments() async throws -> InvestmentsResponse { SampleInvesting.investments }
+    func habits() async throws -> HabitFactors { SampleInvesting.habits }
+    func isaPeriods() async throws -> IsaPeriodsResponse { SampleInvesting.periods }
+    func isaBacktest(_ query: IsaBacktestQuery) async throws -> IsaBacktestResponse { SampleInvesting.backtest(query) }
+    func isaScenarios(_ query: IsaScenariosQuery) async throws -> IsaScenariosResult { SampleInvesting.scenarios(query) }
 
     // MARK: Bank
 

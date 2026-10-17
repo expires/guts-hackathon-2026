@@ -26,6 +26,7 @@ MoveKind = Literal[
     "pay_off_debt",
     "build_emergency_fund",
     "cut_budget",
+    "spread_isa",
 ]
 
 

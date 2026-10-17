@@ -12,6 +12,11 @@ final class CoreFlowUITests: XCTestCase {
         app.launchArguments = ["-uiTestingMock"]
         app.launch()
 
+        // The app opens on Money. The game lives in the Life tab.
+        let lifeTab = app.tabBars.buttons["Life"]
+        XCTAssertTrue(lifeTab.waitForExistence(timeout: 10))
+        lifeTab.tap()
+
         // "Play yourself" is the first card.
         let playYourself = app.buttons["character.self"]
         XCTAssertTrue(playYourself.waitForExistence(timeout: 10))
