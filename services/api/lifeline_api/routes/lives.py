@@ -164,9 +164,25 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
     return life
 
 
+async def _load_readable(state: AppState, life_id: str, sub: str) -> LifeRecord:
+    """Read access: the owner, or a player in the same live room as the owner when the life was started in
+    that room (Same Life results). Everyone else gets 404, so existence is not revealed. Read only."""
+    rec = await state.store.get(life_id, sub)
+    if rec is not None:
+        return rec
+    other = await state.store.get_any(life_id)
+    code = other.life.room_code if other is not None else None
+    if other is None or not code:
+        raise not_found("Life not found")
+    room = await state.rooms.get(code)  # None once the room has expired
+    if room is None or room.player_of(sub) is None or room.player_of(other.owner) is None:
+        raise not_found("Life not found")
+    return other
+
+
 @router.get("/v1/lives/{id}", response_model=Life, response_model_exclude_none=True)
 async def get_life(id: LifeId, request: Request, sub: Subject) -> Life:  # noqa: A002
-    rec, _ = await _load(get_state(request), id, sub)
+    rec = await _load_readable(get_state(request), id, sub)
     return rec.life
 
 
@@ -233,5 +249,5 @@ async def rewind_life(id: LifeId, body: RewindRequest, request: Request, sub: Su
 
 @router.get("/v1/lives/{id}/summary", response_model=LifeSummary, response_model_exclude_none=True)
 async def get_life_summary(id: LifeId, request: Request, sub: Subject) -> LifeSummary:  # noqa: A002
-    rec, _ = await _load(get_state(request), id, sub)
+    rec = await _load_readable(get_state(request), id, sub)
     return await call_pure(sim_api.summary, rec.life)

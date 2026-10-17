@@ -93,6 +93,10 @@ class LifeStore(Protocol):
         """Return the record only if `owner` owns it. Other owners get None (shown as 404)."""
         ...
 
+    async def get_any(self, life_id: str) -> LifeRecord | None:
+        """The record whatever its owner. Only for access checks that decide visibility themselves."""
+        ...
+
     async def save(self, record: LifeRecord) -> None: ...
 
     async def put_macro(self, digest: str, table: MacroTable) -> None: ...
@@ -147,6 +151,9 @@ class MemoryLifeStore:
         if rec is None or rec.owner != owner:
             return None
         return rec
+
+    async def get_any(self, life_id: str) -> LifeRecord | None:
+        return self._lives.get(life_id)
 
     async def save(self, record: LifeRecord) -> None:
         record.updated_at = datetime.now(UTC)
@@ -286,6 +293,21 @@ class PostgresLifeStore:
                 await conn.execute(
                     text("SELECT id, owner, life, macro_hash, updated_at FROM lives WHERE id = :id AND owner = :owner"),
                     {"id": life_id, "owner": owner},
+                )
+            ).first()
+        if row is None:
+            return None
+        life_raw: Any = row.life
+        life = Life.model_validate_json(life_raw) if isinstance(life_raw, str) else Life.model_validate(life_raw)
+        return LifeRecord(id=row.id, owner=row.owner, life=life, macro_hash=row.macro_hash, updated_at=row.updated_at)
+
+    @_guarded
+    async def get_any(self, life_id: str) -> LifeRecord | None:
+        await self._ensure_schema()
+        async with self._eng().connect() as conn:
+            row = (
+                await conn.execute(
+                    text("SELECT id, owner, life, macro_hash, updated_at FROM lives WHERE id = :id"), {"id": life_id}
                 )
             ).first()
         if row is None:

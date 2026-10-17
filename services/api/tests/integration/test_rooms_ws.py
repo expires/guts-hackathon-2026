@@ -105,8 +105,14 @@ def test_four_players_full_game(tc: TestClient) -> None:
             seeds.add(life["seed"])
             assert life["room_code"] == code
         assert seeds == {room["seed"]}, "the server owns one seed for the room"
-        other = tc.get(f"/v1/lives/{life_ids[you[1]['id']]}", headers={"Authorization": f"Bearer {tokens[0]}"})
-        assert other.status_code == 404, "each life belongs to its player"
+        rival_life = life_ids[you[1]["id"]]
+        host = {"Authorization": f"Bearer {tokens[0]}"}
+        assert tc.get(f"/v1/lives/{rival_life}", headers=host).status_code == 200, "room members can read"
+        assert tc.get(f"/v1/lives/{rival_life}/summary", headers=host).status_code == 200
+        assert tc.post(f"/v1/lives/{rival_life}/age", headers=host).status_code == 404, "but never play it"
+        outsider = {"Authorization": f"Bearer {_token(tc, 'room-outsider-01')}"}
+        assert tc.get(f"/v1/lives/{rival_life}", headers=outsider).status_code == 404
+        assert tc.get(f"/v1/lives/{rival_life}/summary", headers=outsider).status_code == 404
 
         # Player 1 ages; everyone gets a rival update with the server's numbers.
         life = _age_and_clear(tc, tokens[1], life_ids[you[1]["id"]])
@@ -179,3 +185,31 @@ def test_room_rules(tc: TestClient) -> None:
         assert _until(w0, "pong")["type"] == "pong"
         w0.send_json({"type": "bogus"})
         assert _until_error(w0) == "validation_error"
+
+
+def test_room_lives_hidden_after_room_expires(tc: TestClient) -> None:
+    from lifeline_api.main import app
+
+    host, guest = _token(tc, DEVICES[0]), _token(tc, DEVICES[1])
+    code = tc.post("/v1/rooms", json={"mode": "duel", "host_name": "Ana", "preset_id": "nurse-leeds",
+                                      "start_year": 2006}, headers={"Authorization": f"Bearer {host}"}).json()["code"]
+    with (tc.websocket_connect(f"/v1/rooms/{code}?token={host}") as w0,
+          tc.websocket_connect(f"/v1/rooms/{code}?token={guest}") as w1):
+        w0.send_json({"type": "join", "name": "Ana"})
+        _until(w0, "welcome")
+        w1.send_json({"type": "join", "name": "Ben"})
+        guest_id = _until(w1, "welcome")["you"]["id"]
+        for ws in (w0, w1):
+            ws.send_json({"type": "ready"})
+        for _ in range(10):
+            if all(p["ready"] for p in _until(w0, "roster")["room"]["players"]):
+                break
+        w0.send_json({"type": "start"})
+        room = _until(w0, "started")["room"]
+    guest_life = next(p["life_id"] for p in room["players"] if p["id"] == guest_id)
+    auth = {"Authorization": f"Bearer {host}"}
+    assert tc.get(f"/v1/lives/{guest_life}", headers=auth).status_code == 200
+    rooms = app.state.lifeline.rooms
+    tc.portal.call(rooms.redis.delete, f"lifeline:room:{code}")  # the 24 h TTL ran out
+    assert tc.get(f"/v1/lives/{guest_life}", headers=auth).status_code == 404
+    assert tc.get(f"/v1/lives/{guest_life}", headers={"Authorization": f"Bearer {guest}"}).status_code == 200
