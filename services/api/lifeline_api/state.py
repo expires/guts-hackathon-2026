@@ -11,6 +11,7 @@ from fastapi import Request
 
 from lifeline_api.ratelimit import Limiter
 from lifeline_api.settings import Settings
+from lifeline_api.social import SocialStore
 from lifeline_api.store import LifeStore
 from lifeline_contracts.interfaces import DataHub
 
@@ -23,6 +24,7 @@ class AppState:
     limiter: Limiter
     jwt_secret: str
     redis: Any | None = None
+    social: SocialStore | None = None
     life_locks: defaultdict[str, asyncio.Lock] = field(default_factory=lambda: defaultdict(asyncio.Lock))
     # Per-subject locks for read-modify-write on per-subject documents (budgets, goals, guesses, plan).
     subject_locks: defaultdict[str, asyncio.Lock] = field(default_factory=lambda: defaultdict(asyncio.Lock))

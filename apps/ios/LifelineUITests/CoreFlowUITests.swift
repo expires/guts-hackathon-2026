@@ -1,14 +1,16 @@
 import XCTest
 
-/// Money tab first, then Life: character select -> start year -> AGE -> answer event -> lesson.
-/// Uses canned data (`-uiTestingMock`).
+/// The app is stripped to real money (`AppFeatures.game == false`): Money and You tabs.
+/// The Life game test is skipped while the game is hidden. Uses canned data (`-uiTestingMock`).
 final class CoreFlowUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }
 
     @MainActor
-    func testPresetLifeAgeAndAnswerEvent() {
+    func testPresetLifeAgeAndAnswerEvent() throws {
+        throw XCTSkip("The Life game is hidden (AppFeatures.game = false). Re-enable with the flag.")
+        // swiftlint:disable:next unreachable_code
         let app = XCUIApplication()
         app.launchArguments = ["-uiTestingMock"]
         app.launch()
@@ -80,17 +82,52 @@ final class CoreFlowUITests: XCTestCase {
         doThis.tap()
         XCTAssertTrue(app.descendants(matching: .any)["nextMove.planMessage"].waitForExistence(timeout: 5))
 
-        // Test it opens the W7 comparison.
-        app.buttons["nextMove.testIt"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["testit.summary"].waitForExistence(timeout: 10))
-        app.buttons["testit.close"].tap()
+        // Test it launches the hidden game simulation, so the button must not be there.
+        XCTAssertFalse(app.buttons["nextMove.testIt"].exists)
+        XCTAssertFalse(app.buttons["tab.life"].exists)
+        XCTAssertFalse(app.buttons["tab.play"].exists)
+        XCTAssertTrue(app.buttons["tab.you"].exists)
 
         // Why? shows the 3 evidence points.
         let why = app.buttons["nextMove.why"]
         XCTAssertTrue(why.waitForExistence(timeout: 5))
         why.tap()
         XCTAssertTrue(app.descendants(matching: .any)["why.evidence.2"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["why.testIt"].exists)
+        XCTAssertFalse(app.buttons["why.openLesson"].exists)
         app.buttons["why.close"].tap()
+    }
+
+    @MainActor
+    func testInsightsChartExplainerOpens() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestingMock"]
+        app.launch()
+
+        let insights = app.buttons["money.insights"]
+        XCTAssertTrue(insights.waitForExistence(timeout: 10))
+        insights.tap()
+
+        let info = app.buttons["chart.info.moneyInAndOut"]
+        XCTAssertTrue(info.waitForExistence(timeout: 10))
+        XCTAssertEqual(info.label, "About this chart")
+        info.tap()
+        XCTAssertTrue(app.staticTexts["What this shows"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["How to read it"].exists)
+        XCTAssertTrue(app.staticTexts["What it means for you"].exists)
+        app.buttons["chart.explainer.close"].tap()
+    }
+
+    @MainActor
+    func testYouTabHasNoGameRows() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestingMock"]
+        app.launch()
+        app.buttons["tab.you"].tap()
+        XCTAssertTrue(app.buttons["you.plan"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["you.store"].exists)
+        XCTAssertFalse(app.buttons["you.evaluation"].exists)
+        XCTAssertFalse(app.buttons["you.spendAccuracy"].exists)
     }
 
     /// `top.action` from `Lifeline/Preview/Recorded/getNextMove.json` (the file the app's mock client serves).

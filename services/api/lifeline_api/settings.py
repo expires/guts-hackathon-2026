@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_seconds: int = Field(default=30 * 24 * 3600, ge=60)
     apple_bundle_id: str = "com.lifeline.app"
+    credentials_dir: str = "data/private"  # same folder the data hub uses; holds social.json too
 
     @property
     def is_test(self) -> bool:

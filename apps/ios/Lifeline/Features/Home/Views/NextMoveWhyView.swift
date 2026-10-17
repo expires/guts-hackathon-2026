@@ -47,7 +47,7 @@ struct NextMoveWhyView: View {
                     }
                     .padding(.horizontal, Theme.Spacing.xs)
                     lesson
-                    if state.hasDecisionDetail {
+                    if AppFeatures.game && state.hasDecisionDetail {
                         Button("See the full decision", action: actions.onOpenDecision)
                             .buttonStyle(.text)
                             .accessibilityIdentifier("why.decision")
@@ -57,7 +57,7 @@ struct NextMoveWhyView: View {
                 .padding(.top, Theme.Spacing.l)
             }
             HStack(spacing: Theme.Spacing.s) {
-                if let onTestIt {
+                if AppFeatures.game, let onTestIt {
                     Button("Test it in Life", action: onTestIt)
                         .buttonStyle(.main)
                         .accessibilityIdentifier("why.testIt")
@@ -121,9 +121,11 @@ struct NextMoveWhyView: View {
                     if let personal = lesson.personal {
                         Text(personal).font(.llBodyBold).accessibilityIdentifier("why.personal")
                     }
-                    Button("Open the lesson", action: actions.onOpenLesson)
-                        .buttonStyle(.text)
-                        .accessibilityIdentifier("why.openLesson")
+                    if AppFeatures.game {
+                        Button("Open the lesson", action: actions.onOpenLesson)
+                            .buttonStyle(.text)
+                            .accessibilityIdentifier("why.openLesson")
+                    }
                 }
                 .padding(Theme.Spacing.l)
                 .frame(maxWidth: .infinity, alignment: .leading)

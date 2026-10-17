@@ -65,6 +65,7 @@ struct NextMoveCardView: View {
                 .accessibilityIdentifier("nextMove.headline")
         }
         impactRow(move)
+        ChartCaptionRow(help: ChartHelpCatalogue.nextMoveConfidence)
         buttons(move)
         if let message = state.planMessage {
             Button(message, action: actions.onOpenPlan)
@@ -112,7 +113,7 @@ struct NextMoveCardView: View {
 
     @ViewBuilder
     private func buttonRow(_ move: NextMoveCardState.Move) -> some View {
-        if move.isTestable {
+        if AppFeatures.game && move.isTestable {
             Button { actions.onTestIt(move.id) } label: {
                 HStack(spacing: Theme.Spacing.s) {
                     LLIconImage(.test, size: 24)

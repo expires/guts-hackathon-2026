@@ -17,7 +17,7 @@ struct YouView: View {
                 case .ready:
                     header
                 }
-                scores
+                if AppFeatures.game { scores }
                 if !state.personalFacts.isEmpty { facts }
                 bankAndData
                 settings
@@ -137,13 +137,17 @@ struct YouView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             BlockTitle(text: "Settings")
             VStack(spacing: 0) {
-                row(icon: .lock, title: "Lifeline Plus", id: "you.store", action: actions.onOpenStore)
-                RuleDivider()
+                if AppFeatures.game {
+                    row(icon: .lock, title: "Lifeline Plus", id: "you.store", action: actions.onOpenStore)
+                    RuleDivider()
+                }
                 row(icon: .check, title: "Your plan", id: "you.plan", action: actions.onOpenPlan)
-                RuleDivider()
-                row(icon: .test, title: "How good is the advice?", id: "you.evaluation", action: actions.onOpenEvaluation)
-                RuleDivider()
-                row(icon: .investment, title: "How good is the spend guess?", id: "you.spendAccuracy", action: actions.onOpenSpendAccuracy)
+                if AppFeatures.game {
+                    RuleDivider()
+                    row(icon: .test, title: "How good is the advice?", id: "you.evaluation", action: actions.onOpenEvaluation)
+                    RuleDivider()
+                    row(icon: .investment, title: "How good is the spend guess?", id: "you.spendAccuracy", action: actions.onOpenSpendAccuracy)
+                }
                 if state.showsDebugMenu {
                     RuleDivider()
                     row(icon: .statusCached, title: "Debug menu", id: "you.debug", action: actions.onOpenDebug)

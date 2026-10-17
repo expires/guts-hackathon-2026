@@ -165,6 +165,18 @@ struct PlaygroundScreen: View {
             } else {
                 Text("No screen for \(id)")
             }
+        case "chartHelp.moneyInAndOut": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.moneyInAndOut) {} }
+        case "chartHelp.isaReplay": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.isaReplay) {} }
+        case "chartHelp.possiblePaths": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.possiblePaths) {} }
+        case "chartHelp.habitsScore": LLSheetFrame { ChartExplainerSheet(help: ChartHelpCatalogue.habitsScore) {} }
+        case "chartHelp.card":
+            card(InkCard {
+                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                    ChartHeader(title: "Money in and out", help: ChartHelpCatalogue.moneyInAndOut)
+                    RoundedRectangle(cornerRadius: 8).fill(Theme.Palette.rule).frame(height: 120)
+                    ChartCaption(help: ChartHelpCatalogue.moneyInAndOut)
+                }
+            })
         case "common.error": ErrorStateView(state: Fixtures.networkError)
         case "common.startAge": ErrorStateView(state: Fixtures.startAgeError)
         case "common.loading": LoadingStateView(state: Fixtures.loading)

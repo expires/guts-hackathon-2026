@@ -99,3 +99,14 @@ Thumbs.db
 *.log
 logs/
 apps/ios/Config/Local.xcconfig
+
+# ---- Connected-account credentials and personal data (any depth) ----
+# The backend stores Monzo/Trading212 tokens, imported transactions and friend lists under
+# CREDENTIALS_DIR (default data/private, relative to services/api). Never commit them.
+**/data/private/
+**/data/cache/
+**/credentials.json
+**/monzo_history.json
+**/finance_snapshot.json
+**/oauth_states.json
+**/social.json

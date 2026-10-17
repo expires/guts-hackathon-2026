@@ -15,6 +15,12 @@ struct HabitsView: View {
                 ErrorStateView(state: error, onRetry: actions.onRetry)
             case .ready:
                 overallCard
+                if !state.factors.isEmpty {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        ChartHeader(title: "What makes up the score", help: ChartHelpCatalogue.habitFactors)
+                        ChartCaption(help: ChartHelpCatalogue.habitFactors)
+                    }
+                }
                 ForEach(state.factors) { FactorRow(factor: $0) }
             }
         }
@@ -27,6 +33,7 @@ struct HabitsView: View {
             VStack(spacing: Theme.Spacing.m) {
                 ScoreRing(score: state.overall)
                     .frame(width: 148, height: 148)
+                ChartCaption(help: ChartHelpCatalogue.habitsScore)
                 if let band = state.overallBandText {
                     Text(band).font(.llTitle)
                 }
@@ -40,6 +47,9 @@ struct HabitsView: View {
         .padding(.bottom, Theme.heroShadow.height)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("habits.overall")
+        .overlay(alignment: .topTrailing) {
+            ChartInfoButton(help: ChartHelpCatalogue.habitsScore).padding(.trailing, Theme.heroShadow.width)
+        }
     }
 }
 

@@ -18,6 +18,7 @@ tags:
 - name: decision
 - name: finance
 - name: investing
+- name: friends
 - name: connections
 - name: rooms
 - name: bank
@@ -1228,6 +1229,179 @@ paths:
             examples:
               IsaScenariosQuery:
                 $ref: '#/components/examples/IsaScenariosQuery'
+  /v1/friends:
+    get:
+      operationId: getLeaderboard
+      summary: You and your friends ranked by habit score. No money amounts
+      tags:
+      - friends
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Leaderboard'
+              examples:
+                Leaderboard:
+                  $ref: '#/components/examples/Leaderboard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/friends/invite:
+    post:
+      operationId: createFriendInvite
+      summary: Your invite code (lifeline://join/CODE). Stable until rotate=true
+      tags:
+      - friends
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCode'
+              examples:
+                InviteCode:
+                  $ref: '#/components/examples/InviteCode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+      parameters:
+      - name: rotate
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+  /v1/friends/join:
+    post:
+      operationId: joinFriend
+      summary: Add a friend by invite code. Both of you see each other. Repeating it is safe
+      tags:
+      - friends
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Leaderboard'
+              examples:
+                Leaderboard:
+                  $ref: '#/components/examples/Leaderboard'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinFriendRequest'
+            examples:
+              JoinFriend:
+                $ref: '#/components/examples/JoinFriend'
+  /v1/friends/me:
+    get:
+      operationId: getMyFriendCard
+      summary: Exactly what your friends can see about you
+      tags:
+      - friends
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendCard'
+              examples:
+                MyFriendCard:
+                  $ref: '#/components/examples/MyFriendCard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    put:
+      operationId: updateMyFriendCard
+      summary: Set the name friends see and whether to share your mix as percentages
+      tags:
+      - friends
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendCard'
+              examples:
+                MyFriendCard:
+                  $ref: '#/components/examples/MyFriendCard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareSettings'
+            examples:
+              ShareSettings:
+                $ref: '#/components/examples/ShareSettings'
+  /v1/friends/{friend_id}:
+    delete:
+      operationId: removeFriend
+      summary: Remove a friend for both of you
+      tags:
+      - friends
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Leaderboard'
+              examples:
+                Leaderboard:
+                  $ref: '#/components/examples/Leaderboard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+      parameters:
+      - name: friend_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 64
   /v1/connections:
     get:
       operationId: listConnections
@@ -2877,6 +3051,48 @@ components:
       - monthly_costs
       - net_worth
       type: object
+    FriendCard:
+      additionalProperties: false
+      description: Exactly what a friend can see about one person.
+      properties:
+        friend_id:
+          description: Opaque id for this person in the friends list. Not their account id
+          type: string
+        display_name:
+          type: string
+        overall_score:
+          description: Overall habit score, 0-100
+          maximum: 100
+          minimum: 0
+          type: integer
+        factor_scores:
+          additionalProperties:
+            type: integer
+          description: Habit factor id to 0-100 score. Factors that cannot be scored yet are left out
+          type: object
+        growth_index:
+          description: Their current investment mix replayed over the whole period, 100 at the start
+          type: number
+        mix:
+          description: Investment mix as percentages by asset class. Only when they chose to share it
+          additionalProperties:
+            type: number
+          type: object
+        data_status:
+          description: mock means sample data, not connected accounts
+          enum:
+          - live
+          - mock
+          type: string
+        updated_at:
+          type: string
+      required:
+      - friend_id
+      - display_name
+      - factor_scores
+      - data_status
+      - updated_at
+      type: object
     GoalsResponse:
       additionalProperties: false
       properties:
@@ -3330,6 +3546,17 @@ components:
       - cash
       - allocation
       type: object
+    InviteCode:
+      additionalProperties: false
+      properties:
+        code:
+          pattern: ^[A-HJ-NP-Z2-9]{8}$
+          type: string
+        expires_at:
+          type: string
+      required:
+      - code
+      type: object
     IsaBacktestMetrics:
       additionalProperties: false
       description: Computed on the time-weighted index.
@@ -3593,6 +3820,17 @@ components:
       - title
       - annual_income
       type: object
+    JoinFriendRequest:
+      additionalProperties: false
+      properties:
+        code:
+          description: An invite code. Case and spaces do not matter
+          maxLength: 16
+          minLength: 1
+          type: string
+      required:
+      - code
+      type: object
     KeyMoment:
       additionalProperties: false
       properties:
@@ -3609,6 +3847,42 @@ components:
       - age
       - emoji
       - text
+      type: object
+    Leaderboard:
+      additionalProperties: false
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/LeaderboardEntry'
+          type: array
+        my_invite_code:
+          type: string
+        explain:
+          default: Growth is how an investment mix would have grown, shown as 100 at the start, so 150 means it grew by half.
+            Friends are compared on the same scale, with no money amounts.
+          description: One plain-English line on what rebased to 100 means
+          type: string
+      required:
+      - entries
+      - my_invite_code
+      type: object
+    LeaderboardEntry:
+      additionalProperties: false
+      properties:
+        card:
+          $ref: '#/components/schemas/FriendCard'
+        rank:
+          minimum: 1
+          type: integer
+        is_me:
+          type: boolean
+        score_vs_me:
+          description: Their overall score rebased so that yours is 100. Null if either is missing
+          type: number
+      required:
+      - card
+      - rank
+      - is_me
       type: object
     Lesson:
       additionalProperties: false
@@ -4587,6 +4861,20 @@ components:
       required:
       - start_month
       - index
+      type: object
+    ShareSettings:
+      additionalProperties: false
+      properties:
+        display_name:
+          maxLength: 30
+          minLength: 1
+          type: string
+        share_mix:
+          description: Let friends see your investment mix as percentages
+          type: boolean
+      required:
+      - display_name
+      - share_mix
       type: object
     SourceRef:
       additionalProperties: false
@@ -7073,6 +7361,66 @@ components:
           index: 101.4
           net_worth: -11000.0
           ribbons: 0
+    Leaderboard:
+      value:
+        entries:
+        - card:
+            friend_id: fr_1a2b3c4d5e6f7a8b
+            display_name: You
+            overall_score: 72
+            factor_scores:
+              savings_rate: 80
+              runway_months: 65
+            growth_index: 412.3
+            mix:
+              bond: 20.0
+              equity: 80.0
+            data_status: mock
+            updated_at: '2026-10-17T00:00:00Z'
+          rank: 1
+          is_me: true
+          score_vs_me: 100.0
+        - card:
+            friend_id: fr_9f8e7d6c5b4a3921
+            display_name: Sam
+            overall_score: 64
+            factor_scores:
+              savings_rate: 55
+              runway_months: 70
+              isa_concentration: 60
+            growth_index: 388.0
+            data_status: live
+            updated_at: '2026-10-17T00:00:00Z'
+          rank: 2
+          is_me: false
+          score_vs_me: 88.9
+        my_invite_code: K7M2QX9P
+        explain: Growth is how an investment mix would have grown, shown as 100 at the start, so 150 means it grew by half.
+          Friends are compared on the same scale, with no money amounts.
+    MyFriendCard:
+      value:
+        friend_id: fr_1a2b3c4d5e6f7a8b
+        display_name: You
+        overall_score: 72
+        factor_scores:
+          savings_rate: 80
+          runway_months: 65
+        growth_index: 412.3
+        mix:
+          bond: 20.0
+          equity: 80.0
+        data_status: mock
+        updated_at: '2026-10-17T00:00:00Z'
+    InviteCode:
+      value:
+        code: K7M2QX9P
+    JoinFriend:
+      value:
+        code: K7M2QX9P
+    ShareSettings:
+      value:
+        display_name: Sam
+        share_mix: true
     NextMove:
       value:
         meta:

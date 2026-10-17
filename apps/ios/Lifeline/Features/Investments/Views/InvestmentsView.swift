@@ -66,7 +66,7 @@ struct InvestmentsView: View {
     private var allocationCard: some View {
         InkCard(shape: .cardAlt) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                Text("What it is made of").font(.llBodyBold)
+                ChartHeader(title: "What it is made of", help: ChartHelpCatalogue.investmentSplit)
                 Chart(Array(state.slices.enumerated()), id: \.element.id) { offset, slice in
                     SectorMark(angle: .value("Share", slice.percent), innerRadius: .ratio(0.6), angularInset: 2)
                         .foregroundStyle(seriesPalette[offset % seriesPalette.count])
@@ -74,6 +74,7 @@ struct InvestmentsView: View {
                 .frame(height: 180)
                 .accessibilityLabel("Split of your investments")
                 .accessibilityValue(state.slices.map { "\($0.label) \($0.percentText)" }.joined(separator: ", "))
+                ChartCaption(help: ChartHelpCatalogue.investmentSplit)
                 ForEach(Array(state.slices.enumerated()), id: \.element.id) { offset, slice in
                     HStack(spacing: Theme.Spacing.s) {
                         RoundedRectangle(cornerRadius: 3)
@@ -118,9 +119,10 @@ private struct ReplaySection: View {
         InkCard {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Replay your ISA").font(.llBodyBold)
+                    Text("Replay your ISA").font(.llBodyBold).accessibilityAddTraits(.isHeader)
                     Spacer()
                     IllustrativeBadge(text: replay.dataLabel)
+                    ChartInfoButton(help: ChartHelpCatalogue.isaReplay)
                 }
                 Text("See how different mixes would have done in a real stretch of the past.")
                     .font(.llLabel)
@@ -182,6 +184,7 @@ private struct ReplaySection: View {
                     ErrorStateView(state: error, onRetry: actions.onRetryReplay)
                 case .ready:
                     chart
+                    ChartCaption(help: ChartHelpCatalogue.isaReplay)
                     ForEach(replay.results) { result in
                         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                             Text(result.label).font(.llBodyBold)
@@ -199,6 +202,7 @@ private struct ReplaySection: View {
                         .padding(.top, Theme.Spacing.xs)
                         .accessibilityElement(children: .contain)
                     }
+                    ChartCaptionRow(help: ChartHelpCatalogue.replayNumbers)
                     Text("\(replay.detailLabel). Made-up numbers shaped like real markets. Not advice.")
                         .font(.llLabel)
                         .foregroundStyle(Theme.Palette.muted)
@@ -239,9 +243,10 @@ private struct PathsSection: View {
         InkCard(shape: .cardAlt) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Possible paths").font(.llBodyBold)
+                    Text("Possible paths").font(.llBodyBold).accessibilityAddTraits(.isHeader)
                     Spacer()
                     IllustrativeBadge(text: paths.dataLabel)
+                    ChartInfoButton(help: ChartHelpCatalogue.possiblePaths)
                 }
                 switch paths.phase {
                 case let .loading(loading):
@@ -267,6 +272,7 @@ private struct PathsSection: View {
                     .frame(height: 200)
                     .accessibilityLabel("Fan chart. The line is the middle path. The shaded band covers most paths.")
                     .accessibilityIdentifier("paths.chart")
+                    ChartCaption(help: ChartHelpCatalogue.possiblePaths)
                 }
                 // Always visible, in every state.
                 Text(paths.disclaimer)

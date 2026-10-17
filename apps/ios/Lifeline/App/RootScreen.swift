@@ -3,6 +3,8 @@ import SwiftUI
 /// App tabs (ADR 0016), in this order. Money is the default.
 enum AppTab: String, Hashable, CaseIterable {
     case money, life, play, you
+    // TODO(friends): add `case friends` here (and title/icon/content below) when the Friends tab lands.
+    // Gate it with `AppFeatures.friends` in `AppFeatures.visibleTabs`.
 
     var title: String {
         switch self {
@@ -41,7 +43,7 @@ struct RootScreen: View {
         // above the bar, also right after the bar appears at the end of a setup flow.
         VStack(spacing: 0) {
             ZStack {
-                ForEach(AppTab.allCases, id: \.self) { tab in
+                ForEach(AppFeatures.visibleTabs, id: \.self) { tab in
                     let isActive = tab == selection
                     content(for: tab)
                         .opacity(isActive ? 1 : 0)
@@ -53,7 +55,7 @@ struct RootScreen: View {
             // Setup flows (character select, form, start year) hide the tab bar.
             if showsTabBar {
                 LLTabBar(
-                    items: AppTab.allCases.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon) },
+                    items: AppFeatures.visibleTabs.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon) },
                     selection: selection.rawValue
                 ) { id in
                     if let tab = AppTab(rawValue: id) { coordinator.selectedTab = tab }

@@ -113,7 +113,7 @@ struct InsightsView: View {
     private var monthsCard: some View {
         InkCard(shape: .cardAlt) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                Text("Money in and out").font(.llBodyBold).accessibilityAddTraits(.isHeader)
+                ChartHeader(title: "Money in and out", help: ChartHelpCatalogue.moneyInAndOut)
                 HStack(spacing: Theme.Spacing.l) {
                     total(title: "Earned", value: state.earnedText, color: Theme.Palette.money)
                     total(title: "Spent", value: state.spentText, color: Theme.Palette.home)
@@ -148,6 +148,7 @@ struct InsightsView: View {
                 .accessibilityLabel("Money earned and spent each month")
                 .accessibilityValue(state.months.map(\.spokenText).joined(separator: ". "))
                 .accessibilityIdentifier("insights.monthsChart")
+                ChartCaption(help: ChartHelpCatalogue.moneyInAndOut)
             }
         }
         .accessibilityIdentifier("insights.months")
@@ -169,12 +170,15 @@ struct InsightsView: View {
 
     private var categoriesCard: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BlockTitle(text: "Where your money goes")
+            ChartHeader(title: "Where your money goes", help: ChartHelpCatalogue.spendingByCategory)
             InkCard(padding: 0) {
                 VStack(spacing: 0) {
-                    shareBar
-                        .padding(.horizontal, Theme.Spacing.l)
-                        .padding(.vertical, Theme.Spacing.m)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                        shareBar
+                        ChartCaption(help: ChartHelpCatalogue.spendingByCategory)
+                    }
+                    .padding(.horizontal, Theme.Spacing.l)
+                    .padding(.vertical, Theme.Spacing.m)
                     ForEach(state.categories) { category in
                         RuleDivider()
                         categoryRow(category)
@@ -251,7 +255,8 @@ struct InsightsView: View {
 
     private var subscriptionsCard: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BlockTitle(text: "Subscriptions")
+            ChartHeader(title: "Subscriptions", help: ChartHelpCatalogue.subscriptions)
+            ChartCaption(help: ChartHelpCatalogue.subscriptions)
             InkCard(shape: .cardAlt, padding: 0) {
                 VStack(spacing: 0) {
                     HStack(spacing: Theme.Spacing.l) {
@@ -299,7 +304,7 @@ struct InsightsView: View {
 
     private func patternsCard(_ patterns: InsightsViewState.Patterns) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BlockTitle(text: "Spending patterns")
+            ChartHeader(title: "Spending patterns", help: ChartHelpCatalogue.spendingPatterns)
             InkCard {
                 VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                     if let share = patterns.weekendShare, let text = patterns.weekendText {
@@ -327,6 +332,7 @@ struct InsightsView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Spending by day of the week")
                     .accessibilityValue(patterns.weekdays.map { "\($0.label) \(Money.spoken($0.amount))" }.joined(separator: ", "))
+                    ChartCaption(help: ChartHelpCatalogue.spendingPatterns)
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         fact(patterns.averageDailyText)
                         if let text = patterns.biggestWeekdayText { fact(text) }

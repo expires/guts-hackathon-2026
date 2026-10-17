@@ -23,6 +23,7 @@ from lifeline_contracts import api_models as A  # noqa: E402
 from lifeline_contracts import accounts as ACC  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
+from lifeline_contracts import friends as FR  # noqa: E402
 from lifeline_contracts import habits as H  # noqa: E402
 from lifeline_contracts import insights as INS  # noqa: E402
 from lifeline_contracts import investing as I  # noqa: E402,E741
@@ -97,6 +98,12 @@ MODELS: list[type[BaseModel]] = [
     I.IsaScenariosQuery,
     I.IsaScenariosResult,
     I.IsaPeriodsResponse,
+    FR.FriendCard,
+    FR.LeaderboardEntry,
+    FR.Leaderboard,
+    FR.InviteCode,
+    FR.JoinFriendRequest,
+    FR.ShareSettings,
 ]
 
 
@@ -522,6 +529,7 @@ def examples() -> dict[str, Any]:
         "DemoSignIn": A.DemoSignInRequest(device_id="3F2A9C1E-7B4D-4E8A"),
         "Token": A.Token(access_token="eyJhbGciOiJIUzI1NiJ9.demo.sig", token_type="bearer", expires_in=86400),  # noqa: S106 (fake example token)
         **finance_examples(),
+        **friends_examples(),
         **next_move_examples(),
     }
 
@@ -1081,6 +1089,42 @@ ERR_EXAMPLES = {
 }
 
 
+def friends_examples() -> dict[str, Any]:
+    """Friends leaderboard. Scores and a rebased index only: no example holds a money amount."""
+    me = FR.FriendCard(
+        friend_id="fr_1a2b3c4d5e6f7a8b",
+        display_name="You",
+        overall_score=72,
+        factor_scores={"savings_rate": 80, "runway_months": 65},
+        growth_index=412.3,
+        mix={"bond": 20.0, "equity": 80.0},
+        data_status="mock",
+        updated_at="2026-10-17T00:00:00Z",
+    )
+    pal = FR.FriendCard(
+        friend_id="fr_9f8e7d6c5b4a3921",
+        display_name="Sam",
+        overall_score=64,
+        factor_scores={"savings_rate": 55, "runway_months": 70, "isa_concentration": 60},
+        growth_index=388.0,
+        data_status="live",
+        updated_at="2026-10-17T00:00:00Z",
+    )
+    return {
+        "Leaderboard": FR.Leaderboard(
+            entries=[
+                FR.LeaderboardEntry(card=me, rank=1, is_me=True, score_vs_me=100.0),
+                FR.LeaderboardEntry(card=pal, rank=2, is_me=False, score_vs_me=88.9),
+            ],
+            my_invite_code="K7M2QX9P",
+        ),
+        "MyFriendCard": me,
+        "InviteCode": FR.InviteCode(code="K7M2QX9P"),
+        "JoinFriend": FR.JoinFriendRequest(code="K7M2QX9P"),
+        "ShareSettings": FR.ShareSettings(display_name="Sam", share_mix=True),
+    }
+
+
 def ref(name: str) -> dict[str, str]:
     return {"$ref": f"#/components/schemas/{name}"}
 
@@ -1406,6 +1450,7 @@ def paths() -> dict[str, Any]:
         },
         **finance_paths(),
         **investing_paths(),
+        **friends_paths(),
         **connection_paths(),
         **next_move_paths(),
         "/v1/purchases/verify": {
@@ -1477,6 +1522,67 @@ def investing_paths() -> dict[str, Any]:
                 "investing",
                 {**ok("IsaScenariosResult", "IsaScenarios"), **errs(*FIN)},
                 requestBody=body("IsaScenariosQuery", "IsaScenariosQuery"),
+            )
+        },
+    }
+
+
+FRIEND_ID = {"name": "friend_id", "in": "path", "required": True, "schema": {"type": "string", "maxLength": 64}}
+
+
+def friends_paths() -> dict[str, Any]:
+    """Friends leaderboard. Friends see scores, a rebased growth index and (opt-in) the mix as percentages."""
+    return {
+        "/v1/friends": {
+            "get": op(
+                "getLeaderboard",
+                "You and your friends ranked by habit score. No money amounts",
+                "friends",
+                {**ok("Leaderboard", "Leaderboard"), **errs(*FIN)},
+            )
+        },
+        "/v1/friends/invite": {
+            "post": op(
+                "createFriendInvite",
+                "Your invite code (lifeline://join/CODE). Stable until rotate=true",
+                "friends",
+                {**ok("InviteCode", "InviteCode"), **errs(*FIN)},
+                parameters=[
+                    {"name": "rotate", "in": "query", "required": False, "schema": {"type": "boolean", "default": False}}
+                ],
+            )
+        },
+        "/v1/friends/join": {
+            "post": op(
+                "joinFriend",
+                "Add a friend by invite code. Both of you see each other. Repeating it is safe",
+                "friends",
+                {**ok("Leaderboard", "Leaderboard"), **errs("400", "404", *FIN)},
+                requestBody=body("JoinFriendRequest", "JoinFriend"),
+            )
+        },
+        "/v1/friends/me": {
+            "get": op(
+                "getMyFriendCard",
+                "Exactly what your friends can see about you",
+                "friends",
+                {**ok("FriendCard", "MyFriendCard"), **errs(*FIN)},
+            ),
+            "put": op(
+                "updateMyFriendCard",
+                "Set the name friends see and whether to share your mix as percentages",
+                "friends",
+                {**ok("FriendCard", "MyFriendCard"), **errs(*FIN)},
+                requestBody=body("ShareSettings", "ShareSettings"),
+            ),
+        },
+        "/v1/friends/{friend_id}": {
+            "delete": op(
+                "removeFriend",
+                "Remove a friend for both of you",
+                "friends",
+                {**ok("Leaderboard", "Leaderboard"), **errs(*FIN)},
+                parameters=[FRIEND_ID],
             )
         },
     }
@@ -1751,7 +1857,7 @@ def build() -> dict[str, Any]:
         "tags": [
             {"name": t}
             for t in (
-                "meta", "auth", "next-move", "lives", "learn", "decision", "finance", "investing", "connections",
+                "meta", "auth", "next-move", "lives", "learn", "decision", "finance", "investing", "friends", "connections",
                 "rooms", "bank", "store",
             )
         ],

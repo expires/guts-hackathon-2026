@@ -86,6 +86,13 @@ extension Fixtures {
                     .init(id: "common.startAge", title: "Error state", detail: "Start age too low (422)"),
                     .init(id: "common.loading", title: "Loading state", detail: "Generic"),
                 ]),
+                .init(id: "chartHelp", title: "Chart explainers", entries: [
+                    .init(id: "chartHelp.moneyInAndOut", title: "Chart explainer", detail: "Money in and out"),
+                    .init(id: "chartHelp.isaReplay", title: "Chart explainer", detail: "Replay your ISA"),
+                    .init(id: "chartHelp.possiblePaths", title: "Chart explainer", detail: "Possible paths (not a forecast)"),
+                    .init(id: "chartHelp.habitsScore", title: "Chart explainer", detail: "Money habits score"),
+                    .init(id: "chartHelp.card", title: "Chart explainer", detail: "Header, caption and info button on a card"),
+                ]),
                 .init(id: "money", title: "Money tab", entries: [
                     .init(id: "money.home.ready", title: "Money tab", detail: "Next Move, guess first, widgets"),
                     .init(id: "money.home.revealed", title: "Money tab", detail: "Move in plan, guess revealed"),

@@ -9,6 +9,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -19,8 +20,9 @@ from lifeline_api.auth import bearer_subject
 from lifeline_api.bodylimit import BodySizeLimitMiddleware
 from lifeline_api.errors import CatchAllMiddleware, install_error_handlers
 from lifeline_api.ratelimit import Limiter, MemoryBucket, RateLimitMiddleware, RedisBucket
-from lifeline_api.routes import auth, connections, finance, investing, later, learn, lives, meta, next_move
+from lifeline_api.routes import auth, connections, finance, friends, investing, later, learn, lives, meta, next_move
 from lifeline_api.settings import ENV_FILES, Settings
+from lifeline_api.social import SocialStore
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeStore, MemoryLifeStore, PostgresLifeStore
 from lifeline_contracts.brand import PRODUCT_NAME
@@ -81,6 +83,7 @@ def build_state(settings: Settings) -> AppState:
         limiter=limiter,
         jwt_secret=settings.signing_secret(),
         redis=redis,
+        social=SocialStore(Path(settings.credentials_dir) / "social.json"),
     )
 
 
@@ -119,7 +122,7 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
     install_error_handlers(app)
-    routers = (meta, auth, lives, finance, investing, connections, next_move, learn, later)
+    routers = (meta, auth, lives, finance, investing, connections, friends, next_move, learn, later)
     for r in (m.router for m in routers):
         app.include_router(r)
     # Order: last added runs first. Outermost: catch-all, then body limit, then rate limit.

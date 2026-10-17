@@ -16,10 +16,13 @@ struct MoneyHomeView: View {
                 NextMoveCardView(state: state.nextMove, actions: actions.nextMove)
                     .padding(.top, 18)
                 tiles.padding(.top, Theme.Spacing.xs)
+                if state.widgets.overview.value?.netWorthSeries.count ?? 0 > 1 {
+                    ChartCaptionRow(help: ChartHelpCatalogue.netWorth)
+                }
                 if let insights = state.insights {
                     InsightsTeaserCard(state: insights, onOpen: actions.onOpenInsights)
                 }
-                GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess)
+                if AppFeatures.game { GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess) }
                 comingUp
                 navigationRow(
                     title: "Your investments",
@@ -232,6 +235,8 @@ private struct InsightsTeaserCard: View {
                 HStack(spacing: Theme.Spacing.s) {
                     Text("\(state.monthText) in numbers").font(.llBodyBold)
                     Spacer(minLength: 0)
+                    // Room for the (?) button drawn over the card.
+                    Color.clear.frame(width: Theme.minTarget, height: 1)
                     Chevron()
                 }
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.l) {
@@ -241,6 +246,7 @@ private struct InsightsTeaserCard: View {
                 if let share = state.spentShare {
                     InkProgressBar(value: share, color: Theme.Palette.home, height: 14)
                         .accessibilityHidden(true)
+                    ChartCaption(help: ChartHelpCatalogue.monthSummary)
                 }
                 ForEach(state.sentences, id: \.self) { sentence in
                     Text(sentence)
@@ -262,6 +268,12 @@ private struct InsightsTeaserCard: View {
         .accessibilityHint("Opens Insights")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("money.insights")
+        // The (?) sits over the card, beside the chevron, so it is not a button inside a button.
+        .overlay(alignment: .topTrailing) {
+            ChartInfoButton(help: ChartHelpCatalogue.monthSummary)
+                .padding(.top, Theme.Spacing.xs)
+                .padding(.trailing, Theme.Spacing.xl + Theme.Spacing.m)
+        }
     }
 
     private func figure(title: String, value: String) -> some View {

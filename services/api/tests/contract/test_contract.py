@@ -52,6 +52,13 @@ TIER1 = {
     "postIsaBacktest",
     "postIsaScenarios",
     "listConnections",
+    # Friends leaderboard.
+    "getLeaderboard",
+    "createFriendInvite",
+    "joinFriend",
+    "getMyFriendCard",
+    "updateMyFriendCard",
+    "removeFriend",
     "connectTrading212",
     "connectMonzoToken",
     "syncMonzo",
