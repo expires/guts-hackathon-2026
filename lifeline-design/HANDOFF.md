@@ -1,6 +1,6 @@
 # Lifeline — design handoff
 
-Mobile app for a 30-hour hackathon. Personal finance (Money tab) plus a life game (Life tab) on real UK mortgage data.
+Mobile app for a 24-hour hackathon. Personal finance (Money tab) plus a life game (Life tab) on real UK mortgage data.
 Pitch: "Aladdin stress tests portfolios. We stress test a life."
 
 ## What is in this folder

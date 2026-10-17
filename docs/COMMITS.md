@@ -184,3 +184,22 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
 ```
 
+
+## 6. Official brief alignment: trade-offs, AI disclosure
+
+```
+feat: trade-offs on every Next Move, AI disclosure, room life sharing
+
+- contract: Move.trade_off, gain_kind, cover_months, spread_investments
+  (ADR 0042); contract test requires a trade-off on every move
+- engine: one engine-defined trade-off per move kind, months of cover
+  for the emergency fund, spread_investments scoring (inactive until
+  holdings data lands)
+- explain: Ask Penny states the trade-off from engine text only, numbers
+  verified as facts; prompt penny-v4; "How Penny uses AI" text
+- api: room members can read lives started in their room; others 404
+- docs: brief alignment (ADR 0043), room rules (ADR 0044), 24 hours
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
+```

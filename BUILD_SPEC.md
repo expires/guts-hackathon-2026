@@ -1,6 +1,6 @@
 # BUILD_SPEC.md: Penny
 
-You are the BOSS agent for a 30-hour solo hackathon build. Build the complete product below, end to end, with maximum parallelism and strict verification. Work autonomously. Do not ask questions unless a step is impossible without user input. If a decision is open, choose, record it in `docs/adr/`, and continue.
+You are the BOSS agent for a 24-hour solo hackathon build. Build the complete product below, end to end, with maximum parallelism and strict verification. Work autonomously. Do not ask questions unless a step is impossible without user input. If a decision is open, choose, record it in `docs/adr/`, and continue.
 
 ---
 

@@ -1,9 +1,20 @@
 # STATUS
 
+## 18:45 update
+
+- Product renamed to **Penny** ("Your money, played forward.", ADR 0040). Railway API redeployed ("Penny API", /v1/finance/home live, read limit 300/min).
+- Git: BOSS commits on main, never pushes (ADR 0041). The iOS work is uncommitted until the build is green and V4 passes.
+- Official brief (ADR 0043): trade-offs on every move (ADR 0042, contract done; W2 engine, W5 Penny and AI disclosure running), "24 hours" copy, named user Yaffy.
+- Crashes: 10 simulator crashes (worker simulators, 18:31-18:36) from one bug in W9's mock room server (exclusivity conflict). No crash reports on the iPhone. W9 is fixing it.
+- iOS build: red only in W7 Penny files (2 errors) and W9 MockRoomTransport (1). V4 fix pass: FAIL on j, k, l (sent to W6, helper).
+
 ## Needs Akshat (do these when back; nothing waits on them)
 
+- [ ] Trade-off typical ranges (ADR 0042 amendment) were written from memory: early repayment charge 1% to 5%, energy exit fee £25 to £75 per fuel, savings notice 30 to 120 days. Check them or accept them as labelled assumptions.
+
 - [ ] **URGENT: secrets in the public repo.** Branch `integration` (commit 31eaaa6) contains `services/api/data/private/aa298cec…/credentials.json` with Trading212 api_key/api_secret and Monzo access/refresh tokens, plus real Monzo history and a finance snapshot. Revoke the Trading212 key and the Monzo tokens now, purge the files from history (git filter-repo or BFG) and force-push. Our `.gitignore` now ignores `**/data/private/`, `**/data/cache/` and `**/credentials.json` (the old rule only matched the repo root); keep this on merge. Also check `services/api/tests/integration/test_live_data_flow.py` lines 26-27 (gitleaks hit).
-- [ ] **Yaffy's integration branch** (pushed 17:46): recon done (Insights feature). 15 files conflict with ours; credentials still in the branch. Merge plan: keep ours, re-add his route, client method and contract path, regenerate the contract and Xcode project. Waiting for your decision.
+- [ ] **Named user Yaffy (ADR 0043):** send his age, his situation (student or working), his city, and his consent to show his real Monzo and Trading212 data on stage. Until then README shows placeholders and the demo uses Priya.
+- [x] Yaffy merge: permission given. BOSS merges `merge/yaffy` into main after milestone 1 is green (keep: Monzo bank routes, TrueLayer off, Insights behind Spending, no data/private, tokens encrypted in Postgres). No push.
 - [ ] Phone installs: the phone is away. All UI work is checked on the simulator. Run `make ios-device` when the phone is back (Mock config) or the Demo config once Railway is up.
 - [ ] TrueLayer: disabled by your rule (sandbox has test banks only). No action unless you change that.
 - [ ] Monzo / Trading212: Yaffy's area. Untouched until you merge his branch. The onboarding buttons call `/v1/bank` and `/v1/connections` and show "unavailable" until then.
