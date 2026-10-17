@@ -8,8 +8,7 @@ struct LifeMenuBarView: View {
     var actions: LifeMenuActions = .noop
 
     var body: some View {
-        GlassEffectContainer(spacing: Theme.Spacing.xs) {
-            HStack(spacing: Theme.Spacing.xs) {
+        HStack(spacing: Theme.Spacing.xs) {
                 ForEach(state.items) { item in
                     Button { actions.onOpen(item.menu) } label: {
                         VStack(spacing: 2) {
@@ -22,8 +21,8 @@ struct LifeMenuBarView: View {
                                 Text("\(item.count)")
                                     .font(.llLabelBold)
                                     .padding(.horizontal, 5)
-                                    .background(.tint, in: .capsule)
-                                    .foregroundStyle(.white)
+                                    .background(Theme.Palette.ink, in: .capsule)
+                                    .foregroundStyle(Theme.Palette.surface)
                                     .accessibilityHidden(true)
                             }
                         }
@@ -34,7 +33,6 @@ struct LifeMenuBarView: View {
                     .accessibilityValue(item.count == 1 ? "1 action" : "\(item.count) actions")
                     .accessibilityIdentifier("lifeMenu.\(item.menu.rawValue)")
                 }
-            }
         }
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.vertical, Theme.Spacing.s)

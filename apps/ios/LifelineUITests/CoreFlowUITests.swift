@@ -66,7 +66,8 @@ final class CoreFlowUITests: XCTestCase {
         // The Next Move card is the first element on the Money tab (ADR 0018).
         let action = app.staticTexts["nextMove.action"]
         XCTAssertTrue(action.waitForExistence(timeout: 10))
-        XCTAssertEqual(action.label, "Fix for 5 years")
+        // The expected move comes from the recorded engine output, never from a hard-coded decision.
+        XCTAssertEqual(action.label, Self.recordedTopAction())
         XCTAssertTrue(app.staticTexts["nextMove.headline"].exists)
         XCTAssertTrue(app.staticTexts["nextMove.deadline"].exists || app.descendants(matching: .any)["nextMove.deadline"].exists)
 
@@ -90,6 +91,23 @@ final class CoreFlowUITests: XCTestCase {
         why.tap()
         XCTAssertTrue(app.descendants(matching: .any)["why.evidence.2"].waitForExistence(timeout: 5))
         app.buttons["why.close"].tap()
+    }
+
+    /// `top.action` from `Lifeline/Preview/Recorded/getNextMove.json` (the file the app's mock client serves).
+    /// The simulator test runner can read the source tree on the host Mac.
+    static func recordedTopAction(file: StaticString = #filePath) -> String {
+        let url = URL(fileURLWithPath: "\(file)")
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Lifeline/Preview/Recorded/getNextMove.json")
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let top = json["top"] as? [String: Any],
+              let action = top["action"] as? String else {
+            XCTFail("Cannot read top.action from \(url.path)")
+            return ""
+        }
+        return action
     }
 
     @MainActor

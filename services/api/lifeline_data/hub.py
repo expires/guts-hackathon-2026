@@ -43,7 +43,7 @@ from lifeline_data.prediction_inputs import (
     mock_weather_day,
 )
 from lifeline_data.settings import DataSettings
-from lifeline_data.sources import SOURCES, missing_keys
+from lifeline_data.sources import SOURCES, missing_key_message, missing_keys
 
 log = logging.getLogger(__name__)
 quiet_http_loggers()  # keys in query strings (Adzuna) must never reach logs; applies to API and worker
@@ -181,7 +181,7 @@ class DataHub:
     def _missing_key_error(self, source: str) -> str | None:
         info = SOURCES[source]
         missing = missing_keys(info, self._env)
-        return f"{missing[0]} not set" if missing else None
+        return missing_key_message(missing[0]) if missing else None
 
     @staticmethod
     def _filter(observations: list[Observation], region: str | None) -> list[Observation]:

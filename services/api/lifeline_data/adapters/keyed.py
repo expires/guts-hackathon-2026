@@ -11,6 +11,7 @@ appear in error messages. The hub checks keys first: a missing key gives labelle
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import date, datetime
@@ -18,10 +19,13 @@ from typing import Any, ClassVar
 
 from lifeline_contracts.observation import Observation
 from lifeline_data.base import Adapter, FetchError, PayloadError, parse_number, utcnow
+from lifeline_data.sources import COMPANIES_HOUSE_API_URL, STATXPLORE_API_URL, base_url
 
-COMPANIES_HOUSE_SEARCH_URL = "https://api.company-information.service.gov.uk/advanced-search/companies"
+COMPANIES_HOUSE_SEARCH_PATH = "/advanced-search/companies"
+COMPANIES_HOUSE_SEARCH_URL = COMPANIES_HOUSE_API_URL + COMPANIES_HOUSE_SEARCH_PATH
 EPC_SEARCH_URL = "https://api.get-energy-performance-data.communities.gov.uk/api/domestic/search"
-STATXPLORE_TABLE_URL = "https://stat-xplore.dwp.gov.uk/webapi/rest/v1/table"
+STATXPLORE_TABLE_PATH = "/table"
+STATXPLORE_TABLE_URL = STATXPLORE_API_URL + STATXPLORE_TABLE_PATH
 ADZUNA_HISTORY_URL = "https://api.adzuna.com/v1/api/jobs/gb/history"
 DVLA_URL = "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles"
 DVSA_MOT_URL = "https://history.mot.api.gov.uk/v1/trade/vehicles/registration/{reg}"
@@ -151,7 +155,7 @@ class CompaniesHouseAdapter(Adapter):
         if status is None:
             raise PayloadError(f"companieshouse: unknown series {series_id}")
         resp = await self.get(
-            COMPANIES_HOUSE_SEARCH_URL,
+            base_url("COMPANIES_HOUSE_API_URL", self.env) + COMPANIES_HOUSE_SEARCH_PATH,
             {"company_status": status, "size": 1},
             auth=(self.key("COMPANIES_HOUSE_KEY"), ""),
         )
@@ -159,11 +163,18 @@ class CompaniesHouseAdapter(Adapter):
 
 
 class EpcAdapter(Adapter):
-    """Share of domestic certificates rated A to C in each region's main council (England and Wales)."""
+    """Share of domestic certificates rated A to C in each region's main council (England and Wales).
+
+    The service counts a whole council per request. Measured from the worker (October 2026): 0.5 to
+    11 s per request, so EPC gets a 30 s timeout. Regions run 4 at a time. A region that fails is
+    skipped; the fetch fails only when every region fails.
+    """
 
     source_id = "epc"
     default_series: ClassVar[tuple[tuple[str, str | None], ...]] = (("epc-abc-share", None),)
     bounds: ClassVar[dict[str, tuple[float, float]]] = {"epc-abc-share": (0.0, 100.0)}
+    timeout_seconds: ClassVar[float | None] = 30.0
+    concurrency: ClassVar[int] = 4
 
     async def _count(self, council: str, bands: tuple[str, ...]) -> int:
         params: dict[str, Any] = {"council[]": council, "page_size": 1}
@@ -178,19 +189,33 @@ class EpcAdapter(Adapter):
             raise
         return parse_epc_total(resp.text)
 
+    async def _region(self, region: str, today: date) -> Observation | None:
+        council = EPC_COUNCILS[region]
+        total = await self._count(council, ())
+        if total <= 0:
+            return None
+        good = await self._count(council, ("A", "B", "C"))
+        return self.obs("epc-abc-share", today, round(100.0 * good / total, 2), "percent", region)
+
     async def fetch(self, series_id: str, region: str | None = None) -> list[Observation]:
         if series_id != "epc-abc-share":
             raise PayloadError(f"epc: unknown series {series_id}")
+        self.key("EPC_KEY")  # fail fast, before any request, when the key is missing
         today = utcnow().date()
         regions = [region] if region in EPC_COUNCILS else list(EPC_COUNCILS)
-        out: list[Observation] = []
-        for r in regions:
-            assert r is not None
-            total = await self._count(EPC_COUNCILS[r], ())
-            if total <= 0:
-                continue
-            good = await self._count(EPC_COUNCILS[r], ("A", "B", "C"))
-            out.append(self.obs(series_id, today, round(100.0 * good / total, 2), "percent", r))
+        gate = asyncio.Semaphore(self.concurrency)
+
+        async def one(r: str) -> Observation | None:
+            async with gate:
+                return await self._region(r, today)
+
+        results = await asyncio.gather(*(one(r) for r in regions if r is not None), return_exceptions=True)
+        out = [r for r in results if isinstance(r, Observation)]
+        if not out:
+            first = next((r for r in results if isinstance(r, BaseException)), None)
+            if isinstance(first, Exception):
+                raise first
+            raise PayloadError("epc: no region returned certificates")
         return out
 
 
@@ -204,7 +229,7 @@ class StatXploreAdapter(Adapter):
             raise PayloadError(f"statxplore: unknown series {series_id}")
         resp = await self.request(
             "POST",
-            STATXPLORE_TABLE_URL,
+            base_url("STATXPLORE_API_URL", self.env) + STATXPLORE_TABLE_PATH,
             headers={"APIKey": self.key("DWP_STATXPLORE_KEY"), "Content-Type": "application/json"},
             json_body=STATXPLORE_UC_QUERY,
         )

@@ -35,18 +35,21 @@ struct RootScreen: View {
 
     var body: some View {
         // Custom tab bar from the handoff. Every tab stays alive so its state and scroll position persist.
-        ZStack {
-            ForEach(AppTab.allCases, id: \.self) { tab in
-                let isActive = tab == selection
-                content(for: tab)
-                    .opacity(isActive ? 1 : 0)
-                    .allowsHitTesting(isActive)
-                    .accessibilityHidden(!isActive)
+        // A VStack (not `.safeAreaInset`): the content frame shrinks, so every NavigationStack lays out
+        // above the bar, also right after the bar appears at the end of a setup flow.
+        VStack(spacing: 0) {
+            ZStack {
+                ForEach(AppTab.allCases, id: \.self) { tab in
+                    let isActive = tab == selection
+                    content(for: tab)
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                        .accessibilityHidden(!isActive)
+                }
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Setup flows (character select, form, start year) hide the tab bar.
-            if !(selection == .life && session.phase == .selecting) {
+            if showsTabBar {
                 LLTabBar(
                     items: AppTab.allCases.map { .init(id: $0.rawValue, title: $0.title, icon: $0.icon) },
                     selection: selection.rawValue
@@ -68,6 +71,10 @@ struct RootScreen: View {
         } message: { message in
             Text(message)
         }
+    }
+
+    private var showsTabBar: Bool {
+        !(selection == .life && session.phase == .selecting)
     }
 
     @ViewBuilder
