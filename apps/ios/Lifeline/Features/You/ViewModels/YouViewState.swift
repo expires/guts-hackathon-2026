@@ -31,8 +31,16 @@ struct YouViewState: Equatable, Sendable {
     /// Best INDEX across your lives, for example "124". "-" without lives.
     var bestIndexText: String = "-"
     var ribbonsText: String = "0"
-    /// "3/40".
+    /// "3/40". Kept for the cut concepts collection.
     var conceptsText: String = "-"
+    /// "Lessons 3/48" tile (PENNY_V3_BUILD E5): "3/48", or "-" before the Learn path loads.
+    var lessonsText: String = "-"
+    /// One honesty line under "Your money and data" (PENNY_V3_BUILD B4).
+    var honestyText: String = ""
+    /// "Safety buffer" setting (B2): the stored buffer %. Nil until the forecast loads or without one.
+    var buffer: BufferSetting? = nil
+    /// PENNY_V3_BUILD F: shows the cut rows (plan, advice check, spend guess check).
+    var showsCutFeatures = false
     /// "Demo Bank" or "No bank".
     var bankName: String = ""
     /// "Connected · fake accounts" or "Not connected".
@@ -46,7 +54,7 @@ struct YouViewState: Equatable, Sendable {
     var connectMoneyText: String? = nil
     /// Presentation mode switch (stored in `@AppStorage("llPresentationMode")` by the glue).
     var isPresentationMode = false
-    /// "Sample data" (sample statement), "Mock data" (canned data) or nil (the user's own data).
+    /// Always nil since PENNY_V3_BUILD B4 (no "Mock data" or "Sample data" tags). Kept for older tests.
     var dataBadgeText: String? = nil
     /// "How good is the advice?" shows only when the backtest has at least one case (n > 0).
     var showsEvaluation = false
@@ -55,11 +63,20 @@ struct YouViewState: Equatable, Sendable {
     /// "Version" row: checkpoint, build time and features from Info.plist.
     var buildInfo = YouBuildInfo(appName: Brand.productName, version: "1.0", checkpoint: nil, builtText: nil, features: [])
 
+    /// Safety buffer chips: 0, 5, 10, 15 or 20%.
+    struct BufferSetting: Equatable, Sendable {
+        var selected: Int
+        var options: [Int] = [0, 5, 10, 15, 20]
+        var isSaving = false
+        /// "Couldn't save your buffer. Try again." Nil when fine.
+        var errorText: String? = nil
+    }
+
     struct DataRow: Equatable, Sendable, Identifiable {
         var id: String
         var name: String
         var status: DataStatus
-        /// "Saved copy · Bank of England" or "Live" or "Mock data".
+        /// "Live", "Saved copy", "Checked figures" or "Not live now". Never "Mock data" (B4).
         var detail: String
     }
 }
@@ -120,8 +137,12 @@ struct YouActions {
     var onOpenSources: @MainActor () -> Void = {}
     /// Backtest of the decision engine (`/v1/evaluation`).
     var onOpenEvaluation: @MainActor () -> Void = {}
-    /// Spend model accuracy (`/v1/finance/prediction/evaluation`).
+    /// Spend model accuracy (`/v1/finance/prediction/evaluation`). Cut (PENNY_V3_BUILD F1).
     var onOpenSpendAccuracy: @MainActor () -> Void = {}
+    /// "Lessons X/48": opens the Learn path (PENNY_V3_BUILD E5).
+    var onOpenLearn: @MainActor () -> Void = {}
+    /// "Safety buffer": stores the buffer % (PUT /v1/forecast/settings).
+    var onSetBuffer: @MainActor (Int) -> Void = { _ in }
     /// "Change language" (ADR 0063).
     var onChangeLanguage: @MainActor () -> Void = {}
     var onOpenDebug: @MainActor () -> Void = {}

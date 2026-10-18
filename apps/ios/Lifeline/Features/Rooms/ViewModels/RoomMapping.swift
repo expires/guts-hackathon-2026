@@ -9,8 +9,15 @@ enum RoomMapping {
     static func face(seat: Int) -> String { faces[seat % faces.count] }
 
     /// A Same Life room played as a Quick Life (the server default when the option is missing).
-    static func isQuickLife(_ room: Room) -> Bool {
+    nonisolated static func isQuickLife(_ room: Room) -> Bool {
         RoomGameKind(room: room.game) == .sameLife && (room.options?.quick ?? true)
+    }
+
+    /// Server rule (routes/rooms.py `_is_quick_life`): a Quick Life round, or a lobby with no game picked yet
+    /// that is not a preset room. The host's Start counts every seated player as ready, so nobody sends "ready".
+    nonisolated static func joiningCountsAsReady(_ room: Room) -> Bool {
+        if room.game == nil { return room.presetId == nil }
+        return isQuickLife(room)
     }
 
     // MARK: Connection
@@ -39,9 +46,10 @@ enum RoomMapping {
     ) -> RoomLobbyViewState {
         let me = room.players.first { $0.id == myID }
         let isHost = me?.isHost ?? false
+        let joinIsReady = joiningCountsAsReady(room)
         let players = room.players.enumerated().map { seat, player in
             let connected = player.connected ?? true
-            let ready = isReady(player)
+            let ready = joinIsReady || isReady(player)
             return RoomLobbyViewState.Player(
                 id: player.id, name: player.name, isHost: player.isHost, isMe: player.id == myID,
                 face: face(seat: seat),
@@ -53,7 +61,8 @@ enum RoomMapping {
         let readyCount = players.filter(\.isReady).count
         // Server rule (routes/rooms.py "start"): every seated player is ready (the host counts as ready),
         // and at least 2 players. A player who is away still counts and must be ready.
-        let notReady = room.players.filter { !isReady($0) }.count
+        // Quick Life: joining counts as ready, so 2 seated players are enough.
+        let notReady = joinIsReady ? 0 : room.players.filter { !isReady($0) }.count
         let everyoneReady = notReady == 0 && room.players.count >= 2
         let host = room.players.first { $0.isHost }
         let game = GameMapping.gameCard(room: room, paths: paths, students: students)
@@ -88,8 +97,8 @@ enum RoomMapping {
             startTitle: startTitle,
             isSampleData: isSampleData,
             connection: connection(link),
-            canReady: me != nil && !isHost && me?.ready != true && link == .live,
-            isMeReady: me.map(isReady) ?? false,
+            canReady: !joinIsReady && me != nil && !isHost && me?.ready != true && link == .live,
+            isMeReady: joinIsReady ? me != nil : (me.map(isReady) ?? false),
             waitingText: isHost ? "" : waiting(host: host?.name, picked: game != nil),
             shareText: L10n.tr("Play with me in \(Brand.productName). Room \(room.code): \(room.joinUrl)"),
             game: game,
@@ -166,7 +175,7 @@ enum RoomMapping {
             isBusy: isBusy,
             waitingText: done ? L10n.tr("Your run is over") : nil,
             canFinish: !done || me?.finished != true,
-            canOpenLife: !done
+            canOpenLife: !done && FeatureFlags.showsCutFeatures
         )
     }
 

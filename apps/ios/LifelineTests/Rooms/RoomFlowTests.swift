@@ -70,7 +70,7 @@ struct RoomFlowTests {
 
     @Test func pickerOptionsPerGame() {
         let quiz = RoomFlowFixtures.pickerQuiz
-        #expect(quiz.games.map(\.label) == ["Money Quiz", "Same Decision", "Same Life"])
+        #expect(quiz.games.map(\.label) == ["Quick Life", "Money Quiz"])
         #expect(quiz.canConfirm)
         #expect(quiz.confirmTitle == "Pick Money Quiz")
 
@@ -389,13 +389,10 @@ struct RoomFlowTests {
         let (model, session, game) = mockFlow(runYears: 2)
         #expect(await openReadyLobby(model))
         model.openGamePicker()
-        model.pickerActions.onSelectGame("same_life")
-        #expect(await eventually { model.pickerState.pathsPhase == .ready })
-        model.pickerActions.onQuick(true)
+        model.pickerActions.onSelectGame(GamePickerViewState.quickLifeID)
         #expect(await eventually { model.pickerState.students.count == 5 })
-        model.pickerActions.onStudent("qs-jordan")
-        await model.confirmGame()
-        #expect(await eventually { model.lobbyState?.game?.title == "Same Life" && model.lobbyState?.canStart == true })
+        await model.pickStudent("qs-jordan")
+        #expect(await eventually { model.lobbyState?.game?.title == "Quick Life" && model.lobbyState?.canStart == true })
         #expect(session.room?.options?.quickStudentId == "qs-jordan")
         #expect(session.room?.options?.pathId == "apprentice")
 

@@ -206,3 +206,7 @@ struct AnyButtonStyle: ButtonStyle {
 #Preview("Guest · light") { RoomLobbyView(state: RoomFlowFixtures.lobbyGuest) }
 #Preview("Guest · dark") { RoomLobbyView(state: RoomFlowFixtures.lobbyGuest).previewDark() }
 #Preview("Reconnecting · light") { RoomLobbyView(state: RoomFlowFixtures.lobbyReconnecting) }
+#Preview("Quick Life host · light") { RoomLobbyView(state: RoomFlowFixtures.lobbyQuickHost) }
+#Preview("Quick Life host · dark") { RoomLobbyView(state: RoomFlowFixtures.lobbyQuickHost).previewDark() }
+#Preview("Quick Life guest · light") { RoomLobbyView(state: RoomFlowFixtures.lobbyQuickGuest) }
+#Preview("Quick Life guest · AX3") { RoomLobbyView(state: RoomFlowFixtures.lobbyQuickGuest).previewLargeType() }

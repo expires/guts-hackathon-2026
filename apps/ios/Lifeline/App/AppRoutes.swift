@@ -13,7 +13,7 @@ enum OnboardingStart: String, Hashable, Identifiable, Sendable {
 /// What the user asks Penny about (ADR 0031). The root turns it into W7's `PennyContext`.
 struct PennyRoute: Identifiable, Hashable, Sendable {
     enum Screen: String, Hashable, Sendable {
-        case money, nextMove, why, lifeEvent, life, testIt, other
+        case money, nextMove, why, lifeEvent, life, testIt, forecast, other
     }
 
     var id = UUID()
@@ -51,6 +51,7 @@ struct PennyRoute: Identifiable, Hashable, Sendable {
         case .lifeEvent: .lifeEvent
         case .life: .life
         case .testIt: .testIt
+        case .forecast: .forecast
         case .other: .other
         }
         return ChatContext(nextMoveId: nextMoveID, lifeId: lifeID, eventId: eventID, screen: screen, title: title)

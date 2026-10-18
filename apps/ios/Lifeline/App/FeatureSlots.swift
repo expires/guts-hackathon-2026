@@ -48,12 +48,21 @@ enum FeatureSlots {
             client: client,
             context: pennyContext(route),
             onClose: onClose,
-            onOpenLink: { _ in
-                // next_move, test_it, why and plan all live on the Money tab.
+            onOpenLink: { link in
+                // Every link opens a Money screen: the forecast card or The maths (D5).
                 onClose()
                 routes.selectTab(.money)
+                MoneyNavigation.shared.open(moneyDestination(link.destination))
             }
         )
+    }
+
+    /// Penny's link destination to the Money tab's navigation (W6 Money owns the push).
+    static func moneyDestination(_ destination: PennyDestination) -> MoneyNavigation.Destination {
+        switch destination {
+        case .moneyForecast: .forecast
+        case .theMaths: .theMaths
+        }
     }
 }
 
@@ -67,6 +76,7 @@ extension FeatureSlots {
         case .lifeEvent: .lifeEvent
         case .life: .life
         case .testIt: .testIt
+        case .forecast: .forecast
         }
         return PennyContext(
             screen: screen,

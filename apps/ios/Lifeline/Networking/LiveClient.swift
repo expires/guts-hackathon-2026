@@ -543,3 +543,27 @@ extension LiveClient: LearnService {
         }
     }
 }
+
+// MARK: Forecast (ADR 0072)
+extension LiveClient {
+    func forecast(bufferPct: Int?, stress: Int?) async throws -> Forecast {
+        // Text in the app language; numbers are the same in every language.
+        let query = Operations.GetForecast.Input.Query(
+            bufferPct: bufferPct.flatMap { .init(rawValue: $0) },
+            stress: stress.flatMap { .init(rawValue: $0) },
+            language: .init(rawValue: AppLanguage.current.rawValue)
+        )
+        return try await call { try await client.getForecast(query: query).ok.body.json }
+    }
+
+    func setForecastSettings(bufferPct: Int) async throws -> ForecastSettings {
+        let body = ForecastSettings(bufferPct: .init(rawValue: bufferPct))
+        return try await call { try await client.setForecastSettings(body: .json(body)).ok.body.json }
+    }
+
+    func categoryDetail(category: String, month: String?) async throws -> CategoryDetail {
+        try await call {
+            try await client.getCategoryDetail(path: .init(category: category), query: .init(month: month)).ok.body.json
+        }
+    }
+}

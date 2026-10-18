@@ -6,7 +6,12 @@ import SwiftUI
 /// ```swift
 /// @State private var penny = PennyTabModel(client: session.client)
 /// ...
-/// PennyTab(model: penny, onOpenLink: { link in /* route */ })   // the Penny tab
+/// PennyTab(model: penny, onOpenLink: { link in
+///     switch link.destination {          // D5
+///     case .moneyForecast: /* Money tab, scrolled to the forecast card */
+///     case .theMaths: /* Money tab, then push The maths */
+///     }
+/// })
 /// // routes.askPenny(context): select the Penny tab, then
 /// penny.ask(context)
 /// ```

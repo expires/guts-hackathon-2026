@@ -9,7 +9,8 @@ enum PlaySheet: String, Identifiable {
     var id: String { rawValue }
 }
 
-/// Glue for the Play tab (ADR 0052): Play solo, Play with friends, Join, challenges, collection.
+/// Glue for the Play tab (PENNY_V3_BUILD F4): Play with friends, Learn, Join, Circles. Play solo,
+/// challenges and collection only with `FeatureFlags.showsCutFeatures`.
 struct PlayScreen: View {
     let session: GameSession
     /// Kept for RootScreen. Play solo now opens inside the Play tab.
@@ -38,6 +39,7 @@ struct PlayScreen: View {
         state.rooms = rooms.entryState
         state.circles = circles.state
         state.learn = learn.entry
+        state.showsCutFeatures = FeatureFlags.showsCutFeatures
         return state
     }
 
@@ -62,7 +64,7 @@ struct PlayScreen: View {
             .onAppear {
                 model.onRoute = { route in
                     switch route {
-                    case .life: sheet = .solo
+                    case .life: if FeatureFlags.showsCutFeatures { sheet = .solo }
                     case .rooms: rooms.isPresented = true
                     case .concepts: sheet = .learn
                     case .money: routes.selectTab(.money)
@@ -70,6 +72,8 @@ struct PlayScreen: View {
                 }
                 // "Open in the Life tab" from a live room: close the room cover, then show the life.
                 rooms.onOpenLife = {
+                    // The full Life game is cut (PENNY_V3_BUILD F2).
+                    guard FeatureFlags.showsCutFeatures else { return }
                     Task {
                         try? await Task.sleep(for: .milliseconds(450))
                         sheet = .solo
@@ -78,7 +82,7 @@ struct PlayScreen: View {
             }
             // A life opened elsewhere (Money tab "Open in Life") shows here, unless it is the room life.
             .onChange(of: session.life?.id) { _, id in
-                guard let id, id != rooms.myLifeID, rooms.session.room?.status != .playing, !rooms.isPresented else { return }
+                guard FeatureFlags.showsCutFeatures, let id, id != rooms.myLifeID, rooms.session.room?.status != .playing, !rooms.isPresented else { return }
                 sheet = .solo
             }
             // V4 F4-1: a switch to another tab (for example "Ask Penny") closes the Play covers.

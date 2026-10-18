@@ -12,6 +12,8 @@ struct PennyContext: Hashable, Sendable, Identifiable {
         case roomRound = "room_round"
         /// A Learn lesson (ADR 0068). The server loads the lesson's cards and facts.
         case learnLesson = "learn_lesson"
+        /// The Money forecast ("Explain my weekly budget", PENNY_V3_BUILD D4). The server loads the forecast.
+        case forecast
     }
 
     var screen: Screen = .other
@@ -30,9 +32,11 @@ struct PennyContext: Hashable, Sendable, Identifiable {
     var roundID: String?
     /// Learn lesson id (screen `learnLesson`).
     var lessonID: String?
+    /// The lesson card on screen, from 0 (D4). Sent as `card_index`.
+    var cardIndex: Int?
 
     var id: String {
-        [screen.rawValue, nextMoveID, lifeID, eventID, question, title, roomCode, roundID, lessonID].map { $0 ?? "-" }.joined(separator: "|")
+        [screen.rawValue, nextMoveID, lifeID, eventID, question, title, roomCode, roundID, lessonID, cardIndex.map(String.init)].map { $0 ?? "-" }.joined(separator: "|")
     }
 
     init(
@@ -71,6 +75,7 @@ struct PennyContext: Hashable, Sendable, Identifiable {
         case .testIt: L10n.tr("Test it result")
         case .lifeEvent: L10n.tr("Life event")
         case .roomRound: L10n.tr("Room round")
+        case .forecast: L10n.tr("Your weekly budget")
         case .money, .life, .other, .onboarding, .learnLesson: nil
         }
     }
@@ -118,21 +123,67 @@ enum PennyQuestion {
     static var nextMove: String { L10n.tr("Why this move?") }
     static var why: String { L10n.tr("Explain this simply") }
     static var testIt: String { L10n.tr("What does this result mean?") }
+    /// "Ask Penny" on the Money forecast (D4).
+    static var forecast: String { L10n.tr("Explain my weekly budget") }
+    /// "Ask Penny" on a Learn card (D4): about the card on screen, not the whole lesson.
+    static func learnCard(title: String) -> String { L10n.tr("Explain this card simply: \(title)") }
+}
+
+extension PennyContext {
+    /// "Ask Penny" on the Money forecast: a new chat that sends "Explain my weekly budget" with the forecast loaded.
+    static var forecast: PennyContext {
+        PennyContext(screen: .forecast, question: PennyQuestion.forecast)
+    }
+
+    /// "Ask Penny" on a Learn card (D4). The question names the card and carries its text, so Penny explains
+    /// that card. `lesson_id` lets the server load the lesson's facts. Card text over 400 characters is cut.
+    static func learnCard(lessonID: String, lessonTitle: String, cardIndex: Int? = nil, cardTitle: String, cardText: String) -> PennyContext {
+        let title = cardTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = cardText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.count > 400 { text = String(text.prefix(400)) + "…" }
+        let head = PennyQuestion.learnCard(title: title.isEmpty ? lessonTitle : title)
+        var context = PennyContext(
+            screen: .learnLesson,
+            question: text.isEmpty ? head : head + "\n\n\"" + text + "\"",
+            title: lessonTitle.isEmpty ? nil : lessonTitle,
+            lessonID: lessonID
+        )
+        context.cardIndex = cardIndex
+        return context
+    }
 }
 
 /// In-app destinations from `ChatResponse.links`. The caller decides how to open them.
 enum PennyLink: String, Equatable, Sendable, CaseIterable {
-    case nextMove = "next_move", testIt = "test_it", why, plan
+    case nextMove = "next_move", testIt = "test_it", why, plan, maths, forecast
 
     /// Button text.
     var title: String {
         switch self {
         case .nextMove: L10n.tr("See the Next Move")
         case .testIt: L10n.tr("Test it")
-        case .why: L10n.tr("Why this move?")
+        case .why: L10n.tr("See the maths")
         case .plan: L10n.tr("Open your plan")
+        case .maths: L10n.tr("See the maths")
+        case .forecast: L10n.tr("See your weekly budget")
         }
     }
+
+    /// The screen the link opens (PENNY_V3_BUILD D5). The app routes each destination.
+    var destination: PennyDestination {
+        switch self {
+        case .why, .maths: .theMaths
+        case .nextMove, .testIt, .plan, .forecast: .moneyForecast
+        }
+    }
+}
+
+/// Where a Penny link button goes (D5). Test it and the plan were cut in V3 (B4), so they open the forecast.
+enum PennyDestination: Equatable, Sendable {
+    /// Money tab, scrolled to the top: the forecast card ("Your Next Move").
+    case moneyForecast
+    /// Money tab, then push "The maths" (the forecast steps and their sources).
+    case theMaths
 }
 
 /// Penny's tapback on the user's question. Set within 1 s, before the answer (ADR 0031).
@@ -207,6 +258,9 @@ struct PennyViewState: Equatable, Sendable {
     /// Penny's reply to one question: verified bubbles, then links, then the sources card.
     struct AnswerGroup: Equatable, Sendable, Identifiable {
         var id: String
+        /// Stable row identity for one answer (D1). The streamed group and the final group of the same answer
+        /// share it, so the final bubbles replace the streamed ones in place. Empty uses `id`.
+        var rowKey: String = ""
         var bubbles: [Bubble]
         var highlights: [String: HighlightDetail]
         /// 0 to 1. Penny's face follows it.
@@ -231,6 +285,8 @@ struct PennyViewState: Equatable, Sendable {
     /// One user message. Penny's answer groups attach to it.
     struct Question: Equatable, Sendable, Identifiable {
         var id: String
+        /// Stable row identity (D1): it does not change when the server's message id replaces the local id.
+        var rowKey: String = ""
         var text: String
         var reaction: PennyReaction?
         /// "N Replies" under the bubble. 0 hides the link.
@@ -249,8 +305,8 @@ struct PennyViewState: Equatable, Sendable {
 
         var id: String {
             switch self {
-            case let .question(q): "q." + q.id
-            case let .answer(a): "a." + a.id
+            case let .question(q): "q." + (q.rowKey.isEmpty ? q.id : q.rowKey)
+            case let .answer(a): "a." + (a.rowKey.isEmpty ? a.id : a.rowKey)
             case let .working(id, _): "w." + id
             case let .failed(id, _): "f." + id
             }
@@ -276,8 +332,16 @@ struct PennyViewState: Equatable, Sendable {
     var pennyFaceRowID: String? = nil
     /// Answer group id whose `suggestions` show as chips (the newest finished answer).
     var suggestionsGroupID: String? = nil
-    /// Earlier chats (`GET /v1/chat/threads`), shown on an empty chat.
+    /// Past chats (`GET /v1/chat/threads`), newest first, no duplicates. Shown on the Past chats screen (D3).
     var pastThreads: [ThreadSummary]
+    /// False in onboarding: the Try Penny step has its own header (Back, Skip), so the chat header would repeat it.
+    var showsHeader = true
+    /// "New chat" in the header (D2). Hidden on an empty chat and in onboarding.
+    var showsNewChat = false
+    /// "Past chats" in the header (D3). Hidden in onboarding.
+    var showsPastChats = false
+    /// The Past chats screen is open.
+    var isPastChatsOpen = false
     var isWorking: Bool
     var canSend: Bool
     /// Penny's face: the last answer's confidence, or thinking while she works.
@@ -318,6 +382,12 @@ struct PennyActions {
     var onToggleSources: @MainActor (String) -> Void = { _ in }
     var onLink: @MainActor (PennyLink) -> Void = { _ in }
     var onOpenPastThread: @MainActor (String) -> Void = { _ in }
+    /// "New chat" in the header (D2).
+    var onNewChat: @MainActor () -> Void = {}
+    /// "Past chats" in the header (D3): opens the list.
+    var onOpenPastChats: @MainActor () -> Void = {}
+    /// Closes the Past chats screen without opening a chat.
+    var onClosePastChats: @MainActor () -> Void = {}
     var onRetry: @MainActor (String) -> Void = { _ in }
     var onClose: @MainActor () -> Void = {}
 

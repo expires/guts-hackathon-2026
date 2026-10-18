@@ -35,6 +35,8 @@ final class RoomFlowViewModel {
     /// Host's game sheet.
     var showsGamePicker = false
     private(set) var draft = GameMapping.Draft()
+    /// Picker step: the game list, or the Quick Life students.
+    private(set) var pickerStep: GamePickerViewState.Step = .games
     /// The room cover is on screen. The glue binds to it.
     var isPresented = false
     var showsScanner = false
@@ -148,7 +150,7 @@ final class RoomFlowViewModel {
     }
 
     var pickerState: GamePickerViewState {
-        GameMapping.picker(draft: draft, paths: paths, students: students, pathsPhase: pathsPhase)
+        GameMapping.picker(draft: draft, paths: paths, students: students, pathsPhase: pathsPhase, step: pickerStep)
     }
 
     var quizState: QuizViewState? {
@@ -241,15 +243,16 @@ final class RoomFlowViewModel {
 
     var pickerActions: GamePickerActions {
         GamePickerActions(
-            onSelectGame: { [weak self] in if let kind = RoomGameKind(rawValue: $0) { self?.draft.game = kind } },
+            onSelectGame: { [weak self] in self?.selectGame($0) },
             onQuestions: { [weak self] in self?.draft.questions = min(15, max(3, $0)) },
             onTopic: { [weak self] in self?.draft.topic = $0 },
             onPath: { [weak self] in self?.draft.pathID = $0 },
-            onStudent: { [weak self] in self?.selectStudent($0) },
+            onStudent: { [weak self] id in Task { await self?.pickStudent(id) } },
             onQuick: { [weak self] in self?.setQuick($0) },
             onYear: { [weak self] in self?.draft.startYear = min(2026, max(1990, $0)) },
             onConfirm: { [weak self] in Task { await self?.confirmGame() } },
-            onClose: { [weak self] in self?.showsGamePicker = false }
+            onClose: { [weak self] in self?.showsGamePicker = false },
+            onBack: { [weak self] in self?.pickerStep = .games }
         )
     }
 
@@ -427,8 +430,30 @@ final class RoomFlowViewModel {
             draft.quick = room.options?.quick ?? draft.quick
             draft.startYear = room.options?.startYear ?? draft.startYear
         }
+        pickerStep = .games
         showsGamePicker = true
         Task { await loadPaths() }
+    }
+
+    /// A game row. Quick Life opens the student step; a student tap then picks the game.
+    func selectGame(_ id: String) {
+        if id == GamePickerViewState.quickLifeID {
+            draft.game = .sameLife
+            setQuick(true)
+            pickerStep = .students
+            return
+        }
+        guard let kind = RoomGameKind(rawValue: id) else { return }
+        draft.game = kind
+        // The "Same Life" row is the full life (cut, shown only with FeatureFlags.showsCutFeatures).
+        if kind == .sameLife { setQuick(false) }
+        pickerStep = .games
+    }
+
+    /// Quick Life student step: one tap picks the student, sends `pick_game` and closes the sheet.
+    func pickStudent(_ id: String) async {
+        selectStudent(id)
+        await confirmGame()
     }
 
     private func setQuick(_ quick: Bool) {
@@ -442,6 +467,7 @@ final class RoomFlowViewModel {
     func confirmGame() async {
         guard pickerState.canConfirm else { return }
         showsGamePicker = false
+        pickerStep = .games
         await session.pickGame(draft.game, options: draft.options)
     }
 

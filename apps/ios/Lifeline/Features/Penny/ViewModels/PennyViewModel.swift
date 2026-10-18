@@ -9,7 +9,8 @@ import Observation
 final class PennyViewModel {
     static var verifyingLabel: String { L10n.tr("Checking the numbers…") }
     nonisolated static var introText: String { L10n.tr("Ask me about your money, or anything about student life. When I use your numbers, I check every one.") }
-    nonisolated static var onboardingIntroText: String { L10n.tr("Hi, I'm Penny. Ask me anything about student money. I can't see your numbers yet.") }
+    /// Try Penny (PENNY_V3_BUILD C5): Penny's first bubble before the user types.
+    nonisolated static var onboardingIntroText: String { L10n.tr("Hi, I'm Penny, your student money guide. Ask me anything about money or uni life: budgets, loans, rent, part-time work, or anything in between. Once you pick a student, I'll use their numbers too, and check every one.") }
     /// Starter chips in onboarding: student money in general, no personal data needed.
     nonisolated static var onboardingChips: [String] { [
         L10n.tr("How does the maintenance loan work?"),
@@ -49,6 +50,9 @@ final class PennyViewModel {
     struct Exchange: Equatable, Sendable {
         /// Local id until the server sends `reply_to`, then the server's message id.
         var id: String
+        /// Row identity on screen. Never changes, so the rename to the server id and the switch from the
+        /// streamed answer to the final answer do not insert a second row (D1, double bubble).
+        var key: String
         var text: String
         var reaction: PennyReaction?
         /// The thread root's id for a reply asked inside a thread. Nil for a top-level question.
@@ -72,6 +76,11 @@ final class PennyViewModel {
     private(set) var openThreadQuestionID: String?
     private(set) var openHighlightID: String?
     private(set) var expandedSources: Set<String> = []
+    /// The Past chats screen is open (D3).
+    private(set) var isPastChatsOpen = false
+    /// The student's numbers for the starter chips. Nil: the general chips.
+    private(set) var chipData: PennyChipData?
+    private var didLoadChips = false
     /// Presentation mode (ADR 0029): money amounts are rounded. The glue sets it from `llPresentationMode`.
     var presentation = false
     private var localCounter = 0
@@ -115,8 +124,8 @@ final class PennyViewModel {
             title: openThreadQuestionID == nil ? (isTab ? "Penny" : L10n.tr("Ask Penny")) : L10n.tr("Thread"),
             openThreadQuestionID: openThreadQuestionID,
             rows: rows,
-            chips: exchanges.isEmpty && openThreadQuestionID == nil ? (isOnboarding ? Self.onboardingChips : Self.chips) : [],
-            pastThreads: exchanges.isEmpty ? pastThreads : [],
+            chips: exchanges.isEmpty && openThreadQuestionID == nil ? starterChips : [],
+            pastThreads: pastThreads,
             isWorking: isWorking,
             canSend: !isWorking && canReply,
             pennyMood: isWorking ? .thinking : (lastConfidence.map(PennyMood.from(confidence:)) ?? .smiling),
@@ -126,7 +135,11 @@ final class PennyViewModel {
             inputPlaceholder: openThreadQuestionID == nil ? L10n.tr("Ask Penny anything") : L10n.tr("Reply in this thread")
         )
         state.showsClose = !isTab
+        state.showsNewChat = !isOnboarding && !exchanges.isEmpty
+        state.showsPastChats = !isOnboarding
+        state.isPastChatsOpen = isPastChatsOpen && !isOnboarding
         if isOnboarding {
+            state.showsHeader = false
             state.introText = Self.onboardingIntroText
             state.pastThreads = []
             // No Next Move or plan links: there is no data to link to yet.
@@ -144,7 +157,11 @@ final class PennyViewModel {
     private func mainRows(now: Date) -> [PennyViewState.Row] {
         exchanges.filter { $0.rootID == nil }.flatMap { exchange in
             var rows: [PennyViewState.Row] = [.question(question(exchange))]
-            if let first = exchange.answers.first { rows.append(.answer(group(first, now: now))) }
+            if let first = exchange.answers.first {
+                var answer = group(first, now: now)
+                answer.rowKey = exchange.key
+                rows.append(.answer(answer))
+            }
             rows.append(contentsOf: statusRows(exchange))
             return rows
         }
@@ -153,7 +170,11 @@ final class PennyViewModel {
     private func threadRows(rootID: String, now: Date) -> [PennyViewState.Row] {
         exchanges.filter { $0.id == rootID || $0.rootID == rootID }.flatMap { exchange in
             var rows: [PennyViewState.Row] = [.question(question(exchange, inThread: true))]
-            rows.append(contentsOf: exchange.answers.map { .answer(group($0, now: now)) })
+            rows.append(contentsOf: exchange.answers.enumerated().map { index, answer in
+                var answerGroup = group(answer, now: now)
+                answerGroup.rowKey = index == 0 ? exchange.key : "\(exchange.key).\(index)"
+                return .answer(answerGroup)
+            })
             rows.append(contentsOf: statusRows(exchange))
             return rows
         }
@@ -161,8 +182,8 @@ final class PennyViewModel {
 
     private func statusRows(_ exchange: Exchange) -> [PennyViewState.Row] {
         switch exchange.status {
-        case let .working(step): [.working(id: exchange.id, step: step)]
-        case let .failed(error): [.failed(id: exchange.id, error: error)]
+        case let .working(step): [.working(id: exchange.key, step: step)]
+        case let .failed(error): [.failed(id: exchange.key, error: error)]
         case .done: []
         }
     }
@@ -170,9 +191,11 @@ final class PennyViewModel {
     private func question(_ exchange: Exchange, inThread: Bool = false) -> PennyViewState.Question {
         .init(
             id: exchange.id,
+            rowKey: exchange.key,
             text: exchange.text,
             reaction: exchange.reaction,
-            replyCount: inThread || exchange.rootID != nil ? 0 : replyCount(rootID: exchange.id, server: exchange.serverReplies),
+            // No "1 Reply" label in Try Penny (C5): onboarding has no threads.
+            replyCount: inThread || exchange.rootID != nil || isOnboarding ? 0 : replyCount(rootID: exchange.id, server: exchange.serverReplies),
             isReply: exchange.rootID != nil
         )
     }
@@ -189,7 +212,7 @@ final class PennyViewModel {
             return PennyMapping.answerGroup(response, presentation: presentation, now: now)
         case let .streaming(id, events):
             var bubbles: [PennyViewState.Bubble] = []
-            for event in events {
+            for event in events.prefix(PennyMapping.maxBubbles) {
                 let (bubble, _) = PennyMapping.bubble(
                     event.bubble, highlights: event.highlights ?? [], facts: [], sources: [],
                     groupID: id, presentation: presentation, now: now
@@ -215,7 +238,10 @@ final class PennyViewModel {
             onToggleSources: { [weak self] id in self?.toggleSources(id) },
             onLink: { [weak self] link in self?.onOpenLink(link) },
             onOpenPastThread: { [weak self] id in self?.loadThread(id: id) },
-            onRetry: { [weak self] id in self?.retry(exchangeID: id) },
+            onNewChat: { [weak self] in self?.newChat() },
+            onOpenPastChats: { [weak self] in self?.openPastChats() },
+            onClosePastChats: { [weak self] in self?.closePastChats() },
+            onRetry: { [weak self] id in self?.retry(exchangeKey: id) },
             onClose: { [weak self] in
                 guard let self, !isTab else { return }
                 turn?.cancel()
@@ -225,7 +251,25 @@ final class PennyViewModel {
     }
 
     /// First appearance: sends the context question, if any, and loads past chats for an empty chat.
+    /// Onboarding: general student chips. With the student's data: chips from the forecast and spending
+    /// (what-if chips first when the chat opened from the forecast). Else the general chips.
+    var starterChips: [String] {
+        if isOnboarding { return Self.onboardingChips }
+        if let chipData {
+            let chips = PennyChips.chips(chipData, whatIfFirst: context.screen == .forecast)
+            if !chips.isEmpty { return chips }
+        }
+        return Self.chips
+    }
+
     func start() async {
+        if !isOnboarding && !didLoadChips {
+            didLoadChips = true
+            let service = service
+            Task { [weak self] in
+                await service.loadChipData { data in self?.chipData = data }
+            }
+        }
         guard !didStart else { return }
         didStart = true
         if let question = context.question?.trimmingCharacters(in: .whitespacesAndNewlines), !question.isEmpty {
@@ -233,9 +277,32 @@ final class PennyViewModel {
             return
         }
         guard !isOnboarding else { return }
+        await refreshPastThreads()
+    }
+
+    private func refreshPastThreads() async {
         try? await service.loadThreads { [weak self] threads in
             self?.pastThreads = PennyMapping.pastThreads(threads)
         }
+    }
+
+    /// "New chat" in the header (D2): clears the chat. The next question opens a new server thread.
+    /// A context question already sent is not sent again.
+    func newChat() {
+        startNewChat()
+        context.question = nil
+        if isTab { context = PennyContext() }
+    }
+
+    /// "Past chats" in the header (D3): opens the list and refreshes it.
+    func openPastChats() {
+        guard !isOnboarding else { return }
+        isPastChatsOpen = true
+        Task { [weak self] in await self?.refreshPastThreads() }
+    }
+
+    func closePastChats() {
+        isPastChatsOpen = false
     }
 
     /// Sends a question. Inside an open thread it replies to the thread's root question.
@@ -245,7 +312,7 @@ final class PennyViewModel {
         let rootID = openThreadQuestionID
         if let rootID, rootID.hasPrefix("local-") { return }
         localCounter += 1
-        let exchange = Exchange(id: "local-\(localCounter)", text: text, rootID: rootID, status: .working(step: nil))
+        let exchange = Exchange(id: "local-\(localCounter)", key: "local-\(localCounter)", text: text, rootID: rootID, status: .working(step: nil))
         exchanges.append(exchange)
         openHighlightID = nil
         startTurn(exchangeID: exchange.id)
@@ -274,16 +341,18 @@ final class PennyViewModel {
         if expandedSources.contains(groupID) { expandedSources.remove(groupID) } else { expandedSources.insert(groupID) }
     }
 
-    func retry(exchangeID: String) {
-        guard !isWorking, let index = exchanges.firstIndex(where: { $0.id == exchangeID }) else { return }
+    /// "Try again" on a failed row. The row id is the exchange's key.
+    func retry(exchangeKey: String) {
+        guard !isWorking, let index = exchanges.firstIndex(where: { $0.key == exchangeKey }) else { return }
         exchanges[index].answers = []
         exchanges[index].status = .working(step: nil)
-        startTurn(exchangeID: exchangeID)
+        startTurn(exchangeID: exchanges[index].id)
     }
 
     /// Opens an earlier chat (`GET /v1/chat/threads/{id}`).
     func loadThread(id: String) {
         guard !isWorking else { return }
+        isPastChatsOpen = false
         turn = Task { [weak self] in
             guard let self else { return }
             do {
@@ -307,7 +376,7 @@ final class PennyViewModel {
         for message in thread.messages {
             if message.role.rawValue == "user" {
                 built.append(Exchange(
-                    id: message.id, text: message.text ?? "", rootID: root(of: message.replyTo),
+                    id: message.id, key: message.id, text: message.text ?? "", rootID: root(of: message.replyTo),
                     status: .done, serverReplies: message.replies ?? 0
                 ))
             } else if let response = message.response,
@@ -391,6 +460,8 @@ final class PennyViewModel {
                     update(currentID) { $0.status = .working(step: Self.verifyingLabel) }
                 case "bubble":
                     guard let bubble = event.bubble, !bubble.bubble.text.isEmpty else { continue }
+                    // D6: at most 3 bubbles per answer. Later bubbles get no typing pause.
+                    guard streamedCount(streamID, in: currentID) < PennyMapping.maxBubbles else { continue }
                     try await service.sleep(Self.typingPause(for: bubble.bubble.text))
                     appendStreamed(bubble, streamID: streamID, to: currentID)
                 case "done":
@@ -423,6 +494,14 @@ final class PennyViewModel {
         }
     }
 
+    private func streamedCount(_ streamID: String, in exchangeID: String) -> Int {
+        guard let exchange = exchanges.first(where: { $0.id == exchangeID }) else { return 0 }
+        for answer in exchange.answers {
+            if case let .streaming(id, bubbles) = answer, id == streamID { return bubbles.count }
+        }
+        return 0
+    }
+
     private func appendStreamed(_ bubble: Components.Schemas.BubbleEvent, streamID: String, to exchangeID: String) {
         update(exchangeID) { exchange in
             if let index = exchange.answers.firstIndex(where: { $0.id == streamID }),
@@ -444,7 +523,7 @@ final class PennyViewModel {
             guard case let .streaming(id, bubbles) = answer, id == streamID else { return [] }
             return bubbles.map(\.bubble.id)
         } ?? [])
-        for bubble in response.bubbles where !shown.contains(bubble.id) {
+        for bubble in response.bubbles.prefix(PennyMapping.maxBubbles) where !shown.contains(bubble.id) {
             try await service.sleep(Self.typingPause(for: bubble.text))
             let highlights = (response.highlights ?? []).filter { $0.bubbleId == bubble.id }
             appendStreamed(.init(bubble: bubble, highlights: highlights), streamID: streamID, to: exchangeID)

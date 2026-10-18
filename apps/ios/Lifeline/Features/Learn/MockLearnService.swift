@@ -106,9 +106,8 @@ actor MockLearnService: LearnService {
         languages.append(language)
         try await pause()
         guard var found = entry(id) else { throw Self.notFound(id) }
-        let current = summary(id)
-        if current.status == .locked { throw Self.locked(current) }
-        found.lesson.summary = current
+        // No locks (PENNY_V3_BUILD E1): every lesson opens.
+        found.lesson.summary = summary(id)
         return found.lesson
     }
 
@@ -117,8 +116,6 @@ actor MockLearnService: LearnService {
         attempts += 1
         try await pause()
         guard let found = entry(id) else { throw Self.notFound(id) }
-        let before = summary(id)
-        if before.status == .locked { throw Self.locked(before) }
         let results = found.answers.map { answer in
             LearnWire.AnswerResult(
                 questionId: answer.questionId,
@@ -158,19 +155,11 @@ actor MockLearnService: LearnService {
     }
 
     static func summary(_ id: String, course: Course, passed: Set<String>, bonus: Set<String>) -> LearnWire.Summary {
-        let order = course.units.flatMap(\.lessonIds)
         let title = { (id: String) in course.lessons.first { $0.lesson.summary.id == id }?.lesson.summary }
         var summary = title(id) ?? .init(id: id, unitId: "", index: 0, title: id, icon: "book", status: .locked)
-        let index = order.firstIndex(of: id) ?? 0
         summary.lockedReason = nil
-        if passed.contains(id) {
-            summary.status = .passed
-        } else if index == 0 || passed.contains(order[index - 1]) {
-            summary.status = .open
-        } else {
-            summary.status = .locked
-            summary.lockedReason = "Finish \(title(order[index - 1])?.title ?? order[index - 1]) first"
-        }
+        // No locks (PENNY_V3_BUILD E1): a lesson is passed or open. The path keeps the order.
+        summary.status = passed.contains(id) ? .passed : .open
         summary.lifeBonus = bonus.contains(id)
         return summary
     }

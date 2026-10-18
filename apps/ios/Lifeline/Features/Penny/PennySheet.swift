@@ -14,13 +14,23 @@ import SwiftUI
 ///                      question: PennyQuestion.lifeEvent, title: PennyContext.eventTitle(event.title, age: life.age))
 /// ```
 extension View {
-    func pennySheet(_ context: Binding<PennyContext?>, client: any LifelineClient) -> some View {
-        modifier(PennySheetModifier(context: context, service: .live(client)))
+    /// - Parameter onOpenLink: where a link button goes (D5). The sheet closes first. Nil only closes the sheet
+    ///   (in a game there is no Money screen to open).
+    func pennySheet(
+        _ context: Binding<PennyContext?>,
+        client: any LifelineClient,
+        onOpenLink: (@MainActor (PennyDestination) -> Void)? = nil
+    ) -> some View {
+        modifier(PennySheetModifier(context: context, service: .live(client), onOpenLink: onOpenLink))
     }
 
     /// Tests and the Playground pass a scripted service.
-    func pennySheet(_ context: Binding<PennyContext?>, service: PennyService) -> some View {
-        modifier(PennySheetModifier(context: context, service: service))
+    func pennySheet(
+        _ context: Binding<PennyContext?>,
+        service: PennyService,
+        onOpenLink: (@MainActor (PennyDestination) -> Void)? = nil
+    ) -> some View {
+        modifier(PennySheetModifier(context: context, service: service, onOpenLink: onOpenLink))
     }
 }
 
@@ -32,6 +42,7 @@ enum PennySheetLayout {
 private struct PennySheetModifier: ViewModifier {
     @Binding var context: PennyContext?
     let service: PennyService
+    let onOpenLink: (@MainActor (PennyDestination) -> Void)?
 
     func body(content: Content) -> some View {
         content.sheet(item: $context) { value in
@@ -39,8 +50,11 @@ private struct PennySheetModifier: ViewModifier {
                 service: service,
                 context: value,
                 onClose: { context = nil },
-                // Next Move, Test it, Why and plan links live on the Money tab. In a game they only close the sheet.
-                onOpenLink: { _ in context = nil }
+                // Links open Money screens (D5). The sheet closes first; in a game the links only close it.
+                onOpenLink: { link in
+                    context = nil
+                    onOpenLink?(link.destination)
+                }
             )
             .paperBackground()
             .presentationDetents([PennySheetLayout.detent, .large])

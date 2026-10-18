@@ -73,9 +73,16 @@ final class LearnLessonViewModel {
         )
     }
 
-    /// "Ask Penny about this lesson": the server loads the lesson from `lesson_id`.
+    /// "Ask Penny" asks about the card on screen (PENNY_V3_BUILD D4): its title and text go in the question,
+    /// and `lesson_id` lets the server load the lesson's facts. Off a card (fact, quiz, result) it asks
+    /// about the lesson.
     var pennyContext: PennyContext {
         let title = lesson?.summary.title ?? fallbackTitle
+        let current = state
+        if case let .card(index) = step, current.cards.indices.contains(index) {
+            let card = current.cards[index]
+            return .learnCard(lessonID: lessonID, lessonTitle: title, cardIndex: index, cardTitle: card.title, cardText: card.text)
+        }
         return PennyContext(screen: .learnLesson, question: L10n.tr("Explain this lesson simply"), title: title, lessonID: lessonID)
     }
 
@@ -105,10 +112,14 @@ final class LearnLessonViewModel {
     }
 
     private func handle(_ error: APIError) {
-        if case let .server(_, code, message, _) = error, code == LearnWire.lockedCode {
-            let reason = message.isEmpty ? LearnMapping.lockedFallback(previous: nil) : message
-            phase = .failed(.init(title: L10n.tr("This lesson is locked"), message: reason, canRetry: false))
-            onLocked(reason)
+        // No locks on the client (PENNY_V3_BUILD E1). A server that still answers 409 `lesson_locked` gets a
+        // calm retry here; the lesson stays on screen and the path shows no lock.
+        if case let .server(_, code, _, _) = error, code == LearnWire.lockedCode {
+            if lesson == nil {
+                phase = .failed(.init(title: L10n.tr("Couldn't open this lesson"), message: L10n.tr("Try again in a moment."), canRetry: true))
+            } else {
+                errorText = L10n.tr("Couldn't check your answers. Try again.")
+            }
             return
         }
         if lesson == nil { phase = .failed(.from(error)) } else { errorText = error.userMessage }

@@ -9,7 +9,7 @@ struct LearnLessonView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 header
                 switch state.phase {
                 case .loading:
@@ -58,16 +58,16 @@ struct LearnLessonView: View {
                     .accessibilityAddTraits(.isHeader)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if state.isSampleData { DemoDataBadge() }
         }
     }
 
     private var progress: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            // One segment per card, plus one for the quiz (PENNY_V3_BUILD E4).
             HStack(spacing: 4) {
-                ForEach(Array(state.steps.enumerated()), id: \.offset) { index, _ in
+                ForEach(0..<state.progressSegments, id: \.self) { index in
                     Capsule()
-                        .fill(index <= state.stepIndex ? Theme.Palette.ink : Theme.Palette.rule)
+                        .fill(index < state.filledSegments ? Theme.Palette.ink : Theme.Palette.rule)
                         .frame(height: 6)
                 }
             }
@@ -95,12 +95,12 @@ struct LearnLessonView: View {
     }
 
     private func cardPage(_ card: LearnLessonViewState.Card) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            InkCard(shape: .hero, hero: true, padding: Theme.Spacing.xl) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            InkCard(shape: .hero, hero: true, padding: Theme.Spacing.l) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     Image(systemName: state.symbol)
-                        .font(.system(size: 34, weight: .semibold))
-                        .frame(width: 64, height: 64)
+                        .font(.system(size: 26, weight: .semibold))
+                        .frame(width: 48, height: 48)
                         .inkSurface(.badge, fill: Theme.Palette.money)
                         .foregroundStyle(Theme.Palette.onArea)
                         .accessibilityHidden(true)
@@ -116,10 +116,10 @@ struct LearnLessonView: View {
     }
 
     private var factPage: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             ForEach(state.facts) { fact in
-                InkCard(shape: .cardAlt, hero: fact.id == 0, padding: Theme.Spacing.xl) {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                InkCard(shape: .cardAlt, hero: fact.id == 0, padding: Theme.Spacing.l) {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                         Text(L10n.tr("The real number")).llEyebrow().foregroundStyle(Theme.Palette.muted)
                         if let number = fact.number {
                             Text(number)
@@ -129,6 +129,12 @@ struct LearnLessonView: View {
                                 .accessibilityIdentifier("learn.lesson.factNumber")
                         }
                         Text(fact.text).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                        if let why = fact.whyText {
+                            Text(why)
+                                .font(.llBodyBold)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("learn.lesson.why.\(fact.id)")
+                        }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(fact.sourceLabel).font(.llLabelBold)
                             Text(fact.checkedText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
@@ -153,7 +159,7 @@ struct LearnLessonView: View {
     }
 
     private func questionPage(_ question: LearnLessonViewState.Question) -> some View {
-        InkCard(shape: .cardAlt, padding: Theme.Spacing.xl) {
+        InkCard(shape: .cardAlt, padding: Theme.Spacing.l) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 Text(question.text).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)

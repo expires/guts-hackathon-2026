@@ -10,17 +10,7 @@ struct DataBadge: View {
     var text: String?
     @Environment(\.dataBadgeText) private var environmentText
 
-    var body: some View {
-        let label = text ?? environmentText ?? "Mock data"
-        Text(label)
-            .font(.llLabelBold)
-            .foregroundStyle(Theme.Palette.ink)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 3)
-            .inkSurface(.badge, lineWidth: Theme.chipOutline)
-            .accessibilityLabel(label == "Sample data"
-                ? "Sample data. A made-up student statement, not your bank."
-                : "Mock data. Not from your bank or the live server.")
-            .accessibilityIdentifier("demoDataBadge")
-    }
+    /// PENNY_V3_BUILD.md B4: data tags are gone everywhere; the honesty line replaces them.
+    var body: some View { EmptyView() }
+
 }

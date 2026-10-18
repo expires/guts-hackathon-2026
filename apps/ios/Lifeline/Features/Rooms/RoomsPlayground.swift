@@ -17,8 +17,11 @@ enum RoomsPlayground {
         .init(id: "w9rooms.lobbyHost", title: "Lobby", detail: "Host, Money Quiz picked"),
         .init(id: "w9rooms.lobbyGuest", title: "Lobby", detail: "Guest, not ready"),
         .init(id: "w9rooms.lobbyReconnecting", title: "Lobby", detail: "Reconnecting"),
+        .init(id: "w9rooms.lobbyQuickHost", title: "Lobby", detail: "Host, Quick Life, no ready step"),
+        .init(id: "w9rooms.lobbyQuickGuest", title: "Lobby", detail: "Guest, Quick Life, waiting for host"),
+        .init(id: "w9rooms.pickerGames", title: "Pick a game", detail: "Quick Life first"),
+        .init(id: "w9rooms.pickerStudents", title: "Pick a game", detail: "Quick Life students"),
         .init(id: "w9rooms.pickerQuiz", title: "Pick a game", detail: "Money Quiz"),
-        .init(id: "w9rooms.pickerLife", title: "Pick a game", detail: "Same Life"),
         .init(id: "w9rooms.quiz", title: "Money Quiz", detail: "Question"),
         .init(id: "w9rooms.quizReveal", title: "Money Quiz", detail: "Reveal"),
         .init(id: "w9rooms.decision", title: "Same Decision", detail: "Open"),
@@ -45,8 +48,11 @@ enum RoomsPlayground {
         case "w9rooms.lobbyHost": RoomLobbyView(state: RoomFlowFixtures.lobbyHost)
         case "w9rooms.lobbyGuest": RoomLobbyView(state: RoomFlowFixtures.lobbyGuest)
         case "w9rooms.lobbyReconnecting": RoomLobbyView(state: RoomFlowFixtures.lobbyReconnecting)
+        case "w9rooms.lobbyQuickHost": RoomLobbyView(state: RoomFlowFixtures.lobbyQuickHost)
+        case "w9rooms.lobbyQuickGuest": RoomLobbyView(state: RoomFlowFixtures.lobbyQuickGuest)
+        case "w9rooms.pickerGames": GamePickerView(state: RoomFlowFixtures.pickerGames)
+        case "w9rooms.pickerStudents": GamePickerView(state: RoomFlowFixtures.pickerStudents)
         case "w9rooms.pickerQuiz": GamePickerView(state: RoomFlowFixtures.pickerQuiz)
-        case "w9rooms.pickerLife": GamePickerView(state: RoomFlowFixtures.pickerSameLife)
         case "w9rooms.quiz": QuizView(state: RoomFlowFixtures.quizQuestion)
         case "w9rooms.quizReveal": QuizView(state: RoomFlowFixtures.quizReveal)
         case "w9rooms.decision": DecisionView(state: RoomFlowFixtures.decisionOpen)

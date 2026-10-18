@@ -153,7 +153,9 @@ struct MoneyTabViewModelTests {
     @Test func widgetsLoadContractExamplesWithMoveLinks() async throws {
         let home = MoneyHomeViewModel(client: MockClient())
         await home.load()
-        // Money home itself uses GET /v1/finance/home only; the detail screens load the widgets.
+        // Money home no longer loads the widgets or the old move (ADR 0072); the older details view does.
+        await home.nextMove.load()
+        home.widgets.moves = home.nextMove.moves
         await home.widgets.load()
         let widgets = home.state.widgets
         #expect(widgets.isSampleData)
@@ -179,27 +181,19 @@ struct MoneyTabViewModelTests {
         #expect(goal.planText == "Save £429 a month to reach it by 1 Jun 2029")
     }
 
-    @Test func widgetLinkFocusesNextMove() async {
-        let home = MoneyHomeViewModel(client: MockClient())
-        await home.load()
-        home.actions.widgets.onShowMove("mv_cancel_subs")
-        #expect(home.state.nextMove.displayedMove?.id == "mv_cancel_subs")
-    }
-
     // MARK: Money home from GET /v1/finance/home (one request)
 
-    @Test func homeWithDataShowsTilesAndAtMostThreeBills() async throws {
+    @Test func homeWithDataShowsTheForecastAndNoTiles() async throws {
         let client = MockClient()
         let home = MoneyHomeViewModel(client: client)
         await home.load()
-        let expected = try await client.financeHome()
+        let expected = try await client.forecast(bufferPct: nil, stress: nil)
         let state = home.state
         #expect(state.content == .ready)
         #expect(state.showsMoney)
-        #expect(state.tiles?.balance == expected.balance)
-        #expect(state.tiles?.netWorth == expected.netWorth)
-        #expect(state.comingUp.count <= 3)
-        #expect(state.nextMove.displayedMove?.id == expected.nextMove?.top.id)
+        #expect(state.tiles == nil, "The two balance tiles are gone (B4)")
+        #expect(state.forecast?.headline == expected.headline)
+        #expect(state.moneyNow == expected.moneyNow)
     }
 
     @Test func homeWithoutDataShowsOneConnectCard() async throws {

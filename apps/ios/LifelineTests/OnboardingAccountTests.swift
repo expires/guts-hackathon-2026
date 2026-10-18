@@ -33,11 +33,12 @@ struct OnboardingAccountTests {
             },
             setManualFinance: { _ in try await mock.financeProfile() },
             reversePostcode: { _, _ in OnboardingExamples.reversePostcode },
-            nextMove: { try await mock.nextMove() },
+            forecast: { try await mock.forecast(bufferPct: nil, stress: nil) },
             financeProfile: { try await mock.financeProfile() },
             spending: { month in try await mock.financeSpending(month: month) },
             bills: { try await mock.bills() },
             subscriptions: { try await mock.subscriptions() },
+            categoryDetail: { category, month in try await mock.categoryDetail(category: category, month: month) },
             overview: { try await mock.financeOverview() },
             sources: { try await mock.listSources() },
             habits: { try await mock.habits() }
@@ -87,14 +88,15 @@ struct OnboardingAccountTests {
         #expect(model.state.signIn.note?.contains("demo account") == true)
     }
 
-    @Test func statementImportBuildsTheProfileThenTheMove() async throws {
+    @Test func statementImportBuildsTheProfileThenTheForecast() async throws {
         let model = model(api())
         await model.importStatement(data: Data("date,amount".utf8), fileName: "monzo.csv")
         #expect(model.state.step == .building)
         #expect(model.state.building.isFinished)
         #expect(model.state.building.stages.first?.detail?.hasPrefix("412 payments") == true)
-        let recorded = MockData.recorded.nextMove.top
-        #expect(model.state.nextMove?.action == recorded.action)
+        let forecast = try await MockClient(data: .recorded).forecast(bufferPct: nil, stress: nil)
+        #expect(model.state.forecastCard?.headline == forecast.headline)
+        #expect(model.state.decides?.steps.count == 4)
         #expect(model.state.profile?.noticed.count == min(3, MockData.recorded.financeProfile.personalFacts.count))
         model.next()
         #expect(model.state.step == .profile)

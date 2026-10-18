@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 struct OnboardingScreen: View {
     @State private var model: OnboardingViewModel
     @State private var showsPicker = false
+    /// "Ask Penny" on the forecast card ("Their Next Move").
+    @State private var showsPenny = false
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     private let onFinished: @MainActor () -> Void
     private let onLanguage: @MainActor (AppLanguage) -> Void
@@ -59,6 +61,16 @@ struct OnboardingScreen: View {
             }
         }
             .onAppear(perform: wire)
+            .sheet(isPresented: $showsPenny) {
+                if let client {
+                    // A new chat with the forecast loaded and "Explain my weekly budget" sent (B3.7).
+                    PennyScreen(
+                        client: client,
+                        context: PennyContext(screen: .forecast, question: L10n.tr("Explain my weekly budget"), title: L10n.tr("My weekly budget")),
+                        onClose: { showsPenny = false }
+                    )
+                }
+            }
             .fileImporter(
                 isPresented: $showsPicker,
                 allowedContentTypes: [.commaSeparatedText, .pdf, .plainText],
@@ -110,6 +122,7 @@ struct OnboardingScreen: View {
             onLanguage(language)
         }
         model.pickStatement = { showsPicker = true }
+        model.onAskPenny = { if client != nil { showsPenny = true } }
         model.appleSignIn = { try await AppleSignIn().identityToken() }
         let session = webAuthenticationSession
         model.openBank = { url in

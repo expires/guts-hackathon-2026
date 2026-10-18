@@ -176,7 +176,7 @@ struct RoomLiveViewState: Equatable, Sendable {
     /// "Starting your life" while the shared life loads.
     var waitingText: String? = nil
     var canFinish: Bool = true
-    /// Shows "Open in Life tab".
+    /// Shows "Open in Life tab". Only with `FeatureFlags.showsCutFeatures` (the full Life game is cut).
     var canOpenLife: Bool = false
     /// Same Life: your room life did not start. A red banner with "Try again". Nil hides it.
     var startError: String? = nil

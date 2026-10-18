@@ -103,7 +103,6 @@ struct LifeView: View {
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityIdentifier("life.year")
                     Spacer()
-                    if state.usesSampleData { DemoDataBadge() }
                 }
                 ForEach(Array(current.lines.enumerated()), id: \.offset) { _, line in
                     Text(line).font(.llBody).fixedSize(horizontal: false, vertical: true)

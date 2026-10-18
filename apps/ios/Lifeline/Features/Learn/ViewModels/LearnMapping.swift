@@ -20,11 +20,11 @@ enum LearnMapping {
         return Array(Set(names.filter { UIImage(systemName: $0) == nil })).sorted()
     }
 
+    /// No locks (PENNY_V3_BUILD E1): a lesson the server still marks locked shows as open.
     static func status(_ status: LearnWire.Summary.StatusPayload) -> LearnNodeStatus {
         switch status {
         case .passed: .passed
-        case .open: .open
-        case .locked: .locked
+        case .open, .locked: .open
         }
     }
 
@@ -126,6 +126,28 @@ enum LearnMapping {
 
     // MARK: Lesson
 
+    /// The server's `why_it_matters`, with the "Why this matters to you:" lead added when it is missing.
+    static func whyLine(_ text: String?) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        if text.lowercased().hasPrefix("why this matters") { return text }
+        return L10n.tr("Why this matters to you: \(text)")
+    }
+
+    /// "Why this matters to you: ..." under each real number (PENNY_V3_BUILD E3). Fixed text per unit topic,
+    /// until the server sends `why_it_matters` per fact. Nil for an unknown unit.
+    static func whyItMatters(unitID: String?) -> String? {
+        let reason: String? = switch unitID {
+        case "money-basics": L10n.tr("small everyday choices decide whether your money lasts until your next payment.")
+        case "student-money": L10n.tr("loans, bursaries, rent and bills set how much you have to live on each term.")
+        case "staying-safe": L10n.tr("one overdraft fee, debt or scam can cost more than a month of food shopping.")
+        case "making-money-grow": L10n.tr("money you put aside now earns interest and gives you a cushion later.")
+        case "after-uni": L10n.tr("your first payslip, tax and loan repayments decide what you take home.")
+        case "bigger-picture": L10n.tr("interest rates and prices change what your rent, savings and shopping cost.")
+        default: nil
+        }
+        return reason.map { L10n.tr("Why this matters to you: \($0)") }
+    }
+
     /// The first money amount or percentage in a fact, for the big number: "£25,000", "9%", "£1,270.50".
     static func number(in text: String) -> String? {
         let pattern = /£\d[\d,]*(?:\.\d+)?(?:\s?(?:million|billion|bn|m)\b)?|\d[\d,]*(?:\.\d+)?%/
@@ -158,11 +180,14 @@ enum LearnMapping {
     ) -> LearnLessonViewState {
         let graded = Dictionary(uniqueKeysWithValues: (attempt?.results ?? []).map { ($0.questionId, $0) })
         let cards = (lesson?.cards ?? []).enumerated().map { LearnLessonViewState.Card(id: $0, title: $1.title, text: $1.text) }
+        let why = whyItMatters(unitID: lesson?.summary.unitId)
         let facts = (lesson?.facts ?? []).enumerated().map { index, fact in
             LearnLessonViewState.Fact(
                 id: index, number: number(in: fact.text), text: fact.text, sourceLabel: fact.sourceLabel,
                 sourceURL: URL(string: fact.sourceUrl).flatMap { ["https", "http"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil },
-                checkedText: checkedText(fact.checked)
+                checkedText: checkedText(fact.checked),
+                // The server's line per fact wins; the fixed per-unit line is the fallback (PENNY_V3_BUILD E3).
+                whyText: whyLine(fact.whyItMatters) ?? why
             )
         }
         let questions = (lesson?.quiz ?? []).map { question in
@@ -201,8 +226,8 @@ enum LearnMapping {
         if let unlocked = lesson(attempt.unlockedLessonId, in: attempt.path) { return unlocked }
         let all = lessons(attempt.path)
         guard let index = all.firstIndex(where: { $0.id == lessonID }), index + 1 < all.count else { return nil }
-        let next = all[index + 1]
-        return next.status == .locked ? nil : next
+        // No locks (PENNY_V3_BUILD E1): the next lesson on the path is always open.
+        return all[index + 1]
     }
 
     static func result(lessonID: String, attempt: LearnWire.AttemptResult) -> LearnLessonViewState.Result {

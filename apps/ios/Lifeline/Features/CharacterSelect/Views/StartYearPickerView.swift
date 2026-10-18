@@ -10,7 +10,6 @@ struct StartYearPickerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 ScreenHeader(title: L10n.tr("When to start"), leading: HeaderSquareButton(kind: .back, identifier: "startYear.back") { dismiss() }) {
-                    if state.usesSampleData { DemoDataBadge() }
                 }
                 HStack(spacing: Theme.Spacing.l) {
                     LLIconImage(LLIcon.face(emoji: state.emoji), size: 64)

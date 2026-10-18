@@ -146,7 +146,7 @@ struct CoreViewModelTests {
         model.apply(bankProfile: ContractExamples.bankSummary.profile, status: .mock)
         #expect(model.state.fields.income == 38_000)
         #expect(model.state.fields.housing == .mortgage)
-        #expect(model.state.bankStatusText == "Filled from your bank (sample data)")
+        #expect(model.state.bankStatusText == "Filled from your bank") // No data tags (PENNY_V3_BUILD B4).
     }
 }
 

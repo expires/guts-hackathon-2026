@@ -17,6 +17,7 @@ struct RankingRowState: Equatable, Sendable, Identifiable {
 }
 
 /// Host's one small sheet: pick a game and its options.
+/// Quick Life is the first game. Its row opens the student step: one tap on a student picks the game.
 struct GamePickerViewState: Equatable, Sendable {
     struct Option: Equatable, Sendable, Identifiable {
         var id: String
@@ -25,6 +26,18 @@ struct GamePickerViewState: Equatable, Sendable {
         var icon: String = ""
     }
 
+    enum Step: Equatable, Sendable {
+        /// The game list, with the options of a game that has options (Money Quiz).
+        case games
+        /// Quick Life: the premade students as cards. The year is preset.
+        case students
+    }
+
+    /// Picker id of the Quick Life row (a Same Life room with `quick: true`).
+    static let quickLifeID = "quick_life"
+
+    var step: Step = .games
+    /// Quick Life first, then the other games. Cut games show only with `FeatureFlags.showsCutFeatures`.
     var games: [Option]
     var selectedGame: String
     /// Money Quiz length, 3 to 15.
@@ -45,6 +58,8 @@ struct GamePickerViewState: Equatable, Sendable {
     var maxYear: Int
     var confirmTitle: String
     var canConfirm: Bool
+    /// Games step: the confirm button. Hidden for Quick Life, where the student tap confirms.
+    var showsConfirm: Bool = true
 }
 
 struct GamePickerActions {
@@ -57,6 +72,8 @@ struct GamePickerActions {
     var onYear: @MainActor (Int) -> Void = { _ in }
     var onConfirm: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
+    /// Student step: back to the game list.
+    var onBack: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }

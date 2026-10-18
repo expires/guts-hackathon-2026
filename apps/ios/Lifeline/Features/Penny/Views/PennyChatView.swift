@@ -15,10 +15,12 @@ struct PennyChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-                .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.top, Theme.Spacing.l)
-                .padding(.bottom, Theme.Spacing.m)
+            if state.showsHeader {
+                header
+                    .padding(.horizontal, Theme.Spacing.margin)
+                    .padding(.top, Theme.Spacing.l)
+                    .padding(.bottom, Theme.Spacing.m)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Theme.Spacing.m) {
@@ -51,6 +53,11 @@ struct PennyChatView: View {
         }
         .foregroundStyle(Theme.Palette.ink)
         .animation(Motion.standard(reduceMotion: reduceMotion), value: state.rows)
+        .sheet(isPresented: Binding(get: { state.isPastChatsOpen }, set: { if !$0 { actions.onClosePastChats() } })) {
+            PennyPastChatsView(threads: state.pastThreads, onOpen: actions.onOpenPastThread, onClose: actions.onClosePastChats)
+                .presentationDetents([.large])
+                .presentationBackground(Theme.Palette.paper)
+        }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy, delay: Double = 0) {
@@ -76,15 +83,50 @@ struct PennyChatView: View {
 
     // MARK: Header and intro
 
+    /// Title, then "New chat" and "Past chats" (D2, D3), then close. When the row is too narrow (large text,
+    /// close button), the two chat buttons move to a row under the title.
     private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            headerRow(withChatButtons: true)
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                headerRow(withChatButtons: false)
+                if hasChatButtons {
+                    HStack(spacing: Theme.Spacing.s) { chatButtons }
+                }
+            }
+        }
+    }
+
+    private var hasChatButtons: Bool {
+        state.openThreadQuestionID == nil && (state.showsNewChat || state.showsPastChats)
+    }
+
+    private func headerRow(withChatButtons: Bool) -> some View {
         ScreenHeader(
             title: state.title,
             leading: state.openThreadQuestionID == nil
                 ? nil
                 : HeaderSquareButton(kind: .back, identifier: "penny.thread.back", action: actions.onCloseThread)
         ) {
+            if withChatButtons && hasChatButtons { chatButtons }
             if state.showsClose {
                 HeaderSquareButton(kind: .close, identifier: "penny.close", action: actions.onClose)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var chatButtons: some View {
+        if state.openThreadQuestionID == nil {
+            if state.showsNewChat {
+                PennySmallButton(title: L10n.tr("New chat"), identifier: "penny.newChat", action: { actions.onNewChat() })
+                    .fixedSize()
+                    .accessibilityHint(L10n.tr("Starts a new chat with Penny"))
+            }
+            if state.showsPastChats {
+                PennySmallButton(title: L10n.tr("Past chats"), identifier: "penny.pastChats", action: { actions.onOpenPastChats() })
+                    .fixedSize()
+                    .accessibilityHint(L10n.tr("Opens your earlier chats with Penny"))
             }
         }
     }
@@ -101,23 +143,6 @@ struct PennyChatView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("penny.intro")
-            if !state.pastThreads.isEmpty {
-                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                    Text("Earlier chats").sectionEyebrowStyle()
-                    VStack(spacing: 0) {
-                        ForEach(Array(state.pastThreads.enumerated()), id: \.element.id) { index, thread in
-                            if index > 0 { RuleDivider() }
-                            Button { actions.onOpenPastThread(thread.id) } label: {
-                                ListRow(icon: .why, title: thread.title, subtitle: thread.detail)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("penny.past.\(thread.id)")
-                        }
-                    }
-                    .padding(.horizontal, Theme.Spacing.l)
-                    .inkSurface(.card)
-                }
-            }
         }
     }
 
@@ -176,7 +201,8 @@ struct PennyChatView: View {
         HStack(alignment: .top, spacing: 10) {
             faceColumn(rowID: PennyViewState.Row.answer(group).id, mood: PennyMood.from(confidence: group.confidence))
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                if group.isComplete || !group.bubbles.isEmpty {
+                // One label per answer (D1): only the final answer knows its mode, so none while streaming.
+                if group.isComplete {
                     modeLabel(group)
                 }
                 ForEach(group.bubbles) { bubble in
@@ -451,4 +477,7 @@ struct PennyChatView: View {
 #Preview("Shrug · dark") { LLSheetFrame { PennyChatView(state: PennyFixtures.shrug) }.previewDark() }
 #Preview("General answer · light") { LLSheetFrame { PennyChatView(state: PennyFixtures.general) } }
 #Preview("General answer · dark") { LLSheetFrame { PennyChatView(state: PennyFixtures.general) }.previewDark() }
+#Preview("Past chats · light") { LLSheetFrame { PennyChatView(state: PennyFixtures.pastChatsOpen) } }
+#Preview("Try Penny · light") { LLSheetFrame { PennyChatView(state: PennyFixtures.onboarding) } }
+#Preview("Try Penny · AX3") { LLSheetFrame { PennyChatView(state: PennyFixtures.onboarding) }.previewLargeType() }
 #Preview("Unavailable · light") { LLSheetFrame { PennyChatView(state: PennyFixtures.unavailable) } }

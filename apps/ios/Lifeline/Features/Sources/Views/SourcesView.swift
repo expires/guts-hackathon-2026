@@ -13,7 +13,6 @@ struct SourcesView: View {
             case let .failed(error):
                 ErrorStateView(state: error, onRetry: actions.onRetry)
             case .ready:
-                if state.usesSampleData { DemoDataBadge() }
                 Text("Live: fetched today. Saved copy: the last good download. Sample: example numbers while the source is not available.")
                     .font(.llLabel).foregroundStyle(Theme.Palette.muted)
                 RowGroup {

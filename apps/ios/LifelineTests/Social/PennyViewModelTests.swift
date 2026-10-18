@@ -67,7 +67,7 @@ struct PennyViewModelTests {
         #expect(group.suggestions == ["Add a holiday in June", "Summary"])
         #expect(state.suggestionsGroupID == group.id)
         // Penny's face shows once, on the newest Penny row.
-        #expect(state.pennyFaceRowID == "a.msg_2")
+        #expect(state.pennyFaceRowID == "a.local-1")
         #expect(group.isComplete)
         #expect(group.links == [.testIt, .why])
         #expect(state.pennyMood == .happy)
@@ -535,7 +535,7 @@ struct YouBuildInfoTests {
         let score = try JSONDecoder().decode(HabitScore.self, from: Data(json.utf8))
         let card = try #require(YouViewModel.habitCard(score))
         #expect(card.overall == 64)
-        #expect(card.rows.map(\.name) == ["Savings rate", "Months of cover", "Spend stability", "Discretionary share", "Subscription creep", "Debt pressure"])
+        #expect(card.rows.map(\.name) == ["Saving", "Safety cushion", "Steady spending", "Needs before wants", "Subscriptions in check", "Low debt pressure"])
         #expect(card.rows.map(\.value) == [40, 75, 80, 55, 90, 70])
         let empty = try JSONDecoder().decode(HabitScore.self, from: Data(#"{"components":{}}"#.utf8))
         #expect(YouViewModel.habitCard(empty) == nil)
@@ -544,7 +544,10 @@ struct YouBuildInfoTests {
     @Test @MainActor func evaluationRowNeedsCases() {
         let none = YouViewModel.makeState(profile: nil, phase: .ready, clientKind: .mock, isDebugBuild: false, evaluationCount: 0)
         #expect(!none.showsEvaluation)
-        let some = YouViewModel.makeState(profile: nil, phase: .ready, clientKind: .mock, isDebugBuild: false, evaluationCount: 120)
+        // Cut (PENNY_V3_BUILD F2): the advice check shows only with the cut-features flag.
+        let hidden = YouViewModel.makeState(profile: nil, phase: .ready, clientKind: .mock, isDebugBuild: false, evaluationCount: 120)
+        #expect(!hidden.showsEvaluation)
+        let some = YouViewModel.makeState(profile: nil, phase: .ready, clientKind: .mock, isDebugBuild: false, evaluationCount: 120, showsCutFeatures: true)
         #expect(some.showsEvaluation)
     }
 

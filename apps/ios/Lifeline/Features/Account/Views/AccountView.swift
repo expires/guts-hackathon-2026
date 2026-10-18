@@ -12,7 +12,6 @@ struct AccountView: View {
                     title: "Account",
                     leading: actions.onClose.map { close in HeaderSquareButton(kind: .back, identifier: "account.back", action: close) }
                 ) {
-                    if state.isSampleData { DemoDataBadge() }
                 }
                 switch state.phase {
                 case let .loading(loading):

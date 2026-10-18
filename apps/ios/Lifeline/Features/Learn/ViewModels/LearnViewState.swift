@@ -30,7 +30,7 @@ struct LearnPathViewState: Equatable, Sendable {
         /// SF Symbol name that exists on this device (the server's `icon`, else a generic book).
         var symbol: String
         var status: LearnNodeStatus
-        /// "Finish Needs and wants first" (server text). Locked nodes only.
+        /// Server text for a locked lesson. Always nil since PENNY_V3_BUILD E1 (no locks).
         var lockedReason: String?
         /// The concept was also earned in a Life game.
         var hasLifeBonus: Bool
@@ -105,6 +105,8 @@ struct LearnLessonViewState: Equatable, Sendable {
         var sourceURL: URL?
         /// "Checked 17 Oct 2026".
         var checkedText: String
+        /// "Why this matters to you: ..." (PENNY_V3_BUILD E3). Nil hides the line.
+        var whyText: String? = nil
     }
 
     struct Choice: Equatable, Sendable, Identifiable {
@@ -165,6 +167,21 @@ struct LearnLessonViewState: Equatable, Sendable {
     var currentQuestion: Question? {
         if case let .question(index) = step, questions.indices.contains(index) { return questions[index] }
         return nil
+    }
+
+    /// Progress bar segments (PENNY_V3_BUILD E4): one per card, plus one for the quiz.
+    var progressSegments: Int {
+        cards.count + (questions.isEmpty ? 0 : 1)
+    }
+
+    /// Segments filled for `step`: card 2 of 3 fills 2; the real number fills every card; the quiz and the
+    /// result fill the quiz segment too.
+    var filledSegments: Int {
+        switch step {
+        case let .card(index): min(index + 1, cards.count)
+        case .fact: cards.count
+        case .question, .result: progressSegments
+        }
     }
 
     /// "Card 1 of 2", "The real number", "Question 2 of 3", "Result".

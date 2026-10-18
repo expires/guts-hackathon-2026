@@ -46,13 +46,12 @@ struct LearnPathView: View {
                     .font(.llScreenHeader)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
-                if state.isSampleData { DemoDataBadge() }
             }
             if state.phase == .ready {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                     Text(state.progressText).font(.llBodyBold)
                     InkProgressBar(value: state.progress)
-                    Text(L10n.tr("Pass a lesson to open the next one."))
+                    Text(L10n.tr("Every lesson is open. The path shows a good order."))
                         .font(.llLabel)
                         .foregroundStyle(Theme.Palette.muted)
                 }
@@ -246,7 +245,8 @@ struct LearnNodeCircle: View {
 
     var body: some View {
         ZStack {
-            if node.status == .open {
+            // Only the next lesson pulses: every lesson is open (PENNY_V3_BUILD E1).
+            if node.status == .open && node.isNext {
                 Circle()
                     .stroke(Theme.Palette.home, lineWidth: 5)
                     .frame(width: LearnTrail.nodeSize + 14, height: LearnTrail.nodeSize + 14)
@@ -279,7 +279,7 @@ struct LearnNodeCircle: View {
             }
         }
         .onAppear {
-            guard node.status == .open, !reduceMotion else { return }
+            guard node.status == .open, node.isNext, !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
         }
         .onChange(of: reduceMotion) { _, reduce in if reduce { pulse = false } }

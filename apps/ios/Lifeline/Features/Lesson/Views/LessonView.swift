@@ -12,7 +12,6 @@ struct LessonView: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 HStack {
                     OutlineTag(text: "Lesson", icon: .lesson, eyebrow: true)
-                    if state.isSampleData { DemoDataBadge() }
                     Spacer()
                     HeaderSquareButton(kind: .close, identifier: "lesson.close", action: actions.onClose)
                 }

@@ -49,7 +49,8 @@ struct LearnTests {
         #expect(nodes.prefix(4).allSatisfy { $0.status == .passed })
         #expect(nodes[4].status == .open)
         #expect(nodes[4].isNext)
-        #expect(nodes.dropFirst(5).allSatisfy { $0.status == .locked })
+        // No locks (PENNY_V3_BUILD E1): every unpassed lesson is open; only the next one is marked.
+        #expect(nodes.dropFirst(5).allSatisfy { $0.status == .open && !$0.isNext })
         #expect(state.nextLessonID == order[4])
         #expect(state.progressText == "4 of \(path.total) lessons")
         #expect(state.units[0].eyebrow == "Unit 1")
@@ -59,14 +60,16 @@ struct LearnTests {
         #expect(!nodes[5].hasLifeBonus)
     }
 
-    @Test func lockedNodeCarriesTheServerReason() {
-        let path = MockLearnService.path(course: course, passed: Set(order.prefix(1)))
+    /// PENNY_V3_BUILD E1: a lesson the server still marks locked shows as open, with no lock text.
+    @Test func serverLockedLessonShowsAsOpen() {
+        var path = MockLearnService.path(course: course, passed: Set(order.prefix(1)))
+        path.units[0].lessons[2].status = .locked
+        path.units[0].lessons[2].lockedReason = "Finish it first"
         let state = LearnMapping.pathState(path, phase: .ready, lockedMessage: nil, isSampleData: false)
-        let locked = state.units[0].nodes[2]
-        let previous = path.units[0].lessons[1].title
-        #expect(locked.status == .locked)
-        #expect(locked.lockedReason == "Finish \(previous) first")
-        #expect(locked.accessibilityLabel.contains("Locked"))
+        let node = state.units[0].nodes[2]
+        #expect(node.status == .open)
+        #expect(node.lockedReason == nil)
+        #expect(!node.accessibilityLabel.contains("Locked"))
     }
 
     @Test func nodesWindSideToSide() {
@@ -95,16 +98,16 @@ struct LearnTests {
         #expect(LearnMapping.entry(path).nextText == "Course complete")
     }
 
-    @Test func tapOnLockedLessonShowsReasonAndOpensNothing() async {
+    /// PENNY_V3_BUILD E1: any lesson opens, also one far ahead on the path.
+    @Test func tapOnAnyLessonOpensIt() async {
         let service = MockLearnService(passedCount: 4)
         let model = LearnPathViewModel(service: service, language: { .en })
         await model.load()
         model.select(order[6])
-        #expect(model.openLesson == nil)
-        #expect(model.state.lockedMessage?.hasPrefix("Finish ") == true)
+        #expect(model.openLesson?.id == order[6])
+        #expect(model.state.lockedMessage == nil)
         model.select(order[4])
         #expect(model.openLesson?.id == order[4])
-        #expect(model.state.lockedMessage == nil)
     }
 
     @Test func factNumberAndCheckedDate() {
@@ -205,20 +208,38 @@ struct LearnTests {
         #expect(await service.attempts == 0)
     }
 
-    @Test func lockedLessonReports409Reason() async {
+    /// PENNY_V3_BUILD E1: a lesson ahead of the next one loads (no 409 from the mock).
+    @Test func lessonAheadOfThePathLoads() async {
         let service = MockLearnService(passedCount: 4)
         let model = lessonModel(service, id: order[8])
-        var reason: String?
-        model.onLocked = { reason = $0 }
         await model.load()
-        let previous = course.lessons.first { $0.lesson.summary.id == order[7] }?.lesson.summary.title ?? ""
-        #expect(reason == "Finish \(previous) first")
-        guard case let .failed(error) = model.phase else {
-            Issue.record("Expected a failed phase")
-            return
-        }
-        #expect(error.title == "This lesson is locked")
-        #expect(!error.canRetry)
+        #expect(model.phase == .ready)
+        #expect(model.lesson != nil)
+    }
+
+    /// The real number has a "Why this matters to you" line from the lesson's unit (PENNY_V3_BUILD E3).
+    @Test func factsCarryWhyItMatters() async {
+        let service = MockLearnService(passedCount: 4)
+        let model = lessonModel(service, id: order[0])
+        await model.load()
+        let facts = model.state.facts
+        #expect(!facts.isEmpty)
+        #expect(facts.allSatisfy { $0.whyText?.hasPrefix("Why this matters to you: ") == true })
+        #expect(LearnMapping.whyLine("It sets your rent.") == "Why this matters to you: It sets your rent.")
+        #expect(LearnMapping.whyLine("Why this matters to you: x") == "Why this matters to you: x")
+        #expect(LearnMapping.whyLine("  ") == nil)
+    }
+
+    /// Progress bar: one segment per card plus one for the quiz (PENNY_V3_BUILD E4).
+    @Test func progressSegmentsMatchCards() async {
+        let service = MockLearnService(passedCount: 4)
+        let model = lessonModel(service, id: order[4])
+        await model.load()
+        let cards = model.state.cards.count
+        #expect(model.state.progressSegments == cards + 1)
+        #expect(model.state.filledSegments == 1)
+        walkToQuiz(model)
+        #expect(model.state.filledSegments == cards + 1)
     }
 
     @Test func passingAnOldLessonOpensTheNextOpenLesson() async {
@@ -266,7 +287,16 @@ struct LearnTests {
         #expect(context?.screen == .learnLesson)
         #expect(context?.lessonID == order[4])
         #expect(context?.title == title)
-        #expect(context?.question == "Explain this lesson simply")
+        // D4: Penny is asked about the card on screen, with its title and text.
+        let cards = model.lesson?.cards ?? []
+        let first = try #require(cards.first)
+        #expect(context?.question?.hasPrefix("Explain this card simply: \(first.title)") == true)
+        #expect(context?.question?.contains(String(first.text.prefix(40))) == true)
+        if cards.count > 1 {
+            model.next()
+            model.actions.onAskPenny()
+            #expect(context?.question?.hasPrefix("Explain this card simply: \(cards[1].title)") == true)
+        }
         let chat = PennyMapping.chatContext(try #require(context), isNewThread: true)
         #expect(chat.screen?.rawValue == "learn_lesson")
         #expect(chat.lessonId == order[4])

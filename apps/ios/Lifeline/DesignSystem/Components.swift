@@ -128,16 +128,10 @@ struct AreaChip: View {
 
 /// "Mock data" chip on any screen with fake data (handoff rule).
 struct DemoDataBadge: View {
-    var body: some View {
-        Text("Mock data")
-            .font(.llLabelBold)
-            .foregroundStyle(Theme.Palette.ink)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 3)
-            .inkSurface(.badge, lineWidth: Theme.chipOutline)
-            .accessibilityLabel("Mock data. Not from your bank or the live server.")
-            .accessibilityIdentifier("demoDataBadge")
-    }
+    /// PENNY_V3_BUILD.md B4: no "Mock data" / "Sample data" tags anywhere. One honesty line on "Pick your student"
+    /// and You > "Your money and data" replaces them. Kept as a type so existing call sites compile.
+    var body: some View { EmptyView() }
+
 }
 
 /// "Demo payment" label on every paid screen.

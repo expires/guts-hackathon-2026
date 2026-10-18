@@ -10,7 +10,8 @@ final class CoreFlowUITests: XCTestCase {
     @MainActor
     func testPresetLifeAgeAndAnswerEvent() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTestingMock"]
+        // The full Life game is cut (PENNY_V3_BUILD F); the flag keeps its flow testable.
+        app.launchArguments = ["-uiTestingMock", "-showsCutFeatures"]
         app.launch()
 
         // The app opens on Money. The game is "Play solo" inside the Play tab (ADR 0048).
@@ -67,57 +68,24 @@ final class CoreFlowUITests: XCTestCase {
     }
 
     @MainActor
-    func testMoneyTabOpensOnNextMove() {
+    func testMoneyTabOpensOnTheForecast() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTestingMock"]
+        app.launchArguments = ["-uiTestingMock", "-skipOnboarding"]
         app.launch()
 
-        // The Next Move card is the first element on the Money tab (ADR 0018).
-        let action = app.staticTexts["nextMove.action"]
-        XCTAssertTrue(action.waitForExistence(timeout: 10))
-        // The expected move comes from the recorded engine output, never from a hard-coded decision.
-        XCTAssertEqual(action.label, Self.recordedTop("action"))
-        XCTAssertEqual(app.staticTexts["nextMove.headline"].label, Self.recordedTop("headline"))
-
-        // Guess my spend hides the prediction until the guess (ADR 0017).
+        // The forecast card is the first block on the Money tab (ADR 0072, B3.1). The old move card is gone (B4).
+        XCTAssertTrue(app.descendants(matching: .any)["money.block.forecast"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.descendants(matching: .any)["forecast.summary"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["nextMove.action"].exists)
+        XCTAssertFalse(app.buttons["nextMove.testIt"].exists)
+        // Guess my spend has no entry point (F1).
         XCTAssertFalse(app.staticTexts["guess.predicted"].exists)
 
-        // Do this adds the move to the plan.
-        let doThis = app.buttons["nextMove.doThis"]
-        XCTAssertTrue(doThis.waitForExistence(timeout: 5))
-        doThis.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["nextMove.planMessage"].waitForExistence(timeout: 5))
-
-        // Test it opens the W7 comparison.
-        app.buttons["nextMove.testIt"].tap()
-        // `testit.hero` wraps the summary and overrides its identifier, so wait for the screen's own close button.
-        let testItClose = app.buttons["testit.close"]
-        XCTAssertTrue(testItClose.waitForExistence(timeout: 10))
-        testItClose.tap()
-
-        // Why? shows the 3 evidence points.
-        let why = app.buttons["nextMove.why"]
-        XCTAssertTrue(why.waitForExistence(timeout: 5))
-        why.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["why.evidence.2"].waitForExistence(timeout: 5))
-        app.buttons["why.close"].tap()
-    }
-
-    /// A `top` field from `Lifeline/Preview/Recorded/getNextMove.json` (the file the app's mock client serves).
-    /// The simulator test runner can read the source tree on the host Mac.
-    static func recordedTop(_ key: String, file: StaticString = #filePath) -> String {
-        let url = URL(fileURLWithPath: "\(file)")
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Lifeline/Preview/Recorded/getNextMove.json")
-        guard let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let top = json["top"] as? [String: Any],
-              let value = top[key] as? String else {
-            XCTFail("Cannot read top.\(key) from \(url.path)")
-            return ""
-        }
-        return value
+        // "See the maths" opens the 4 steps.
+        let maths = app.buttons["forecast.seeMaths"]
+        XCTAssertTrue(maths.waitForExistence(timeout: 5))
+        maths.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["maths.step.1"].waitForExistence(timeout: 10))
     }
 
     @MainActor
@@ -129,6 +97,7 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 10))
         entry.tap()
         XCTAssertTrue(app.buttons["character.self"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["demoDataBadge"].exists)
+        // No "Mock data" tag anywhere (B4).
+        XCTAssertFalse(app.descendants(matching: .any)["demoDataBadge"].exists)
     }
 }

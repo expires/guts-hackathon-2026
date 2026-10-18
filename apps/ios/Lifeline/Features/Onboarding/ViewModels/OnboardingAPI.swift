@@ -14,7 +14,8 @@ struct OnboardingAPI: Sendable {
     var setManualFinance: @Sendable (_ input: Components.Schemas.ManualFinanceInput) async throws -> FinanceProfile
     /// `GET /v1/postcodes/reverse`.
     var reversePostcode: @Sendable (_ lat: Double, _ lon: Double) async throws -> Components.Schemas.ReversePostcode
-    var nextMove: @Sendable () async throws -> NextMoveResponse
+    /// `GET /v1/forecast` (ADR 0072) with the stored buffer: "How Penny decides" and "Their Next Move".
+    var forecast: @Sendable () async throws -> Forecast
     var financeProfile: @Sendable () async throws -> FinanceProfile
     /// The built-in sample students, cached first (ADR 0060). `onUpdate` may run twice (disk, then network).
     var listSamples: @Sendable (_ onUpdate: @escaping @MainActor @Sendable ([SampleStatement]) -> Void) async throws -> Void = { _ in }
@@ -25,6 +26,8 @@ struct OnboardingAPI: Sendable {
     var spending: @Sendable (_ month: String?) async throws -> SpendingResponse = { _ in throw OnboardingAPI.notYetAvailable }
     var bills: @Sendable () async throws -> BillsResponse = { throw OnboardingAPI.notYetAvailable }
     var subscriptions: @Sendable () async throws -> SubscriptionsResponse = { throw OnboardingAPI.notYetAvailable }
+    /// `GET /v1/finance/spending/{category}?month=`: the bills and subscriptions paid in the profile's month.
+    var categoryDetail: @Sendable (_ category: String, _ month: String?) async throws -> CategoryDetail = { _, _ in throw OnboardingAPI.notYetAvailable }
     /// `GET /v1/finance/overview`: accounts, for debts.
     var overview: @Sendable () async throws -> FinanceOverview = { throw OnboardingAPI.notYetAvailable }
     /// `GET /v1/sources`: live UK data status.
@@ -42,13 +45,14 @@ struct OnboardingAPI: Sendable {
             importStatement: { file, name, provider in try await client.importStatement(file: file, fileName: name, provider: provider) },
             setManualFinance: { input in try await client.setManualFinance(input) },
             reversePostcode: { lat, lon in try await client.reversePostcode(lat: lat, lon: lon) },
-            nextMove: { try await client.nextMove() },
+            forecast: { try await client.forecast(bufferPct: nil, stress: nil) },
             financeProfile: { try await client.financeProfile() },
             listSamples: { onUpdate in try await client.load(CachedOps.samples, onUpdate: onUpdate) },
             importSample: { id in try await client.importSample(id: id) },
             spending: { month in try await client.financeSpending(month: month) },
             bills: { try await client.bills() },
             subscriptions: { try await client.subscriptions() },
+            categoryDetail: { category, month in try await client.categoryDetail(category: category, month: month) },
             overview: { try await client.financeOverview() },
             sources: { try await client.listSources() },
             habits: { try await client.habits() }

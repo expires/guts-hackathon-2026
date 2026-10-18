@@ -21,6 +21,8 @@ actor MockClient: LifelineClient {
     /// Guesses made in this session, by date (YYYY-MM-DD). One per day (ADR 0017).
     private var guessesByDate: [String: Double] = [:]
     private var planItems: [PlanItem] = []
+    /// Stored buffer % for the forecast (PUT /v1/forecast/settings). Default 10.
+    private var forecastBufferPct = 10
     private var chatThreads: [String: ChatThread] = [:]
     private var nextChatNumber = 1
     private var me: Me = MockExamples.me
@@ -279,7 +281,8 @@ actor MockClient: LifelineClient {
             comingUpMore: bills.count > 3
         )
     }
-    func financeSpending(month: String?) async throws -> SpendingResponse { data.spending }
+    /// Every statement month in `months`; another month is a steady variant (ADR 0072 month switch).
+    func financeSpending(month: String?) async throws -> SpendingResponse { ForecastMock.spending(base: data.spending, month: month) }
     func subscriptions() async throws -> SubscriptionsResponse { data.subscriptions }
     func bills() async throws -> BillsResponse { data.bills }
 
@@ -366,6 +369,33 @@ actor MockClient: LifelineClient {
     // MARK: Next Move
 
     func nextMove() async throws -> NextMoveResponse { data.nextMove }
+
+    // MARK: Forecast (ADR 0072)
+
+    /// Canvas students: Eilidh on track, or Callum running short with `-mockForecastShort`.
+    private var forecastPersona: ForecastMock.Persona {
+        ProcessInfo.processInfo.arguments.contains("-mockForecastShort") ? ForecastMock.short : ForecastMock.onTrack
+    }
+
+    func forecast(bufferPct: Int?, stress: Int?) async throws -> Forecast {
+        ForecastMock.forecast(forecastPersona, bufferPct: bufferPct ?? forecastBufferPct, stress: stress)
+    }
+
+    func setForecastSettings(bufferPct: Int) async throws -> ForecastSettings {
+        guard [0, 5, 10, 15, 20].contains(bufferPct) else {
+            throw APIError.server(status: 422, code: "validation_error", message: "Buffer must be 0, 5, 10, 15 or 20.", source: "mock")
+        }
+        forecastBufferPct = bufferPct
+        return ForecastSettings(bufferPct: .init(rawValue: bufferPct))
+    }
+
+    func categoryDetail(category: String, month: String?) async throws -> CategoryDetail {
+        let spending = try await financeSpending(month: month)
+        guard let detail = ForecastMock.categoryDetail(spending: spending, category: category) else {
+            throw APIError.server(status: 404, code: "not_found", message: "No spending in that category.", source: "mock")
+        }
+        return detail
+    }
 
     func testNextMove(moveID: String, optionIDs: [String]?) async throws -> TestMoveResult {
         guard moveID == data.testMoveResult.moveId else {

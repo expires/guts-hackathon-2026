@@ -10,6 +10,9 @@ enum PennyMapping {
     /// Chat failure text (DIRECTION_V2 section 6, fix 9).
     static var unavailable: String { L10n.tr("Penny is unavailable right now. Try again.") }
 
+    /// Penny shows at most this many bubbles per answer (PENNY_V3_BUILD D6: 1 to 3 bubbles).
+    static let maxBubbles = 3
+
     /// Units that may be highlighted: money and rates only, never years, dates, counts or months.
     static func isHighlightable(_ unit: String) -> Bool {
         unit.hasPrefix("gbp") || unit == "percent"
@@ -254,7 +257,7 @@ enum PennyMapping {
         let groupID = response.messageId
         var bubbles: [PennyViewState.Bubble] = []
         var details: [String: PennyViewState.HighlightDetail] = [:]
-        for item in response.bubbles {
+        for item in response.bubbles.prefix(maxBubbles) {
             let (bubble, cards) = bubble(
                 item, highlights: response.highlights ?? [], facts: response.facts ?? [],
                 sources: response.sources ?? [], groupID: groupID, presentation: presentation, now: now
@@ -284,16 +287,26 @@ enum PennyMapping {
         raw.flatMap(PennyReaction.init(rawValue:))
     }
 
-    /// "2 messages · 17 Oct".
-    /// Past chats for the chat list. A thread with no messages never shows (no empty context chats).
+    /// Past chats for the Past chats screen (D3), newest first. A thread with no messages never shows
+    /// (no empty context chats). Threads with the same title show once: the newest one. The title is the
+    /// first message or the context title, so two rows with one title look the same to the user.
     static func pastThreads(_ response: PennyAPI.ThreadsResponse) -> [PennyViewState.ThreadSummary] {
-        response.threads.filter { $0.messageCount > 0 }.map(threadSummary)
+        let sorted = response.threads.filter { $0.messageCount > 0 }.enumerated().sorted { a, b in
+            let da = parseDate(a.element.updatedAt) ?? .distantPast
+            let db = parseDate(b.element.updatedAt) ?? .distantPast
+            return da == db ? a.offset < b.offset : da > db
+        }.map(\.element)
+        var seen = Set<String>()
+        return sorted.filter { thread in
+            let key = thread.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return seen.insert(key).inserted
+        }.map(threadSummary)
     }
 
     /// `ChatRequest.context` for a Penny context. `title` goes only with the first message of a new thread
     /// (the server titles the thread with it). A room round sends `multiplayer`, `room_code` and `round_id`.
     static func chatContext(_ context: PennyContext, isNewThread: Bool) -> PennyAPI.Context {
-        PennyAPI.Context(
+        var chat = PennyAPI.Context(
             nextMoveId: context.nextMoveID,
             lifeId: context.lifeID,
             eventId: context.eventID,
@@ -304,6 +317,8 @@ enum PennyMapping {
             lessonId: context.lessonID,
             roundId: context.roundID
         )
+        chat.cardIndex = context.cardIndex
+        return chat
     }
 
     static func threadSummary(_ thread: Components.Schemas.ChatThreadSummary) -> PennyViewState.ThreadSummary {

@@ -40,6 +40,8 @@ final class MockRoomTransport: RoomTransport {
         room.mode = .group
         room.maxPlayers = 6
         room.joinUrl = RoomLink.joinURL(code: code)
+        // A friend's "Play with friends" lobby has no preset (ADR 0059): Quick Life rules, no "ready" step.
+        room.presetId = nil
         // A rival hosts a room you join.
         room.players = [.init(id: "p2", name: MockRoomServer.rivalNames[0], isHost: true, ready: true, connected: true, finished: false)]
         let age = await startAge(presetID: room.presetId, startYear: room.gameStartYear)
@@ -141,6 +143,8 @@ actor MockRoomServer {
     private var connections: [Int: AsyncStream<RoomWire.Incoming>.Continuation] = [:]
     private var nextConnection = 1
     private var step = 0
+    /// Guest mode: steps the simulated host waits after its Quick Life pick before it starts.
+    private var lobbyWait = 0
     private var simulation: Task<Void, Never>?
     // Games: Money Quiz and Same Decision rounds.
     private var round = -1
@@ -306,8 +310,19 @@ actor MockRoomServer {
         } else if let waiting = room.players.first(where: { $0.id != myPlayerID && $0.ready != true }) {
             update(waiting.id) { $0.ready = true }
             broadcast(.init(_type: .roster, room: room))
+        } else if !hostIsMe, RoomMapping.joiningCountsAsReady(room) {
+            // "Play with friends" room: the simulated host picks Quick Life, waits a few steps so the guest
+            // sees the lobby, then starts. Joining counts as ready: the guest never sends "ready".
+            if room.game == nil, let student = MockPlayData.quickStudents.first {
+                pick(game: RoomGameKind.sameLife.rawValue, options: .init(pathId: student.pathId, quick: true, quickStudentId: student.id))
+                lobbyWait = 3
+            } else if lobbyWait > 0 {
+                lobbyWait -= 1
+            } else {
+                start()
+            }
         } else if !hostIsMe, room.players.allSatisfy({ $0.ready == true }) {
-            // The simulated host picks a short Money Quiz, then starts.
+            // Preset room: the simulated host picks a short Money Quiz once everyone is ready, then starts.
             if room.game == nil {
                 pick(game: RoomGameKind.quiz.rawValue, options: .init(questions: 4, topic: .mixed))
             } else {
@@ -317,6 +332,10 @@ actor MockRoomServer {
     }
 
     private func start() {
+        // Server rule (routes/rooms.py "start"): in a Quick Life round the host's Start counts every seated player as ready.
+        if RoomMapping.joiningCountsAsReady(room) {
+            for index in room.players.indices { room.players[index].ready = true }
+        }
         room.status = .playing
         room.mode = room.players.count == 2 ? .duel : .group
         switch RoomGameKind(room: room.game) {

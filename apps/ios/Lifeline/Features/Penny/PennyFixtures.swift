@@ -146,6 +146,8 @@ enum PennyFixtures {
             inputPlaceholder: "Ask Penny anything"
         )
         state.pennyFaceRowID = rows.last { if case .question = $0 { false } else { true } }?.id
+        state.showsNewChat = !rows.isEmpty
+        state.showsPastChats = true
         if !working, case let .answer(group)? = rows.last, !group.suggestions.isEmpty {
             state.suggestionsGroupID = group.id
         }
@@ -158,7 +160,34 @@ enum PennyFixtures {
 
     static var empty: PennyViewState {
         var state = base(rows: [])
-        state.pastThreads = [.init(id: "th_1", title: "What if I lose my job?", detail: "2 messages · 17 Oct")]
+        state.pastThreads = pastThreadRows
+        return state
+    }
+
+    static var pastThreadRows: [PennyViewState.ThreadSummary] { [
+        .init(id: "th_1", title: "What if I lose my job?", detail: "2 messages · 17 Oct"),
+        .init(id: "th_2", title: "Prices creep up", detail: "4 messages · 16 Oct"),
+        .init(id: "th_3", title: "How do I make a weekly budget?", detail: "2 messages · 12 Oct"),
+    ] }
+
+    /// The Past chats screen open over the chat (D3).
+    static var pastChatsOpen: PennyViewState {
+        var state = answer
+        state.openHighlightID = nil
+        state.pastThreads = pastThreadRows
+        state.isPastChatsOpen = true
+        return state
+    }
+
+    /// Try Penny in onboarding (C5): the opening bubble and the starter chips, no header buttons.
+    static var onboarding: PennyViewState {
+        var state = base(rows: [])
+        state.title = "Ask Penny"
+        state.chips = PennyViewModel.onboardingChips
+        state.introText = PennyViewModel.onboardingIntroText
+        state.showsPastChats = false
+        state.showsNewChat = false
+        state.showsHeader = false
         return state
     }
 
@@ -237,7 +266,9 @@ enum PennyFixtures {
 
     static var all: [(id: String, title: String, state: PennyViewState)] {
         [
-            ("penny.empty", "Empty, earlier chats", empty),
+            ("penny.empty", "Empty", empty),
+            ("penny.onboarding", "Try Penny (onboarding)", onboarding),
+            ("penny.pastChats", "Past chats", pastChatsOpen),
             ("penny.thinking", "Thinking (reaction set)", thinking),
             ("penny.streaming", "Streaming, tool step", streamingStep),
             ("penny.answer", "Answer, caveat, question, number card", answer),

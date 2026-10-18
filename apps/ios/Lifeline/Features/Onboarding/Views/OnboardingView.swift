@@ -8,6 +8,7 @@ struct OnboardingView: View {
     let state: OnboardingViewState
     var actions: OnboardingActions = .noop
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Group {
@@ -35,6 +36,7 @@ struct OnboardingView: View {
 
     /// Scrolling content with the buttons pinned above the home indicator.
     private func page(
+        showsButtons: Bool = true,
         @ViewBuilder content: () -> some View,
         @ViewBuilder buttons: () -> some View
     ) -> some View {
@@ -50,10 +52,14 @@ struct OnboardingView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: Theme.Spacing.s) { buttons() }
-                .padding(.horizontal, Theme.Spacing.margin)
-                .padding(.vertical, Theme.Spacing.m)
-                .background(Theme.Palette.paper.ignoresSafeArea(edges: .bottom))
+            // No buttons: no bar. An empty bar drew a small paper rectangle over the list.
+            if showsButtons {
+                VStack(spacing: Theme.Spacing.s) { buttons() }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, Theme.Spacing.margin)
+                    .padding(.vertical, Theme.Spacing.m)
+                    .background(Theme.Palette.paper.ignoresSafeArea(edges: .bottom))
+            }
         }
     }
 
@@ -61,14 +67,10 @@ struct OnboardingView: View {
         HeaderSquareButton(kind: .back, identifier: "onboarding.back", action: actions.onBack)
     }
 
-    /// Back, title, then Skip (where it makes sense) or the sample data badge.
+    /// Back, title, then Skip where it makes sense. No sample data badge (B4): "Pick your student" says it once.
     private func header(_ title: String, skip: Bool = false) -> some View {
         ScreenHeader(title: title, leading: backButton) {
-            if skip {
-                skipButton
-            } else if state.isSampleData {
-                DemoDataBadge()
-            }
+            if skip { skipButton }
         }
     }
 
@@ -94,24 +96,43 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         page {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                PennyView(mood: .happy, size: 140)
+            VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+                PennyView(mood: .happy, size: 170)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, Theme.Spacing.xl)
+                    .padding(.vertical, Theme.Spacing.m)
                     .accessibilityHidden(true)
-                Text(Brand.tagline)
+                Text(L10n.tr("Your student money, sorted."))
                     .font(.llHero)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("onboarding.welcome.title")
-                Text("\(Brand.productName) uses real UK data to show where your money should go.")
-                    .font(.llBody)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 0) {
+                    welcomeLine(.study, L10n.tr("For UK students and graduates."), id: "who")
+                    RuleDivider()
+                    welcomeLine(.bank, L10n.tr("Penny uses your statement and live UK data."), id: "what")
+                    RuleDivider()
+                    welcomeLine(.check, L10n.tr("You get one clear answer each month, with the evidence."), id: "get")
+                }
+                .inkSurface(.card)
             }
-            .padding(.top, Theme.Spacing.xxl)
+            // Fills the screen: the content sits in the middle of the space above the button (C1). Large text
+            // scrolls instead.
+            .modifier(FillScreenHeight(isOn: !typeSize.isAccessibilitySize))
         } buttons: {
             nextButton("Get started")
         }
+    }
+
+    private func welcomeLine(_ icon: LLIcon, _ text: String, id: String) -> some View {
+        HStack(alignment: .center, spacing: Theme.Spacing.m) {
+            LLIconImage(icon, size: 32)
+            Text(text).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.vertical, Theme.Spacing.m)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("onboarding.welcome.\(id)")
     }
 
     // MARK: Problem
@@ -124,11 +145,10 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("onboarding.problem.title")
-            Text("Your loan, your job, your bank and your bills each tell you something different. Penny puts them in one place and tells you the one move that helps most.")
+            Text(L10n.tr("Your loan, job, bank and bills each tell you something different. Penny puts them with live UK data and gives you one clear answer."))
                 .font(.llBody)
                 .fixedSize(horizontal: false, vertical: true)
             ProblemArt()
-                .padding(.top, Theme.Spacing.s)
         } buttons: {
             nextButton("Continue")
         }
@@ -151,23 +171,26 @@ struct OnboardingView: View {
     private var features: some View {
         page {
             ScreenHeader(title: L10n.tr("What you can do"), leading: backButton)
-            // Explainer list: icon, headline, one line. No surfaces, no chevrons: nothing here is a button.
-            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                ForEach(OnboardingViewState.featureRows) { row in
-                    HStack(alignment: .top, spacing: Theme.Spacing.l) {
-                        LLIconImage(featureIcon(row.id), size: 40)
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            // Explainer list: icon, headline, one line. No chevrons: nothing here is a button.
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(OnboardingViewState.featureRows.enumerated()), id: \.element.id) { offset, row in
+                    if offset > 0 { RuleDivider() }
+                    HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                        LLIconImage(featureIcon(row.id), size: 36)
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(row.title).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
-                            Text(row.text).font(.llBody).foregroundStyle(Theme.Palette.muted)
+                            Text(row.text).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, Theme.Spacing.l)
+                    .padding(.vertical, Theme.Spacing.m)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("onboarding.feature.\(row.id)")
                 }
             }
-            .padding(.top, Theme.Spacing.s)
+            .inkSurface(.card)
         } buttons: {
             nextButton("Continue")
         }
@@ -175,9 +198,9 @@ struct OnboardingView: View {
 
     private func featureIcon(_ id: String) -> LLIcon {
         switch id {
-        case "allMoney": .budget
-        case "nextMove": .why
-        case "testIt": .test
+        case "allMoney": .bank
+        case "weekly": .budget
+        case "maths": .why
         case "penny": .pennySmiling
         default: .trophy
         }
@@ -219,20 +242,23 @@ struct OnboardingView: View {
     // MARK: Pick your student
 
     private var connect: some View {
-        page {
+        page(showsButtons: false) {
             header(L10n.tr("Pick your student"))
             if let note = state.signIn.note {
                 Text(note).font(.llLabel).foregroundStyle(Theme.Palette.muted).accessibilityIdentifier("onboarding.signInNote")
             }
-            Text("Each is a made-up student with 3 months of payments. Their Next Move is worked out live.")
+            Text(L10n.tr("Pick one to see how Penny works. Their forecast is worked out live from their statement."))
                 .font(.llBody)
                 .fixedSize(horizontal: false, vertical: true)
             if state.samplesLoading && state.samples.isEmpty {
-                SkeletonCard(lines: 4)
-                SkeletonCard(lines: 4)
+                SkeletonCard(lines: 6)
+                SkeletonCard(lines: 6)
             }
             ForEach(state.samples) { sample in
                 StudentCard(sample: sample, onPick: { actions.onPickSample(sample.id) })
+            }
+            if !state.samples.isEmpty {
+                HonestyLine()
             }
             section("Or use your own money")
             VStack(spacing: 0) {
@@ -275,7 +301,7 @@ struct OnboardingView: View {
     // MARK: Building their profile
 
     private var building: some View {
-        page {
+        page(showsButtons: state.building.isFinished) {
             header(L10n.tr("Building their profile"))
             HStack(spacing: Theme.Spacing.m) {
                 PennyView(mood: state.building.isFinished ? .happy : .thinking, size: 56)
@@ -321,27 +347,13 @@ struct OnboardingView: View {
     private var howDecides: some View {
         page {
             header(L10n.tr("How Penny decides"), skip: true)
-            PennyView(mood: .thinking, size: 96)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Theme.Spacing.m)
-                .accessibilityHidden(true)
             if let decides = state.decides {
-                Text(decides.title)
-                    .font(.llTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("onboarding.decides.title")
-                if !decides.sources.isEmpty {
-                    Text("Sources").llEyebrow()
-                    FlowRow(spacing: Theme.Spacing.s) {
-                        ForEach(decides.sources) { SourceChip(source: $0) }
-                    }
-                }
+                DecidesContent(decides: decides)
+            } else {
+                Text("Penny could not work out a forecast yet.").font(.llBody)
             }
-            Text("Here is the one that helps most this month.")
-                .font(.llBodyBold)
-                .fixedSize(horizontal: false, vertical: true)
         } buttons: {
-            nextButton("See the move")
+            nextButton("See their forecast")
         }
     }
 
@@ -350,30 +362,16 @@ struct OnboardingView: View {
     private var nextMove: some View {
         page {
             header(L10n.tr("Their Next Move"))
-            if let move = state.nextMove {
-                NextMoveRevealCard(move: move)
-                if !move.alsoConsidered.isEmpty {
-                    section("Also considered:")
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(move.alsoConsidered.enumerated()), id: \.element.id) { offset, runner in
-                            if offset > 0 { RuleDivider() }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(runner.action).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
-                                Text(runner.line).font(.llLabel).foregroundStyle(Theme.Palette.muted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.horizontal, Theme.Spacing.l)
-                            .padding(.vertical, Theme.Spacing.m)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("onboarding.runner.\(runner.id)")
-                        }
-                    }
-                    .inkSurface(.cardAlt)
-                }
+            if let card = state.forecastCard {
+                // The Money home forecast card (B3.1). "See the maths" goes back to "How Penny decides".
+                ForecastCardView(state: card, onSeeMaths: actions.onSeeMaths, onAskPenny: actions.onAskPenny)
             } else {
-                Text("No move right now. Their money looks fine.").font(.llBody)
+                Text("Penny could not work out a forecast yet.").font(.llBody)
             }
+            Text("You see this card at the top of Money every day.")
+                .font(.llLabel)
+                .foregroundStyle(Theme.Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
         } buttons: {
             Button("Start", action: actions.onFinish)
                 .buttonStyle(.main)
@@ -384,42 +382,91 @@ struct OnboardingView: View {
 
 // MARK: - Parts
 
-/// Four money sources flowing into Penny: the "one app" picture.
+/// Centres the content in the scroll view's height, less the pinned button. Off: no change.
+private struct FillScreenHeight: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.containerRelativeFrame(.vertical, alignment: .center) { length, _ in max(0, length - 120) }
+        } else {
+            content
+        }
+    }
+}
+
+/// "Your money" and "UK data" rows flowing into one clear decision (C2). UK data lists only the student-facing
+/// sources (B4).
 private struct ProblemArt: View {
+    private struct Item: Identifiable {
+        var id: String { title }
+        var icon: LLIcon?
+        var title: String
+    }
+
+    private var money: [Item] { [
+        .init(icon: .study, title: L10n.tr("Loan")),
+        .init(icon: .ribbon, title: L10n.tr("Bursary")),
+        .init(icon: .job, title: L10n.tr("Job")),
+        .init(icon: .family, title: L10n.tr("Parents")),
+        .init(icon: .bank, title: L10n.tr("Bank")),
+        .init(icon: .bills, title: L10n.tr("Bills")),
+    ] }
+
+    private var data: [Item] { [
+        .init(title: L10n.tr("Official facts (gov.uk, SAAS, Student Finance)")),
+        .init(title: "Bank of England"),
+        .init(title: "ONS"),
+        .init(title: "Nomis"),
+        .init(title: "Octopus Energy"),
+        .init(title: "Frankfurter"),
+        .init(title: L10n.tr("Bank of England MPC dates")),
+    ] }
+
     var body: some View {
-        VStack(spacing: Theme.Spacing.m) {
-            HStack(spacing: Theme.Spacing.s) {
-                source(.study, "Loan")
-                source(.job, "Job")
-                source(.bank, "Bank")
-                source(.bills, "Bills")
-            }
-            Rectangle().fill(Theme.Palette.ink).frame(width: Theme.outline, height: 28).clipShape(.capsule)
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            group(L10n.tr("Your money"), items: money, id: "money")
+            group(L10n.tr("UK data"), items: data, id: "data")
             HStack(spacing: Theme.Spacing.m) {
-                PennyView(mood: .happy, size: 56)
+                PennyView(mood: .happy, size: 48).accessibilityHidden(true)
                 Text("One clear decision").font(.llBodyBold)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, Theme.Spacing.l)
             .padding(.vertical, Theme.Spacing.s)
             .inkSurface(.cardAlt, fill: Theme.Palette.money)
             .foregroundStyle(Theme.Palette.onArea)
+            .accessibilityElement(children: .combine)
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Loan, job, bank and bills go into one clear decision."))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func source(_ icon: LLIcon, _ title: LocalizedStringKey) -> some View {
-        VStack(spacing: Theme.Spacing.xs) {
-            LLIconImage(icon, size: 32)
-            Text(title).font(.llLabelBold).lineLimit(1).minimumScaleFactor(0.7)
+    private func group(_ title: String, items: [Item], id: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Text(title).llEyebrow()
+            FlowRow(spacing: Theme.Spacing.s) {
+                ForEach(items) { item in
+                    HStack(spacing: 6) {
+                        if let icon = item.icon { LLIconImage(icon, size: 22) }
+                        Text(item.title).font(.llLabelBold).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, Theme.Spacing.s)
+                    .padding(.vertical, 6)
+                    .inkSurface(.chip, lineWidth: Theme.chipOutline)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 64)
-        .inkSurface(.card, lineWidth: Theme.chipOutline)
+        .padding(Theme.Spacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .inkSurface(.card)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text([title, items.map(\.title).joined(separator: ", ")].joined(separator: ": ")))
+        .accessibilityIdentifier("onboarding.problem.\(id)")
     }
 }
 
-/// One sample student: avatar, name, age, uni and city, funding, money in with dates, housing, habit line.
+/// One sample student, large (C6): avatar, name, age, uni and city, funding, money in with dates, housing,
+/// habit line.
 private struct StudentCard: View {
     let sample: OnboardingViewState.SampleCard
     let onPick: () -> Void
@@ -428,23 +475,24 @@ private struct StudentCard: View {
         Button(action: onPick) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 HStack(alignment: .center, spacing: Theme.Spacing.m) {
-                    LLIconImage(sample.avatar.flatMap(LLIcon.init(rawValue:)) ?? .study, size: 56)
+                    LLIconImage(sample.avatar.flatMap(LLIcon.init(rawValue:)) ?? .study, size: 72)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(sample.title).font(.llTitle).fixedSize(horizontal: false, vertical: true)
-                        let kind = [sample.kindText, sample.ageText.map { L10n.tr("Age \($0)") }].compactMap { $0 }.joined(separator: " · ")
+                        let kind = [sample.ageText.map { L10n.tr("Age \($0)") }, sample.kindText].compactMap { $0 }.joined(separator: " · ")
                         if !kind.isEmpty {
-                            Text(kind).font(.llLabelBold).foregroundStyle(Theme.Palette.muted)
+                            Text(kind).font(.llBodyBold).foregroundStyle(Theme.Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     Spacer(minLength: 0)
                     Chevron()
                 }
                 if let place = sample.placeText {
-                    Label(place, icon: .study).font(.llLabel)
+                    Label(place, icon: .study).font(.llBody).fixedSize(horizontal: false, vertical: true)
                 }
                 Chip(text: sample.fundingText, fill: Theme.Palette.money)
                 if sample.moneyIn.isEmpty {
-                    Text(sample.text).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                    Text(sample.text).font(.llBody).fixedSize(horizontal: false, vertical: true)
                 } else {
                     VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                         Text("Money in").llEyebrow()
@@ -452,16 +500,19 @@ private struct StudentCard: View {
                             MoneyInRow(line: line)
                         }
                     }
+                    .padding(Theme.Spacing.m)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .inkSurface(.cardAlt, lineWidth: Theme.chipOutline)
                 }
                 if let housing = sample.housing {
-                    Label(housing, icon: .home).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                    Label(housing, icon: .home).font(.llBody).fixedSize(horizontal: false, vertical: true)
                 }
                 if let habit = sample.habitLine {
-                    Text(habit).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    Label(habit, icon: .goal).font(.llBody).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .foregroundStyle(Theme.Palette.ink)
-            .padding(Theme.Spacing.l)
+            .padding(Theme.Spacing.xl)
             .frame(maxWidth: .infinity, minHeight: Theme.minTarget, alignment: .leading)
             .inkSurface(.card)
             .contentShape(.rect)
@@ -471,6 +522,23 @@ private struct StudentCard: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(Text("Builds this student's profile"))
         .accessibilityIdentifier("onboarding.sample.\(sample.id)")
+    }
+}
+
+/// The one honesty line (B4), under the student list.
+private struct HonestyLine: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+            LLIconImage(.why, size: 28)
+            Text(L10n.tr("These are sample students. UK banks do not give apps like ours access to real accounts without a licence, so Penny runs on sample statements built from real UK figures."))
+                .font(.llLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Theme.Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .inkSurface(.cardAlt)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("onboarding.honesty")
     }
 }
 
@@ -571,16 +639,25 @@ private struct ProfileContent: View {
                     }
                 }
             }
+            if let period = profile.periodText {
+                // Every money block below uses this one period (C7).
+                Label(L10n.tr("Spending and bills: \(period)"), icon: .budget)
+                    .font(.llBodyBold)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("onboarding.profile.period")
+            }
             if !profile.spending.isEmpty {
-                block("Spending by category") {
+                block(L10n.tr("Spending by category")) {
                     if let total = profile.spendingTotalText { Text(total).font(.llBodyBold) }
-                    SpendingChart(slices: profile.spending)
+                    SpendingPie(slices: profile.spending, label: [L10n.tr("Spending by category"), profile.periodText].compactMap { $0 }.joined(separator: ", "))
                 }
             }
             if !profile.bills.isEmpty {
-                block("Bills and subscriptions") {
+                block(L10n.tr("Bills and subscriptions")) {
+                    if let total = profile.billsTotalText { Text(total).font(.llBodyBold) }
                     ForEach(profile.bills) { row($0) }
                 }
+                .accessibilityIdentifier("onboarding.profile.bills")
             }
             if !profile.debts.isEmpty || profile.noDebts {
                 block("Debts") {
@@ -634,6 +711,10 @@ private struct ProfileContent: View {
 
     private var noticedColors: [Color] { [Theme.Palette.work, Theme.Palette.home, Theme.Palette.family] }
 
+    private func block(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        block(LocalizedStringKey(title), content: content)
+    }
+
     private func block(_ title: LocalizedStringKey, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Text(title).font(.llSection).accessibilityAddTraits(.isHeader)
@@ -659,31 +740,38 @@ private struct ProfileContent: View {
     }
 }
 
-/// Spending by category: one ink-outlined bar per category, largest first.
-private struct SpendingChart: View {
+/// Spending by category as a pie (C7): ink-outlined slices in the forecast colours, then a legend with £ and share.
+private struct SpendingPie: View {
     let slices: [OnboardingViewState.SpendSlice]
+    let label: String
 
     var body: some View {
-        Chart(slices) { slice in
-            BarMark(
-                x: .value("Amount", slice.amount),
-                y: .value("Category", slice.label)
-            )
-            .foregroundStyle(Theme.Palette.money)
-            .annotation(position: .trailing, alignment: .leading) {
-                Text(slice.amountText).font(.llLabelBold).foregroundStyle(Theme.Palette.ink)
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            Chart(slices) { slice in
+                SectorMark(angle: .value("Amount", slice.amount), angularInset: 1)
+                    .foregroundStyle(ForecastPalette.slice(slice.colorIndex))
+            }
+            .chartLegend(.hidden)
+            .frame(width: 168, height: 168)
+            .overlay(Circle().strokeBorder(Theme.Palette.ink, lineWidth: 2.5))
+            .frame(maxWidth: .infinity)
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                ForEach(slices) { slice in
+                    HStack(spacing: Theme.Spacing.s) {
+                        CategoryDot(color: ForecastPalette.slice(slice.colorIndex))
+                        Text(slice.label).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: Theme.Spacing.s)
+                        Text(slice.amountText).font(.llBodyBold)
+                        Text(slice.shareText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                            .frame(minWidth: 40, alignment: .trailing)
+                    }
+                }
             }
         }
-        .chartXAxis(.hidden)
-        .chartYAxis {
-            AxisMarks { _ in
-                AxisValueLabel().font(.llLabel).foregroundStyle(Theme.Palette.ink)
-            }
-        }
-        .chartXScale(domain: 0...((slices.map(\.amount).max() ?? 1) * 1.35))
-        .frame(height: CGFloat(slices.count) * 34 + 8)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(slices.map { "\($0.label) \($0.amountText)" }.joined(separator: ", ")))
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(slices.map { "\($0.label) \($0.amountText), \($0.shareText)" }.joined(separator: ". ")))
         .accessibilityIdentifier("onboarding.profile.spendingChart")
     }
 }
@@ -736,51 +824,83 @@ private struct NoticedRow: View {
     }
 }
 
-/// The top move: action, reason, gain, trade-off, plain-English confidence.
-private struct NextMoveRevealCard: View {
-    let move: OnboardingViewState.NextMove
+/// "How Penny decides" (C8): the question, the 4 forecast steps with real numbers and sources, the sum, then
+/// the result and the comparison with habits.
+private struct DecidesContent: View {
+    let decides: OnboardingViewState.Decides
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("Their next money move").llEyebrow()
-            Text(move.action)
-                .font(.llTitle)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("onboarding.nextMove.action")
-            Text(move.reason).font(.llBody).fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("onboarding.nextMove.reason")
-            if !move.impactAmountText.isEmpty {
-                RuleDivider()
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
-                    Text(move.impactAmountText).font(.llHero).lineLimit(1).minimumScaleFactor(0.6)
-                    Text(move.impactCaption).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .center, spacing: Theme.Spacing.m) {
+                PennyView(mood: .thinking, size: 56).accessibilityHidden(true)
+                Text(decides.question)
+                    .font(.llTitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("onboarding.decides.title")
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(decides.steps.enumerated()), id: \.element.id) { offset, step in
+                    if offset > 0 { RuleDivider() }
+                    StepRow(step: step)
+                }
+            }
+            .inkSurface(.card)
+            if let sum = decides.sumLine, let result = decides.resultText {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text(sum).font(.llBody)
+                    Text(result).font(.llHero).lineLimit(1).minimumScaleFactor(0.6)
+                    if let daily = decides.dailyText { Text(daily).font(.llLabelBold).foregroundStyle(Theme.Palette.muted) }
+                }
+                .padding(Theme.Spacing.l)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inkSurface(.cardAlt, fill: ForecastPalette.greenTint)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("onboarding.decides.result")
+            }
+            if let habit = decides.habitText {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text(decides.verdict).llEyebrow()
+                    Text(habit).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                    if let source = decides.habitSource {
+                        Text(source).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("onboarding.decides.habits")
             }
-            if let tradeOff = move.tradeOff {
-                Text(tradeOff).font(.llLabel).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("onboarding.nextMove.tradeOff")
-            }
-            if !move.confidenceText.isEmpty {
-                RuleDivider()
-                VStack(alignment: .leading, spacing: 6) {
-                    if move.confidenceFilled > 0 { ConfidenceMeter(filled: move.confidenceFilled) }
-                    Text(move.confidenceText).font(.llLabelBold).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private struct StepRow: View {
+        let step: OnboardingViewState.DecideStep
+
+        var body: some View {
+            HStack(alignment: .top, spacing: Theme.Spacing.m) {
+                Text("\(step.number)")
+                    .font(.llLabelBold)
+                    .frame(width: 26, height: 26)
+                    .inkSurface(.badge, lineWidth: Theme.chipOutline)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(step.title).font(.llBodyBold).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: Theme.Spacing.s)
+                        Text(step.amountText).font(.llBodyBold.monospacedDigit()).multilineTextAlignment(.trailing)
+                    }
+                    if let detail = step.detail {
+                        Text(detail).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !step.sources.isEmpty {
+                        Text(L10n.tr("Source: \(step.sources.joined(separator: ", "))"))
+                            .font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("onboarding.nextMove.confidence")
             }
+            .padding(.horizontal, Theme.Spacing.l)
+            .padding(.vertical, Theme.Spacing.m)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("onboarding.decides.step.\(step.number)")
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(Theme.Palette.ink)
-        .inkSurface(.hero, hero: true)
-        .overlay(alignment: .topTrailing) {
-            PennyView(mood: .happy, size: 56).rotationEffect(.degrees(8)).offset(x: -14, y: -28).accessibilityHidden(true)
-        }
-        .padding(.top, Theme.Spacing.s)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("onboarding.reveal")
     }
 }
 
@@ -835,7 +955,8 @@ struct OnboardingErrorCard: View {
 #Preview("How Penny decides · light") { OnboardingView(state: OnboardingFixtures.howDecides) }
 #Preview("How Penny decides · dark") { OnboardingView(state: OnboardingFixtures.howDecides).previewDark() }
 #Preview("How Penny decides · AX3") { OnboardingView(state: OnboardingFixtures.howDecides).previewLargeType() }
+#Preview("How Penny decides, running short · light") { OnboardingView(state: OnboardingFixtures.howDecidesShort) }
 #Preview("Their Next Move · light") { OnboardingView(state: OnboardingFixtures.nextMove) }
 #Preview("Their Next Move · dark") { OnboardingView(state: OnboardingFixtures.nextMove).previewDark() }
 #Preview("Their Next Move · AX3") { OnboardingView(state: OnboardingFixtures.nextMove).previewLargeType() }
-#Preview("Their Next Move, older server · light") { OnboardingView(state: OnboardingFixtures.nextMoveFallback) }
+#Preview("Their Next Move, running short · light") { OnboardingView(state: OnboardingFixtures.nextMoveShort) }

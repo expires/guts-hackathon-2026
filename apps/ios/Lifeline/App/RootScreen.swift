@@ -119,20 +119,20 @@ struct RootScreen: View {
     }
 
     private var tabs: some View {
-        // Custom tab bar from the handoff. Every tab stays alive so its state and scroll position persist.
-        // A VStack (not `.safeAreaInset`): the content frame shrinks, so every NavigationStack lays out
-        // above the bar, also right after the bar appears at the end of a setup flow.
-        VStack(spacing: 0) {
-            ZStack {
-                ForEach(AppTab.allCases, id: \.self) { tab in
-                    let isActive = tab == selection
-                    content(for: tab)
-                        .opacity(isActive ? 1 : 0)
-                        .allowsHitTesting(isActive)
-                        .accessibilityHidden(!isActive)
-                }
+        // Floating tab bar (PENNY_V3_BUILD.md G2). Every tab stays alive so its state and scroll position persist.
+        // `.safeAreaInset` puts the bar over the content and adds its height to the bottom safe area, so every
+        // scrolling screen gets bottom padding and the Penny input sits above the bar. Covers still hide it.
+        ZStack {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                let isActive = tab == selection
+                content(for: tab)
+                    .opacity(isActive ? 1 : 0)
+                    .allowsHitTesting(isActive)
+                    .accessibilityHidden(!isActive)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             // Setup flows (character select, form, start year) hide the tab bar.
             if showsTabBar {
                 LLTabBar(
@@ -178,7 +178,11 @@ struct RootScreen: View {
                 MoneyHomeScreen(client: session.client) { lifeID in openLife(lifeID) }
             }
         case .penny:
-            PennyTab(model: penny) { _ in router.selection = .money }
+            // Penny links open the right Money screen (D5): the forecast card or The maths.
+            PennyTab(model: penny) { link in
+                router.selection = .money
+                MoneyNavigation.shared.open(FeatureSlots.moneyDestination(link.destination))
+            }
         case .play:
             NavigationStack {
                 PlayScreen(session: session) {}

@@ -37,15 +37,20 @@ struct OnboardingFlowTests {
             importStatement: { _, _, _ in await calls.add("import"); return OnboardingRecorded.importResult },
             setManualFinance: { _ in await calls.add("manual"); return OnboardingRecorded.profile },
             reversePostcode: { _, _ in OnboardingExamples.reversePostcode },
-            nextMove: { await calls.add("nextMove"); return OnboardingRecorded.nextMove },
+            forecast: { await calls.add("forecast"); return OnboardingRecorded.forecast },
             financeProfile: { await calls.add("profile"); return OnboardingRecorded.profile }
         )
         api.listSamples = { onUpdate in await onUpdate(OnboardingRecorded.samples.samples) }
         api.importSample = { _ in await calls.add("importSample"); return OnboardingRecorded.importResult }
-        api.spending = { _ in
-            await calls.add("spending")
+        api.spending = { month in
+            await calls.add(month == nil ? "spending" : "spending \(month!)")
             if let spendingGate { await spendingGate.wait() }
-            return OnboardingRecorded.spending
+            return OnboardingRecorded.spending(month)
+        }
+        api.categoryDetail = { category, month in
+            await calls.add("paid \(category) \(month ?? "now")")
+            if failBills { throw APIError.server(status: 503, code: "down", message: "down", source: "test") }
+            return try OnboardingRecorded.categoryDetail(category, month)
         }
         api.bills = {
             await calls.add("bills")
@@ -183,14 +188,43 @@ struct OnboardingFlowTests {
         #expect(model.state.building.stages.allSatisfy { $0.status == .done })
         #expect(model.state.building.isFinished)
         let names = await calls.names
-        #expect(names == ["importSample", "profile", "spending", "bills", "subscriptions", "overview", "sources", "habits", "nextMove"]
-            || names == ["importSample", "profile", "spending", "subscriptions", "bills", "overview", "sources", "habits", "nextMove"])
+        #expect(Array(names.prefix(4)) == ["importSample", "profile", "spending", "spending 2026-09"])
+        #expect(Set(names[4..<8]) == ["bills", "subscriptions", "paid bills 2026-09", "paid subscriptions 2026-09"])
+        #expect(Array(names.suffix(4)) == ["overview", "sources", "habits", "forecast"])
         // Each stage says what its call found.
         #expect(model.state.building.stages[0].detail?.hasPrefix("66 payments") == true)
         #expect(model.state.building.stages[1].detail == "3 income sources")
         #expect(model.state.building.stages[3].detail == "2 bills, 1 subscription")
         #expect(model.state.building.stages[4].detail == "No debts found")
         #expect(model.state.building.stages[6].detail == "Habit score 63 out of 100")
+        #expect(model.state.building.stages[7].detail == "Forecast ready")
+    }
+
+    @Test func thisMonthSoFarWhenThereIsNoEarlierMonth() async throws {
+        var api = api()
+        api.spending = { month in
+            guard month == nil else { throw APIError.server(status: 404, code: "not_found", message: "none", source: "test") }
+            return OnboardingRecorded.spending
+        }
+        let model = model(api)
+        await model.importSample("scottish")
+        let profile = try #require(model.state.profile)
+        #expect(profile.periodText == "October so far")
+        #expect(profile.spendingTotalText?.hasSuffix("in October so far") == true)
+    }
+
+    @Test func spendSlicesMergeTheRestAndAddUp() {
+        let slices = OnboardingViewModel.spendSlices(OnboardingRecorded.spending)
+        #expect(slices.count <= 6)
+        #expect(slices.map(\.colorIndex) == Array(0..<slices.count))
+        let total = OnboardingRecorded.spending.categories.filter { !["income", "transfers", "savings"].contains($0.category.rawValue) }
+            .reduce(0) { $0 + $1.amount }
+        #expect(abs(slices.reduce(0) { $0 + $1.amount } - total) < 0.005)
+    }
+
+    @Test func habitNamesAreTheOneSet() {
+        let names = OnboardingViewModel.habitParts(OnboardingRecorded.habits).map(\.label)
+        #expect(names == ["Saving", "Safety cushion", "Steady spending", "Needs before wants", "Subscriptions in check", "Low debt pressure"])
     }
 
     @Test func failedCallSkipsItsStageAndHidesItsRows() async {
@@ -240,7 +274,23 @@ struct OnboardingFlowTests {
         #expect(profile.housing == "Shared flat in Marchmont, £540 a month")
         #expect(profile.spending.first?.label == "Housing")
         #expect(profile.spending.allSatisfy { !["income", "transfers", "savings"].contains($0.id) })
-        #expect(profile.bills.map(\.label) == ["Marchmont Lettings", "giffgaff", "Spotify"])
+        // One period for every money block (C7): September, the last full month.
+        #expect(profile.periodText == "September")
+        #expect(profile.spendingTotalText?.hasSuffix("in September") == true)
+        #expect(profile.billsTotalText?.hasSuffix("in September") == true)
+        // The bills block is the payments behind the chart's bills and subscriptions slices.
+        let chartBills = profile.spending.filter { OnboardingViewModel.billCategories.contains($0.id) }.reduce(0) { $0 + $1.amount }
+        let september = OnboardingRecorded.spending("2026-09")
+        let paid = OnboardingViewModel.billCategories.compactMap { try? OnboardingRecorded.categoryDetail($0, "2026-09") }
+        #expect(abs(paid.reduce(0) { $0 + $1.total } - chartBills) < 0.005)
+        #expect(profile.billsTotalText == OnboardingViewModel.amountInPeriod(Money.format(chartBills), month: september.month, currentMonth: "2026-10"))
+        #expect(profile.bills.contains { $0.label == "Spotify" && $0.detail?.contains("Subscription") == true })
+        // The chart slices add up to the total text, and the shares to about 100%.
+        let total = profile.spending.reduce(0) { $0 + $1.amount }
+        #expect(profile.spendingTotalText == OnboardingViewModel.spendingTotalText(september, currentMonth: "2026-10"))
+        #expect(profile.spendingTotalText?.hasPrefix(Money.format(total)) == true)
+        // No "Sample data" tag anywhere (B4).
+        #expect(profile.noticed.allSatisfy { $0.sourceText == "From their statement" })
         #expect(profile.noDebts)
         #expect(profile.savingsText == "£300")
         #expect(profile.coverText == "About 1.6 months of spending")
@@ -293,40 +343,55 @@ struct OnboardingFlowTests {
 
     // MARK: How Penny decides and Their Next Move
 
-    @Test func howPennyDecidesCountsOptionsAndListsSources() {
-        let decides = OnboardingViewModel.makeDecides(OnboardingRecorded.nextMove)
-        #expect(decides.title == "Penny compared 6 options using this profile and live UK data.")
-        #expect(decides.sources.map(\.name) == ["Your statement", "Bank of England", "Land Registry", "Nomis", "ONS"])
-        // Older server: options_compared missing, so the moves shown are counted.
-        var older = OnboardingRecorded.nextMove
-        older.optionsCompared = nil
-        older.runnersUp = []
-        #expect(OnboardingViewModel.makeDecides(older).title == "Penny checked 1 option using this profile and live UK data.")
+    @Test func howPennyDecidesShowsTheForecastStepsWithSources() throws {
+        let forecast = OnboardingRecorded.forecast
+        let decides = OnboardingViewModel.makeDecides(forecast)
+        #expect(decides.steps.map(\.number) == [1, 2, 3, 4])
+        // Money now, bills before the next money, the buffer, the next money: the forecast's own numbers.
+        #expect(decides.steps[0].amountText == ForecastText.whole(forecast.moneyAvailable))
+        #expect(decides.steps[1].amountText == ForecastText.minusWhole(forecast.billsTotal))
+        #expect(decides.steps[2].amountText == ForecastText.minusWhole(forecast.bufferAmount))
+        let next = try #require(forecast.nextMoneyIfAny)
+        #expect(decides.steps[3].amountText.hasSuffix(ForecastText.whole(next.amount)))
+        #expect(decides.steps[0].sources == ["Your statement"])
+        #expect(decides.steps[3].sources == [next.source.label])
+        #expect(decides.resultText == "= \(ForecastText.whole(forecast.perWeek)) a week")
+        #expect(decides.verdict == "On track")
+        // No Land Registry, no "Sample data".
+        let all = decides.steps.flatMap(\.sources)
+        #expect(!all.contains { $0.contains("Land Registry") || $0.contains("Sample data") })
+        #expect(OnboardingViewModel.makeDecides(ForecastMock.forecast(ForecastMock.short)).verdict == "Running short")
     }
 
-    @Test func nextMoveHasReasonTradeOffConfidenceAndRunnersUp() throws {
-        let move = try #require(OnboardingFixtures.nextMove.nextMove)
-        #expect(move.action == "Build a safety net of £2,565")
-        #expect(move.reason == "A small cash cushion stops a surprise bill going on a card.")
-        #expect(move.tradeOff == "What you give up: Less money invested, so lower expected growth")
-        #expect(move.confidenceText == "Low confidence: based on 5 similar past years and your last 3 months of spending")
-        #expect(move.alsoConsidered.map(\.action) == ["Spend up to £120 a week", "Cancel Spotify"])
-        #expect(move.alsoConsidered.first?.line == "Keeps you on track until the next SAAS payment.")
+    @Test func howPennyDecidesAddsExpectedIncomeToMoneyNow() {
+        var persona = ForecastMock.onTrack
+        persona.expected = [.init(label: "Mum", pence: 4_000, date: "2026-10-23", source: "Your statement, every Friday")]
+        let forecast = ForecastMock.forecast(persona)
+        let decides = OnboardingViewModel.makeDecides(forecast)
+        #expect(decides.steps[0].amountText == ForecastText.whole(forecast.moneyNow + 40))
+        #expect(decides.steps[0].detail?.contains("expected before") == true)
+        #expect(decides.steps[0].sources.contains("Your statement, every Friday"))
     }
 
-    @Test func nextMoveConfidenceFallsBackToAPlainSentence() throws {
-        let move = try #require(OnboardingFixtures.nextMoveFallback.nextMove)
-        #expect(move.confidenceText == "Low confidence: Penny has only a few similar cases. Use it as a rough guide.")
-        #expect(!move.confidenceText.contains("sample"))
-        // No reason: the headline is the one line.
-        #expect(move.reason == "Your safety net covers 1.6 months")
-        #expect(move.alsoConsidered.isEmpty)
+    @Test func theirNextMoveIsTheForecastCard() async throws {
+        let model = model(api())
+        await model.importSample("scottish")
+        let card = try #require(model.state.forecastCard)
+        #expect(card == ForecastCardState.make(OnboardingRecorded.forecast))
+        // "See the maths" goes back to How Penny decides; "Ask Penny" calls the glue.
+        model.go(.nextMove)
+        var asked = false
+        model.onAskPenny = { asked = true }
+        model.actions.onSeeMaths()
+        #expect(model.state.step == .howDecides)
+        model.actions.onAskPenny()
+        #expect(asked)
     }
 
     @Test func noEmDashesInNewCopy() {
         let rows = OnboardingViewState.featureRows
         #expect(rows.count == 5)
-        #expect(rows.map(\.title) == ["See all your money", "Your next move", "Test it first", "Ask Penny", "Learn and play with friends"])
+        #expect(rows.map(\.title) == ["See all your money", "Know what you can spend each week", "See the maths behind it", "Ask Penny", "Learn and play with friends"])
         let texts = rows.flatMap { [$0.title, $0.text] } + OnboardingViewModel.stages(firstLabel: "Reading the statement").map(\.label)
         #expect(texts.allSatisfy { !$0.contains("\u{2014}") })
     }

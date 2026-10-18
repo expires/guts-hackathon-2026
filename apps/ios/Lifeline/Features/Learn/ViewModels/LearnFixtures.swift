@@ -97,7 +97,7 @@ enum LearnFixtures {
 
     static var lessonLocked: LearnLessonViewState {
         var state = lessonCard
-        state.phase = .failed(.init(title: "This lesson is locked", message: "Finish Make a budget first", canRetry: false))
+        state.phase = .failed(.init(title: "Couldn't open this lesson", message: "Try again in a moment.", canRetry: true))
         return state
     }
 

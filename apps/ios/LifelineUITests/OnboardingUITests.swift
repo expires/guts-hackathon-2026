@@ -40,11 +40,16 @@ final class OnboardingUITests: XCTestCase {
         let next = app.buttons["onboarding.next"]
         XCTAssertTrue(next.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["onboarding.back"].exists)
+        for id in ["who", "what", "get"] {
+            XCTAssertTrue(any(app, "onboarding.welcome.\(id)").exists, id)
+        }
         shot("\(prefix)-01-welcome")
         next.tap()
 
         // Problem, with Back to Welcome.
         XCTAssertTrue(any(app, "onboarding.problem.title").waitForExistence(timeout: 5))
+        XCTAssertTrue(any(app, "onboarding.problem.money").exists)
+        XCTAssertTrue(any(app, "onboarding.problem.data").exists)
         shot("\(prefix)-02-problem")
         app.buttons["onboarding.back"].tap()
         XCTAssertTrue(any(app, "onboarding.welcome.title").waitForExistence(timeout: 5))
@@ -70,7 +75,7 @@ final class OnboardingUITests: XCTestCase {
 
         // What you can do: 5 explainer rows, none of them buttons.
         XCTAssertTrue(any(app, "onboarding.feature.allMoney").waitForExistence(timeout: 5))
-        for id in ["allMoney", "nextMove", "testIt", "penny", "friends"] {
+        for id in ["allMoney", "weekly", "maths", "penny", "friends"] {
             XCTAssertTrue(any(app, "onboarding.feature.\(id)").exists, id)
             XCTAssertFalse(app.buttons["onboarding.feature.\(id)"].exists, "\(id) must not look tappable")
         }
@@ -90,7 +95,14 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(student.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["onboarding.option.statement"].exists)
         XCTAssertFalse(app.buttons["onboarding.option.monzo"].exists)
+        // No "Mock data" tag (B4); the honesty line sits under the list.
+        XCTAssertFalse(any(app, "demoDataBadge").exists)
         shot("\(prefix)-06-pick-your-student")
+        app.swipeUp()
+        XCTAssertTrue(any(app, "onboarding.honesty").waitForExistence(timeout: 5))
+        shot("\(prefix)-06b-pick-your-student-honesty")
+        app.swipeDown()
+        app.swipeDown()
         student.tap()
 
         // Building their profile: no auto-jump, "View profile" when every stage ended.
@@ -106,8 +118,11 @@ final class OnboardingUITests: XCTestCase {
         // Their profile.
         XCTAssertTrue(any(app, "onboarding.profile.name").waitForExistence(timeout: 5))
         XCTAssertTrue(any(app, "onboarding.habit.savings_rate").exists)
+        XCTAssertTrue(any(app, "onboarding.profile.period").exists)
+        XCTAssertFalse(any(app, "demoDataBadge").exists)
         shot("\(prefix)-09-profile")
         app.swipeUp()
+        shot("\(prefix)-09b-profile-bills")
         app.swipeUp()
         shot("\(prefix)-10-profile-more")
         // "Penny noticed": tap shows the evidence.
@@ -118,18 +133,26 @@ final class OnboardingUITests: XCTestCase {
         shot("\(prefix)-11-profile-evidence")
         app.buttons["onboarding.next"].tap()
 
-        // How Penny decides: Back and Skip.
+        // How Penny decides: the 4 forecast steps with sources, then the result. Back and Skip.
         XCTAssertTrue(any(app, "onboarding.decides.title").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["onboarding.skip"].exists)
+        for number in 1...4 {
+            XCTAssertTrue(any(app, "onboarding.decides.step.\(number)").exists, "step \(number)")
+        }
         shot("\(prefix)-12-how-penny-decides")
+        app.swipeUp()
+        XCTAssertTrue(any(app, "onboarding.decides.result").waitForExistence(timeout: 5))
+        shot("\(prefix)-12b-how-penny-decides-result")
         app.buttons["onboarding.next"].tap()
 
-        // Their Next Move, then Back to How Penny decides and forward again.
-        XCTAssertTrue(any(app, "onboarding.nextMove.action").waitForExistence(timeout: 5))
-        XCTAssertTrue(any(app, "onboarding.nextMove.confidence").exists)
+        // Their Next Move: the forecast card. "See the maths" goes back to How Penny decides.
+        XCTAssertTrue(any(app, "forecast.card").waitForExistence(timeout: 5))
+        XCTAssertTrue(any(app, "forecast.headline").exists || any(app, "forecast.summary").exists)
         shot("\(prefix)-13-next-move")
-        app.swipeUp()
-        shot("\(prefix)-14-next-move-more")
+        app.buttons["forecast.seeMaths"].tap()
+        XCTAssertTrue(any(app, "onboarding.decides.title").waitForExistence(timeout: 5))
+        app.buttons["onboarding.next"].tap()
+        XCTAssertTrue(app.buttons["onboarding.back"].waitForExistence(timeout: 5))
         app.buttons["onboarding.back"].tap()
         XCTAssertTrue(any(app, "onboarding.decides.title").waitForExistence(timeout: 5))
         app.buttons["onboarding.next"].tap()
@@ -168,6 +191,9 @@ final class OnboardingUITests: XCTestCase {
         manual.tap()
         let save = app.buttons["onboarding.manual.save"]
         XCTAssertTrue(save.waitForExistence(timeout: 5))
+        // Manual entry: Back, no Skip.
+        XCTAssertTrue(app.buttons["onboarding.back"].exists)
+        XCTAssertFalse(app.buttons["onboarding.skip"].exists)
         save.tap()
         XCTAssertTrue(app.descendants(matching: .any)["onboarding.manual.problems"].waitForExistence(timeout: 5))
     }

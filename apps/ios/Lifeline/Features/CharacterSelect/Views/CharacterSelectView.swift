@@ -12,7 +12,6 @@ struct CharacterSelectView: View {
                     title: L10n.tr("Choose a life"),
                     leading: actions.onClose.map { close in HeaderSquareButton(kind: .back, identifier: "characterSelect.back", action: close) }
                 ) {
-                    if state.usesSampleData { DemoDataBadge() }
                 }
                 Text(state.intro).font(.llBody).foregroundStyle(Theme.Palette.muted)
                 VStack(spacing: Theme.Spacing.m) {

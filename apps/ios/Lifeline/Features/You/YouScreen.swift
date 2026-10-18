@@ -11,6 +11,9 @@ struct YouScreen: View {
     let session: GameSession
     @State private var model: YouViewModel
     @State private var sheet: YouSheet?
+    /// Learn progress for the "Lessons X/48" tile; the same model opens the path (PENNY_V3_BUILD E5).
+    @State private var learn: LearnPathViewModel
+    @State private var showsLearn = false
     @Environment(\.appRoutes) private var routes
     /// Judge mode action waiting for confirmation.
     @State private var judgeConfirm: YouViewModel.Route?
@@ -36,6 +39,7 @@ struct YouScreen: View {
         self.onNewPlayer = onNewPlayer
         self.onResetDemo = onResetDemo
         _model = State(initialValue: YouViewModel(client: session.client))
+        _learn = State(initialValue: LearnPathViewModel(client: session.client))
     }
 
     var body: some View {
@@ -50,13 +54,14 @@ struct YouScreen: View {
                     case .spendAccuracy: .spendAccuracy
                     case .debug: .debug
                     case .connectMoney: nil
-                    case .askPenny, .newPlayer, .resetDemo, .account, .changeLanguage: nil
+                    case .askPenny, .newPlayer, .resetDemo, .account, .changeLanguage, .learn: nil
                     case .aiDisclosure: .aiDisclosure
                     }
                     // Opens onboarding at "Connect your money", not at the welcome pages.
                     if route == .connectMoney { routes.openConnectMoney() }
                     if route == .account { routes.openAccount() }
                     if route == .changeLanguage { onChangeLanguage() }
+                    if route == .learn { showsLearn = true }
                     // "Ask Penny" switches to the Penny tab (ADR 0051), not a sheet.
                     if route == .askPenny { routes.askPenny(PennyRoute(screen: .other)) }
                     if route == .newPlayer || route == .resetDemo { judgeConfirm = route }
@@ -82,6 +87,13 @@ struct YouScreen: View {
                 model.conceptsUnlocked = session.life?.conceptsUnlocked.count
                 await model.load()
             }
+            .task { await learn.load() }
+            .onChange(of: learn.entry, initial: true) { _, entry in
+                model.lessons = entry.isLoading ? nil : (entry.done, entry.total)
+            }
+            .llCover(isPresented: $showsLearn) {
+                LearnPathScreen(model: learn, client: session.client) { showsLearn = false }
+            }
             .llSheet(item: $sheet) { sheet in
                 let close: @MainActor () -> Void = { self.sheet = nil }
                 switch sheet {
@@ -91,7 +103,9 @@ struct YouScreen: View {
                 case .evaluation: EvaluationScreen(client: session.client, onClose: close)
                 case .spendAccuracy: SpendAccuracyScreen(client: session.client, onClose: close)
                 case .aiDisclosure: AIDisclosureView(state: .load(), onClose: close)
-                case .debug: DebugMenuScreen(activeKind: session.client.kind, onClose: close)
+                case .debug:
+                    // Debug builds only (PENNY_V3_BUILD F6): Demo and Release never show it.
+                    if ClientFactory.isDebugBuild { DebugMenuScreen(activeKind: session.client.kind, onClose: close) }
                 }
             }
     }

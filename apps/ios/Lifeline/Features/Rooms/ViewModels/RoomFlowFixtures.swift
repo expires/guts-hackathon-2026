@@ -124,9 +124,18 @@ enum RoomFlowFixtures {
         return room
     }
 
+    /// "Play with friends" lobby (no preset) with Quick Life picked: everyone plays Jordan. Jas never sent "ready".
+    static var quickLifeRoom: Room {
+        var room = lobbyRoom
+        room.presetId = nil
+        room.game = .sameLife
+        room.options = .init(pathId: "apprentice", quick: true, quickStudentId: "qs-jordan")
+        return room
+    }
+
     static func lobby(room: Room = quizRoom, myID: String = myID, link: RoomSession.Link = .live) -> RoomLobbyViewState {
         RoomMapping.lobby(
-            room: room, myID: myID, link: link, paths: MockPlayData.paths,
+            room: room, myID: myID, link: link, paths: MockPlayData.paths, students: MockPlayData.quickStudents,
             qrPNG: RoomQR.generate(room.joinUrl), isSampleData: true
         )
     }
@@ -135,15 +144,26 @@ enum RoomFlowFixtures {
     static var lobbyHostNoGame: RoomLobbyViewState { lobby(room: lobbyRoom) }
     static var lobbyGuest: RoomLobbyViewState { lobby(myID: "p4") }
     static var lobbyReconnecting: RoomLobbyViewState { lobby(link: .reconnecting(attempt: 2)) }
+    static var lobbyQuickHost: RoomLobbyViewState { lobby(room: quickLifeRoom) }
+    static var lobbyQuickGuest: RoomLobbyViewState { lobby(room: quickLifeRoom, myID: "p4") }
 
-    static func picker(_ game: RoomGameKind) -> GamePickerViewState {
+    static func picker(_ game: RoomGameKind, quick: Bool = false, step: GamePickerViewState.Step = .games) -> GamePickerViewState {
         var draft = GameMapping.Draft()
         draft.game = game
+        draft.quick = quick
         draft.pathID = "uni"
-        return GameMapping.picker(draft: draft, paths: MockPlayData.paths, pathsPhase: .ready)
+        return GameMapping.picker(
+            draft: draft, paths: MockPlayData.paths, students: MockPlayData.quickStudents, pathsPhase: .ready,
+            step: step, showsCutFeatures: game == .sameDecision || (game == .sameLife && !quick)
+        )
     }
 
+    /// The game list as the host first sees it: Quick Life first, then Money Quiz.
+    static var pickerGames: GamePickerViewState { picker(.sameLife, quick: true) }
+    /// Quick Life: the 5 premade students.
+    static var pickerStudents: GamePickerViewState { picker(.sameLife, quick: true, step: .students) }
     static var pickerQuiz: GamePickerViewState { picker(.quiz) }
+    /// Cut games, shown only with `FeatureFlags.showsCutFeatures`.
     static var pickerDecision: GamePickerViewState { picker(.sameDecision) }
     static var pickerSameLife: GamePickerViewState { picker(.sameLife) }
 

@@ -28,7 +28,7 @@ struct YouView: View {
                         ForEach(state.credits, id: \.self) {
                             Text($0).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                         }
-                        Text(L10n.tr("Version \(state.versionText) · \(state.clientText) data"))
+                        Text(L10n.tr("Version \(state.versionText)"))
                             .font(.llLabel).foregroundStyle(Theme.Palette.muted)
                     }
                     .accessibilityElement(children: .combine)
@@ -59,14 +59,6 @@ struct YouView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if let badge = state.dataBadgeText {
-                    Text(badge)
-                        .font(.llLabelBold)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .inkSurface(.badge, lineWidth: Theme.chipOutline)
-                        .accessibilityIdentifier("you.dataBadge")
-                }
                 Chevron()
             }
             .foregroundStyle(Theme.Palette.ink)
@@ -111,24 +103,32 @@ struct YouView: View {
         .accessibilityIdentifier("you.habits")
     }
 
+    /// "Lessons 3/48" (PENNY_V3_BUILD E5). Tapping it opens Learn.
     private var scores: some View {
-        HStack(spacing: Theme.Spacing.s) {
-            // Best INDEX and Ribbons belong to the old game (V2 feature map): only concepts stay.
-            score(icon: .lesson, value: state.conceptsText, label: "Concepts learned")
+        Button(action: actions.onOpenLearn) {
+            HStack(spacing: Theme.Spacing.m) {
+                LLIconImage(.lesson, size: 32)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Lessons").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    Text(state.lessonsText).font(.llTitle).lineLimit(1).minimumScaleFactor(0.6)
+                        .contentTransition(.numericText())
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Chevron()
+            }
+            .foregroundStyle(Theme.Palette.ink)
+            .padding(.horizontal, Theme.Spacing.l)
+            .padding(.vertical, Theme.Spacing.m)
+            .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
+            .inkSurface(.card)
+            .contentShape(.rect)
         }
-    }
-
-    private func score(icon: LLIcon, value: String, label: String) -> some View {
-        VStack(spacing: 2) {
-            LLIconImage(icon, size: 24)
-            Text(value).font(.llTitle).lineLimit(1).minimumScaleFactor(0.6)
-            Text(label).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
-        }
-        .padding(.vertical, Theme.Spacing.m)
-        .padding(.horizontal, Theme.Spacing.xs)
-        .frame(maxWidth: .infinity)
-        .inkSurface(.card)
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(L10n.tr("Lessons \(state.lessonsText)"))
+        .accessibilityHint(L10n.tr("Opens Learn"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("you.lessons")
     }
 
     private var facts: some View {
@@ -145,6 +145,13 @@ struct YouView: View {
     private var bankAndData: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             BlockTitle(text: "Your money and data")
+            if !state.honestyText.isEmpty {
+                Text(state.honestyText)
+                    .font(.llLabel)
+                    .foregroundStyle(Theme.Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("you.honesty")
+            }
             VStack(spacing: 0) {
                 connectMoneyRow
                 ForEach(state.dataRows) { row in
@@ -176,22 +183,73 @@ struct YouView: View {
                 RuleDivider()
                 row(icon: .lesson, title: L10n.tr("How \(Brand.productName) uses AI"), id: "you.aiDisclosure", action: actions.onOpenAIDisclosure)
                 RuleDivider()
-                row(icon: .check, title: "Your plan", id: "you.plan", action: actions.onOpenPlan)
-                RuleDivider()
-                if state.showsEvaluation {
-                    row(icon: .test, title: "How good is the advice?", id: "you.evaluation", action: actions.onOpenEvaluation)
+                if let buffer = state.buffer {
+                    bufferRow(buffer)
                     RuleDivider()
                 }
-                row(icon: .investment, title: "How good is the spend guess?", id: "you.spendAccuracy", action: actions.onOpenSpendAccuracy)
+                // Cut (PENNY_V3_BUILD B4, F1): the plan, the advice check and the spend guess check.
+                if state.showsCutFeatures {
+                    row(icon: .check, title: "Your plan", id: "you.plan", action: actions.onOpenPlan)
+                    RuleDivider()
+                    if state.showsEvaluation {
+                        row(icon: .test, title: "How good is the advice?", id: "you.evaluation", action: actions.onOpenEvaluation)
+                        RuleDivider()
+                    }
+                    row(icon: .investment, title: "How good is the spend guess?", id: "you.spendAccuracy", action: actions.onOpenSpendAccuracy)
+                    RuleDivider()
+                }
                 if state.showsDebugMenu {
                     RuleDivider()
                     row(icon: .statusCached, title: "Debug menu", id: "you.debug", action: actions.onOpenDebug)
+                    RuleDivider()
                 }
-                RuleDivider()
                 versionRow
             }
             .inkSurface(.card)
         }
+    }
+
+    /// "Safety buffer" (PENNY_V3_BUILD B2): 0, 5, 10, 15 or 20% kept back from what you can spend.
+    private func bufferRow(_ buffer: YouViewState.BufferSetting) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            HStack(spacing: Theme.Spacing.m) {
+                LLIconImage(.savings, size: 24)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Safety buffer").font(.llBody)
+                    Text("Kept back before your weekly amount").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if buffer.isSaving { ProgressView().accessibilityLabel(L10n.tr("Saving")) }
+            }
+            HStack(spacing: Theme.Spacing.xs) {
+                ForEach(buffer.options, id: \.self) { pct in
+                    let isOn = pct == buffer.selected
+                    Button { actions.onSetBuffer(pct) } label: {
+                        Text("\(pct)%")
+                            .font(.llLabelBold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(isOn ? Theme.Palette.surface : Theme.Palette.ink)
+                            .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
+                            .inkSurface(.chip, fill: isOn ? Theme.Palette.ink : Theme.Palette.surface, lineWidth: Theme.chipOutline)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Safety buffer \(pct) percent"))
+                    .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+                    .accessibilityIdentifier("you.buffer.\(pct)")
+                }
+            }
+            if let error = buffer.errorText {
+                Text(error).font(.llLabelBold).foregroundStyle(Theme.Palette.health)
+                    .accessibilityIdentifier("you.buffer.error")
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.vertical, Theme.Spacing.m)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("you.buffer")
     }
 
     /// Judge mode (DIRECTION_V2 section 4): "New player" and "Reset demo".

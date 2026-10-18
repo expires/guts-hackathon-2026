@@ -60,17 +60,22 @@ enum OnboardingFixtures {
         return state
     }
 
-    /// The recorded responses for the sample student "scottish".
+    /// The recorded responses for the sample student "scottish". The profile period is September, the last
+    /// full month before the recorded October.
     static var collected: OnboardingViewModel.Collected {
-        .init(
+        let september = OnboardingRecorded.spending("2026-09")
+        let payments = OnboardingViewModel.billCategories.compactMap { try? OnboardingRecorded.categoryDetail($0, "2026-09") }
+        return .init(
             profile: OnboardingRecorded.profile,
-            spending: OnboardingRecorded.spending,
+            spending: september,
+            currentMonth: OnboardingRecorded.spending.month,
             bills: OnboardingRecorded.bills,
             subscriptions: OnboardingRecorded.subscriptions,
+            billPayments: payments,
             overview: OnboardingRecorded.overview,
             sources: nil,
             habits: OnboardingRecorded.habits,
-            nextMove: OnboardingRecorded.nextMove
+            forecast: OnboardingRecorded.forecast
         )
     }
 
@@ -83,7 +88,7 @@ enum OnboardingFixtures {
         var state = base(.building)
         state.building.stages = OnboardingViewModel.stages(firstLabel: L10n.tr("Reading the statement"))
         let details = [OnboardingViewModel.importSummary(OnboardingRecorded.importResult), OnboardingViewModel.incomeDetail(sample: scottish, profile: OnboardingRecorded.profile),
-                       OnboardingViewModel.spendingTotalText(OnboardingRecorded.spending)]
+                       OnboardingViewModel.spendingTotalText(OnboardingRecorded.spending("2026-09"), currentMonth: OnboardingRecorded.spending.month)]
         for index in 0..<3 {
             state.building.stages[index].status = .done
             state.building.stages[index].detail = details[index]
@@ -103,7 +108,7 @@ enum OnboardingFixtures {
         state.building.stages[5].status = .skipped
         state.building.stages[5].detail = L10n.tr("Not available right now")
         state.building.stages[6].detail = L10n.tr("Habit score \(OnboardingRecorded.habits.overall ?? 0) out of 100")
-        state.building.stages[7].detail = L10n.tr("Next move ready")
+        state.building.stages[7].detail = L10n.tr("Forecast ready")
         state.building.isFinished = true
         return state
     }
@@ -123,24 +128,26 @@ enum OnboardingFixtures {
 
     static var howDecides: OnboardingViewState {
         var state = base(.howDecides)
-        state.decides = OnboardingViewModel.makeDecides(OnboardingRecorded.nextMove)
+        state.decides = OnboardingViewModel.makeDecides(OnboardingRecorded.forecast)
+        return state
+    }
+
+    /// Callum (canvas 2): running short.
+    static var howDecidesShort: OnboardingViewState {
+        var state = base(.howDecides)
+        state.decides = OnboardingViewModel.makeDecides(ForecastMock.forecast(ForecastMock.short))
         return state
     }
 
     static var nextMove: OnboardingViewState {
         var state = base(.nextMove)
-        state.nextMove = OnboardingViewModel.makeNextMove(OnboardingRecorded.nextMove)
+        state.forecastCard = .make(OnboardingRecorded.forecast)
         return state
     }
 
-    /// Older server: no reason, confidence_text or runners-up. Confidence falls back to a plain sentence.
-    static var nextMoveFallback: OnboardingViewState {
-        var response = OnboardingRecorded.nextMove
-        response.top.reason = nil
-        response.top.confidenceText = nil
-        response.runnersUp = []
+    static var nextMoveShort: OnboardingViewState {
         var state = base(.nextMove)
-        state.nextMove = OnboardingViewModel.makeNextMove(response)
+        state.forecastCard = .make(ForecastMock.forecast(ForecastMock.short))
         return state
     }
 
@@ -224,8 +231,9 @@ enum OnboardingFixtures {
             ("profile", "Their profile", profile),
             ("profileEvidence", "Their profile, evidence open", profileEvidence),
             ("howDecides", "How Penny decides", howDecides),
+            ("howDecidesShort", "How Penny decides, running short", howDecidesShort),
             ("nextMove", "Their Next Move", nextMove),
-            ("nextMoveFallback", "Their Next Move, older server", nextMoveFallback),
+            ("nextMoveShort", "Their Next Move, running short", nextMoveShort),
         ]
     }
 }

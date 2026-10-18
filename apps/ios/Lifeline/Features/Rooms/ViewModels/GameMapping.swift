@@ -32,6 +32,7 @@ enum GameMapping {
                 let student = students.first { $0.id == options?.quickStudentId }?.name
                 detail = student.map { L10n.tr("Quick Life, ages 18 to 25 · everyone plays \($0)") }
                     ?? L10n.tr("Quick Life, ages 18 to 25 · \(path)")
+                return RoomGameCard(title: L10n.tr("Quick Life"), detail: detail, icon: kind.icon)
             } else {
                 detail = L10n.tr("\(path) · Full life")
             }
@@ -42,7 +43,8 @@ enum GameMapping {
     // MARK: Picker
 
     struct Draft: Equatable, Sendable {
-        var game: RoomGameKind = .quiz
+        /// Quick Life is the first game (PENNY_V3_BUILD.md F5): a Same Life room with `quick`.
+        var game: RoomGameKind = .sameLife
         var questions = 8
         var topic = "mixed"
         var pathID: String?
@@ -60,14 +62,40 @@ enum GameMapping {
             case .sameDecision:
                 .init(startYear: startYear)
             case .sameLife:
+                // Quick Life: the year is preset (no year step). The server uses its Quick Life default year.
                 quick
-                    ? .init(pathId: studentPathID ?? pathID, quick: true, quickStudentId: quickStudentID, startYear: startYear)
+                    ? .init(pathId: studentPathID ?? pathID, quick: true, quickStudentId: quickStudentID)
                     : .init(pathId: pathID, quick: false, startYear: startYear)
             }
         }
+
+        var isQuickLife: Bool { game == .sameLife && quick }
+
+        /// The picker row id: `quick_life` for Quick Life, else the game's raw value.
+        var pickerID: String { isQuickLife ? GamePickerViewState.quickLifeID : game.rawValue }
     }
 
-    static func picker(draft: Draft, paths: [PlayWire.Path], students: [PlayWire.Student] = [], pathsPhase: LoadPhase) -> GamePickerViewState {
+    /// The game rows: Quick Life first, then Money Quiz. Same Decision and the full Same Life are cut
+    /// (PENNY_V3_BUILD.md F2) and show only with `showsCutFeatures`.
+    static func pickerGames(showsCutFeatures: Bool) -> [GamePickerViewState.Option] {
+        var games: [GamePickerViewState.Option] = [
+            .init(id: GamePickerViewState.quickLifeID, label: L10n.tr("Quick Life"), detail: L10n.tr("Ages 18 to 25 in about 2 minutes"), icon: RoomGameKind.sameLife.icon),
+            .init(id: RoomGameKind.quiz.rawValue, label: RoomGameKind.quiz.title, detail: RoomGameKind.quiz.detail, icon: RoomGameKind.quiz.icon),
+        ]
+        if showsCutFeatures {
+            games += [RoomGameKind.sameDecision, .sameLife].map { .init(id: $0.rawValue, label: $0.title, detail: $0.detail, icon: $0.icon) }
+        }
+        return games
+    }
+
+    static func picker(
+        draft: Draft,
+        paths: [PlayWire.Path],
+        students: [PlayWire.Student] = [],
+        pathsPhase: LoadPhase,
+        step: GamePickerViewState.Step = .games,
+        showsCutFeatures: Bool = FeatureFlags.showsCutFeatures
+    ) -> GamePickerViewState {
         let shown = paths.filter { !draft.quick || $0.quick }
         let needsPath = draft.game == .sameLife
         // Quick Life with premade students: pick a student. Without them (older server), pick a path.
@@ -76,8 +104,9 @@ enum GameMapping {
             ? students.contains { $0.id == draft.quickStudentID }
             : (draft.pathID != nil && shown.contains { $0.id == draft.pathID })
         return GamePickerViewState(
-            games: RoomGameKind.allCases.map { .init(id: $0.rawValue, label: $0.title, detail: $0.detail, icon: $0.icon) },
-            selectedGame: draft.game.rawValue,
+            step: draft.isQuickLife ? step : .games,
+            games: pickerGames(showsCutFeatures: showsCutFeatures),
+            selectedGame: draft.pickerID,
             questions: draft.questions,
             topics: topics,
             topic: draft.topic,
@@ -92,8 +121,9 @@ enum GameMapping {
             startYear: draft.startYear,
             minYear: 1990,
             maxYear: 2026,
-            confirmTitle: L10n.tr("Pick \(draft.game.title)"),
-            canConfirm: !needsPath || ready
+            confirmTitle: draft.isQuickLife ? L10n.tr("Pick Quick Life") : L10n.tr("Pick \(draft.game.title)"),
+            canConfirm: !needsPath || ready,
+            showsConfirm: !draft.isQuickLife
         )
     }
 

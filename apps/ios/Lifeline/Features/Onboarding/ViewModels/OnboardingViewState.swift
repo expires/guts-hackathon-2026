@@ -108,6 +108,10 @@ struct OnboardingViewState: Equatable, Sendable {
         /// £ for the chart.
         var amount: Double
         var amountText: String
+        /// "36%" of the shown spending.
+        var shareText: String = ""
+        /// Colour by rank (`ForecastPalette.slice`): 0 green, 1 blue, 2 orange, 3 purple, 4 grey, then light grey.
+        var colorIndex: Int = 0
     }
 
     struct HabitPart: Equatable, Sendable, Identifiable {
@@ -124,7 +128,7 @@ struct OnboardingViewState: Equatable, Sendable {
         /// Icon id for the small visual, for example "subscriptions".
         var icon: String
         var evidence: [ProfileRow]
-        /// "From Sample data".
+        /// "From their statement".
         var sourceText: String
     }
 
@@ -134,10 +138,16 @@ struct OnboardingViewState: Equatable, Sendable {
         var avatar: String?
         var incomes: [MoneyInLine] = []
         var housing: String?
+        /// The one period every money block uses: "September" (the last full month) or "October so far".
+        var periodText: String?
         var spending: [SpendSlice] = []
-        /// "£1,796 in October".
+        /// "£1,796 in September".
         var spendingTotalText: String?
+        /// Bills and subscriptions paid in the same period as the chart. Their total equals the chart's
+        /// bills and subscriptions slices.
         var bills: [ProfileRow] = []
+        /// "£14 in September". Nil hides it.
+        var billsTotalText: String?
         var debts: [ProfileRow] = []
         /// Checked for debts and found none.
         var noDebts = false
@@ -149,32 +159,37 @@ struct OnboardingViewState: Equatable, Sendable {
         var noticed: [Noticed] = []
     }
 
-    /// "How Penny decides".
-    struct Decides: Equatable, Sendable {
-        /// "Penny compared 3 options using this profile and live UK data."
+    /// One step of "How Penny decides" (PENNY_V3_BUILD B2, C8): the forecast maths with real numbers and sources.
+    struct DecideStep: Equatable, Sendable, Identifiable {
+        var id: Int { number }
+        var number: Int
+        /// "Money now".
         var title: String
-        var sources: [SourceChipState]
+        /// "£318", "−£18", "2 Nov · £735".
+        var amountText: String
+        /// "Your account today". Nil hides it.
+        var detail: String?
+        /// "Your statement", "Bank of England". Plain names, shown under the step.
+        var sources: [String]
     }
 
-    /// One runner-up under "Also considered".
-    struct Runner: Equatable, Sendable, Identifiable {
-        var id: String
-        var action: String
-        var line: String
-    }
-
-    /// "Their Next Move": the engine's top move.
-    struct NextMove: Equatable, Sendable {
-        var action: String
-        var reason: String
-        /// "What you give up: ...". Nil hides it.
-        var tradeOff: String?
-        var impactAmountText: String
-        var impactCaption: String
-        /// Plain English, for example "Medium confidence: based on your last 4 weeks of spending". Empty hides it.
-        var confidenceText: String
-        var confidenceFilled: Int
-        var alsoConsidered: [Runner]
+    /// "How Penny decides": the forecast steps, then the result.
+    struct Decides: Equatable, Sendable {
+        /// "Will Eilidh's money last until their next money arrives?"
+        var question: String
+        var steps: [DecideStep]
+        /// "£270 left ÷ 2 weeks". Nil when there is no next money.
+        var sumLine: String?
+        /// "= £135 a week".
+        var resultText: String?
+        /// "About £19 a day".
+        var dailyText: String?
+        /// "You spent £122 a week on average over the last 4 weeks. That's £13 under £135, so you're on track."
+        var habitText: String?
+        /// "Your statement, 20 Sep to 17 Oct".
+        var habitSource: String?
+        /// "On track", "Running short".
+        var verdict: String
     }
 
     struct FeatureRow: Equatable, Sendable, Identifiable {
@@ -331,18 +346,20 @@ struct OnboardingViewState: Equatable, Sendable {
     /// The "3 things Penny noticed" row that shows its evidence.
     var expandedNoticedID: String?
     var decides: Decides?
-    var nextMove: NextMove?
+    /// "Their Next Move": the forecast card (B3.1).
+    var forecastCard: ForecastCardState?
     var isBusy = false
     /// Error for the current step, in plain English.
     var errorMessage: String?
-    /// Sample data (mock client or a sample student): show the badge.
+    /// Sample data (mock client or a sample student). No badge in onboarding (B4): "Pick your student" shows
+    /// the honesty line instead.
     var isSampleData = false
 
-    /// "What you can do" (ADR 0069): icon, headline, one line. Explainer only.
+    /// "What you can do" (PENNY_V3_BUILD C4): icon, headline, one line. Explainer only.
     static var featureRows: [FeatureRow] { [
-        .init(id: "allMoney", title: L10n.tr("See all your money"), text: L10n.tr("Loan, job, bank and bills in one place.")),
-        .init(id: "nextMove", title: L10n.tr("Your next move"), text: L10n.tr("The one thing that helps most this month, with the evidence.")),
-        .init(id: "testIt", title: L10n.tr("Test it first"), text: L10n.tr("Play the move through real years before you do it.")),
+        .init(id: "allMoney", title: L10n.tr("See all your money"), text: L10n.tr("Loan, job, parents, bank and bills in one place.")),
+        .init(id: "weekly", title: L10n.tr("Know what you can spend each week"), text: L10n.tr("Penny checks your money lasts until your next money arrives.")),
+        .init(id: "maths", title: L10n.tr("See the maths behind it"), text: L10n.tr("Every step and every number, with its source.")),
         .init(id: "penny", title: L10n.tr("Ask Penny"), text: L10n.tr("Short answers about money and student life.")),
         .init(id: "friends", title: L10n.tr("Learn and play with friends"), text: L10n.tr("Short lessons and quizzes. Share habits, never amounts.")),
     ] }
@@ -382,6 +399,10 @@ struct OnboardingActions {
     /// "3 things Penny noticed": show or hide one row's evidence.
     var onToggleNoticed: (String) -> Void = { _ in }
     var onFinish: () -> Void = {}
+    /// "See the maths" on the forecast card: back to "How Penny decides".
+    var onSeeMaths: () -> Void = {}
+    /// "Ask Penny" on the forecast card: Penny with the forecast loaded.
+    var onAskPenny: () -> Void = {}
     var onDismissError: () -> Void = {}
 
     static var noop: OnboardingActions { OnboardingActions() }

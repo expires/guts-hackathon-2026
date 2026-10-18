@@ -35,6 +35,10 @@ enum CachedOps {
     static var nextMove: CachedOp<NextMoveResponse> {
         CachedOp(key: "getNextMove." + AppLanguage.current.rawValue, scope: .user) { try await $0.nextMove() }
     }
+    /// The forecast with the stored buffer (ADR 0072). One entry per language: its text is translated.
+    static var forecast: CachedOp<Forecast> {
+        CachedOp(key: "getForecast." + AppLanguage.current.rawValue, scope: .user) { try await $0.forecast(bufferPct: nil, stress: nil) }
+    }
     static let plan = CachedOp<PlanResponse>(key: "getPlan", scope: .user) { try await $0.plan() }
     static let bills = CachedOp<BillsResponse>(key: "listBills", scope: .user) { try await $0.bills() }
     static let subscriptions = CachedOp<SubscriptionsResponse>(key: "listSubscriptions", scope: .user) { try await $0.subscriptions() }

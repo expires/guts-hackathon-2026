@@ -58,6 +58,10 @@ typealias PersonalFact = Components.Schemas.PersonalFact
 typealias SpendPrediction = Components.Schemas.SpendPrediction
 typealias GuessesResponse = Components.Schemas.GuessesResponse
 typealias PredictionEvaluation = Components.Schemas.PredictionEvaluation
+// Forecast Next Move (ADR 0072)
+typealias Forecast = Components.Schemas.Forecast
+typealias ForecastSettings = Components.Schemas.ForecastSettings
+typealias CategoryDetail = Components.Schemas.CategoryDetail
 // Next Move (ADR 0018)
 typealias NextMoveResponse = Components.Schemas.NextMoveResponse
 typealias Move = Components.Schemas.Move
@@ -152,6 +156,15 @@ protocol LifelineClient: Sendable {
     func testNextMove(moveID: String, optionIDs: [String]?) async throws -> TestMoveResult
     func plan() async throws -> PlanResponse
     func addPlanItem(moveID: String) async throws -> PlanItem
+
+    // Forecast (ADR 0072)
+    /// `GET /v1/forecast`. `bufferPct` previews another buffer (0, 5, 10, 15, 20); nil uses the stored one.
+    /// `stress` 2022 reruns with 2022 ONS inflation. Text comes in `AppLanguage.current`.
+    func forecast(bufferPct: Int?, stress: Int?) async throws -> Forecast
+    /// `PUT /v1/forecast/settings`: stores the buffer %.
+    func setForecastSettings(bufferPct: Int) async throws -> ForecastSettings
+    /// `GET /v1/finance/spending/{category}?month=`. `month` is YYYY-MM; nil means this month.
+    func categoryDetail(category: String, month: String?) async throws -> CategoryDetail
 
     // Rooms
     func createRoom(_ request: CreateRoomRequest) async throws -> Room

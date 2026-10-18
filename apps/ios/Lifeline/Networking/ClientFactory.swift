@@ -49,8 +49,13 @@ enum ClientFactory {
         #endif
     }
 
+    /// The Playground gallery exists only in Debug builds (PENNY_V3_BUILD.md F6); the phones run Demo.
     static func isPlayground(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        #if DEBUG
         arguments.contains(playgroundArgument)
+        #else
+        false
+        #endif
     }
 
     static func make(_ kind: ClientKind) -> any LifelineClient {

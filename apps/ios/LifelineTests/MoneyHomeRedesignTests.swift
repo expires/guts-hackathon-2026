@@ -2,25 +2,23 @@ import Foundation
 import Testing
 @testable import Lifeline
 
-/// ADR 0070: Money home block order, £0 categories hidden, local-time greeting, Test it always shown when testable.
+/// ADR 0072: Money home block order, £0 categories hidden, "Hi, <name>" greeting, Test it card logic (old screens kept).
 @MainActor
 @Suite("Money home redesign (ADR 0070)")
 struct MoneyHomeRedesignTests {
-    // MARK: Block order
+    // MARK: Block order (ADR 0072)
 
-    @Test func blocksFollowTheADROrder() {
-        var state = Fixtures.MoneyHome.ready
-        state.weeklyBudget = .init(moveID: "mv_week", text: "Until 2 November: spend up to £82 a week", detail: nil)
-        #expect(state.blocks == [
-            .nextMove, .weeklyBudget, .spending, .bills, .subscriptions, .budgetsAndGoals, .accountLine, .guess,
-        ])
+    @Test func blocksFollowTheForecastOrder() {
+        let state = ForecastFixtures.home(.onTrack)
+        #expect(state.blocks == [.forecast, .spending, .due, .help, .accountLine])
     }
 
     @Test func optionalBlocksDropOutWithoutChangingTheOrder() {
-        var state = Fixtures.MoneyHome.ready
-        state.weeklyBudget = nil
-        state.tiles = nil
-        #expect(state.blocks == [.nextMove, .spending, .bills, .subscriptions, .budgetsAndGoals, .guess])
+        var state = ForecastFixtures.home(.onTrack)
+        state.help = nil
+        state.due = nil
+        state.moneyNow = nil
+        #expect(state.blocks == [.forecast, .spending])
         #expect(state.accountLineText == nil)
     }
 
@@ -30,62 +28,39 @@ struct MoneyHomeRedesignTests {
         #expect(Fixtures.MoneyHome.offline.blocks.isEmpty)
     }
 
-    @Test func accountLineUsesTheHomeNumbers() async throws {
+    @Test func accountLineUsesTheForecastMoneyNow() async throws {
         let client = MockClient()
         let home = MoneyHomeViewModel(client: client)
         await home.load()
-        let expected = try await client.financeHome()
-        let balance = try #require(expected.balance)
-        let netWorth = try #require(expected.netWorth)
+        let forecast = try await client.forecast(bufferPct: nil, stress: nil)
         let state = home.state
-        #expect(state.accountLineText == "In your account \(Money.format(balance)) · Net worth \(Money.format(netWorth))")
-        #expect(state.blocks.first == .nextMove)
-        #expect(state.blocks.last == .guess)
-        #expect(state.blocks.firstIndex(of: .accountLine)! > state.blocks.firstIndex(of: .budgetsAndGoals)!)
+        #expect(state.accountLineText == "In your account \(Money.format(forecast.moneyNow))")
+        #expect(state.blocks.first == .forecast)
+        #expect(state.blocks.last == .accountLine)
     }
 
-    @Test func homeLoadsTheWidgetBlocks() async {
+    @Test func homeLoadsTheForecastAndSpending() async {
         let home = MoneyHomeViewModel(client: MockClient())
         await home.load()
-        let widgets = home.state.widgets
-        #expect(widgets.spending.phase == .ready)
-        #expect(widgets.bills.phase == .ready)
-        #expect(widgets.subscriptions.phase == .ready)
-        #expect(widgets.budgets.phase == .ready)
-        #expect(widgets.goals.phase == .ready)
-        #expect(home.state.billsShown.count <= 3)
-        #expect(home.state.topCategories.count <= 4)
+        let state = home.state
+        #expect(state.forecastPhase == .ready)
+        #expect(state.forecast?.status == .onTrack)
+        #expect(state.spendingPhase == .ready)
+        #expect((state.spending?.top.count ?? 0) <= 5)
+        #expect(state.due?.rows.isEmpty == false)
+        #expect(state.help?.kind == .save)
     }
 
-    // MARK: Home without next_move (slow server)
-
-    @Test func homeWithoutNextMoveKeepsSkeletonThenFetchesTheMove() async throws {
-        let client = MockClient()
-        var slowHome = try await client.financeHome()
-        try #require(slowHome.hasData)
-        slowHome.nextMove = nil
-        let home = MoneyHomeViewModel(client: client)
-        home.apply(slowHome)
-        // Never "No move right now" while the move is only late.
-        #expect(home.state.nextMove.phase.isLoading)
-        #expect(home.state.nextMove.top == nil)
-        await home.loadMoveIfNeeded()
-        let expected = try await client.nextMove()
-        #expect(home.state.nextMove.phase == .ready)
-        #expect(home.state.nextMove.top?.id == expected.top.id)
-        #expect(home.widgets.moves.first?.id == expected.top.id)
-        // A later home without next_move keeps the move on screen.
-        home.apply(slowHome)
-        #expect(home.state.nextMove.top?.id == expected.top.id)
-    }
-
-    @Test func homeWithNextMoveInEnglishNeedsNoSecondCall() async throws {
-        let client = MockClient()
-        let home = MoneyHomeViewModel(client: client)
+    /// B4: the old Next Move card, weekly budget block, balance tiles and Guess my spend are gone from Money home.
+    @Test func oldMoneyHomeBlocksAreGone() async {
+        let home = MoneyHomeViewModel(client: MockClient())
         await home.load()
-        let expected = try await client.financeHome()
-        #expect(home.state.nextMove.top?.id == expected.nextMove?.top.id)
-        #expect(home.state.nextMove.phase == .ready)
+        let names = home.state.blocks.map(\.rawValue)
+        for removed in ["nextMove", "weeklyBudget", "bills", "subscriptions", "budgetsAndGoals", "guess"] {
+            #expect(!names.contains(removed))
+        }
+        #expect(home.state.tiles == nil)
+        #expect(home.state.weeklyBudget == nil)
     }
 
     // MARK: £0 categories
@@ -106,10 +81,11 @@ struct MoneyHomeRedesignTests {
     }
 
     @Test func topCategoriesAreLargestFirstAndNeverZero() {
-        let state = Fixtures.MoneyHome.ready
-        let amounts = state.topCategories.map(\.amount)
+        let pie = SpendingPieState.make(ForecastFixtures.spending)
+        let amounts = pie.top.map(\.amount)
         #expect(amounts == amounts.sorted(by: >))
         #expect(amounts.allSatisfy { $0.rounded() > 0 })
+        #expect(pie.top.count == 5)
     }
 
     // MARK: Greeting by local time
@@ -125,33 +101,16 @@ struct MoneyHomeRedesignTests {
         london.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: hour, minute: minute))!
     }
 
-    @Test(arguments: [
-        (4, 59, MoneyHomeViewModel.DayPart.lateNight),
-        (5, 0, .morning),
-        (11, 59, .morning),
-        (12, 0, .afternoon),
-        (17, 59, .afternoon),
-        (18, 0, .evening),
-        (22, 59, .evening),
-        (23, 0, .lateNight),
-        (0, 0, .lateNight),
-    ])
-    func greetingBoundaries(hour: Int, minute: Int, part: MoneyHomeViewModel.DayPart) {
-        let header = MoneyHomeViewModel.header(profile: nil, now: Self.date(hour: hour, minute: minute), calendar: Self.london)
-        #expect(header.greeting == MoneyHomeViewModel.greeting(part, name: nil))
+    /// G1: "Hi, <first name>" at every time of day.
+    @Test(arguments: [0, 4, 5, 8, 12, 14, 18, 20, 23])
+    func greetingIsHiAtEveryHour(hour: Int) {
+        let header = MoneyHomeViewModel.header(profile: nil, now: Self.date(hour: hour), calendar: Self.london)
+        #expect(header.greeting == "Hi")
+        #expect(MoneyHomeViewModel.greeting(name: "Eilidh") == "Hi, Eilidh")
     }
 
-    @Test func greetingWordsInEnglish() {
-        #expect(MoneyHomeViewModel.header(profile: nil, now: Self.date(hour: 8), calendar: Self.london).greeting == "Morning")
-        #expect(MoneyHomeViewModel.header(profile: nil, now: Self.date(hour: 14), calendar: Self.london).greeting == "Afternoon")
-        #expect(MoneyHomeViewModel.header(profile: nil, now: Self.date(hour: 20), calendar: Self.london).greeting == "Evening")
-        #expect(MoneyHomeViewModel.header(profile: nil, now: Self.date(hour: 2), calendar: Self.london).greeting == "Hi")
-        #expect(MoneyHomeViewModel.greeting(.lateNight, name: "Priya") == "Hi, Priya")
-        #expect(MoneyHomeViewModel.greeting(.morning, name: "Priya") == "Morning, Priya")
-    }
-
-    @Test func greetingUsesTheInjectedClock() {
-        let model = MoneyHomeViewModel(client: MockClient(), now: { Self.date(hour: 23, minute: 30) }, calendar: Self.london)
+    @Test func greetingUsesTheInjectedClockButStaysHi() {
+        let model = MoneyHomeViewModel(client: MockClient(), now: { Self.date(hour: 8, minute: 30) }, calendar: Self.london)
         #expect(model.state.header.greeting == "Hi")
     }
 
@@ -197,13 +156,5 @@ struct MoneyHomeRedesignTests {
         model.onTestIt = { opened = $0 }
         model.actions.onTestIt(shown.id)
         #expect((opened != nil) == (model.move(runnerUp.id)?.testable == true))
-    }
-
-    @Test func topTestableMoveShowsTestItOnMoneyHome() async throws {
-        let home = MoneyHomeViewModel(client: MockClient())
-        await home.load()
-        let top = try #require(home.state.nextMove.displayedMove)
-        let move = try #require(home.nextMove.move(top.id))
-        #expect(NextMoveCardView.showsTestIt(top) == move.testable)
     }
 }

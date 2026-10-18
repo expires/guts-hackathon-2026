@@ -1,11 +1,11 @@
 // Rebuilt for ADR 0026 by W7. Solo and friends entry by W9 (ADR 0048 compact, ADR 0052).
 import SwiftUI
 
-/// Play tab: "Play solo", "Play with friends", Join, then challenges and your collection.
+/// Play tab (PENNY_V3_BUILD F4): "Play with friends", "Learn", Join and Circles. The cut Life game,
+/// challenges and collection show only with `FeatureFlags.showsCutFeatures`.
 struct PlayView: View {
     enum Segment: String, CaseIterable, Identifiable {
         case challenges = "Challenges"
-        case circles = "Circles"
         case collection = "Collection"
         var id: String { rawValue }
     }
@@ -19,24 +19,14 @@ struct PlayView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                HStack {
-                    Text("Play").font(.llBodyBold).accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    if state.isSampleData || state.rooms?.isSampleData == true { DemoDataBadge() }
-                }
+                Text("Play").font(.llBodyBold).accessibilityAddTraits(.isHeader)
                 if let active = state.rooms?.activeRoom {
                     activeRoom(active)
                 }
                 PlayChoiceCard(
-                    icon: .tabLife, title: L10n.tr("Play solo"),
-                    detail: L10n.tr("Live a life from 18. Make the money choices. See where they lead."),
-                    fill: Theme.Palette.money, shape: .hero, hero: true, identifier: "play.solo",
-                    action: actions.onPlaySolo
-                )
-                PlayChoiceCard(
                     icon: .family, title: L10n.tr("Play with friends"),
-                    detail: L10n.tr("Open a lobby. Friends join with a QR code or a short code."),
-                    fill: Theme.Palette.family, shape: .cardAlt, identifier: "play.friends",
+                    detail: L10n.tr("Quick Life, Money Quiz and more. Friends join with a QR code or a short code."),
+                    fill: Theme.Palette.family, shape: .hero, hero: true, identifier: "play.friends",
                     action: actions.onPlayWithFriends
                 )
                 if let learn = state.learn {
@@ -51,18 +41,13 @@ struct PlayView: View {
                 .buttonStyle(.second)
                 .accessibilityHint("Opens the camera to scan a room code. You can type the code instead.")
                 .accessibilityIdentifier("play.join")
-                SegmentBar(segments: Segment.allCases.filter { $0 != .circles || state.circles != nil }, selected: segment) { segment = $0 }
-                    .padding(.top, Theme.Spacing.s)
-                switch segment {
-                case .challenges:
-                    phaseContent { challenges }
-                case .circles:
-                    if let circles = state.circles {
-                        CirclesContent(state: circles, actions: actions.circles)
-                    }
-                case .collection:
-                    phaseContent { collection }
+                if let circles = state.circles {
+                    BlockTitle(text: L10n.tr("Circles"))
+                        .padding(.top, Theme.Spacing.s)
+                    CirclesContent(state: circles, actions: actions.circles)
                 }
+                // PENNY_V3_BUILD F: the full Life game, Challenges and Collection hide behind one flag.
+                if state.showsCutFeatures { cutFeatures }
             }
             .foregroundStyle(Theme.Palette.ink)
             .padding(.horizontal, Theme.Spacing.margin)
@@ -73,10 +58,27 @@ struct PlayView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
+    /// Cut features (PENNY_V3_BUILD F): Play solo, Challenges and Collection. Shown only with the flag.
+    @ViewBuilder
+    private var cutFeatures: some View {
+        PlayChoiceCard(
+            icon: .tabLife, title: L10n.tr("Play solo"),
+            detail: L10n.tr("Live a life from 18. Make the money choices. See where they lead."),
+            fill: Theme.Palette.money, shape: .cardAlt, identifier: "play.solo",
+            action: actions.onPlaySolo
+        )
+        SegmentBar(segments: Segment.allCases, selected: segment) { segment = $0 }
+            .padding(.top, Theme.Spacing.s)
+        switch segment {
+        case .challenges: phaseContent { challenges }
+        case .collection: phaseContent { collection }
+        }
+    }
+
     /// "Learn" (ADR 0068): course progress and the next lesson.
     private func learnCard(_ learn: LearnEntryState) -> some View {
         let detail = learn.isLoading
-            ? L10n.tr("Short money lessons. Pass one to open the next.")
+            ? L10n.tr("Short money lessons. Start any lesson.")
             : [learn.progressText, learn.nextText].compactMap { $0 }.joined(separator: "\n")
         return PlayChoiceCard(
             icon: .lesson, title: L10n.tr("Learn"), detail: detail,

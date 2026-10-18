@@ -2,8 +2,8 @@ import Foundation
 
 /// Responses recorded from the local API for the sample student "scottish" (Eilidh Fraser), 2026-10-18,
 /// for previews and tests of the ADR 0069 onboarding. The local API did not fill the new ADR 0069 fields yet, so
-/// `next-move` adds example `reason`, `confidence_text`, `options_compared` and two runners-up, and `profile` adds
-/// `income_sources`, `debts`, `months_of_cover` and `monthly_rent` from the sample hints (preview data only).
+/// `profile` adds `income_sources`, `debts`, `months_of_cover` and `monthly_rent` from the sample hints (preview
+/// data only). The forecast, September and category payments are built from `ForecastMock` (preview data only).
 /// The sample cards come from `lifeline_data/statements/samples/index.json`.
 enum OnboardingRecorded {
     static var samples: Components.Schemas.SamplesResponse { ContractExamples.decode(#"""
@@ -34,16 +34,41 @@ enum OnboardingRecorded {
     {"components": {"savings_rate": 26, "months_of_cover": 54, "spend_stability": 3, "discretionary_share": 98, "subscription_creep": 95, "debt_pressure": 100}, "overall": 63}
     """#) }
 
-    static var nextMove: NextMoveResponse { ContractExamples.decode(#"""
-    {"meta": {"data_status": "mock", "source": "sample", "as_of": "2026-10-16", "label": "Sample data"}, "question": "Where should my money go this month?", "top": {"id": "build_emergency_fund", "kind": "build_emergency_fund", "action": "Build a safety net of £2,565", "headline": "Your safety net covers 1.6 months", "impact_per_year": 52.91, "worst_case_per_year": 0.0, "confidence": 0.23, "sample_size": 5, "confidence_level": "low", "confidence_label": "2 in 10 twins in similar past periods did better (sample: 5 past years)", "evidence": [{"text": "Your cash and savings cover 1.6 months of spending. You spend about £855 a month, so 3 months is £2,565.", "facts": {"months": 1.6, "spend": 855.0, "months_target": 3.0, "target": 2565.0}, "source": {"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Sample data"}}, {"text": "In similar past years (2005, 2007, 2017-2018, 2024), about 25% of people faced a surprise bill like £1,167. Putting it on a card cost £53 a year on average.", "facts": {"chance_pct": 25.0, "shock": 1167.0, "impact": 53.0, "period_1_start": 2005.0, "period_1_end": 2005.0, "period_2_start": 2007.0, "period_2_end": 2007.0, "period_3_start": 2017.0, "period_3_end": 2018.0, "period_4_start": 2024.0, "period_4_end": 2024.0}, "source": {"source": "boe", "series_id": "IUMCCTL", "status": "live"}}, {"text": "In the 2022-2023 cost-of-living spike, prices rose 10.50% in 2022. A surprise bill like £1,167 on a card then cost about £62 a year.", "facts": {"cpi_peak": 10.5, "peak_year": 2022.0, "shock": 1167.0, "stress": 62.0, "stress_start": 2022.0, "stress_end": 2023.0}, "source": {"source": "ons", "series_id": "D7G7", "status": "live"}}], "sources": [{"source": "boe", "series_id": "IUMCCTL", "status": "live"}, {"source": "nomis", "series_id": "NM_17_5", "status": "mock"}, {"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Sample data"}], "options": [{"id": "save", "label": "Build a safety net of £2,565", "is_recommended": true}, {"id": "keep", "label": "Do nothing", "is_recommended": false}], "testable": true, "test_period": {"start": 2022, "end": 2023, "label": "2022-2023 cost-of-living spike (stress test)"}, "concept_id": "emergency-fund", "gain_kind": "months_of_cover", "cover_months": 3.0, "trade_off": {"summary": "Less money invested, so lower expected growth", "points": [{"text": "£1,167 kept as cash earns about 2.06% a year at the UK average savings rate.", "facts": {"amount": 1167.0, "savings_rate": 2.06}}, {"text": "UK shares returned 8.77% a year on average from 1990 to 2026, but they can fall just when you need the money.", "facts": {"stock_return": 8.77, "first_year": 1990.0, "last_year": 2026.0}}, {"text": "On £1,167, that is about £78 a year less growth on average.", "facts": {"amount": 1167.0, "gap": 78.0}}]}, "reason": "A small cash cushion stops a surprise bill going on a card.", "confidence_text": "Low confidence: based on 5 similar past years and your last 3 months of spending"}, "runners_up": [{"evidence": [{"text": "Your cash and savings cover 1.6 months of spending. You spend about £855 a month, so 3 months is £2,565.", "facts": {"months": 1.6, "spend": 855.0, "months_target": 3.0, "target": 2565.0}, "source": {"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Sample data"}}, {"text": "In similar past years (2005, 2007, 2017-2018, 2024), about 25% of people faced a surprise bill like £1,167. Putting it on a card cost £53 a year on average.", "facts": {"chance_pct": 25.0, "shock": 1167.0, "impact": 53.0, "period_1_start": 2005.0, "period_1_end": 2005.0, "period_2_start": 2007.0, "period_2_end": 2007.0, "period_3_start": 2017.0, "period_3_end": 2018.0, "period_4_start": 2024.0, "period_4_end": 2024.0}, "source": {"source": "boe", "series_id": "IUMCCTL", "status": "live"}}, {"text": "In the 2022-2023 cost-of-living spike, prices rose 10.50% in 2022. A surprise bill like £1,167 on a card then cost about £62 a year.", "facts": {"cpi_peak": 10.5, "peak_year": 2022.0, "shock": 1167.0, "stress": 62.0, "stress_start": 2022.0, "stress_end": 2023.0}, "source": {"source": "ons", "series_id": "D7G7", "status": "live"}}], "sources": [{"source": "boe", "series_id": "IUMCCTL", "status": "live"}, {"source": "nomis", "series_id": "NM_17_5", "status": "mock"}, {"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Sample data"}], "options": [{"id": "save", "label": "Build a safety net of £2,565", "is_recommended": true}, {"id": "keep", "label": "Do nothing", "is_recommended": false}], "id": "weekly_budget", "kind": "weekly_budget", "action": "Spend up to £120 a week", "headline": "Your next loan payment is in 4 weeks", "reason": "Keeps you on track until the next SAAS payment.", "impact_per_year": 0.0, "worst_case_per_year": 0.0, "confidence": 0.4, "confidence_label": "", "testable": false}, {"evidence": [{"text": "Your cash and savings cover 1.6 months of spending. You spend about £855 a month, so 3 months is £2,565.", "facts": {"months": 1.6, "spend": 855.0, "months_target": 3.0, "target": 2565.0}, "source": {"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Sample data"}}, {"text": "In similar past years (2005, 2007, 2017-2018, 2024), about 25% of people faced a surprise bill like £1,167. Putting it on a card cost £53 a year on average.", "facts": {"chance_pct": 25.0, "shock": 1167.0, "impact": 53.0, "period_1_start": 2005.0, "period_1_end": 2005.0, "period_2_start": 2007.0, "period_2_end": 2007.0, "period_3_start": 2017.0, "period_3_end": 2018.0, "period_4_start": 2024.0, "period_4_end": 2024.0}, "source": {"source": "boe", "series_id": "IUMCCTL", "status": "live"}}, {"text": "In the 2022-2023 cost-of-living spike, prices rose 10.50% in 2022. A surprise bill like £1,167 on a card then cost about £62 a year.", "facts": {"cpi_peak": 10.5, "peak_year": 2022.0, "shock": 1167.0, "stress": 62.0, "stress_start": 2022.0, "stress_end": 2023.0}, "source": {"source": "ons", "series_id": "D7G7", "status": "live"}}], "sources": [{"source": "boe", "series_id": "IUMCCTL", "status": "live"}, {"source": "nomis", "series_id": "NM_17_5", "status": "mock"}, {"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Sample data"}], "options": [{"id": "save", "label": "Build a safety net of £2,565", "is_recommended": true}, {"id": "keep", "label": "Do nothing", "is_recommended": false}], "id": "cancel_subscription", "kind": "cancel_subscription", "action": "Cancel Spotify", "headline": "You pay £5.99 a month", "reason": "Saves £72 a year if you do not use it.", "impact_per_year": 71.88, "worst_case_per_year": 0.0, "confidence": 0.4, "confidence_label": "", "testable": false}], "decision_sources": [{"source": "bank:sample", "series_id": "scottish", "status": "mock", "note": "Your bank data"}, {"source": "boe", "series_id": "IUMBEDR,IUMCCTL", "status": "live", "note": "Bank of England"}, {"source": "landregistry", "series_id": "ukhpi-annual-change,ukhpi-average-price", "status": "live", "note": "HM Land Registry"}, {"source": "nomis", "series_id": "NM_17_5,NM_2072_1,NM_30_1", "status": "mock", "note": "Nomis"}, {"source": "ons", "series_id": "D7G7", "status": "live", "note": "ONS"}], "decision_source_count": 5, "context_lines": [], "generated_at": "2026-10-18T01:46:13Z", "options_compared": 6}
-    """#) }
-
     static var importResult: Components.Schemas.ImportResult { ContractExamples.decode(#"""
     {"import_id": "im_48a76b0ac078", "status": "done", "provider": "monzo", "transactions": 66, "first_date": "2026-07-18", "last_date": "2026-10-16", "months_covered": 3.0, "warnings": [], "stages": [{"name": "read", "label": "Reading your statement", "done": true}, {"name": "categorise", "label": "Sorting your spending", "done": true}, {"name": "find_bills", "label": "Finding your bills", "done": true}, {"name": "build_profile", "label": "Building your profile", "done": true}, {"name": "next_move", "label": "Finding your next move", "done": true}]}
     """#) }
 }
 
 extension OnboardingRecorded {
+    /// Eilidh's forecast (ADR 0072): the canvas numbers from `ForecastMock` (on track). Preview data only.
+    static var forecast: Forecast { ForecastMock.forecast(ForecastMock.onTrack) }
+
+    /// The recorded October, with September as a steady variant of it (preview data only).
+    static func spending(_ month: String?) -> SpendingResponse {
+        var response = ForecastMock.spending(base: spending, month: month)
+        // Spotify (£5.99 on the 20th) is paid in every full month; the recorded October is before the 20th.
+        if month != nil, month != spending.month, !response.categories.contains(where: { $0.category == .subscriptions }) {
+            let spotify: Components.Schemas.CategorySpend = ContractExamples.decode(#"""
+            {"category": "subscriptions", "label": "Subscriptions", "emoji": "🔁", "amount": 5.99, "share": 0, "transactions": 1}
+            """#)
+            response.categories.append(spotify)
+            let total = response.categories.reduce(0) { $0 + $1.amount }
+            response.total = (total * 100).rounded() / 100
+            for index in response.categories.indices {
+                response.categories[index].share = total > 0 ? ((response.categories[index].amount / total) * 1_000).rounded() / 1_000 : 0
+            }
+        }
+        return response
+    }
+
+    /// One category in one month, built from `spending(month)` (preview data only).
+    static func categoryDetail(_ category: String, _ month: String?) throws -> CategoryDetail {
+        guard let detail = ForecastMock.categoryDetail(spending: spending(month), category: category) else {
+            throw APIError.server(status: 404, code: "not_found", message: "No spending in that category.", source: "mock")
+        }
+        return detail
+    }
+
     /// Launch argument for UI tests and screenshots: onboarding answers from these recordings (Debug builds only).
     static let launchArgument = "-onboardingRecorded"
 
@@ -56,12 +81,13 @@ extension OnboardingRecorded {
         api.importStatement = { _, _, _ in OnboardingRecorded.importResult }
         api.financeProfile = { OnboardingRecorded.profile }
         api.setManualFinance = { _ in OnboardingRecorded.profile }
-        api.spending = { _ in OnboardingRecorded.spending }
+        api.spending = { month in OnboardingRecorded.spending(month) }
+        api.categoryDetail = { category, month in try OnboardingRecorded.categoryDetail(category, month) }
         api.bills = { OnboardingRecorded.bills }
         api.subscriptions = { OnboardingRecorded.subscriptions }
         api.overview = { OnboardingRecorded.overview }
         api.habits = { OnboardingRecorded.habits }
-        api.nextMove = { OnboardingRecorded.nextMove }
+        api.forecast = { OnboardingRecorded.forecast }
         return api
     }
 }

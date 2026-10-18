@@ -33,6 +33,26 @@ struct PennyService: Sendable {
     var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     /// "Updated X ago" is measured from this clock. Tests pin it.
     var now: @Sendable () -> Date = { Date() }
+    /// The student's forecast and spending for the starter chips, disk cache first. `onUpdate` runs with each
+    /// version. No data (onboarding, no statement) never calls it, so the general chips stay.
+    var loadChipData: @Sendable (_ onUpdate: @escaping @MainActor @Sendable (PennyChipData) -> Void) async -> Void = { _ in }
+}
+
+/// Collects the cached and fresh forecast and spending, and builds chip data once the forecast is there.
+@MainActor
+final class PennyChipCollector {
+    var forecast: Forecast?
+    var spending: SpendingResponse?
+    let onUpdate: @MainActor @Sendable (PennyChipData) -> Void
+
+    init(onUpdate: @escaping @MainActor @Sendable (PennyChipData) -> Void) {
+        self.onUpdate = onUpdate
+    }
+
+    func emit() {
+        guard let forecast else { return }
+        onUpdate(PennyChips.data(forecast: forecast, spending: spending))
+    }
 }
 
 extension PennyService {
@@ -42,7 +62,18 @@ extension PennyService {
             ask: { try await client.askPenny($0) },
             stream: { client.askPennyStream($0) },
             loadThreads: { onUpdate in try await client.load(CachedOps.chatThreads, onUpdate: onUpdate) },
-            getThread: { try await client.getChatThread(id: $0) }
+            getThread: { try await client.getChatThread(id: $0) },
+            loadChipData: { onUpdate in
+                let collector = await MainActor.run { PennyChipCollector(onUpdate: onUpdate) }
+                try? await client.load(CachedOps.spending()) { value in
+                    collector.spending = value
+                    collector.emit()
+                }
+                try? await client.load(CachedOps.forecast) { value in
+                    collector.forecast = value
+                    collector.emit()
+                }
+            }
         )
     }
 }

@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// Onboarding flow (ADR 0069). Every number on "Their profile" and "Their Next Move" comes from a backend call
-/// that ends one "Building their profile" stage (sample import, finance profile, spending, bills, accounts,
-/// sources, habits, next move).
+/// Onboarding flow (ADR 0069, PENNY_V3_BUILD C). Every number on "Their profile", "How Penny decides" and
+/// "Their Next Move" comes from a backend call that ends one "Building their profile" stage (sample import,
+/// finance profile, spending, bills, accounts, sources, habits, forecast).
 @MainActor
 @Observable
 final class OnboardingViewModel {
@@ -40,13 +40,18 @@ final class OnboardingViewModel {
 
     struct Collected {
         var profile: FinanceProfile?
+        /// The profile's one period: the last full month, or this month so far when it has no earlier month.
         var spending: SpendingResponse?
+        /// This month ("2026-10"), to say "October so far" when `spending` is this month.
+        var currentMonth: String?
         var bills: BillsResponse?
         var subscriptions: SubscriptionsResponse?
+        /// The bills and subscriptions paid in `spending.month`.
+        var billPayments: [CategoryDetail] = []
         var overview: FinanceOverview?
         var sources: [SourceStatus]?
         var habits: HabitScore?
-        var nextMove: NextMoveResponse?
+        var forecast: Forecast?
     }
 
     init(
@@ -91,6 +96,8 @@ final class OnboardingViewModel {
             onToggleDebt: { [weak self] id in self?.toggleDebt(id) },
             onToggleNoticed: { [weak self] id in self?.toggleNoticed(id) },
             onFinish: { [weak self] in self?.finish() },
+            onSeeMaths: { [weak self] in self?.go(.howDecides) },
+            onAskPenny: { [weak self] in self?.askPenny() },
             onDismissError: { [weak self] in self?.state.errorMessage = nil }
         )
     }
@@ -152,7 +159,7 @@ final class OnboardingViewModel {
     func confirmLanguage() {
         onLanguage(state.language)
         // The screens built by the ViewModel follow the new language.
-        if state.profile != nil || state.nextMove != nil { rebuildFromCollected() }
+        if state.profile != nil || state.forecastCard != nil { rebuildFromCollected() }
         go(.features)
     }
 
@@ -167,6 +174,13 @@ final class OnboardingViewModel {
 
     func finish() {
         onFinished()
+    }
+
+    /// Opens Penny with the forecast loaded. Set by the glue.
+    @ObservationIgnored var onAskPenny: @MainActor () -> Void = {}
+
+    func askPenny() {
+        onAskPenny()
     }
 
     func toggleNoticed(_ id: String) {
@@ -558,7 +572,7 @@ final class OnboardingViewModel {
         collected = Collected()
         state.profile = nil
         state.decides = nil
-        state.nextMove = nil
+        state.forecastCard = nil
         state.expandedNoticedID = nil
         state.building = .init(stages: Self.stages(firstLabel: firstLabel))
         go(.building)
@@ -588,29 +602,41 @@ final class OnboardingViewModel {
             end(1, detail: Self.incomeDetail(sample: pickedSample, profile: value))
         } else { skipStage(1) }
 
-        // 3. Sorting spending: this month, or last month when this month has none yet.
+        // 3. Sorting spending: the last full month, so the chart, bills and subscriptions cover the same whole
+        // month (C7). This month so far only when there is no earlier month.
         guard let spending = await run(2, generation, { [api] in
             let now = try await api.spending(nil)
-            guard Self.spendSlices(now).isEmpty, let previous = Self.previousMonth(now.month) else { return now }
-            let earlier = try? await api.spending(previous)
-            return earlier.flatMap { Self.spendSlices($0).isEmpty ? nil : $0 } ?? now
+            guard let previous = Self.previousMonth(now.month), let earlier = try? await api.spending(previous),
+                  !Self.spendSlices(earlier).isEmpty else { return (now, now.month) }
+            return (earlier, now.month)
         }) else { return }
-        if case let .success(value) = spending {
-            collected.spending = value
-            end(2, detail: Self.spendingTotalText(value))
+        if case let .success(pair) = spending {
+            collected.spending = pair.0
+            collected.currentMonth = pair.1
+            end(2, detail: Self.spendingTotalText(pair.0, currentMonth: pair.1))
         } else { skipStage(2) }
 
         // 4. Finding bills and subscriptions.
+        // The payments come from the same month as the chart, for the categories the chart has.
+        let paidMonth = collected.spending?.month
+        let paidCategories = Self.billCategories.filter { id in
+            collected.spending?.categories.contains { $0.category.rawValue == id && $0.amount > 0 } == true
+        }
         guard let bills = await run(3, generation, { [api] in
             async let bills = try? api.bills()
             async let subscriptions = try? api.subscriptions()
+            var payments: [CategoryDetail] = []
+            for category in paidCategories {
+                if let detail = try? await api.categoryDetail(category, paidMonth) { payments.append(detail) }
+            }
             let pair = await (bills, subscriptions)
-            if pair.0 == nil && pair.1 == nil { throw OnboardingAPI.notYetAvailable }
-            return pair
+            if pair.0 == nil && pair.1 == nil && payments.isEmpty { throw OnboardingAPI.notYetAvailable }
+            return (pair.0, pair.1, payments)
         }) else { return }
         if case let .success(pair) = bills {
             collected.bills = pair.0
             collected.subscriptions = pair.1
+            collected.billPayments = pair.2
             end(3, detail: Self.billsDetail(bills: pair.0, subscriptions: pair.1))
         } else { skipStage(3) }
 
@@ -637,12 +663,12 @@ final class OnboardingViewModel {
             end(6, detail: value.overall.map { L10n.tr("Habit score \($0) out of 100") })
         } else { skipStage(6) }
 
-        // 8. Building the profile: the engine's next move.
-        guard let move = await run(7, generation, { [api] in try await api.nextMove() }) else { return }
-        switch move {
+        // 8. Building the profile: the forecast (ADR 0072).
+        guard let forecast = await run(7, generation, { [api] in try await api.forecast() }) else { return }
+        switch forecast {
         case let .success(value):
-            collected.nextMove = value
-            end(7, detail: L10n.tr("Next move ready"))
+            collected.forecast = value
+            end(7, detail: L10n.tr("Forecast ready"))
         case let .failure(error):
             return failImport(error)
         }
@@ -653,10 +679,9 @@ final class OnboardingViewModel {
     /// Profile, "How Penny decides" and "Their Next Move" from the collected responses.
     private func rebuildFromCollected() {
         state.profile = Self.makeProfile(sample: pickedSample, collected: collected)
-        if let response = collected.nextMove {
-            state.decides = Self.makeDecides(response)
-            state.nextMove = Self.makeNextMove(response)
-            if FinanceMapping.isSample(response.meta) { state.isSampleData = true }
+        if let forecast = collected.forecast {
+            state.decides = Self.makeDecides(forecast)
+            state.forecastCard = ForecastCardState.make(forecast)
         }
     }
 
@@ -676,14 +701,31 @@ final class OnboardingViewModel {
         return count == 1 ? L10n.tr("1 income source") : L10n.tr("\(count) income sources")
     }
 
-    /// Categories that are spending (not income, transfers or savings), largest first.
+    /// The categories whose payments make the "Bills and subscriptions" block.
+    nonisolated static let billCategories = ["bills", "subscriptions"]
+
+    /// Categories that are spending (not income, transfers or savings), largest first. The 6th and smaller merge
+    /// into one "Everything else" slice, so the slices always add up to the shown total.
     nonisolated static func spendSlices(_ response: SpendingResponse) -> [OnboardingViewState.SpendSlice] {
         let skip: Set<String> = ["income", "transfers", "savings"]
-        return response.categories
+        let all = response.categories
             .filter { !skip.contains($0.category.rawValue) && $0.amount > 0 }
             .sorted { $0.amount > $1.amount }
-            .prefix(6)
-            .map { .init(id: $0.category.rawValue, label: $0.label, amount: $0.amount, amountText: Money.format($0.amount)) }
+        var parts: [(id: String, label: String, amount: Double)] = all.prefix(5).map { ($0.category.rawValue, $0.label, $0.amount) }
+        let rest = all.dropFirst(5)
+        if rest.count == 1, let only = rest.first {
+            parts.append((only.category.rawValue, only.label, only.amount))
+        } else if !rest.isEmpty {
+            parts.append(("rest", L10n.tr("Everything else"), rest.reduce(0) { $0 + $1.amount }))
+        }
+        let total = parts.reduce(0) { $0 + $1.amount }
+        return parts.enumerated().map { index, part in
+            let share = total > 0 ? part.amount / total : 0
+            return .init(
+                id: part.id, label: part.label, amount: part.amount, amountText: Money.format(part.amount),
+                shareText: Int((share * 100).rounded()).description + "%", colorIndex: index
+            )
+        }
     }
 
     /// "2026-10" -> "2026-09".
@@ -694,14 +736,31 @@ final class OnboardingViewModel {
         return String(format: "%04d-%02d", year, value)
     }
 
-    /// "£1,796 in October".
-    static func spendingTotalText(_ response: SpendingResponse) -> String {
+    /// "£1,796 in September" or "£512 in October so far".
+    static func spendingTotalText(_ response: SpendingResponse, currentMonth: String?) -> String {
         let total = spendSlices(response).reduce(0) { $0 + $1.amount }
-        let amount = Money.format(total)
-        guard let date = FinanceMapping.date(response.month + "-01") else { return amount }
+        return amountInPeriod(Money.format(total), month: response.month, currentMonth: currentMonth)
+    }
+
+    /// "£14 in September" or "£14 in October so far".
+    static func amountInPeriod(_ amount: String, month: String, currentMonth: String?) -> String {
+        let name = monthName(month)
+        return month == currentMonth ? L10n.tr("\(amount) in \(name) so far") : L10n.tr("\(amount) in \(name)")
+    }
+
+    /// "September" or "October so far": the profile's one period.
+    static func periodText(month: String, currentMonth: String?) -> String {
+        let name = monthName(month)
+        let text = month == currentMonth ? L10n.tr("\(name) so far") : name
+        return text.prefix(1).uppercased() + text.dropFirst()
+    }
+
+    /// "September", in the app language.
+    static func monthName(_ month: String) -> String {
+        guard let date = FinanceMapping.date(month + "-01") else { return month }
         var format = Date.FormatStyle().locale(FinanceMapping.dateLocale).month(.wide)
         format.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-        return L10n.tr("\(amount) in \(date.formatted(format))")
+        return date.formatted(format)
     }
 
     static func billsDetail(bills: BillsResponse?, subscriptions: SubscriptionsResponse?) -> String {
@@ -786,6 +845,7 @@ final class OnboardingViewModel {
         let amount = Money.format(source.amount)
         let amountText = switch source.schedule {
         case .weekly: L10n.tr("\(amount) a week")
+        case .fortnightly: L10n.tr("\(amount) every 2 weeks")
         case .monthly: L10n.tr("\(amount) a month")
         case .termly: L10n.tr("\(amount) a term")
         case .yearly: L10n.tr("\(amount) a year")
@@ -859,21 +919,33 @@ final class OnboardingViewModel {
         if profile.housing == nil, let decision { profile.housing = housingText(decision, rent: collected.profile?.monthlyRent) }
         if let spending = collected.spending {
             profile.spending = spendSlices(spending)
-            if !profile.spending.isEmpty { profile.spendingTotalText = spendingTotalText(spending) }
+            if !profile.spending.isEmpty {
+                profile.spendingTotalText = spendingTotalText(spending, currentMonth: collected.currentMonth)
+                profile.periodText = periodText(month: spending.month, currentMonth: collected.currentMonth)
+            }
         }
-        let bills = (collected.bills?.items ?? []).filter { $0.kind != .subscription }.prefix(5).map { bill in
-            OnboardingViewState.ProfileRow(
-                id: "bill." + bill.id, label: bill.name, valueText: Money.format(bill.amount),
-                detail: L10n.tr("Due \(FinanceMapping.dayText(bill.dueDate))")
-            )
+        if let spending = collected.spending, !collected.billPayments.isEmpty {
+            // The payments in the chart's month: their total equals the chart's bills and subscriptions slices.
+            let rows = paidRows(collected.billPayments)
+            profile.bills = rows
+            let total = collected.billPayments.reduce(0) { $0 + $1.total }
+            profile.billsTotalText = amountInPeriod(Money.format(total), month: spending.month, currentMonth: collected.currentMonth)
+        } else {
+            // Older server or a failed call: the regular bills and subscriptions, each a month.
+            let bills = (collected.bills?.items ?? []).filter { $0.kind != .subscription && $0.kind != .rent }.prefix(5).map { bill in
+                OnboardingViewState.ProfileRow(
+                    id: "bill." + bill.id, label: bill.name, valueText: Money.format(bill.amount),
+                    detail: L10n.tr("Due \(FinanceMapping.dayText(bill.dueDate))")
+                )
+            }
+            let subscriptions = (collected.subscriptions?.items ?? []).prefix(5).map { item in
+                OnboardingViewState.ProfileRow(
+                    id: "sub." + item.id, label: item.merchant,
+                    valueText: L10n.tr("\(Money.format(item.monthlyCost)) a month"), detail: L10n.tr("Subscription")
+                )
+            }
+            profile.bills = Array(bills) + Array(subscriptions)
         }
-        let subscriptions = (collected.subscriptions?.items ?? []).prefix(5).map { item in
-            OnboardingViewState.ProfileRow(
-                id: "sub." + item.id, label: item.merchant,
-                valueText: L10n.tr("\(Money.format(item.monthlyCost)) a month"), detail: L10n.tr("Subscription")
-            )
-        }
-        profile.bills = Array(bills) + Array(subscriptions)
         if collected.overview != nil || decision != nil {
             profile.debts = debtRows(overview: collected.overview, profile: collected.profile)
             profile.noDebts = profile.debts.isEmpty
@@ -892,46 +964,88 @@ final class OnboardingViewModel {
             profile.habitParts = habitParts(habits)
         }
         if let facts = collected.profile {
-            let source = facts.meta.label.flatMap(nonEmpty) ?? StateMapping.sourceName(facts.meta.source)
+            // No "Sample data" tag (B4): the facts come from the statement or the typed numbers.
+            let source = facts.meta.source == "manual" ? L10n.tr("From the numbers you typed") : L10n.tr("From their statement")
             profile.noticed = facts.personalFacts.prefix(3).map { fact in
                 .init(
                     id: fact.id, text: fact.text, icon: noticedIcon(fact.conceptId),
-                    evidence: evidenceRows(fact), sourceText: L10n.tr("From \(source)")
+                    evidence: evidenceRows(fact), sourceText: source
                 )
             }
         }
         return profile
     }
 
-    /// "Penny compared N options using this profile and live UK data." N is `options_compared`, or the moves shown.
-    static func makeDecides(_ response: NextMoveResponse) -> OnboardingViewState.Decides {
-        let compared = response.optionsCompared ?? 0
-        let count = compared > 0 ? compared : 1 + response.runnersUp.count
-        var seen = Set<String>()
-        let sources = (response.decisionSources ?? []).map(StateMapping.sourceChip).filter { seen.insert($0.name).inserted }
-        return .init(
-            title: count == 1
-                ? L10n.tr("Penny checked 1 option using this profile and live UK data.")
-                : L10n.tr("Penny compared \(count) options using this profile and live UK data."),
-            sources: sources
-        )
+    /// One row per bill or subscription payment in the month, newest first: "giffgaff", "£8", "Paid 5 Sep".
+    static func paidRows(_ details: [CategoryDetail]) -> [OnboardingViewState.ProfileRow] {
+        let rows = details.flatMap { detail in
+            detail.transactions.map { transaction in
+                let name = transaction.merchant.flatMap(nonEmpty) ?? transaction.description
+                let paid = L10n.tr("Paid \(shortDay(transaction.date))")
+                return (
+                    date: transaction.date,
+                    row: OnboardingViewState.ProfileRow(
+                        id: "paid." + transaction.id, label: name, valueText: Money.format(abs(transaction.amount)),
+                        detail: detail.category == .subscriptions ? L10n.tr("\(paid) · Subscription") : paid
+                    )
+                )
+            }
+        }
+        return rows.sorted { $0.date > $1.date }.map(\.row)
     }
 
-    /// "Their Next Move": the top move with a reason, the trade-off, plain-English confidence and 2 runners-up.
-    static func makeNextMove(_ response: NextMoveResponse) -> OnboardingViewState.NextMove {
-        let top = response.top
-        let card = NextMoveViewModel.move(top, isInPlan: false)
+    /// "How Penny decides" (C8): money now (+ expected income), bills before the next money, the buffer, the next
+    /// money, then the result. The numbers are the forecast's; each step lists its sources.
+    static func makeDecides(_ forecast: Forecast) -> OnboardingViewState.Decides {
+        let maths = ForecastMathsState.make(forecast)
+        func step(_ id: Components.Schemas.ForecastStep.IdPayload) -> Components.Schemas.ForecastStep? {
+            forecast.steps.first { $0.id == id }
+        }
+        func labels(_ sources: [Components.Schemas.ForecastSource]?) -> [String] {
+            var seen = Set<String>()
+            return (sources ?? []).map(\.label).filter { !$0.isEmpty && seen.insert($0).inserted }
+        }
+        var moneyDetail = (step(.moneyNow)?.text).flatMap(nonEmpty)
+        var moneySources = labels(step(.moneyNow)?.sources)
+        if forecast.incomeExpectedTotal > 0 {
+            let before = forecast.nextMoneyIfAny.map { ForecastText.shortDate($0.date) } ?? ""
+            let line = L10n.tr("Money now \(ForecastText.whole(forecast.moneyNow)) + expected before \(before) \(ForecastText.whole(forecast.incomeExpectedTotal))")
+            moneyDetail = [line, moneyDetail].compactMap { $0 }.joined(separator: ". ")
+            for label in labels(forecast.incomeExpected.map(\.source)) where !moneySources.contains(label) { moneySources.append(label) }
+        }
+        let details: [String?] = [
+            moneyDetail,
+            (step(.bills)?.text).flatMap(nonEmpty),
+            (step(.buffer)?.text).flatMap(nonEmpty),
+            forecast.nextMoneyIfAny.map(\.label),
+        ]
+        let sources: [[String]] = [
+            moneySources,
+            labels(step(.bills)?.sources),
+            labels(step(.buffer)?.sources),
+            forecast.nextMoneyIfAny.map { labels([$0.source]) } ?? [],
+        ]
+        let steps = maths.steps.enumerated().map { index, item in
+            OnboardingViewState.DecideStep(
+                number: item.number, title: item.title, amountText: item.amountText,
+                detail: index < details.count ? details[index] : nil,
+                sources: index < sources.count ? sources[index] : []
+            )
+        }
+        let verdict: String = switch forecast.state {
+        case .onTrack: L10n.tr("On track")
+        case .runningShort: L10n.tr("Running short")
+        case .noNextMoney: L10n.tr("No money due yet")
+        }
         return .init(
-            action: top.action,
-            reason: top.reason.flatMap(nonEmpty) ?? top.headline,
-            tradeOff: card.tradeOffText,
-            impactAmountText: card.isGainMissing ? "" : card.impactAmountText,
-            impactCaption: card.impactCaption,
-            confidenceText: card.confidenceText,
-            confidenceFilled: card.confidenceFilled,
-            alsoConsidered: response.runnersUp.prefix(2).map { move in
-                .init(id: move.id, action: move.action, line: move.reason.flatMap(nonEmpty) ?? move.headline)
-            }
+            question: L10n.tr("Will their money last until their next money arrives?"),
+            steps: steps,
+            sumLine: maths.sum?.line,
+            resultText: maths.sum?.result,
+            dailyText: maths.sum?.daily,
+            habitText: maths.habits?.text,
+            habitSource: maths.habits?.source,
+            verdict: verdict
         )
     }
 }

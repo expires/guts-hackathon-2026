@@ -62,6 +62,8 @@ struct PlayViewState: Equatable, Sendable {
     var circles: CirclesViewState? = nil
     /// The Learn course card (ADR 0068). Nil hides it.
     var learn: LearnEntryState? = nil
+    /// PENNY_V3_BUILD F: shows Play solo, Challenges and Collection. The glue sets it from `FeatureFlags`.
+    var showsCutFeatures = false
 }
 
 struct PlayActions {

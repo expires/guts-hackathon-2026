@@ -50,7 +50,11 @@ struct DesignRebuildStep5Tests {
         let best = ContractExamples.lives.lives.map(\.index).max().map { "\(Int($0.rounded()))" } ?? "-"
         #expect(state.bestIndexText == best)
         #expect(state.conceptsText == "3/40")
-        #expect(state.dataRows.count == ContractExamples.sources.count)
+        // Student-facing sources only (PENNY_V3_BUILD B4): "Official facts" plus the listed live sources.
+        let listed = ContractExamples.sources.filter { YouViewModel.studentSourceIDs.contains($0.id) }
+        #expect(state.dataRows.count == listed.count + 1)
+        #expect(state.dataRows.first?.id == "facts")
+        #expect(!state.dataRows.contains { $0.detail == "Mock data" })
         // Bug 7 (ADR 0053): the profile line uses onboarding's words: age, student or working, housing.
         #expect(state.personaLine.hasPrefix("Age "))
         #expect(state.credits.first?.hasSuffix("Made in 24 hours at GUTS Hackathon 2026.") == true)

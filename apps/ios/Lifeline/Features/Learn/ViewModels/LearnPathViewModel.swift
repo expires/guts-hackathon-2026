@@ -97,11 +97,8 @@ final class LearnPathViewModel {
     }
 
     func select(_ id: String) {
+        // No locks (PENNY_V3_BUILD E1): every lesson opens.
         guard let lesson = LearnMapping.lesson(id, in: path) else { return }
-        if lesson.status == .locked {
-            showLocked(lesson.lockedReason ?? LearnMapping.lockedFallback(previous: previousTitle(id)))
-            return
-        }
         lockedMessage = nil
         openLesson = LessonRoute(id: lesson.id, title: lesson.title)
     }
@@ -125,12 +122,5 @@ final class LearnPathViewModel {
 
     func unitTitle(for lessonID: String) -> String? {
         path?.units.first { unit in unit.lessons.contains { $0.id == lessonID } }?.title
-    }
-
-    private func previousTitle(_ id: String) -> String? {
-        guard let path else { return nil }
-        let all = LearnMapping.lessons(path)
-        guard let index = all.firstIndex(where: { $0.id == id }), index > 0 else { return nil }
-        return all[index - 1].title
     }
 }
