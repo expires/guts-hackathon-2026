@@ -82,6 +82,25 @@ async def _save(state: Any, sub: str, thread: dict[str, Any], resp: ChatResponse
 KEEPALIVE_SECONDS = 2.0
 
 
+async def _with_keepalive(events: AsyncIterator[ChatStreamEvent]) -> AsyncIterator[ChatStreamEvent | None]:
+    """Yield the answer's events, and None every KEEPALIVE_SECONDS while the next event is slow to come."""
+    it = events.__aiter__()
+    nxt: asyncio.Future[ChatStreamEvent] | None = None
+    while True:
+        if nxt is None:
+            nxt = asyncio.ensure_future(it.__anext__())
+        done, _ = await asyncio.wait({nxt}, timeout=KEEPALIVE_SECONDS)
+        if not done:
+            yield None
+            continue
+        try:
+            ev = nxt.result()
+        except StopAsyncIteration:
+            return
+        nxt = None
+        yield ev
+
+
 @router.post("/v1/chat/stream")
 async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) -> StreamingResponse:
     """Server-Sent Events: `data: <ChatStreamEvent JSON>` per event. Order: reaction, keepalive*, tool_step*,
@@ -124,7 +143,10 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
             yield own("done", response=resp)
             return
         ev: ChatStreamEvent
-        async for ev in penny.answer_stream(body, ctx):
+        async for ev in _with_keepalive(penny.answer_stream(body, ctx)):
+            if ev is None:
+                yield own("keepalive")  # a slow tool (web search) must not hit the app's idle limit
+                continue
             if ev.type == "reaction":
                 continue  # already sent
             if ev.type == "done" and ev.response is not None:
