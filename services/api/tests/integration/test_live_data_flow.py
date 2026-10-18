@@ -136,7 +136,7 @@ async def test_trading212_flow(live: httpx.AsyncClient, router: respx.MockRouter
     # A Stocks and Shares ISA is an investment: it is not cash and not "savings earning 2%".
     assert ov["balance"] == 0 and ov["net_worth"] == 1500.0
     prof = (await call("GET", "/v1/finance/profile")).json()
-    assert prof["profile"]["savings"] == 0
+    assert prof["profile"]["savings"] == 1500.0  # a stocks and shares ISA counts as savings (product decision)
 
     nm = await call("GET", "/v1/next-move")
     assert nm.status_code == 200 and nm.json()["meta"]["data_status"] == "live"
