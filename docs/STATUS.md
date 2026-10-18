@@ -1,5 +1,50 @@
 # STATUS
 
+## Penny V3 build (night of 18 Oct), updated 07:40
+
+Source of truth: `PENNY_V3_BUILD.md`, ADR 0072 (with "Decisions during the build"). Deadline: everything complete by 10:00 (fixes only from 09:00, final verifier 09:15, merge to main and install 09:45).
+
+### Installed on both phones (07:35, Demo build, talks to Railway)
+Commit `f24de3c` on `wip/direction-v2` (iOS) with backend `f2080a9` live on Railway.
+Tests on the installed tree: 376 iOS unit tests passed; 15 of 16 UI tests passed. The one failure (`MoneyHomeUITests.testAllSpendingAndCategory`) is a test id problem, fix in progress. Backend: 2262 tests passed on the committed tree.
+
+### Done
+| Item | Where |
+|---|---|
+| Location bug | Every student's town and region come from the card (fdf5ca7) |
+| Reseed (A1-A5) | 10 students rebuilt; statements 1 Jul to yesterday; banks per A4; September non-rent within 0.1% of target (Priya +8.6%); sources in `docs/seed_sources.md` (A5.5 table at the top) |
+| Forecast (B1, B2) | Engine, `GET /v1/forecast`, buffer setting, category detail; exact sums; A5.4 states: Jordan, Callum, Hugo running short, other 7 on track |
+| Forecast screens (B3) | Money card, Where your money goes, Due before, One thing that helps, The maths, Detailed breakdown, All spending, Category |
+| What-ifs | "Ask Penny 'what if...'" replaces the 2022 button; Penny's forecast_what_if tool (concert, late loan, extra shifts tested) |
+| Removals (B4, F) | Old move card, Test it, Why?, tiles, weekly block, Guess my spend, data tags; Life game, Challenges, Same Decision, Collection behind one flag; Debug and Playground only in Debug builds |
+| Floating tab bar (G2) | One app-wide bar; scrolling screens get bottom padding |
+| Onboarding (C1-C9) | New Welcome, Problem, explainer list, student cards with the honesty line, profile with one period and a pie, forecast steps, forecast card |
+| Penny (C5, D1-D6) | General questions answer (library hours); one bubble per answer; New chat; Past chats; data chips; links open The maths; lesson card context; up to 3 bubbles |
+| Quick Life | First in the picker, one tap per student, no "I'm ready"; Start with 2 players |
+| Learn (E) | No locks; "Why this matters to you" on all 86 facts; progress segments per card; You tab "Lessons X/48" |
+| Greeting (G1) | "Hi, <first name>" at every time of day |
+
+### Decisions taken overnight (in ADR 0072)
+- Next money = the main income; smaller payments before it are expected income (you confirmed).
+- Fewer than 14 days to next money: the card shows a total until that date, not a weekly figure (Eilidh £930 until 26 Oct, Lena £882 until 23 Oct).
+- Overdrawn with nothing to spend: the card says how much is missing (Callum "You are £385 short before 23 October").
+- Callum's first loan payment is late (26 Oct) to keep his overdraft inside £500.
+- Learn has no locks on the server either.
+
+### Left before 10:00
+- Money: G3 (no duplicate amounts, no Monzo leftovers), student-facing source lists, the last UI test.
+- A test that no "mock"/"Sample data" text shows anywhere (in progress).
+- Rooms worker: final test run for the Quick Life picker and deep-link check (QR scan with the camera still needs a person).
+- 09:15 final verifier run; 09:45 merge to main and reinstall both phones.
+
+### What to test first
+1. You > Judge mode > New player. Go through onboarding: Welcome, Problem, Language, What you can do, Try Penny (ask "How long does the library stay open?"), Pick your student.
+2. Pick Callum Reid: the forecast card says running short and how much is missing. Then New player and pick Eilidh Fraser: on track, a total until 26 October.
+3. Tap "See the maths": change the buffer; open "See the detailed breakdown" and check the sums.
+4. Tap "Ask Penny 'what if...'" and ask "Can I afford a £60 concert on the 30th?".
+5. Play > Play with friends: Quick Life is first; on the second phone join with the code; the host can start without "I'm ready".
+6. Play > Learn: every lesson opens; each real number has "Why this matters to you".
+
 ## Direction V2 progress (23:32)
 
 Direction: `DIRECTION_V2.md` (ADRs 0046-0061). Feature freeze 09:30, coding closes 12:00 on 18 Oct.
