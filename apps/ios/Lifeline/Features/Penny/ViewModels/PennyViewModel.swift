@@ -11,18 +11,19 @@ final class PennyViewModel {
     nonisolated static var introText: String { L10n.tr("Ask me about your money, or anything about student life. When I use your numbers, I check every one.") }
     /// Try Penny (PENNY_V3_BUILD C5): Penny's first bubble before the user types.
     nonisolated static var onboardingIntroText: String { L10n.tr("Hi, I'm Penny, your student money guide. Ask me anything about money or uni life: budgets, loans, rent, part-time work, or anything in between. Once you pick a student, I'll use their numbers too, and check every one.") }
-    /// Starter chips in onboarding: student money in general, no personal data needed.
+    /// Try Penny chips (ADR 0073): exactly 3, no personal data needed. One money question, one student-life
+    /// question and one that mixes both.
     nonisolated static var onboardingChips: [String] { [
-        L10n.tr("How does the maintenance loan work?"),
-        L10n.tr("How do I make a weekly budget?"),
-        L10n.tr("Is an overdraft a good idea?"),
+        L10n.tr("How does my student loan work?"),
+        L10n.tr("How do I register with a GP near uni?"),
+        L10n.tr("How can I eat well on £30 a week?"),
     ] }
-    /// Starter chips for students (Ask Penny context fix).
+    /// Empty-chat chips when there is no data for personal chips (ADR 0073): general student money questions.
     nonisolated static var chips: [String] { [
-        L10n.tr("Can I afford a night out this week?"),
-        L10n.tr("How long will my money last?"),
-        L10n.tr("Is a Lifetime ISA worth it for me?"),
-        L10n.tr("How do I make a weekly budget?"),
+        L10n.tr("How does my student loan work?"),
+        L10n.tr("How much should I budget a week?"),
+        L10n.tr("Can I get a bursary?"),
+        L10n.tr("Is an overdraft a good idea?"),
     ] }
     /// No event (keepalive included) for this long ends the stream and starts the fallback.
     static let defaultStreamIdleTimeout: Duration = .seconds(20)

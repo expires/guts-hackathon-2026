@@ -117,6 +117,8 @@ struct MoneyHomeActions {
     var onSeeMaths: @MainActor () -> Void = {}
     /// Forecast card: "Ask Penny" (forecast loaded, "Explain my weekly budget").
     var onAskPennyForecast: @MainActor () -> Void = {}
+    /// Forecast card: "Based on N sources" opens the sources hub (ADR 0073).
+    var onSources: @MainActor () -> Void = {}
     /// "See all spending".
     var onSeeAllSpending: @MainActor () -> Void = {}
     /// A category row in "Where your money goes".
@@ -153,6 +155,7 @@ final class MoneyHomeViewModel {
     @ObservationIgnored var onAskPenny: @MainActor () -> Void = {}
     @ObservationIgnored var onAskPennyForecast: @MainActor () -> Void = {}
     @ObservationIgnored var onSeeMaths: @MainActor () -> Void = {}
+    @ObservationIgnored var onSources: @MainActor () -> Void = {}
     @ObservationIgnored var onSeeAllSpending: @MainActor () -> Void = {}
     @ObservationIgnored var onCategory: @MainActor (String, String) -> Void = { _, _ in }
 
@@ -211,6 +214,7 @@ final class MoneyHomeViewModel {
             onAskPenny: { [weak self] in self?.onAskPenny() },
             onSeeMaths: { [weak self] in self?.onSeeMaths() },
             onAskPennyForecast: { [weak self] in self?.onAskPennyForecast() },
+            onSources: { [weak self] in self?.onSources() },
             onSeeAllSpending: { [weak self] in self?.onSeeAllSpending() },
             onCategory: { [weak self] id, label in self?.onCategory(id, label) },
             onRetryForecast: { [weak self] in Task { await self?.loadForecast() } },

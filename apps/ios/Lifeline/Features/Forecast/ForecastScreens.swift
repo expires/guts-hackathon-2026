@@ -22,11 +22,14 @@ extension PennyRoute {
 struct ForecastMathsScreen: View {
     @State private var model: ForecastMathsViewModel
     @State private var showsDetail = false
+    @State private var showsSources = false
+    private let client: any LifelineClient
     @Environment(\.appRoutes) private var routes
     @Environment(\.dismiss) private var dismiss
     let onForecastChanged: @MainActor (Forecast) -> Void
 
     init(client: any LifelineClient, forecast: Forecast?, onForecastChanged: @escaping @MainActor (Forecast) -> Void = { _ in }) {
+        self.client = client
         _model = State(initialValue: ForecastMathsViewModel(client: client, forecast: forecast))
         self.onForecastChanged = onForecastChanged
     }
@@ -37,6 +40,7 @@ struct ForecastMathsScreen: View {
                 let routes = self.routes
                 model.onBack = { dismiss() }
                 model.onDetail = { showsDetail = true }
+                model.onSources = { showsSources = true }
                 model.onAskPenny = { routes.askPenny(.weeklyBudget) }
                 model.onAskWhatIf = { routes.askPenny(.whatIf) }
                 model.onForecastChanged = onForecastChanged
@@ -46,6 +50,9 @@ struct ForecastMathsScreen: View {
                 if let forecast = model.forecast {
                     ForecastBreakdownView(state: .make(forecast)) { showsDetail = false }
                 }
+            }
+            .navigationDestination(isPresented: $showsSources) {
+                SourcesHubScreen(client: client)
             }
     }
 }

@@ -127,10 +127,10 @@ struct PennyContextTests {
 
     @Test func starterChipsAreForStudents() {
         #expect(PennyViewModel.chips == [
-            "Can I afford a night out this week?",
-            "How long will my money last?",
-            "Is a Lifetime ISA worth it for me?",
-            "How do I make a weekly budget?",
+            "How does my student loan work?",
+            "How much should I budget a week?",
+            "Can I get a bursary?",
+            "Is an overdraft a good idea?",
         ])
     }
 }

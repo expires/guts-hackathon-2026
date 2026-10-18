@@ -4,12 +4,15 @@ import SwiftUI
 enum MoneyRoute: Hashable, Identifiable {
     case maths
     case allSpending
+    /// "Where Penny's data comes from" (ADR 0073).
+    case sources
     case category(id: String, label: String)
 
     var id: String {
         switch self {
         case .maths: "maths"
         case .allSpending: "allSpending"
+        case .sources: "sources"
         case let .category(id, _): "category.\(id)"
         }
     }
@@ -50,6 +53,8 @@ struct MoneyHomeScreen: View {
                     ForecastMathsScreen(client: client, forecast: model.forecast) { [model] in model.show($0) }
                 case .allSpending:
                     AllSpendingScreen(client: client)
+                case .sources:
+                    SourcesHubScreen(client: client)
                 case let .category(id, label):
                     CategoryScreen(client: client, category: id, label: label, month: nil)
                 }
@@ -62,6 +67,7 @@ struct MoneyHomeScreen: View {
         model.onAskPenny = { routes.askPenny(PennyRoute(screen: .money)) }
         model.onAskPennyForecast = { routes.askPenny(.weeklyBudget) }
         model.onSeeMaths = { route = .maths }
+        model.onSources = { route = .sources }
         model.onSeeAllSpending = { route = .allSpending }
         model.onCategory = { id, label in route = .category(id: id, label: label) }
     }

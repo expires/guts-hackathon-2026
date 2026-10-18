@@ -109,6 +109,9 @@ struct ForecastCardState: Equatable, Sendable {
     var habitLine: String?
     /// Today, bills, run-out day and next money in date order. At most 5 points.
     var timeline: [Point]
+    /// "Based on 7 sources" (ADR 0073): the forecast's student-facing sources. A tap opens the sources hub.
+    /// Nil when the forecast lists none.
+    var sourcesText: String?
 
     /// One sentence for VoiceOver.
     var accessibilitySummary: String {
@@ -155,7 +158,8 @@ struct ForecastCardState: Equatable, Sendable {
             budgetNote: forecast.hasNothingToSpend ? forecast.budgetLine : nil,
             dailyText: hasBudget ? L10n.tr("(about \(ForecastText.whole(max(0, forecast.perDay))) a day)") : nil,
             habitLine: forecast.habitLine.flatMap { $0.isEmpty ? nil : $0 } ?? habitLine(forecast),
-            timeline: status == .noNextMoney ? [] : timeline(forecast)
+            timeline: status == .noNextMoney ? [] : timeline(forecast),
+            sourcesText: SourcesHubMapping.basedOnText(count: ForecastText.sources(forecast.sources).count)
         )
     }
 

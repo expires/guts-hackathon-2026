@@ -1523,6 +1523,84 @@ paths:
         schema:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}$
+  /v1/sources/hub:
+    get:
+      operationId: getSourcesHub
+      summary: 'Where Penny''s data comes from: one card per student-facing source (ADR 0073)'
+      tags:
+      - meta
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcesHub'
+              examples:
+                SourcesHub:
+                  $ref: '#/components/examples/SourcesHub'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          default: en
+  /v1/chat/trace:
+    post:
+      operationId: tracePenny
+      summary: 'Demo trace (ADR 0075): one real Penny answer with each step, tool call, engine result and check. Off unless
+        PENNY_TRACE_ENABLED is set on the server'
+      tags:
+      - chat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatTrace'
+              examples:
+                ChatTrace:
+                  $ref: '#/components/examples/ChatTrace'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              ChatAsk:
+                $ref: '#/components/examples/ChatAsk'
   /v1/learn:
     get:
       operationId: getLearnPath
@@ -3537,6 +3615,28 @@ components:
       required:
       - threads
       type: object
+    ChatTrace:
+      additionalProperties: false
+      properties:
+        question:
+          type: string
+        student:
+          type: string
+        steps:
+          items:
+            $ref: '#/components/schemas/TraceStep'
+          type: array
+        answer:
+          $ref: '#/components/schemas/ChatResponse'
+        total_ms:
+          minimum: 0
+          type: integer
+      required:
+      - question
+      - steps
+      - answer
+      - total_ms
+      type: object
     Choice:
       additionalProperties: false
       properties:
@@ -4992,6 +5092,79 @@ components:
       - start
       - length
       - fact_id
+      type: object
+    HubSource:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        name:
+          maxLength: 80
+          type: string
+        kind:
+          enum:
+          - statement
+          - official_facts
+          - live
+          type: string
+        status:
+          enum:
+          - live
+          - cached
+          - mock
+          - unavailable
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+        gives:
+          description: 'One line: what it gives Penny'
+          maxLength: 160
+          type: string
+        used_in:
+          description: Screen names, e.g. 'One thing that helps'
+          items:
+            type: string
+          maxItems: 6
+          type: array
+        latest:
+          items:
+            $ref: '#/components/schemas/HubValue'
+          maxItems: 6
+          type: array
+        url:
+          description: The official page
+          maxLength: 500
+          type: string
+      required:
+      - id
+      - name
+      - kind
+      - status
+      - gives
+      - used_in
+      type: object
+    HubValue:
+      additionalProperties: false
+      properties:
+        label:
+          description: e.g. 'Easy-access savings rate'
+          maxLength: 80
+          type: string
+        value:
+          description: Formatted, e.g. '2.06%' or '£1,723 a year'
+          maxLength: 40
+          type: string
+        as_of:
+          description: e.g. 'Sep 2026' or an ISO date
+          maxLength: 40
+          type: string
+      required:
+      - label
+      - value
       type: object
     ImportResult:
       additionalProperties: false
@@ -6551,6 +6724,133 @@ components:
       - demo
       - label
       type: object
+    QuickChoice:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        label:
+          maxLength: 80
+          type: string
+      required:
+      - id
+      - label
+      type: object
+    QuickFeedback:
+      additionalProperties: false
+      description: 'Sent to the player who answered, right after the answer: points and one sentence with the real number.'
+      properties:
+        question_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        choice_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        points:
+          enum:
+          - 0
+          - 10
+          - 20
+          type: integer
+        line:
+          description: e.g. '+20. A Railcard saves about £65 a year.'
+          maxLength: 160
+          type: string
+        score:
+          description: Score so far
+          maximum: 100
+          minimum: 0
+          type: integer
+      required:
+      - question_id
+      - choice_id
+      - points
+      - line
+      - score
+      type: object
+    QuickPlayerResult:
+      additionalProperties: false
+      properties:
+        player_id:
+          type: string
+        name:
+          type: string
+        score:
+          description: Finance skill score out of 100
+          maximum: 100
+          minimum: 0
+          type: integer
+        game_money:
+          description: Game money at 25; only the tiebreak
+          type: number
+        rank:
+          minimum: 1
+          type: integer
+        best_line:
+          maxLength: 160
+          type: string
+        worst_line:
+          maxLength: 160
+          type: string
+        left:
+          default: false
+          type: boolean
+      required:
+      - player_id
+      - name
+      - score
+      - game_money
+      - rank
+      type: object
+    QuickQuestion:
+      additionalProperties: false
+      description: One preset question at one age; the same 5 for everyone in the room. Choices are shuffled per question.
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        index:
+          maximum: 4
+          minimum: 0
+          type: integer
+        total:
+          default: 5
+          maximum: 5
+          minimum: 1
+          type: integer
+        age:
+          maximum: 25
+          minimum: 18
+          type: integer
+        title:
+          maxLength: 80
+          type: string
+        text:
+          maxLength: 300
+          type: string
+        choices:
+          items:
+            $ref: '#/components/schemas/QuickChoice'
+          maxItems: 3
+          minItems: 3
+          type: array
+      required:
+      - id
+      - index
+      - age
+      - title
+      - text
+      - choices
+      type: object
     QuickStudent:
       additionalProperties: false
       description: A premade Quick Life student the host can pick (ADR 0064).
@@ -6904,6 +7204,7 @@ components:
           - quiz
           - same_decision
           - same_life
+          - quick_life
           type: string
         options:
           $ref: '#/components/schemas/GameOptions'
@@ -7143,6 +7444,25 @@ components:
       - coverage
       - attribution
       - licence
+      type: object
+    SourcesHub:
+      additionalProperties: false
+      properties:
+        summary:
+          description: '''Penny uses your statement plus N live UK sources. ...'''
+          maxLength: 200
+          type: string
+        live_count:
+          minimum: 0
+          type: integer
+        sources:
+          items:
+            $ref: '#/components/schemas/HubSource'
+          type: array
+      required:
+      - summary
+      - live_count
+      - sources
       type: object
     SourcesResponse:
       additionalProperties: false
@@ -7625,6 +7945,35 @@ components:
       - tool
       - label
       type: object
+    TraceStep:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+          - scope
+          - tool_call
+          - tool_result
+          - draft
+          - verify
+          - rewrite
+          - final
+          type: string
+        elapsed_ms:
+          minimum: 0
+          type: integer
+        label:
+          maxLength: 120
+          type: string
+        data:
+          additionalProperties: true
+          description: Step details (scope decision and check mode, tool name and arguments, engine result before and after,
+            draft bubbles, each number with where it matched and pass or fail). Never keys, tokens or prompts.
+          type: object
+      required:
+      - kind
+      - elapsed_ms
+      - label
+      type: object
     TradeOff:
       additionalProperties: false
       description: What the user gives up with this move. Engine-defined per move kind (ADR 0042), never LLM-written.
@@ -7762,6 +8111,8 @@ components:
           - ping
           - pick_game
           - answer
+          - end_round
+          - play_again
           type: string
         player_id:
           description: Resume token after a reconnect
@@ -7786,6 +8137,7 @@ components:
           - quiz
           - same_decision
           - same_life
+          - quick_life
           type: string
         options:
           description: pick_game (host only)
@@ -7819,6 +8171,9 @@ components:
           - decision
           - decision_reveal
           - ranking
+          - ql_question
+          - ql_feedback
+          - ql_results
           type: string
         you:
           description: 'Sent with ''welcome'': your player id for reconnects'
@@ -7840,6 +8195,17 @@ components:
         ranking:
           items:
             $ref: '#/components/schemas/PlayerScore'
+          type: array
+        ql_question:
+          description: 'Quick Life: your next question (ADR 0074)'
+          $ref: '#/components/schemas/QuickQuestion'
+        ql_feedback:
+          description: 'Quick Life: points for your last answer'
+          $ref: '#/components/schemas/QuickFeedback'
+        ql_results:
+          description: 'Quick Life: final results, sent with ''finished'' once everyone is done'
+          items:
+            $ref: '#/components/schemas/QuickPlayerResult'
           type: array
         winner_line:
           description: Penny announces the winner in one line, sent with 'finished' (ADR 0064)
@@ -10036,6 +10402,86 @@ components:
         next_lesson_id: needs-vs-wants
         done: 1
         total: 3
+    ChatTrace:
+      value:
+        question: Can I afford a £60 concert on the 30th?
+        student: scottish
+        steps:
+        - kind: scope
+          elapsed_ms: 3
+          label: 'Scope: money'
+          data:
+            check: strict
+        answer:
+          thread_id: th_1
+          message_id: msg_2
+          reply_to: msg_1
+          reaction: brain
+          mode: checked
+          bubbles:
+          - id: b1
+            kind: answer
+            text: Yes, up to £35 this week. That still leaves enough for rent on Friday.
+          highlights:
+          - bubble_id: b1
+            start: 11
+            length: 3
+            fact_id: f_week
+            source_id: s_you
+          facts:
+          - id: f_week
+            value: 35.0
+            unit: gbp
+            label: Left to spend this week
+            source_id: s_you
+          sources:
+          - id: s_you
+            group: your_data
+            label: Your statement
+            ref:
+              source: bank
+              series_id: your-accounts
+              status: live
+            updated_at: '2026-10-17T12:00:00Z'
+          - id: s_boe
+            group: live_sources
+            label: Bank of England · savings rates · live
+            ref:
+              source: boe
+              series_id: IUMBEDR
+              status: live
+            updated_at: '2026-10-17T12:00:00Z'
+          suggestions:
+          - Next move
+          - Summary
+          confidence: 0.8
+          tool_calls:
+          - name: cash_flow_projection
+            ok: true
+            duration_ms: 120
+          verified: true
+          summary_available: false
+          links: []
+          disclaimer: Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions.
+        total_ms: 2690
+    SourcesHub:
+      value:
+        summary: Penny uses your statement plus 7 live UK sources. Here is what each one does.
+        live_count: 7
+        sources:
+        - id: boe
+          name: Bank of England
+          kind: live
+          status: live
+          gives: Interest rates for saving and borrowing.
+          used_in:
+          - One thing that helps
+          - The maths
+          latest:
+          - label: Easy-access savings rate
+            value: 2.06%
+            as_of: Sep 2026
+          url: https://www.bankofengland.co.uk/boeapps/database
     Forecast:
       value:
         meta:

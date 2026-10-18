@@ -68,7 +68,7 @@ struct MoneyHomeView: View {
         case .forecast:
             switch (state.forecastPhase, state.forecast) {
             case let (_, card?):
-                ForecastCardView(state: card, onSeeMaths: actions.onSeeMaths, onAskPenny: actions.onAskPennyForecast)
+                ForecastCardView(state: card, onSeeMaths: actions.onSeeMaths, onAskPenny: actions.onAskPennyForecast, onSources: actions.onSources)
             case let (.failed(error), nil):
                 ErrorStateView(state: error, onRetry: actions.onRetryForecast)
             default:

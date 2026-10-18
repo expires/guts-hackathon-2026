@@ -59,6 +59,11 @@ enum CachedOps {
     static let challenges = CachedOp<[Challenge]>(key: "listChallenges", scope: .shared) { try await $0.listChallenges() }
     static let samples = CachedOp<[SampleStatement]>(key: "listSamples", scope: .shared) { try await $0.listSamples() }
     static let sources = CachedOp<[SourceStatus]>(key: "listSources", scope: .shared) { try await $0.listSources() }
+    /// "Where Penny's data comes from" (ADR 0073). One entry per language: its text is translated.
+    /// User scope: the statement card shows the user's own statement date.
+    static var sourcesHub: CachedOp<SourcesHub> {
+        CachedOp(key: "getSourcesHub." + AppLanguage.current.rawValue, scope: .user) { try await $0.sourcesHub() }
+    }
 }
 
 /// Files under `Caches/LifelineCache/{user,shared}/<key>.json`, written with the contract's JSON keys.

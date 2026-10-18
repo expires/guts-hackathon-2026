@@ -99,7 +99,8 @@ struct YouScreen: View {
                 switch sheet {
                 case .bank: BankConnectScreen(client: session.client, onUseProfile: { _, _ in close() }, onClose: close)
                 case .plan: PlanScreen(client: session.client, onClose: close)
-                case .sources: SourcesScreen(client: session.client, onClose: close)
+                // "Where our data comes from" opens the sources hub (ADR 0073), not the old Sources sheet.
+                case .sources: NavigationStack { SourcesHubScreen(client: session.client, onClose: close) }
                 case .evaluation: EvaluationScreen(client: session.client, onClose: close)
                 case .spendAccuracy: SpendAccuracyScreen(client: session.client, onClose: close)
                 case .aiDisclosure: AIDisclosureView(state: .load(), onClose: close)

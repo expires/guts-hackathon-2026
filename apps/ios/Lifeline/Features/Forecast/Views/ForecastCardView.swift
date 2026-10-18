@@ -6,6 +6,8 @@ struct ForecastCardView: View {
     let state: ForecastCardState
     var onSeeMaths: () -> Void = {}
     var onAskPenny: () -> Void = {}
+    /// "Based on N sources" (ADR 0073). Nil hides the line (onboarding).
+    var onSources: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -49,6 +51,20 @@ struct ForecastCardView: View {
                 VStack(spacing: 10) { buttons }
             }
             .padding(.top, 4)
+            if let text = state.sourcesText, let onSources {
+                Button(action: onSources) {
+                    HStack(spacing: 6) {
+                        Text(text).font(ForecastFont.bodyBold).underline()
+                        Chevron().scaleEffect(0.6)
+                    }
+                    .foregroundStyle(Theme.Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: Theme.minTarget)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.tr("Shows where Penny's data comes from"))
+                .accessibilityIdentifier("forecast.sources")
+            }
         }
         .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -224,7 +240,7 @@ struct ForecastButtonStyle: ButtonStyle {
 // MARK: - Previews
 
 #Preview("On track · light") {
-    ScrollView { ForecastCardView(state: ForecastFixtures.card(.onTrack)).padding(20) }.paperBackground()
+    ScrollView { ForecastCardView(state: ForecastFixtures.card(.onTrack), onSources: {}).padding(20) }.paperBackground()
 }
 
 #Preview("Running short · dark") {

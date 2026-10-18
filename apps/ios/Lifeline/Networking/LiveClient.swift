@@ -567,3 +567,12 @@ extension LiveClient {
         }
     }
 }
+
+// MARK: Sources hub (ADR 0073)
+extension LiveClient {
+    func sourcesHub() async throws -> SourcesHub {
+        try await call {
+            try await client.getSourcesHub(query: .init(language: .init(rawValue: AppLanguage.current.rawValue))).ok.body.json
+        }
+    }
+}

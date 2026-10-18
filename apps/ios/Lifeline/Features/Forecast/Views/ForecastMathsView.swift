@@ -72,6 +72,20 @@ struct ForecastMathsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("maths.detail")
+        // ADR 0073: opens "Where Penny's data comes from".
+        Button(action: actions.onSources) {
+            HStack {
+                Text(L10n.tr("Where the numbers come from")).font(ForecastFont.bodyBold).frame(maxWidth: .infinity, alignment: .leading)
+                Chevron()
+            }
+            .padding(.horizontal, Theme.Spacing.l)
+            .frame(minHeight: 52)
+            .foregroundStyle(Theme.Palette.ink)
+            .inkSurface(.buttonThird)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("maths.sources")
         // "What if" questions go to Penny with the forecast loaded (user request, replaces the 2022 button).
         Button(L10n.tr("Ask Penny \u{201C}what if...\u{201D}"), action: actions.onAskWhatIf)
             .buttonStyle(ForecastButtonStyle(filled: false))

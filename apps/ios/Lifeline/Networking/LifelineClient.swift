@@ -29,6 +29,10 @@ typealias PlayCircle = Components.Schemas.Circle
 typealias CircleMember = Components.Schemas.CircleMember
 typealias SourceRef = Components.Schemas.SourceRef
 typealias SourceStatus = Components.Schemas.SourceStatus
+/// Sources hub (ADR 0073).
+typealias SourcesHub = Components.Schemas.SourcesHub
+typealias HubSource = Components.Schemas.HubSource
+typealias HubValue = Components.Schemas.HubValue
 typealias YearLog = Components.Schemas.YearLog
 typealias Decision = Components.Schemas.Decision
 typealias DecisionProfile = Components.Schemas.DecisionProfile
@@ -133,6 +137,8 @@ protocol LifelineClient: Sendable {
 
     // Meta
     func listSources() async throws -> [SourceStatus]
+    /// `GET /v1/sources/hub?language=`: "Where Penny's data comes from" (ADR 0073). Text in `AppLanguage.current`.
+    func sourcesHub() async throws -> SourcesHub
 
     // Money tab (ADR 0016, 0017). `month` is YYYY-MM, `date` is YYYY-MM-DD; nil means "now".
     func financeOverview() async throws -> FinanceOverview

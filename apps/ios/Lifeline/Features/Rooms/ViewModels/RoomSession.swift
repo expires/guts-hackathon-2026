@@ -332,6 +332,9 @@ final class RoomSession {
             ranking = reveal.ranking
         case .ranking:
             if let ranking = message.ranking { self.ranking = ranking }
+        case .qlQuestion, .qlFeedback, .qlResults:
+            // Quick Life redesign (ADR 0074) is not built in the app yet.
+            break
         }
         if message._type != .error, message._type != .pong, lastError != nil { clearError() }
         if message._type == .finished, let ranking = message.ranking { self.ranking = ranking }

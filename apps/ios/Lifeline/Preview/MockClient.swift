@@ -447,6 +447,9 @@ actor MockClient: LifelineClient {
 
     func listSources() async throws -> [SourceStatus] { data.sources }
 
+    /// Sources hub (ADR 0073): eight student-facing sources with sample values.
+    func sourcesHub() async throws -> SourcesHub { SourcesHubMock.hub }
+
     // MARK: Rooms
 
     func createRoom(_ request: CreateRoomRequest) async throws -> Room {
@@ -977,7 +980,7 @@ private actor MockRoomState {
         case .start:
             room.status = .playing
             return [.init(_type: .started, room: room)]
-        case .pickGame, .answer:
+        case .pickGame, .answer, .endRound, .playAgain:
             // Quiz and Same Decision run in W9's MockRoomServer; this simple simulator ignores them.
             return []
         case .progress:

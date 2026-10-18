@@ -247,6 +247,9 @@ actor MockRoomServer {
             guard let me = myPlayerID, roundOpen, answers[me] == nil, let choice = message.choiceId else { return }
             answers[me] = choice
             answerOrder.append(me)
+        case .endRound, .playAgain:
+            // Quick Life redesign (ADR 0074) is not built in the app yet.
+            break
         }
     }
 

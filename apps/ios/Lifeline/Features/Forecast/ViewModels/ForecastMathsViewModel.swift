@@ -157,6 +157,8 @@ struct ForecastMathsActions {
     var onAskPenny: @MainActor () -> Void = {}
     /// "Ask Penny 'what if...'": Penny opens with the forecast loaded and no question sent.
     var onAskWhatIf: @MainActor () -> Void = {}
+    /// "Where the numbers come from": opens the sources hub (ADR 0073).
+    var onSources: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
@@ -182,6 +184,7 @@ final class ForecastMathsViewModel {
     @ObservationIgnored var onDetail: @MainActor () -> Void = {}
     @ObservationIgnored var onAskPenny: @MainActor () -> Void = {}
     @ObservationIgnored var onAskWhatIf: @MainActor () -> Void = {}
+    @ObservationIgnored var onSources: @MainActor () -> Void = {}
 
     init(client: any LifelineClient, forecast: Forecast? = nil) {
         self.client = client
@@ -206,6 +209,7 @@ final class ForecastMathsViewModel {
             onStress: { [weak self] in Task { await self?.runStress() } },
             onAskPenny: { [weak self] in self?.onAskPenny() },
             onAskWhatIf: { [weak self] in self?.onAskWhatIf() },
+            onSources: { [weak self] in self?.onSources() },
             onRetry: { [weak self] in Task { await self?.load() } }
         )
     }
