@@ -351,3 +351,26 @@ def test_quick_life_join_counts_as_ready(tc: TestClient) -> None:
         w0.send_json({"type": "start"})  # the guest never sent "ready"
         assert _until(w0, "started")["room"]["status"] == "playing"  # an error to the host fails here
         assert _until(w1, "started")["room"]["status"] == "playing"
+
+
+def test_a_leaver_counts_as_finished_so_the_round_ends(tc: TestClient) -> None:
+    """Quick Life audit bug 2: a player who leaves a Same Life round counts as finished."""
+    host, guest = _token(tc, DEVICES[0]), _token(tc, DEVICES[1])
+    code = tc.post("/v1/rooms", json={"mode": "duel", "host_name": "Ana", "preset_id": "nurse-leeds",
+                                      "start_year": 2006}, headers={"Authorization": f"Bearer {host}"}).json()["code"]
+    with (tc.websocket_connect(f"/v1/rooms/{code}?token={host}") as w0,
+          tc.websocket_connect(f"/v1/rooms/{code}?token={guest}") as w1):
+        w0.send_json({"type": "join", "name": "Ana"})
+        _until(w0, "welcome")
+        w1.send_json({"type": "join", "name": "Ben"})
+        _until(w1, "welcome")
+        for ws in (w0, w1):
+            ws.send_json({"type": "ready"})
+        _until(w0, "roster")
+        w0.send_json({"type": "start"})
+        _until(w0, "started")
+        w0.send_json({"type": "finish"})
+        _until(w0, "rival")
+        w1.send_json({"type": "leave"})
+        done = _until(w0, "finished")
+        assert done["room"]["status"] == "finished" and "INDEX" not in (done.get("winner_line") or "")

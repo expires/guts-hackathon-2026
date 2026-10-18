@@ -340,7 +340,8 @@ def test_quick_life_room_on_a_premade_student(tc: TestClient) -> None:
         assert [r["rank"] for r in ranking] == sorted(r["rank"] for r in ranking) and len(ranking) == 3
         finished = _until(w2, "finished")
         assert finished["room"]["status"] == "finished"
-        assert finished["winner_line"].startswith(ranking[0]["name"]) and "INDEX" in finished["winner_line"]
+        line = finished["winner_line"]
+        assert line.startswith(ranking[0]["name"]) and "game money" in line and "INDEX" not in line
 
 
 def _kill_drivers(tc: TestClient, code: str) -> None:

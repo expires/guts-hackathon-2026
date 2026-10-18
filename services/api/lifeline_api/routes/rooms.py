@@ -225,7 +225,8 @@ async def _create_quick_lives(state: AppState, doc: RoomDoc, opts: GameOptions, 
 
 
 async def _life_results(state: AppState, doc: RoomDoc) -> tuple[list[PlayerScore], str]:
-    """Same Life / Quick Life result (ADR 0064): rank by INDEX, then habit score. Score = INDEX points.
+    """Same Life / Quick Life result (ADR 0064, 0074): rank by game money at the end, then habit score.
+    Score = game money in whole pounds (never shown as INDEX).
     The winner line is a template; every number comes from the result."""
     rows: list[tuple[float, int, dict[str, Any]]] = []
     for p in doc.players:
@@ -235,7 +236,7 @@ async def _life_results(state: AppState, doc: RoomDoc) -> tuple[list[PlayerScore
             table = await state.store.get_macro(rec.macro_hash)
             hs = await call_pure(sim_api.habit_score, rec.life, table)
             habit = hs.overall if hs is not None and hs.overall is not None else -1
-        rows.append((float(p.get("index") or 0.0), habit, p))
+        rows.append((float(p.get("net_worth") or 0.0), habit, p))
     rows.sort(key=lambda r: (-r[0], -r[1], r[2]["name"]))
     ranking: list[PlayerScore] = []
     for i, (index, habit, p) in enumerate(rows):
@@ -245,7 +246,9 @@ async def _life_results(state: AppState, doc: RoomDoc) -> tuple[list[PlayerScore
     if not rows:
         return ranking, ""
     index, habit, winner = rows[0]
-    line = f"{winner['name']} wins with an INDEX of {index:.0f}"
+    money = float(winner.get("net_worth") or 0.0)
+    shown = f"£{abs(money):,.0f}" if money >= 0 else f"-£{abs(money):,.0f}"
+    line = f"{winner['name']} wins with {shown} in game money"
     line += f" and a habit score of {habit} out of 100." if habit >= 0 else "."
     return ranking, line
 
@@ -390,7 +393,20 @@ async def _handle(state: AppState, code: str, player_id: str, msg: WsClientMessa
                     doc.players[0]["is_host"] = True
             else:
                 p["connected"] = False
+                if doc.game not in ("quiz", "same_decision"):
+                    # A player who leaves a Same Life or Quick Life round counts as finished, so the round always
+                    # ends (Quick Life audit bug 2).
+                    p["finished"] = True
             out.append(_msg("roster", room=doc.public()))
+            if doc.status == "playing" and doc.game not in ("quiz", "same_decision") and all(
+                x["finished"] for x in doc.players
+            ):
+                doc.status = "finished"
+                for x in doc.players:
+                    await _refresh_from_life(state, x)
+                ranking, line = await _life_results(state, doc)
+                out.append(_msg("ranking", ranking=ranking))
+                out.append(_finished_msg(doc, line))
         await state.rooms.put(doc)
     for m in out:
         await state.rooms.publish(code, m)
