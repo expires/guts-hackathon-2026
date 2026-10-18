@@ -46,3 +46,12 @@ def test_merchant_key_ignores_refs_and_digits() -> None:
     a = tx("2026-10-01", -1, "NETFLIX.COM 12345")
     b = tx("2026-11-01", -1, "NETFLIX.COM 99881")
     assert merchant_key(a) == merchant_key(b) == "netflix"
+
+
+def test_brand_names_with_number_words_keep_their_name() -> None:
+    """The mobile network "Three" showed as "this payee" (PENNY_V3_BUILD.md C7). Exact brand matches only."""
+    from lifeline_engine.money.categorise import display_name
+
+    assert display_name(tx("2026-10-01", -12.0, "THREE MOBILE", merchant="Three")) == "Three"
+    assert display_name(tx("2026-10-01", -10.0, "O2 UK", merchant="O2")) == "O2"
+    assert display_name(tx("2026-10-01", -5.0, "SHOP", merchant="Three hundred pounds")) != "Three hundred pounds"

@@ -54,13 +54,15 @@ def test_student_trade_offs_have_no_investing_words(macro: MacroTable) -> None:
 
 
 def test_on_track_plan_moves_spare_current_account_cash(macro: MacroTable) -> None:
-    snap = dict(_samples())["scholarship"]
-    top = next_move(snap, macro, TODAY).top
-    assert top.kind == "weekly_budget" and top.shortfall == 0
-    current = sum(a.balance for a in snap.accounts if a.kind == "current")
-    spare = next(e.facts["spare"] for e in top.evidence if "spare" in e.facts)
-    assert 0 < spare <= current
-    assert top.action.startswith("Move ") and top.reason and "spare" in top.reason
+    """ADR 0072: the forecast (lifeline_engine forecast, B2) replaces the old Next Move as the main card, and its
+    "Put £X spare aside" suggestion is tested there. After the reseed no sample student gets the old on-track
+    weekly_budget move, so the spare-cash assertion is dropped. The old move still plans for a shortfall: the three
+    students who run short (A4) get a weekly budget with the money they miss."""
+    samples = dict(_samples())
+    for sid in ("loan_england", "working", "rich"):
+        top = next_move(samples[sid], macro, TODAY).top
+        assert top.kind == "weekly_budget" and (top.shortfall or 0) > 0, sid
+        assert top.action and top.reason
 
 
 def test_investor_keeps_investing_wording() -> None:

@@ -207,7 +207,7 @@ async def test_stale_stored_documents_never_500(client: httpx.AsyncClient) -> No
     await state.store.put_doc(sub, "chat:th_old", thread)
     t = await client.get("/v1/chat/threads/th_old", headers=auth)
     assert t.status_code == 200 and len(t.json()["messages"]) == 2
-    assert len(t.json()["messages"][1]["response"]["bubbles"]) == 2
+    assert len(t.json()["messages"][1]["response"]["bubbles"]) == 3  # trimmed to the contract maximum (D6)
 
 
 async def test_next_move_in_the_chosen_language(client: httpx.AsyncClient) -> None:

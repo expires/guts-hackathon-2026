@@ -47,6 +47,9 @@ TIER1 = {
     "addPlanItem",
 }
 TIER2 = {
+    "getForecast",
+    "setForecastSettings",
+    "getCategoryDetail",
     "getLearnPath",
     "getLearnLesson",
     "attemptLearnLesson",

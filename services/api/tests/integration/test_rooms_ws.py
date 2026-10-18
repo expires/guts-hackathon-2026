@@ -333,3 +333,21 @@ def test_host_start_counts_as_host_ready(tc: TestClient) -> None:
         w0.send_json({"type": "start"})
         assert _until(w1, "started")["room"]["status"] == "playing"
         assert _until(w1, "question")["question"]["total"] == 3
+
+
+def test_quick_life_join_counts_as_ready(tc: TestClient) -> None:
+    """Quick Life: no "I'm ready" step. The host starts as soon as 2 players are in the lobby."""
+    host, guest = _token(tc, DEVICES[0]), _token(tc, DEVICES[1])
+    code = tc.post("/v1/rooms", json={"mode": "duel", "host_name": "Ana"},
+                   headers={"Authorization": f"Bearer {host}"}).json()["code"]
+    with (tc.websocket_connect(f"/v1/rooms/{code}?token={host}") as w0,
+          tc.websocket_connect(f"/v1/rooms/{code}?token={guest}") as w1):
+        w0.send_json({"type": "join", "name": "Ana"})
+        _until(w0, "welcome")
+        w1.send_json({"type": "join", "name": "Ben"})
+        _until(w1, "welcome")
+        w0.send_json({"type": "pick_game", "game": "same_life", "options": {"quick": True, "path_id": "apprentice"}})
+        _until(w0, "game_picked")
+        w0.send_json({"type": "start"})  # the guest never sent "ready"
+        assert _until(w0, "started")["room"]["status"] == "playing"  # an error to the host fails here
+        assert _until(w1, "started")["room"]["status"] == "playing"

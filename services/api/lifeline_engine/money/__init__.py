@@ -87,10 +87,13 @@ def overview(snapshot: FinanceSnapshot) -> FinanceOverview:
 
 
 def spending_response(snapshot: FinanceSnapshot, month: str | None = None) -> SpendingResponse:
+    from lifeline_engine.money.category import statement_months
+
     m = month or dates.month_of(dates.parse(snapshot.as_of))
     cats = spending(snapshot.transactions, m)
     return SpendingResponse(
-        meta=finance_meta(snapshot), month=m, total=round(sum(c.amount for c in cats), 2), categories=cats
+        meta=finance_meta(snapshot), month=m, total=round(sum(c.amount for c in cats), 2), categories=cats,
+        months=statement_months(snapshot),
     )
 
 

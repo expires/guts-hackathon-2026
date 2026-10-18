@@ -1379,6 +1379,150 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '501':
           $ref: '#/components/responses/NotImplemented'
+  /v1/forecast:
+    get:
+      operationId: getForecast
+      summary: Will my money last until my next money arrives? Weekly budget, the maths and sources (ADR 0072)
+      tags:
+      - next-move
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forecast'
+              examples:
+                Forecast:
+                  $ref: '#/components/examples/Forecast'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: buffer_pct
+        in: query
+        required: false
+        description: Preview another buffer; the stored setting is used when omitted
+        schema:
+          type: integer
+          enum:
+          - 0
+          - 5
+          - 10
+          - 15
+          - 20
+      - name: stress
+        in: query
+        required: false
+        description: '2022: rerun with 2022 ONS inflation'
+        schema:
+          type: integer
+          enum:
+          - 2022
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          default: en
+  /v1/forecast/settings:
+    put:
+      operationId: setForecastSettings
+      summary: Store the buffer % (0, 5, 10, 15, 20)
+      tags:
+      - next-move
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastSettings'
+              examples:
+                ForecastSettings:
+                  $ref: '#/components/examples/ForecastSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForecastSettings'
+            examples:
+              ForecastSettings:
+                $ref: '#/components/examples/ForecastSettings'
+  /v1/finance/spending/{category}:
+    get:
+      operationId: getCategoryDetail
+      summary: 'One category: total, usual monthly, weekly bars, every transaction'
+      tags:
+      - finance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryDetail'
+              examples:
+                CategoryDetail:
+                  $ref: '#/components/examples/CategoryDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: category
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+      - name: month
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
   /v1/learn:
     get:
       operationId: getLearnPath
@@ -2670,6 +2814,64 @@ components:
       - month
       - items
       type: object
+    CategoryDetail:
+      additionalProperties: false
+      description: 'Category screen: total, usual monthly amount, bars by week, every transaction.'
+      properties:
+        meta:
+          $ref: '#/components/schemas/FinanceMeta'
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+        label:
+          type: string
+        month:
+          pattern: ^\d{4}-\d{2}$
+          type: string
+        total:
+          minimum: 0
+          type: number
+        usual_monthly:
+          description: Average of the full statement months before this one
+          minimum: 0
+          type: number
+        weeks:
+          items:
+            $ref: '#/components/schemas/CategoryWeek'
+          type: array
+        transactions:
+          items:
+            $ref: '#/components/schemas/Transaction'
+          type: array
+      required:
+      - meta
+      - category
+      - label
+      - month
+      - total
+      - usual_monthly
+      - weeks
+      - transactions
+      type: object
     CategorySpend:
       additionalProperties: false
       properties:
@@ -2719,6 +2921,23 @@ components:
       - amount
       - share
       - transactions
+      type: object
+    CategoryWeek:
+      additionalProperties: false
+      properties:
+        start:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        end:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        amount:
+          minimum: 0
+          type: number
+      required:
+      - start
+      - end
+      - amount
       type: object
     Challenge:
       additionalProperties: false
@@ -2962,6 +3181,10 @@ components:
           minLength: 1
           pattern: ^[A-Za-z0-9_.:-]+$
           type: string
+        card_index:
+          description: Learn lesson card on screen (D4)
+          minimum: 0
+          type: integer
         life_id:
           maxLength: 64
           minLength: 1
@@ -2983,6 +3206,7 @@ components:
           - room_round
           - test_it
           - learn_lesson
+          - forecast
           - other
           type: string
         title:
@@ -3131,10 +3355,10 @@ components:
           - general
           type: string
         bubbles:
-          description: 'Voice: usually one bubble, two at most'
+          description: 1 to 3 short bubbles (PENNY_V3_BUILD.md D6)
           items:
             $ref: '#/components/schemas/ChatBubble'
-          maxItems: 2
+          maxItems: 3
           minItems: 1
           type: array
         highlights:
@@ -3181,6 +3405,8 @@ components:
             - test_it
             - why
             - plan
+            - maths
+            - forecast
             type: string
           maxItems: 3
           type: array
@@ -4203,6 +4429,288 @@ components:
       - monthly_costs
       - net_worth
       type: object
+    Forecast:
+      additionalProperties: false
+      properties:
+        meta:
+          $ref: '#/components/schemas/FinanceMeta'
+        question:
+          const: Will my money last until my next money arrives?
+          default: Will my money last until my next money arrives?
+          type: string
+        state:
+          enum:
+          - on_track
+          - running_short
+          - no_next_money
+          type: string
+        today:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        headline:
+          description: '''You''ll make it to 2 November'' or ''At this pace, you run out on 28 October'''
+          maxLength: 120
+          type: string
+        budget_line:
+          description: '''You can spend £82 a week (about £12 a day)'''
+          maxLength: 120
+          type: string
+        habit_line:
+          maxLength: 160
+          type: string
+        next_money:
+          $ref: '#/components/schemas/NextMoney'
+        money_now:
+          description: Current accounts only; overdraft negative; savings not counted
+          type: number
+        accounts:
+          items:
+            $ref: '#/components/schemas/ForecastAccount'
+          type: array
+        expected_income:
+          description: Smaller incomes due before next money; added to money available
+          items:
+            $ref: '#/components/schemas/ForecastIncome'
+          type: array
+        expected_income_total:
+          default: 0
+          minimum: 0
+          type: number
+        bills:
+          description: Due from tomorrow to the day before next money
+          items:
+            $ref: '#/components/schemas/ForecastBill'
+          type: array
+        bills_total:
+          minimum: 0
+          type: number
+        buffer_pct:
+          enum:
+          - 0
+          - 5
+          - 10
+          - 15
+          - 20
+          type: integer
+        buffer_amount:
+          minimum: 0
+          type: number
+        days:
+          description: Tomorrow to the day before next money
+          minimum: 0
+          type: integer
+        per_day:
+          type: number
+        per_week:
+          type: number
+        budget_period:
+          default: week
+          description: '''until_next_money'' when fewer than 14 days are left: screens show the total (money to spend until
+            the date) and per day, not a weekly figure (ADR 0072)'
+          enum:
+          - week
+          - until_next_money
+          type: string
+        to_spend:
+          default: 0
+          description: 'Money to spend until next money: per_day x days'
+          type: number
+        usual_weekly:
+          description: Average weekly non-rent, non-bill spending, last 4 weeks
+          minimum: 0
+          type: number
+        usual_daily:
+          minimum: 0
+          type: number
+        usual_weeks:
+          items:
+            $ref: '#/components/schemas/SpendWeek'
+          maxItems: 4
+          type: array
+        cpi_adjusted:
+          default: false
+          description: 'Gap over 6 weeks: usual spending raised by ONS CPI'
+          type: boolean
+        cpi_note:
+          maxLength: 200
+          type: string
+        spare:
+          description: 'On track: (per week - usual) x weeks'
+          type: number
+        run_out_date:
+          description: Running short
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        suggestion:
+          $ref: '#/components/schemas/Suggestion'
+        steps:
+          items:
+            $ref: '#/components/schemas/ForecastStep'
+          maxItems: 4
+          minItems: 4
+          type: array
+        timeline:
+          items:
+            $ref: '#/components/schemas/TimelinePoint'
+          type: array
+        sources:
+          items:
+            $ref: '#/components/schemas/ForecastSource'
+          type: array
+        stress:
+          description: Only when requested with stress=2022
+          $ref: '#/components/schemas/StressTest'
+      required:
+      - meta
+      - state
+      - today
+      - headline
+      - budget_line
+      - money_now
+      - accounts
+      - bills
+      - bills_total
+      - buffer_pct
+      - buffer_amount
+      - days
+      - per_day
+      - per_week
+      - usual_weekly
+      - usual_daily
+      - usual_weeks
+      - steps
+      - timeline
+      - sources
+      type: object
+    ForecastAccount:
+      additionalProperties: false
+      properties:
+        name:
+          maxLength: 80
+          type: string
+        kind:
+          enum:
+          - current
+          - savings
+          - credit
+          - overdraft
+          - other
+          type: string
+        balance:
+          type: number
+        counted:
+          description: True when it is in money now (current accounts; overdraft as negative)
+          type: boolean
+      required:
+      - name
+      - kind
+      - balance
+      - counted
+      type: object
+    ForecastBill:
+      additionalProperties: false
+      properties:
+        name:
+          maxLength: 80
+          type: string
+        kind:
+          enum:
+          - bill
+          - subscription
+          - rent
+          - loan
+          - other
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        due_date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+      required:
+      - name
+      - kind
+      - amount
+      - due_date
+      type: object
+    ForecastIncome:
+      additionalProperties: false
+      description: A smaller income expected before the main next money (e.g. weekly pay); added to money available.
+      properties:
+        label:
+          maxLength: 80
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        source:
+          $ref: '#/components/schemas/ForecastSource'
+      required:
+      - label
+      - amount
+      - date
+      - source
+      type: object
+    ForecastSettings:
+      additionalProperties: false
+      properties:
+        buffer_pct:
+          default: 10
+          enum:
+          - 0
+          - 5
+          - 10
+          - 15
+          - 20
+          type: integer
+      type: object
+    ForecastSource:
+      additionalProperties: false
+      properties:
+        label:
+          description: e.g. 'Your statement', 'SAAS payment schedule', 'ONS CPI'
+          maxLength: 120
+          type: string
+        url:
+          maxLength: 500
+          type: string
+      required:
+      - label
+      type: object
+    ForecastStep:
+      additionalProperties: false
+      description: 'One of the 4 steps on ''The maths'': money now, bills before next money, buffer, next money and result.'
+      properties:
+        id:
+          enum:
+          - money_now
+          - bills
+          - buffer
+          - result
+          type: string
+        title:
+          maxLength: 80
+          type: string
+        amount:
+          type: number
+        text:
+          description: One plain sentence with the exact figures
+          maxLength: 240
+          type: string
+        sources:
+          items:
+            $ref: '#/components/schemas/ForecastSource'
+          maxItems: 4
+          type: array
+      required:
+      - id
+      - title
+      - amount
+      - text
+      type: object
     GameOptions:
       additionalProperties: false
       description: Options on the host's one small sheet.
@@ -4578,6 +5086,7 @@ components:
         schedule:
           enum:
           - weekly
+          - fortnightly
           - monthly
           - termly
           - yearly
@@ -5563,6 +6072,27 @@ components:
       required:
       - status
       - items
+      type: object
+    NextMoney:
+      additionalProperties: false
+      properties:
+        label:
+          description: e.g. 'Student Finance England loan', 'Pay from the bar job'
+          maxLength: 80
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        source:
+          $ref: '#/components/schemas/ForecastSource'
+      required:
+      - label
+      - amount
+      - date
+      - source
       type: object
     NextMoveBacktest:
       additionalProperties: false
@@ -6675,6 +7205,24 @@ components:
       - is_bank_holiday
       - model
       type: object
+    SpendWeek:
+      additionalProperties: false
+      properties:
+        start:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        end:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        amount:
+          description: Non-rent, non-bill spending in this week
+          minimum: 0
+          type: number
+      required:
+      - start
+      - end
+      - amount
+      type: object
     SpendingResponse:
       additionalProperties: false
       properties:
@@ -6689,6 +7237,12 @@ components:
         categories:
           items:
             $ref: '#/components/schemas/CategorySpend'
+          type: array
+        months:
+          description: Every statement month, oldest first (month switch)
+          items:
+            pattern: ^\d{4}-\d{2}$
+            type: string
           type: array
       required:
       - meta
@@ -6721,6 +7275,42 @@ components:
       - health
       - smarts
       - money
+      type: object
+    StressTest:
+      additionalProperties: false
+      properties:
+        year:
+          description: '2022'
+          type: integer
+        inflation_pct:
+          description: ONS CPI annual rate used
+          type: number
+        state:
+          enum:
+          - on_track
+          - running_short
+          - no_next_money
+          type: string
+        per_week:
+          type: number
+        usual_weekly:
+          type: number
+        run_out_date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        text:
+          maxLength: 240
+          type: string
+        source:
+          $ref: '#/components/schemas/ForecastSource'
+      required:
+      - year
+      - inflation_pct
+      - state
+      - per_week
+      - usual_weekly
+      - text
+      - source
       type: object
     StudentPath:
       additionalProperties: false
@@ -6830,6 +7420,53 @@ components:
       - count
       - items
       type: object
+    Suggestion:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+          - save_spare
+          - cut_category
+          type: string
+        text:
+          maxLength: 200
+          type: string
+        amount:
+          description: £ to put aside, or the category's weekly amount
+          minimum: 0
+          type: number
+        category:
+          enum:
+          - groceries
+          - eating_out
+          - transport
+          - shopping
+          - entertainment
+          - bills
+          - housing
+          - subscriptions
+          - health
+          - travel
+          - personal_care
+          - education
+          - gifts
+          - transfers
+          - income
+          - savings
+          - cash
+          - fees
+          - other
+          type: string
+        rate_pct:
+          description: Bank of England easy-access rate (save_spare)
+          type: number
+        source:
+          $ref: '#/components/schemas/ForecastSource'
+      required:
+      - kind
+      - text
+      - amount
+      type: object
     TestMoveRequest:
       additionalProperties: false
       properties:
@@ -6898,6 +7535,29 @@ components:
       - end
       - label
       type: object
+    TimelinePoint:
+      additionalProperties: false
+      properties:
+        date:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        kind:
+          enum:
+          - today
+          - bill
+          - next_money
+          - run_out
+          type: string
+        label:
+          maxLength: 80
+          type: string
+        amount:
+          type: number
+      required:
+      - date
+      - kind
+      - label
+      type: object
     Token:
       additionalProperties: false
       properties:
@@ -6934,6 +7594,8 @@ components:
           - habit_score
           - inflation
           - fx_convert
+          - forecast
+          - forecast_what_if
           type: string
         ok:
           type: boolean
@@ -8573,6 +9235,7 @@ components:
           share: 0.139
           transactions: 7
           change_pct: -12.5
+        months: []
     Subscriptions:
       value:
         meta:
@@ -9369,6 +10032,116 @@ components:
         next_lesson_id: needs-vs-wants
         done: 1
         total: 3
+    Forecast:
+      value:
+        meta:
+          data_status: live
+          source: statement
+          as_of: '2026-10-16'
+        question: Will my money last until my next money arrives?
+        state: on_track
+        today: '2026-10-17'
+        headline: You'll make it to 2 November
+        budget_line: You can spend £82 a week (about £12 a day)
+        habit_line: You usually spend £70 a week.
+        next_money:
+          label: Student Finance England loan
+          amount: 3610.0
+          date: '2027-01-18'
+          source:
+            label: Student Finance England payment dates
+        money_now: 1249.16
+        accounts:
+        - name: Current account
+          kind: current
+          balance: 1249.16
+          counted: true
+        expected_income: []
+        expected_income_total: 0.0
+        bills:
+        - name: giffgaff
+          kind: bill
+          amount: 10.0
+          due_date: '2026-11-05'
+        bills_total: 10.0
+        buffer_pct: 10
+        buffer_amount: 123.92
+        days: 92
+        per_day: 12.12
+        per_week: 84.84
+        budget_period: week
+        to_spend: 0.0
+        usual_weekly: 70.0
+        usual_daily: 10.0
+        usual_weeks:
+        - start: '2026-10-10'
+          end: '2026-10-16'
+          amount: 70.0
+        cpi_adjusted: false
+        spare: 194.4
+        suggestion:
+          kind: save_spare
+          text: Put £194 spare aside
+          amount: 194.4
+          rate_pct: 3.5
+          source:
+            label: Bank of England
+        steps:
+        - id: money_now
+          title: Money now
+          amount: 1249.16
+          text: Current account £1,249.16.
+          sources:
+          - label: Your statement
+        - id: bills
+          title: Bills before your next money
+          amount: 10.0
+          text: giffgaff £10.00.
+          sources:
+          - label: Your statement
+        - id: buffer
+          title: Buffer
+          amount: 123.92
+          text: 10% of £1,239.16.
+          sources: []
+        - id: result
+          title: What you can spend
+          amount: 84.84
+          text: £1,115.24 over 92 days.
+          sources:
+          - label: Your statement
+        timeline:
+        - date: '2026-10-17'
+          kind: today
+          label: Today
+        sources:
+        - label: Your statement
+    ForecastSettings:
+      value:
+        buffer_pct: 10
+    CategoryDetail:
+      value:
+        meta:
+          data_status: live
+          source: statement
+          as_of: '2026-10-16'
+        category: groceries
+        label: Groceries
+        month: 2026-10
+        total: 96.4
+        usual_monthly: 142.0
+        weeks:
+        - start: '2026-10-01'
+          end: '2026-10-07'
+          amount: 48.2
+        transactions:
+        - id: tx_1
+          account_id: acc_1
+          date: '2026-10-03'
+          amount: -23.4
+          currency: GBP
+          description: ALDI 123 SHEFFIELD
+          merchant: Aldi
     LearnLesson:
       value:
         summary:

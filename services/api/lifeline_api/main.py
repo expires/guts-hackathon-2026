@@ -31,6 +31,7 @@ from lifeline_api.routes import (
     circles,
     course,
     finance,
+    forecast,
     later,
     learn,
     lives,
@@ -186,8 +187,8 @@ def create_app() -> FastAPI:
     )
     install_error_handlers(app)
     app.add_exception_handler(RoomsUnavailable, _rooms_unavailable)
-    for r in (meta.router, auth.router, lives.router, finance.router, next_move.router, learn.router, account.router,
-              chat.router, rooms.router, circles.router, course.router,
+    for r in (meta.router, auth.router, lives.router, finance.router, forecast.router, next_move.router, learn.router,
+              account.router, chat.router, rooms.router, circles.router, course.router,
               later.router):
         app.include_router(r)
     # Order: last added runs first. Outermost: catch-all, then body limit, then rate limit.

@@ -44,10 +44,9 @@ async def test_path_needs_auth_and_is_fast(client: httpx.AsyncClient) -> None:
 
 async def test_locked_unknown_and_open(client: httpx.AsyncClient) -> None:
     auth = await sign_in(client, "learn-lock-01")
-    r = await client.get(f"/v1/learn/lessons/{IDS[1]}", headers=auth)
-    assert r.status_code == 409 and r.json()["error"]["code"] == "lesson_locked"
-    assert r.json()["error"]["message"] == f"Finish {SPECS[IDS[0]].title} first"
-    assert (await attempt(client, auth, IDS[1], 3)).status_code == 409
+    # No locks (PENNY_V3_BUILD.md E1): a later lesson opens and can be attempted at once.
+    assert (await client.get(f"/v1/learn/lessons/{IDS[1]}", headers=auth)).status_code == 200
+    assert (await attempt(client, auth, IDS[1], 3)).status_code == 200
     r = await client.get("/v1/learn/lessons/no-such-lesson", headers=auth)
     assert r.status_code == 404 and set(r.json()) == {"error"}
     r = await client.get(f"/v1/learn/lessons/{IDS[0]}", headers=auth)
@@ -61,7 +60,6 @@ async def test_fail_retry_pass_unlocks_next(client: httpx.AsyncClient) -> None:
     r = await attempt(client, auth, IDS[0], 1)
     res = r.json()
     assert r.status_code == 200 and not res["passed"] and res["correct"] == 1 and "unlocked_lesson_id" not in res
-    assert (await client.get(f"/v1/learn/lessons/{IDS[1]}", headers=auth)).status_code == 409
     res = (await attempt(client, auth, IDS[0], 2)).json()
     assert res["passed"] and res["unlocked_lesson_id"] == IDS[1] and res["path"]["done"] == 1
     assert all(len(x["explanation"]) > 0 for x in res["results"])

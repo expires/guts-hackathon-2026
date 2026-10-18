@@ -200,7 +200,7 @@ async def save_onboarding(state: AppState, sub: str, *, is_student: bool | None,
     await state.store.put_doc(sub, DOC_ONBOARDING, {"is_student": is_student, "housing": housing, "age": age})
 
 
-PAYMENTS_PER_YEAR = {"weekly": 52, "monthly": 12, "termly": 3, "yearly": 1, "one_off": 1}
+PAYMENTS_PER_YEAR = {"weekly": 52, "fortnightly": 26, "monthly": 12, "termly": 3, "yearly": 1, "one_off": 1}
 
 
 def yearly_income(snap: FinanceSnapshot) -> float | None:

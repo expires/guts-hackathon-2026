@@ -280,7 +280,7 @@ async def import_sample(sample_id: str, request: Request, sub: Subject) -> Impor
     await learn_progress.mark_sample_passed(state, sub)  # ADR 0068: a judge sees Learn progress
     days = [t.date for t in snap.transactions]
     parsed = SimpleNamespace(
-        status="done", provider="monzo", transactions=snap.transactions, warnings=[],
+        status="done", provider="unknown", transactions=snap.transactions, warnings=[],  # no Monzo (A1.5)
         first_date=min(days, default=None), last_date=max(days, default=None),
         months_covered=samples.months_covered(snap),
     )

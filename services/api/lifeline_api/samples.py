@@ -3,7 +3,7 @@ this module adds what the API needs on top: the debt accounts and the import res
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import ValidationError
@@ -36,7 +36,8 @@ def load(sample_id: str) -> FinanceSnapshot | None:
     labelled "Sample data", with debt accounts. None when the sample or its file is missing.
     Raises SampleWithoutBalance when no balance could be read (never import a £0 sample, V1)."""
     try:
-        snap = data_samples.load_sample(sample_id)
+        # PENNY_V3_BUILD A1.3: the statement runs from 1 July 2026 to the day before the import, so it is never stale.
+        snap = data_samples.load_sample(sample_id, today=datetime.now(UTC).date())
     except (KeyError, FileNotFoundError, ValueError):
         return None
     if not any(a.balance != 0 for a in snap.accounts):

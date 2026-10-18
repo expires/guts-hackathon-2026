@@ -267,6 +267,15 @@ async def _refresh_from_life(state: AppState, p: dict[str, Any]) -> None:
         p["finished"] = True
 
 
+def _is_quick_life(doc: RoomDoc) -> bool:
+    """A Quick Life round, or a lobby with no game picked yet (Quick Life is the default first game)."""
+    if doc.preset_id is not None:
+        return False  # preset rooms (full Same Life with a preset character) keep the ready step
+    if doc.game is None:
+        return True
+    return doc.game == "same_life" and (doc.options or {}).get("quick") is True
+
+
 async def _handle(state: AppState, code: str, player_id: str, msg: WsClientMessage) -> dict[str, Any] | None:
     """Apply one client message. Returns a direct reply for the sender, if any. Broadcasts go via pub/sub."""
     if msg.type == "ping":
@@ -320,6 +329,9 @@ async def _handle(state: AppState, code: str, player_id: str, msg: WsClientMessa
                 return _error("already_started", "This game has already started")
             else:
                 p["ready"] = True  # the host's Start is the host's ready; the app shows the host as ready
+                if _is_quick_life(doc):
+                    for x in doc.players:  # Quick Life: joining the room counts as ready (PENNY_V3_BUILD.md)
+                        x["ready"] = True
                 ready = [x for x in doc.players if x["ready"]]
                 if len(ready) < MIN_PLAYERS_TO_START or len(ready) != len(doc.players):
                     return _error("not_ready", f"Everyone must be ready, and at least {MIN_PLAYERS_TO_START} players")

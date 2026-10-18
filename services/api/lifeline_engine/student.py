@@ -110,6 +110,8 @@ def detect_income(txs: Sequence[Transaction], today: date) -> tuple[IncomeSource
             nxt = step(ds[-1], "monthly")
         elif len(ds) >= 3 and all(5 <= g <= 9 for g in recent):
             nxt = step(ds[-1], "weekly")
+        elif len(ds) >= 3 and all(12 <= g <= 16 for g in recent):
+            nxt = dates.add_days(ds[-1], 14)  # fortnightly pay
         else:
             continue
         if nxt <= today:  # due today or missed: the next one is not projected from this source
@@ -120,17 +122,21 @@ def detect_income(txs: Sequence[Transaction], today: date) -> tuple[IncomeSource
     return tuple(out)
 
 
-YEARLY_FACTOR: dict[str, float] = {"weekly": 52.0, "monthly": 12.0, "termly": 3.0, "yearly": 1.0, "one_off": 0.0}
+YEARLY_FACTOR: dict[str, float] = {"weekly": 52.0, "fortnightly": 26.0, "monthly": 12.0, "termly": 3.0, "yearly": 1.0,
+                                   "one_off": 0.0}
 
 
 def entered_next_dates(src: ContractIncome, today: date, horizon_days: int = 400) -> tuple[date, ...]:
-    """Known future payment dates of an entered source: its `dates` and `next_date`. A weekly or monthly source
-    with a next_date in the past steps forward by its own schedule. Termly, yearly and one-off money is used only
+    """Known future payment dates of an entered source: its `dates` and `next_date`. A weekly, fortnightly or monthly
+    source with a next_date in the past steps forward by its own schedule. Termly, yearly and one-off money is used only
     on the dates entered (ADR 0053 bug 3)."""
     found = {dates.parse(d) for d in src.dates}
     if src.next_date is not None:
         d = dates.parse(src.next_date)
-        if src.schedule in ("weekly", "monthly"):
+        if src.schedule == "fortnightly":
+            while d <= today and (today - d).days < horizon_days:
+                d = dates.add_days(d, 14)
+        elif src.schedule in ("weekly", "monthly"):
             cad: Cadence = "weekly" if src.schedule == "weekly" else "monthly"
             while d <= today and (today - d).days < horizon_days:
                 d = step(d, cad)

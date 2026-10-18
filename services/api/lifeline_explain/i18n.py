@@ -224,9 +224,35 @@ STEPS: dict[str, dict[Lang, str]] = {
         "es": "Reviso los tipos de cambio…", "pt": "Verificando as taxas de câmbio…",
         "it": "Controllo i tassi di cambio…", "zh-Hans": "正在查看汇率…",
         "hi": "विनिमय दरें देख रही हूँ…", "ne": "विनिमय दर हेर्दै…"},
+    "Checking your forecast…": {"fr": "Je vérifie vos prévisions…", "es": "Reviso tu previsión…",
+        "pt": "Verificando a sua previsão…", "it": "Controllo la tua previsione…",
+        "zh-Hans": "正在查看你的预测…", "hi": "आपका पूर्वानुमान देख रही हूँ…", "ne": "तपाईंको पूर्वानुमान हेर्दै…"},
+    "Trying your what-if…": {"fr": "J'essaie votre scénario…", "es": "Pruebo tu supuesto…",
+        "pt": "Testando a sua hipótese…", "it": "Provo la tua ipotesi…", "zh-Hans": "正在试算你的假设…",
+        "hi": "आपका 'क्या होगा अगर' आज़मा रही हूँ…", "ne": "तपाईंको 'यदि' परीक्षण गर्दै…"},
     "Working…": {"fr": "Je travaille…", "es": "Trabajando…", "pt": "Trabalhando…",
         "it": "Ci lavoro…", "zh-Hans": "处理中…", "hi": "काम कर रही हूँ…", "ne": "काम गर्दै…"},
 }  # fmt: skip
+
+# C5: the onboarding chat answers; if a model answer was only a refusal ("I can't see your numbers"), this line
+# replaces it after one retry.
+ONBOARDING_ANSWER: dict[Lang, str] = {
+    "en": "Ask me about budgets, loans, rent, part-time work or uni life, and I will explain how it works for "
+    "students.",
+    "fr": "Posez-moi vos questions sur le budget, les prêts, le loyer, les petits boulots ou la vie étudiante, et je "
+    "vous explique comment ça marche pour les étudiants.",
+    "es": "Pregúntame sobre presupuestos, préstamos, alquiler, trabajo a tiempo parcial o la vida universitaria, y "
+    "te explico cómo funciona para estudiantes.",
+    "pt": "Pergunte-me sobre orçamento, empréstimos, aluguel, trabalho de meio período ou vida universitária, e eu "
+    "explico como funciona para estudantes.",
+    "it": "Chiedimi di budget, prestiti, affitto, lavoro part-time o vita universitaria, e ti spiego come funziona "
+    "per gli studenti.",
+    "zh-Hans": "问我关于预算、贷款、房租、兼职或大学生活的问题，我会解释对学生来说是怎么运作的。",
+    "hi": "बजट, लोन, किराया, पार्ट-टाइम काम या यूनिवर्सिटी जीवन के बारे में पूछें, मैं बताऊँगी कि छात्रों के लिए यह कैसे "
+    "काम करता है।",
+    "ne": "बजेट, ऋण, भाडा, पार्ट-टाइम काम वा विश्वविद्यालय जीवनबारे सोध्नुहोस्, म विद्यार्थीका लागि यो कसरी काम गर्छ भनेर "
+    "बताउँछु।",
+}
 
 REPLAYING: dict[Lang, str] = {
     "en": "Replaying", "fr": "Je rejoue", "es": "Repito", "pt": "Repetindo", "it": "Rigioco",

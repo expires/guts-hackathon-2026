@@ -121,9 +121,7 @@ def _status(n: int, passed: Collection[str]) -> LessonStatus:
     flat = _flat()
     if flat[n].spec.id in passed:
         return "passed"
-    if n == 0 or flat[n - 1].spec.id in passed:
-        return "open"
-    return "locked"
+    return "open"  # no locks (PENNY_V3_BUILD.md E1): every lesson is open; the path still shows the order
 
 
 def _summary(n: int, passed: Collection[str], bonus: Collection[str], language: str) -> LessonSummary:

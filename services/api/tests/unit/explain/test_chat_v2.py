@@ -191,7 +191,7 @@ async def test_preloaded_wrong_personal_number_rejected() -> None:
 
 
 def test_prompt_has_live_data_rule() -> None:
-    assert prompts.PENNY_PROMPT_VERSION == "penny-v7"
+    assert prompts.PENNY_PROMPT_VERSION == "penny-v8"
     assert "Never say you lack live or current rates; call boe_rates." in prompts.PENNY_SYSTEM
 
 
@@ -314,10 +314,10 @@ def test_suggestions_cleaned() -> None:
     assert clean_suggestions(["A" * 41, "Next move", "next move"]) == ["Next move"]
 
 
-async def test_one_or_two_bubbles_only() -> None:
+async def test_at_most_three_bubbles() -> None:
     llm = FakeChatLLM(call("finance_summary"), final("You spend £1,840.50 a month.", "One.", "Two.", "Three."))
     r, _ = await ask("How am I doing?", llm)
-    assert len(r.bubbles) == 2 and r.summary_available
+    assert len(r.bubbles) == 3 and r.summary_available  # D6: 1 to 3 bubbles
 
 
 async def test_highlights_only_money_and_rates() -> None:

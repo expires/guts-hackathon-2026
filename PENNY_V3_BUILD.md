@@ -235,22 +235,22 @@ Order stays: Welcome → Problem → Language → What you can do → Try Penny 
 2. Full Life game (Choose a life, Job/Assets/People/Activities sheets, Rewind, Life summary, "Your real decision"), Challenges, Same Decision, old Concepts screens, Collection: hidden.
 3. "Real-life decision" (mortgage) cover in the old Why?: removed with Why?.
 4. Play tab = "Play with friends" (Quick Life) + "Learn". Keep Money Quiz and Circles reachable inside Play with friends for now.
-5. Game picker: "Quick Life" is the first option, one tap, with the student and year preset. Other games below it.
+5. Game picker: "Quick Life" is the first option. Tapping it opens the 5 Quick Life students as cards; one tap picks a student; the year is preset; then Start. Other games below it. Joining a Quick Life room counts as ready: no "I'm ready" step; the host's Start turns on as soon as 2 or more players are in the lobby. The lobby QR code opens the app straight into the lobby when scanned with the iPhone camera.
 6. Debug menu and Playground not reachable in Release builds; the phones run Release.
 
 # G. Other fixes
 
 1. Greeting "Hi, <first name>" at every time of day. The You tab header shows the name, not "You".
-2. Floating tab bar: bigger icons and labels, no glass effect (see canvas).
+2. Floating tab bar: bigger icons and labels, no glass effect (see canvas). It is the one app-wide tab bar for Money, Penny, Play and You. Every scrolling screen has bottom padding so the last item is never hidden behind it. The Penny chat input sits above the bar. Full-screen covers keep hiding the bar. (Must-have: right after B1-B3.)
 3. Net worth / Your money: remove all Monzo and Trading212 leftovers (account names, source rows). Do not show the same amount twice ("Net worth" and "In your account" both £1,249). Confirm in the report that no teammate's real data is anywhere in the seed or on the server.
 4. Data source rows: no "Mock data" labels; cut sources not listed.
 5. Credits line: no "mock data".
 
 # H. Order and rules
 
-1. Order: location bug → A (reseed) → B1–B3 (forecast engine and main screens) → C5 (Try Penny verifier) + D1 (double bubble) → B4 removals + F (cut) + G → C (rest of onboarding) → D (rest) → E.
+1. Order: location bug → A (reseed) → B1–B3 (forecast engine and main screens) → G2 (floating tab bar) → C5 (Try Penny verifier) + D1 (double bubble) → B4 removals + F (cut) + G → C (rest of onboarding) → D (rest) → E.
 2. Parallel workers by area; one owner per file; boss routes.
 3. Commit small, by feature, to the wip branch; push after each verified commit. Merge to main only after the final verifier run.
 4. One full verifier run on the final build before 09:30: fresh account, all 10 students imported, forecast states match A5, onboarding end to end, Quick Life with 2 accounts.
 5. Install on both phones as soon as A + B1–B3 pass, then again after the final run.
-6. If time runs out at 09:30, stop new work, report what is done, and make sure main is green.
+6. Everything complete by 10:00 (user, 06:05). From 09:00 fixes only. 09:15: final verifier run on the final build. 09:45: merge to main, install on all phones. 10:00: done, main green, STATUS.md complete.

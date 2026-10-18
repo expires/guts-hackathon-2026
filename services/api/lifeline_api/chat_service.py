@@ -17,8 +17,10 @@ from pydantic import ValidationError
 
 from lifeline_api import macro, money, prediction
 from lifeline_api.errors import ApiError, not_found
+from lifeline_api.routes.forecast import compute_forecast, stored_settings
 from lifeline_api.routes.lives import new_life_id
 from lifeline_api.routes.next_move import stored_next_move, subject_seed
+from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeRecord, macro_hash
 from lifeline_contracts.chat import (
@@ -33,7 +35,9 @@ from lifeline_contracts.chat import (
 )
 from lifeline_contracts.domain import Life
 from lifeline_contracts.finance import Account, FinanceSnapshot
+from lifeline_contracts.forecast import Forecast, WhatIfChange, WhatIfResult
 from lifeline_contracts.next_move import NextMoveResponse
+from lifeline_engine import forecast as forecast_engine
 from lifeline_explain import game_scene, learn_scene
 from lifeline_explain.chat_engine_tools import EngineToolSet
 from lifeline_explain.chat_tools import ChatToolContext, ChatTurn, GameScene, ToolSet
@@ -99,7 +103,7 @@ def _message(m: dict[str, Any], replies: int) -> ChatMessage | None:
     resp = dict(m.get("response") or {})
     if resp:
         resp.pop("disclaimer", None)  # the current disclaimer applies
-        resp["bubbles"] = list(resp.get("bubbles", []))[:2]
+        resp["bubbles"] = list(resp.get("bubbles", []))[:3]
         resp["tool_calls"] = list(resp.get("tool_calls", []))[:5]
     try:
         return ChatMessage.model_validate({**m, "replies": replies, "response": resp or None})
@@ -241,13 +245,15 @@ async def room_round_scene(state: AppState, sub: str, rc: ChatContext | None) ->
     return game_scene.room_decision_scene(item, revealed)
 
 
-def lesson_scene(rc: ChatContext | None) -> GameScene | None:
+def lesson_scene(rc: ChatContext | None, message: str = "") -> GameScene | None:
     """The Learn lesson on screen (ADR 0068): title, cards and facts with their official sources. Never the quiz.
     In-memory content, so no wait (speed). None for another screen or an unknown lesson id (general answer)."""
     if rc is None or rc.screen != "learn_lesson":
         return None
     try:
-        return learn_scene.lesson_scene(rc.lesson_id)
+        # D4: the card the user is on (ChatContext.card_index once the contract has it, else the quoted card text).
+        card_index = getattr(rc, "card_index", None)
+        return learn_scene.lesson_scene(rc.lesson_id, message, card_index if isinstance(card_index, int) else None)
     except Exception as exc:  # broken content: Penny answers in general
         log.info("chat: lesson scene unavailable (%s)", type(exc).__name__)
         return None
@@ -273,6 +279,24 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
 
     event_id = req.context.event_id if (req.context is not None and life is not None) else None
 
+    async def forecast(stress: int | None) -> Forecast:
+        """Penny's forecast tool (ADR 0072): the same call and stored buffer % as GET /v1/forecast."""
+        return await compute_forecast(state, sub, stress=stress)
+
+    async def what_if(changes: list[WhatIfChange]) -> WhatIfResult:
+        """Penny's forecast_what_if tool: the engine rerun with the same inputs and buffer % as GET /v1/forecast."""
+        live = await money.snapshot(state, sub)
+        pct = (await stored_settings(state, sub)).buffer_pct
+        day = money.today(live)
+        inp = forecast_engine.macro_inputs(table, day)
+        res: WhatIfResult = await call_pure(
+            forecast_engine.what_if, live, day, pct, inp.cpi, inp.inflation_2022, inp.boe_easy_access_rate, changes,
+            sources=inp,
+        )
+        meta = money.meta(live)
+        return res.model_copy(update={"before": res.before.model_copy(update={"meta": meta}),
+                                      "after": res.after.model_copy(update={"meta": meta})})  # fmt: skip
+
     hub: Any = state.hub
     tools = EngineToolSet(
         snap if snap is not None else no_data_snapshot(today),
@@ -290,8 +314,10 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
         holidays=holidays,
         weather=weather,
         life_id_prefix="chat",
+        forecast=forecast if snap is not None else None,  # no own data (onboarding): no forecast tool
+        what_if=what_if if snap is not None else None,
     )
-    scene = (lesson_scene(req.context) or await life_event_scene(tools, req)
+    scene = (lesson_scene(req.context, req.message) or await life_event_scene(tools, req)
              or await room_round_scene(state, sub, req.context))  # fmt: skip
     ctx = ChatToolContext(
         tools=tools,

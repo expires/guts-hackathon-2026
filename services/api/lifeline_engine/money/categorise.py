@@ -414,10 +414,18 @@ def merchant_key(tx: Transaction) -> str:
     return " ".join(words[:3]) or raw.strip()
 
 
+# UK brands whose names contain a number or a number word, which clean_name would strip ("Three" became
+# "this payee"). Exact matches only, so an untrusted name cannot smuggle a number in through this list.
+BRAND_NAMES = {"three": "Three", "three mobile": "Three", "o2": "O2", "4oc": "4oC", "7-eleven": "7-Eleven"}
+
+
 def display_name(tx: Transaction) -> str:
     """Name to show for a payee: the merchant field, else the description in title case. Untrusted text, so it
     is cleaned (no digits, %, currency signs or number words) before it reaches any engine text."""
     if tx.merchant:
+        brand = BRAND_NAMES.get(" ".join(tx.merchant.lower().split()))
+        if brand is not None:
+            return brand
         return clean_name(tx.merchant)
     return clean_name(" ".join(w.capitalize() for w in merchant_key(tx).split()) or tx.description)
 

@@ -24,6 +24,7 @@ from lifeline_contracts import api_models as A  # noqa: E402
 from lifeline_contracts import chat as CH  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
+from lifeline_contracts import forecast as FC  # noqa: E402
 from lifeline_contracts import learn as LN  # noqa: E402
 from lifeline_contracts import next_move as N  # noqa: E402
 from lifeline_contracts import play as PL  # noqa: E402
@@ -89,6 +90,9 @@ MODELS: list[type[BaseModel]] = [
     AC.ImportResult,
     AC.SamplesResponse,
     PL.PathsResponse,
+    FC.Forecast,
+    FC.ForecastSettings,
+    FC.CategoryDetail,
     LN.LearnPath,
     LN.LearnLesson,
     LN.LessonAttemptRequest,
@@ -615,6 +619,58 @@ def chat_examples() -> dict[str, Any]:
     }
 
 
+def forecast_example() -> FC.Forecast:
+    src = FC.ForecastSource(label="Your statement")
+    return FC.Forecast(
+        meta=F.FinanceMeta(data_status="live", source="statement", as_of="2026-10-16"),
+        state="on_track",
+        today="2026-10-17",
+        headline="You'll make it to 2 November",
+        budget_line="You can spend £82 a week (about £12 a day)",
+        habit_line="You usually spend £70 a week.",
+        next_money=FC.NextMoney(
+            label="Student Finance England loan",
+            amount=3610.0,
+            date="2027-01-18",
+            source=FC.ForecastSource(label="Student Finance England payment dates"),
+        ),
+        money_now=1249.16,
+        accounts=[FC.ForecastAccount(name="Current account", kind="current", balance=1249.16, counted=True)],
+        bills=[FC.ForecastBill(name="giffgaff", kind="bill", amount=10.0, due_date="2026-11-05")],
+        bills_total=10.0,
+        buffer_pct=10,
+        buffer_amount=123.92,
+        days=92,
+        per_day=12.12,
+        per_week=84.84,
+        usual_weekly=70.0,
+        usual_daily=10.0,
+        usual_weeks=[FC.SpendWeek(start="2026-10-10", end="2026-10-16", amount=70.0)],
+        spare=194.4,
+        suggestion=FC.Suggestion(
+            kind="save_spare",
+            text="Put £194 spare aside",
+            amount=194.4,
+            rate_pct=3.5,
+            source=FC.ForecastSource(label="Bank of England"),
+        ),
+        steps=[
+            FC.ForecastStep(
+                id="money_now", title="Money now", amount=1249.16, text="Current account £1,249.16.", sources=[src]
+            ),
+            FC.ForecastStep(
+                id="bills", title="Bills before your next money", amount=10.0, text="giffgaff £10.00.", sources=[src]
+            ),
+            FC.ForecastStep(id="buffer", title="Buffer", amount=123.92, text="10% of £1,239.16.", sources=[]),
+            FC.ForecastStep(
+                id="result", title="What you can spend", amount=84.84, text="£1,115.24 over 92 days.", sources=[src]
+            ),
+        ],
+        timeline=[FC.TimelinePoint(date="2026-10-17", kind="today", label="Today")],
+        sources=[src],
+    )
+
+
 def play_examples() -> dict[str, Any]:
     habits = F.HabitScore(
         components=F.HabitComponents(
@@ -689,6 +745,27 @@ def play_examples() -> dict[str, Any]:
             ]
         ),
         "LearnPath": learn_path,
+        "Forecast": forecast_example(),
+        "ForecastSettings": FC.ForecastSettings(buffer_pct=10),
+        "CategoryDetail": FC.CategoryDetail(
+            meta=F.FinanceMeta(data_status="live", source="statement", as_of="2026-10-16"),
+            category="groceries",
+            label="Groceries",
+            month="2026-10",
+            total=96.4,
+            usual_monthly=142.0,
+            weeks=[FC.CategoryWeek(start="2026-10-01", end="2026-10-07", amount=48.2)],
+            transactions=[
+                F.Transaction(
+                    id="tx_1",
+                    account_id="acc_1",
+                    date="2026-10-03",
+                    amount=-23.4,
+                    description="ALDI 123 SHEFFIELD",
+                    merchant="Aldi",
+                )
+            ],
+        ),
         "LearnLesson": LN.LearnLesson(
             summary=learn_path.units[0].lessons[1],
             cards=[
@@ -1347,6 +1424,9 @@ def errs(*codes: str) -> dict[str, Any]:
 # True while some Tier 2 endpoints may still answer 501 not_implemented. Set False when Tier 2 is built.
 STUBS_DECLARED = True
 TIER2_OPS = {
+    "getForecast",
+    "setForecastSettings",
+    "getCategoryDetail",
     "getLearnPath",
     "getLearnLesson",
     "attemptLearnLesson",
@@ -1806,6 +1886,66 @@ def account_paths() -> dict[str, Any]:
                 "Student start paths for Play solo and Quick Life (ADR 0052)",
                 "lives",
                 {**ok("PathsResponse", "Paths"), **errs("401", "429")},
+            )
+        },
+        "/v1/forecast": {
+            "get": op(
+                "getForecast",
+                "Will my money last until my next money arrives? Weekly budget, the maths and sources (ADR 0072)",
+                "next-move",
+                {**ok("Forecast", "Forecast"), **errs("401", "409", "422", "429", "503")},
+                parameters=[
+                    {
+                        "name": "buffer_pct",
+                        "in": "query",
+                        "required": False,
+                        "description": "Preview another buffer; the stored setting is used when omitted",
+                        "schema": {"type": "integer", "enum": [0, 5, 10, 15, 20]},
+                    },
+                    {
+                        "name": "stress",
+                        "in": "query",
+                        "required": False,
+                        "description": "2022: rerun with 2022 ONS inflation",
+                        "schema": {"type": "integer", "enum": [2022]},
+                    },
+                    {
+                        "name": "language",
+                        "in": "query",
+                        "required": False,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"],
+                            "default": "en",
+                        },
+                    },
+                ],
+            )
+        },
+        "/v1/forecast/settings": {
+            "put": op(
+                "setForecastSettings",
+                "Store the buffer % (0, 5, 10, 15, 20)",
+                "next-move",
+                {**ok("ForecastSettings", "ForecastSettings"), **errs(*STD)},
+                requestBody=body("ForecastSettings", "ForecastSettings"),
+            )
+        },
+        "/v1/finance/spending/{category}": {
+            "get": op(
+                "getCategoryDetail",
+                "One category: total, usual monthly, weekly bars, every transaction",
+                "finance",
+                {**ok("CategoryDetail", "CategoryDetail"), **errs("401", "404", "409", "422", "429", "503")},
+                parameters=[
+                    {"name": "category", "in": "path", "required": True, "schema": {"type": "string", "maxLength": 40}},
+                    {
+                        "name": "month",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$"},
+                    },
+                ],
             )
         },
         "/v1/learn": {

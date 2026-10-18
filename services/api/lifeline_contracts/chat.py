@@ -50,12 +50,23 @@ class RateDecisions(_M):
 
 Reaction = Literal["eyes", "brain", "thumbs", "tick", "question", "shrug"]
 Screen = Literal[
-    "money", "next_move", "why", "life_event", "life", "onboarding", "room_round", "test_it", "learn_lesson", "other"
+    "money",
+    "next_move",
+    "why",
+    "life_event",
+    "life",
+    "onboarding",
+    "room_round",
+    "test_it",
+    "learn_lesson",
+    "forecast",
+    "other",
 ]
 
 
 class ChatContext(_M):
     next_move_id: ShortId | None = None
+    card_index: int | None = Field(default=None, ge=0, description="Learn lesson card on screen (D4)")
     life_id: ShortId | None = None
     event_id: ShortId | None = None
     screen: Screen | None = None
@@ -146,6 +157,8 @@ class ToolCall(_M):
         "habit_score",
         "inflation",
         "fx_convert",
+        "forecast",
+        "forecast_what_if",
     ]
     ok: bool
     duration_ms: int = Field(ge=0)
@@ -157,7 +170,9 @@ class ChatResponse(_M):
     reply_to: str = Field(description="The user's message id this answer group attaches to")
     reaction: Reaction
     mode: ChatMode = "checked"
-    bubbles: list[ChatBubble] = Field(min_length=1, max_length=2, description="Voice: usually one bubble, two at most")
+    bubbles: list[ChatBubble] = Field(
+        min_length=1, max_length=3, description="1 to 3 short bubbles (PENNY_V3_BUILD.md D6)"
+    )
     highlights: list[Highlight] = Field(default_factory=list)
     facts: list[ChatFact] = Field(default_factory=list)
     sources: list[ChatSource] = Field(default_factory=list)
@@ -171,7 +186,7 @@ class ChatResponse(_M):
     tool_calls: list[ToolCall] = Field(default_factory=list, max_length=5)
     verified: bool = Field(description="True when every number passed the verifier; False means template summary")
     summary_available: bool = False
-    links: list[Literal["next_move", "test_it", "why", "plan"]] = Field(
+    links: list[Literal["next_move", "test_it", "why", "plan", "maths", "forecast"]] = Field(
         default_factory=list,
         max_length=3,
         description="In-app destinations, e.g. the out-of-scope reply links to the Next Move",

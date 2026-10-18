@@ -101,7 +101,7 @@ class AccountHolder(_M):
 IncomeKind = Literal[
     "maintenance_loan", "scholarship", "bursary", "grant", "family", "part_time_job", "salary", "other"
 ]
-IncomeSchedule = Literal["weekly", "monthly", "termly", "yearly", "one_off"]
+IncomeSchedule = Literal["weekly", "fortnightly", "monthly", "termly", "yearly", "one_off"]
 StudentLoanPlan = Literal["plan_1", "plan_2", "plan_4", "plan_5", "postgraduate", "none"]
 
 
@@ -197,6 +197,9 @@ class SpendingResponse(_M):
     month: IsoMonth
     total: float = Field(ge=0)
     categories: list[CategorySpend]
+    months: list[IsoMonth] = Field(
+        default_factory=list, description="Every statement month, oldest first (month switch)"
+    )
 
 
 class PriceRise(_M):

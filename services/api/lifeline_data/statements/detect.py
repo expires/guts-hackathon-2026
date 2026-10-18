@@ -12,7 +12,8 @@ Income (credits only; the first matching rule wins; text = merchant + descriptio
                    salary, wage(s), payroll, "net pay", "rider payment", payout. Monthly equivalent of
                    £1,200 or more -> salary, else part_time_job.
   other            any other payer that paid 3+ times; refunds (card payment rows) are not income.
-Schedule from the median gap between payments: <= 10 days weekly, <= 45 monthly, <= 200 termly, else yearly.
+Schedule from the median gap between payments: <= 10 days weekly, <= 17 fortnightly, <= 45 monthly,
+<= 200 termly, else yearly.
 One payment: termly for loan, grant, bursary, scholarship; otherwise one_off.
 
 Debts:
@@ -81,6 +82,8 @@ def _schedule(kind: str, dates: list[date]) -> IncomeSchedule:
     gap = median((b - a).days for a, b in zip(dates, dates[1:], strict=False))
     if gap <= 10:
         return "weekly"
+    if gap <= 17:
+        return "fortnightly"
     if gap <= 45:
         return "monthly"
     return "termly" if gap <= 200 else "yearly"
@@ -89,6 +92,8 @@ def _schedule(kind: str, dates: list[date]) -> IncomeSchedule:
 def _next_date(schedule: str, last: date) -> date | None:
     if schedule == "weekly":
         return last + timedelta(days=7)
+    if schedule == "fortnightly":
+        return last + timedelta(days=14)
     if schedule == "monthly":
         return _add_month(last)
     return None
@@ -116,7 +121,8 @@ def detect_income(transactions: list[Transaction]) -> list[IncomeSource]:
         amount = round(sum(t.amount for t in txs) / len(txs), 2)
         final_kind: IncomeKind
         if kind == "job":
-            per_month = {"weekly": amount * 52 / 12, "monthly": amount}.get(schedule, amount)
+            per_month = {"weekly": amount * 52 / 12, "fortnightly": amount * 26 / 12,
+                         "monthly": amount}.get(schedule, amount)
             final_kind = "salary" if per_month >= SALARY_MONTHLY_MIN else "part_time_job"
         else:
             final_kind = kind  # type: ignore[assignment]

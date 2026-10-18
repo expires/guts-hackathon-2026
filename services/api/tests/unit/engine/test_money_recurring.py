@@ -159,5 +159,6 @@ def test_sample_students_rent() -> None:
     from lifeline_engine.money.profile import monthly_rent
 
     statements = pytest.importorskip("lifeline_data.statements")
-    assert monthly_rent(statements.load_sample("working").transactions, TODAY) == 460.0
-    assert monthly_rent(statements.load_sample("graduate").transactions, TODAY) == 1050.0
+    # ADR 0072 reseed: Callum £520 shared house in Hyde Park, Lena £900 room in Hackney (deposit not counted).
+    assert monthly_rent(statements.load_sample("working").transactions, TODAY) == 520.0
+    assert monthly_rent(statements.load_sample("graduate").transactions, TODAY) == 900.0

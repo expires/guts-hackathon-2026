@@ -18,9 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from lifeline_contracts.chat import ChatFact, NewsResponse, RateDecisions
 from lifeline_contracts.domain import Life, SourceRef
 from lifeline_contracts.finance import FinanceSnapshot
+from lifeline_contracts.forecast import Forecast, WhatIfChange, WhatIfResult
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.next_move import NextMoveResponse
 from lifeline_contracts.observation import Observation
+from lifeline_explain import forecast_tool
 from lifeline_explain.chat_tools import PERSONAL_TOOL_NAMES, ToolInputError, ToolOutput, ToolSpec, source_key
 from lifeline_explain.official import with_official_sources
 from lifeline_explain.trade_off import TRADE_OFF_TOOLS, attach_trade_offs
@@ -30,6 +32,10 @@ RatesFn = Callable[[date], Awaitable[RateDecisions]]  # e.g. DataHub.rate_decisi
 SeriesFn = Callable[[str, str], Awaitable[list[Observation]]]  # e.g. DataHub.series(source, series_id)
 FxFn = Callable[[str, str], Awaitable["tuple[float, date] | None"]]  # DataHub.fx_rate(base, quote)
 CpiFn = Callable[[], Awaitable["tuple[float, date] | None"]]  # DataHub.cpi()
+# The user's forecast as GET /v1/forecast computes it (stored buffer %). Argument: stress year (2022) or None.
+ForecastFn = Callable[[int | None], Awaitable[Forecast]]
+# The forecast rerun with what-if changes (engine forecast.what_if, same stored buffer %).
+WhatIfFn = Callable[[list[WhatIfChange]], Awaitable[WhatIfResult]]
 
 # ISO 4217 codes Penny may convert (ECB reference currencies plus GBP). Word aliases for common user phrasing.
 CURRENCIES = frozenset({
@@ -85,6 +91,14 @@ class FxConvertInput(_I):
     to_currency: str = Field(default="GBP", min_length=3, max_length=3)
 
 
+class ForecastInput(_I):
+    stress_2022: bool = Field(default=False, description="True: rerun with 2022 price rises (ONS CPI)")
+
+
+class WhatIfInput(_I):
+    changes: list[WhatIfChange] = Field(min_length=1, max_length=5)
+
+
 class EventChoicesInput(_I):
     years: int = Field(default=3, ge=1, le=10, description="Years to project each choice ahead")
 
@@ -129,6 +143,8 @@ class EngineToolSet:
         holidays: Collection[date] = (),
         weather: Any = None,
         life_id_prefix: str = "chat",
+        forecast: ForecastFn | None = None,
+        what_if: WhatIfFn | None = None,
     ) -> None:
         from lifeline_engine import tools as et
 
@@ -148,6 +164,8 @@ class EngineToolSet:
         self.holidays = holidays
         self.weather = weather
         self.life_id_prefix = life_id_prefix
+        self.forecast = forecast
+        self.what_if = what_if
         self._inputs: dict[str, type[BaseModel]] = {str(k): v for k, v in et.TOOL_INPUTS.items()}
         self._descriptions: dict[str, str] = {str(k): v for k, v in et.TOOL_DESCRIPTIONS.items()}
         if life is not None and event_id:
@@ -179,6 +197,12 @@ class EngineToolSet:
         if cpi is not None:
             self._inputs["inflation"] = NoInput
             self._descriptions["inflation"] = "Latest UK CPI inflation (ONS, annual rate) and its month."
+        if forecast is not None:
+            self._inputs["forecast"] = ForecastInput
+            self._descriptions["forecast"] = forecast_tool.DESCRIPTION
+        if what_if is not None:
+            self._inputs["forecast_what_if"] = WhatIfInput
+            self._descriptions["forecast_what_if"] = forecast_tool.WHAT_IF_DESCRIPTION
         if not self.has_user_data:
             self._drop_personal_tools()  # onboarding: nothing personal to look up, so nothing to claim
 
@@ -195,6 +219,8 @@ class EngineToolSet:
         """Tools Ask Penny runs before the first model call (speed, V1): cheap and personal."""
         if self.snapshot.status == "unavailable" and not self.snapshot.transactions:
             return ()
+        if self.forecast is not None:
+            return ("finance_summary", "forecast")  # ADR 0072: the forecast is the Next Move
         return ("finance_summary", "next_move")
 
     def _drop_personal_tools(self) -> None:
@@ -220,7 +246,8 @@ class EngineToolSet:
                 )
         labels = {"boe_rates": "Checking Bank of England rates\u2026", "user_balance": "Checking your balance\u2026",
                   "habit_score": "Checking your habits\u2026", "inflation": "Checking inflation\u2026",
-                  "fx_convert": "Checking exchange rates\u2026"}  # fmt: skip
+                  "fx_convert": "Checking exchange rates\u2026", "forecast": forecast_tool.STEP_LABEL,
+                  "forecast_what_if": forecast_tool.WHAT_IF_STEP_LABEL}  # fmt: skip
         if name in labels:
             return labels[name]
         if name == "life_replay":
@@ -265,6 +292,17 @@ class EngineToolSet:
             return await self._fx(inp)
         if name == "inflation":
             return await self._inflation()
+        if name == "forecast":
+            assert isinstance(inp, ForecastInput) and self.forecast is not None
+            out = forecast_tool.forecast_output(await self.forecast(2022 if inp.stress_2022 else None))
+            return forecast_tool.with_usual_pay(out, self._usual_pay())
+        if name == "forecast_what_if":
+            assert isinstance(inp, WhatIfInput) and self.what_if is not None
+            try:
+                res = await self.what_if(list(inp.changes))
+            except ValueError as exc:  # e.g. a move_payment target that is not a payment
+                raise ToolInputError(str(exc)[:200] or "Invalid change") from None
+            return forecast_tool.what_if_output(res)
         if name == "user_balance":
             return await asyncio.to_thread(self._balance)
         if name == "habit_score":
@@ -283,6 +321,16 @@ class EngineToolSet:
             moves = {m.id: m for m in [self.response.top, *self.response.runners_up]}
             attach_trade_offs(out.result, moves)
         return out
+
+    def _usual_pay(self) -> float | None:
+        """Usual job pay per payment (one shift's pay for "extra shifts" what-ifs). None without a job."""
+        try:
+            from lifeline_engine import forecast as fe
+
+            pay = fe.usual_pay(self.snapshot)
+        except Exception:  # an engine gap never breaks the forecast tool
+            return None
+        return float(pay) if pay else None
 
     def _life_id(self) -> str:
         return f"{self.life_id_prefix}_{uuid.uuid4().hex[:12]}"

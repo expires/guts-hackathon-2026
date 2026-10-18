@@ -8,3 +8,12 @@ Date: 2026-10-18. Status: accepted. Source of truth: `PENNY_V3_BUILD.md` (repo r
 - **Removed (B4, F):** the old move card, Test it, Why?, Do this, plan line, weekly budget block, balance tiles, Guess my spend, every Mock or Sample data tag (one honesty line instead), the full Life game, Challenges, Same Decision, old Concepts, Collection, Debug menu and Playground in Release. Entry points hide behind one flag; code and tests stay. Play = Play with friends (Quick Life first) + Learn.
 - **Onboarding (C), Penny (D), Learn (E), other fixes (G):** as listed in PENNY_V3_BUILD.md. Learn has no locks.
 - **Order and rules (H):** location bug, reseed, forecast engine and screens, Try Penny verifier and double bubble, removals and cut, then onboarding, Penny, Learn. Small commits to the wip branch; one verifier run before 09:30; then merge to main.
+
+## Decisions during the build (18 Oct, 05:00 to 06:00)
+
+- **Next money = the main income.** The next payment of the student's main income source (the recurring source with the largest monthly-normalised amount) sets the date. Smaller incomes due before it (weekly pay, money from family, a monthly grant) are expected income: listed with their source and added to the money available. The detailed breakdown still adds up exactly. Confirmed by the user.
+- **Quick Life rooms:** joining counts as ready; the host's Start turns on with 2 or more players. Preset rooms and Money Quiz keep the ready step.
+- **What-ifs through Penny:** the 2022 button is replaced by "Ask Penny 'what if...'". Penny's `forecast_what_if` tool reruns the engine with one-off costs, extra income, moved payments or changed recurring costs. The 2022 stress option stays in the API, unused by the app.
+- **Floating tab bar:** one app-wide bar placed with a bottom safe-area inset, so scrolling screens get bottom padding automatically.
+- **Seed:** Callum's first SFE payment is late (26 Oct) so his overdraft stays inside the £500 limit. The SFE household-income taper is a simple example method (£1 less per £7.08 above £25,000). Tax and NI use 20% and 8% above £1,047.50 a month. `IncomeSchedule` gains "fortnightly".
+- **Timeline:** the user set 10:00 as the hard end (everything complete). From 09:00 fixes only; 09:15 final verifier run; 09:45 merge to main and install on all phones; STATUS.md before 08:30 and final at 10:00.

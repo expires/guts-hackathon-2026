@@ -15,7 +15,7 @@ from pydantic import AfterValidator
 
 from lifeline_api import money, prediction
 from lifeline_api.auth import Subject
-from lifeline_api.errors import ApiError
+from lifeline_api.errors import ApiError, not_found
 from lifeline_api.routes.next_move import _latest as latest_next_move
 from lifeline_api.routes.next_move import valid_items
 from lifeline_api.sim_bridge import call_pure
@@ -43,10 +43,13 @@ from lifeline_contracts.finance import (
     SubscriptionsResponse,
     UpdateBudgetsRequest,
 )
+from lifeline_contracts.forecast import CategoryDetail
 from lifeline_contracts.next_move import FinanceHome
 from lifeline_engine import money as money_engine
 from lifeline_engine.habits import habit_score
 from lifeline_engine.money import predict
+from lifeline_engine.money.categorise import CATEGORY_INFO
+from lifeline_engine.money.category import category_detail
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +102,15 @@ async def get_finance_overview(request: Request, sub: Subject) -> FinanceOvervie
 async def get_finance_spending(request: Request, sub: Subject, month: Month = None) -> SpendingResponse:
     _, snap = await _snap(request, sub)
     return await call_pure(money_engine.spending_response, snap, month)
+
+
+@router.get("/v1/finance/spending/{category}", response_model=CategoryDetail, response_model_exclude_none=True)
+async def get_category_detail(request: Request, sub: Subject, category: str, month: Month = None) -> CategoryDetail:
+    """Category screen (ADR 0072): total, usual monthly amount, bars by week, every transaction. 404 unknown."""
+    if category not in CATEGORY_INFO:
+        raise not_found(f"Unknown category {category[:40]}")
+    _, snap = await _snap(request, sub)
+    return await call_pure(category_detail, snap, category, month)
 
 
 @router.get("/v1/finance/subscriptions", response_model=SubscriptionsResponse, response_model_exclude_none=True)

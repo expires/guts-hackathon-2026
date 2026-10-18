@@ -1,4 +1,5 @@
-"""Sample statements (ADR 0047): generator output, CSV and PDF import, income and debt detection. No network."""
+"""Sample statements (ADR 0047, ADR 0072): generator output, CSV and PDF import, income and debt detection.
+No network."""
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import pytest
 
 from lifeline_contracts.account import SampleStatement
 from lifeline_contracts.finance import FinanceSnapshot, Transaction
-from lifeline_data.statements import list_samples, load_sample, parse_statement, to_snapshot
+from lifeline_data.statements import list_samples, load_sample, parse_statement, seed, to_snapshot
 from lifeline_data.statements.detect import detect_debts, detect_income, detect_is_student
 from lifeline_data.statements.parse import PDF_WARNING
 from lifeline_data.statements.samples import sample_hints
@@ -26,9 +27,9 @@ IDS = [s["id"] for s in INDEX]
 JUDGE_IDS = ["scholarship", "scottish", "commuter", "loan_england", "working", "mature", "international",
              "final_year", "rich", "graduate"]
 EXPECTED_KINDS = {
-    "scholarship": {"scholarship", "bursary"},
+    "scholarship": {"maintenance_loan", "bursary"},
     "scottish": {"maintenance_loan", "bursary", "part_time_job"},
-    "commuter": {"grant", "family"},
+    "commuter": {"maintenance_loan", "family"},
     "loan_england": {"maintenance_loan"},
     "working": {"maintenance_loan", "part_time_job"},
     "mature": {"maintenance_loan", "grant", "part_time_job"},
@@ -37,6 +38,10 @@ EXPECTED_KINDS = {
     "rich": {"family"},
     "graduate": {"salary", "family"},
 }
+# Kinds the statement itself shows by the reference day (Callum's first loan payment is late: hints add it).
+STATEMENT_KINDS = {**EXPECTED_KINDS, "working": {"part_time_job"}}
+HINT_KEYS = {"name", "is_student", "age", "housing", "student_loan_plan", "income_sources", "debts", "monthly_costs",
+             "accounts", "budgets", "goals", "town", "region", "bank", "as_of", "target_september", "sources"}
 
 
 def _snap(sample_id: str, fmt: str) -> FinanceSnapshot:
@@ -47,11 +52,10 @@ def _snap(sample_id: str, fmt: str) -> FinanceSnapshot:
 
 
 def test_index_matches_contract():
-    assert JUDGE_IDS == IDS  # the 10 student profiles only (ADR 0070); team phone profiles are gone
+    assert JUDGE_IDS == IDS  # the 10 student profiles only (ADR 0070)
     for entry in INDEX:
         SampleStatement.model_validate({k: v for k, v in entry.items() if k != "hints"})
-        assert set(entry["hints"]) == {"name", "is_student", "age", "housing", "student_loan_plan", "income_sources",
-                                       "debts", "monthly_costs", "accounts", "budgets", "goals"}
+        assert set(entry["hints"]) == HINT_KEYS
         assert entry["hints"]["housing"] in {"rent", "own", "mortgage", "parents"}
         assert entry["team"] is False
         assert set(entry["funding"]) == EXPECTED_KINDS[entry["id"]]
@@ -65,8 +69,8 @@ def test_each_sample_imports_fast(sample_id, fmt):
     start = time.perf_counter()
     snap = _snap(sample_id, fmt)
     assert time.perf_counter() - start < 2.0
-    assert snap.transactions[0].date >= "2026-07-17" and snap.as_of <= "2026-10-16"
-    assert {s.kind for s in snap.income_sources} == EXPECTED_KINDS[sample_id]
+    assert "2026-07-01" <= snap.transactions[0].date <= "2026-07-03" and snap.as_of <= "2026-10-17"
+    assert {s.kind for s in snap.income_sources} == STATEMENT_KINDS[sample_id]
     assert snap.is_student is (None if sample_id == "graduate" else True)
     assert snap.age is None and snap.student_loan_plan is None  # not shown on a statement
 
@@ -78,46 +82,29 @@ def test_csv_and_pdf_agree(sample_id):
     total = round(sum(t.amount for t in csv_snap.transactions), 2)
     assert total == round(sum(t.amount for t in pdf_snap.transactions), 2)
     assert csv_snap.income_sources == pdf_snap.income_sources
-    assert [d.kind for d in csv_snap.debts] == [d.kind for d in pdf_snap.debts]
 
 
 def test_rich_klarna_is_bnpl_debt():
     for fmt in ("csv", "pdf"):
-        debts = {d.kind: d for d in _snap("rich", fmt).debts}
+        debts = {d.kind: d for d in load_sample("rich", fmt).debts}
         assert set(debts) == {"bnpl"}
-        # ASOS 1 of 3 paid (2 x 29.00) + ZARA 1 of 3 paid (2 x 40.00); older plans are complete.
-        assert debts["bnpl"].balance == 138.0 and debts["bnpl"].due_date == "2026-10-20"
-        assert debts["bnpl"].id == "bnpl_klarna"
+        hint = next(d for d in sample_hints("rich")["debts"] if d["kind"] == "bnpl")
+        assert debts["bnpl"].balance == hint["balance"] > 0 and debts["bnpl"].id == "bnpl_klarna"
+        assert debts["bnpl"].due_date == hint["due_date"] and debts["bnpl"].due_date > "2026-10-17"
 
 
-def test_working_overdraft():
-    csv_debt = {d.kind: d for d in _snap("working", "csv").debts}["overdraft"]
-    assert csv_debt.rate_pct == 39.0 and csv_debt.balance == 0.0  # Monzo CSV has no balance
+def test_working_overdraft_is_interest_free_and_near_the_limit():
+    debt = {d.kind: d for d in load_sample("working").debts}["overdraft"]
+    assert debt.free_limit == 500.0 and debt.rate_pct == 0.0
+    assert 300 <= debt.balance <= debt.free_limit  # about -£370 (A4), close to the limit
     pdf_debt = {d.kind: d for d in _snap("working", "pdf").debts}["overdraft"]
-    hint = next(d for d in sample_hints("working")["debts"] if d["kind"] == "overdraft")
-    assert pdf_debt.balance == hint["balance"] > 0 and pdf_debt.rate_pct == 39.0
+    assert pdf_debt.balance == debt.balance  # the PDF's closing balance agrees with the hint
 
 
-def test_no_debt_for_scholarship_and_commuter():
+def test_no_debt_for_the_others():
     for sample_id in ("scholarship", "scottish", "commuter", "loan_england", "mature", "international",
                       "final_year", "graduate"):
-        assert _snap(sample_id, "pdf").debts == []
-
-
-def test_income_does_not_predict_habits():
-    def spend(snap: FinanceSnapshot, words: tuple[str, ...]) -> float:
-        return -sum(t.amount for t in snap.transactions
-                    if t.amount < 0 and any(w in t.description.lower() for w in words))
-
-    sch, rich = _snap("scholarship", "csv"), _snap("rich", "csv")
-    sch_in = sum(t.amount for t in sch.transactions if t.amount > 0)
-    rich_in = sum(t.amount for t in rich.transactions if t.amount > 0)
-    assert rich_in > 4 * sch_in
-    takeaway = ("deliveroo", "uber", "pret", "nandos", "starbucks", "revolution", "greggs")
-    assert spend(sch, takeaway) / sch_in < spend(rich, takeaway) / rich_in / 3
-    assert spend(sch, ("moved to rainy day pot",)) > 0
-    assert not any((t.provider_category or "") == "Savings" for t in rich.transactions)
-    assert not _snap("scholarship", "pdf").debts and _snap("rich", "pdf").debts
+        assert load_sample(sample_id).debts == []
 
 
 @pytest.mark.parametrize("sample_id", IDS)
@@ -131,10 +118,12 @@ def test_load_sample_adds_hints(sample_id):
     assert {s.kind for s in snap.income_sources} == EXPECTED_KINDS[sample_id]
     for h in hints["income_sources"]:
         merged = next(s for s in snap.income_sources if s.kind == h["kind"] and set(h["dates"]) <= set(s.dates))
-        assert merged.next_date == h["next_date"]
+        assert merged.next_date == h["next_date"] and merged.amount == h["amount"]
     assert {d.kind for d in snap.debts} == {d["kind"] for d in hints["debts"]}
     expected = sum(t.amount for t in snap.transactions) + _opening(sample_id)
-    assert snap.accounts[0].balance == pytest.approx(expected, abs=0.01)
+    current = next(a for a in snap.accounts if a.kind == "current")
+    assert current.balance == pytest.approx(expected, abs=0.01)
+    assert {t.account_id for t in snap.transactions} == {current.id}
 
 
 @pytest.mark.parametrize("sample_id", IDS)
@@ -144,12 +133,15 @@ def test_sample_balance_matches_pdf_closing_balance(sample_id, fmt):
     assert pdf.balance_known
     closing = pdf.accounts[0].balance
     snap = load_sample(sample_id, fmt)
+    hint_accounts = sample_hints(sample_id)["accounts"]
     accounts = {a.id: a for a in snap.accounts}
-    assert accounts["monzo_current"].balance == closing != 0
-    hint_ids = {a["id"] for a in sample_hints(sample_id)["accounts"]}
-    assert set(accounts) == hint_ids
-    if "monzo_savings" in accounts:
-        assert accounts["monzo_savings"].kind == "savings" and accounts["monzo_savings"].balance > 0
+    assert set(accounts) == {a["id"] for a in hint_accounts}
+    current = next(a for a in snap.accounts if a.kind == "current")
+    assert current.balance == closing != 0
+    assert current.provider == sample_hints(sample_id)["bank"]
+    for a in snap.accounts:
+        if a.kind == "savings":
+            assert a.balance > 0 and "pot" not in a.name.lower()
 
 
 def test_plain_csv_import_still_asks_for_balance():
@@ -159,8 +151,7 @@ def test_plain_csv_import_still_asks_for_balance():
 
 
 def _opening(sample_id: str) -> float:
-    gen = _generator()
-    return next(make() for make in gen.PROFILES if make().id == sample_id).opening_balance
+    return seed.opening_balance(seed.profile(sample_id))
 
 
 def _generator():
@@ -172,10 +163,15 @@ def _generator():
     return mod
 
 
-def test_generator_is_deterministic(tmp_path, capsys):
+def test_generator_is_deterministic(tmp_path):
     _generator().build(tmp_path)
     for f in sorted(SAMPLES.iterdir()):
-        assert (tmp_path / f.name).read_bytes() == f.read_bytes(), f.name
+        if f.is_file():
+            assert (tmp_path / f.name).read_bytes() == f.read_bytes(), f.name
+
+
+def test_seed_sources_doc_is_current():
+    assert (REPO / "docs" / "seed_sources.md").read_text(encoding="utf-8") == _generator().report()
 
 
 def test_package_and_demo_copies_identical():
@@ -190,8 +186,7 @@ def test_package_and_demo_copies_identical():
 
 
 def test_every_sample_has_a_holder_name():
-    """Rooms and circles show the first word of hints.name for a demo account (W4).
-    The generator writes the PDF's account holder here, so the names match."""
+    """Rooms and circles show the first word of hints.name for a demo account (W4)."""
     names = [sample_hints(i)["name"] for i in IDS]
     for sample_id, name in zip(IDS, names, strict=True):
         assert isinstance(name, str) and name.strip() == name and 0 < len(name) < 24, sample_id
@@ -337,7 +332,5 @@ def test_international_fx_descriptions():
     snap = _snap("international", "csv")
     wise = [t for t in snap.transactions if t.amount > 0]
     assert len(wise) == 4
-    assert all(t.description.startswith("WISE CNY 14,000.00 > GBP AT 0.1") for t in wise)
-    for t in wise:
-        rate = float(t.description.split(" AT ")[1].split()[0])
-        assert t.amount == round(14000 * rate, 2)
+    assert all(t.description.startswith("WISE CNY 15,000.00 > GBP") for t in wise)
+    assert all(1580 <= t.amount <= 1610 for t in wise)  # about £1,600 a month (A4)

@@ -31,7 +31,7 @@ import unicodedata
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field, replace
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, get_args
 
 from pydantic_core import to_jsonable_python
 
@@ -73,7 +73,7 @@ log = logging.getLogger(__name__)
 
 MAX_TOOL_CALLS = 5
 MAX_STEPS = 9
-MAX_BUBBLES = 2  # ADR 0051: usually one bubble, two at most
+MAX_BUBBLES = 3  # D6 (ADR 0072): 1 to 3 bubbles, same as the contract
 MAX_SENTENCES = 3
 MAX_SUGGESTIONS = 2
 HISTORY_TURNS = 10
@@ -225,6 +225,8 @@ STEP_LABELS: dict[str, str] = {
     "inflation": "Checking inflation\u2026",
     "fx_convert": "Checking exchange rates\u2026",
     "web_search": "Searching the web\u2026",
+    "forecast": "Checking your forecast\u2026",
+    "forecast_what_if": "Trying your what-if\u2026",
 }
 
 
@@ -516,6 +518,9 @@ class Penny:
             # Test it: the replay of the move on screen (same seed as the card, so the same result).
             names = [n for n in names if n != "finance_summary"][:1] + ["test_move"]
             args["test_move"] = {"move_id": rc.next_move_id or "top"}
+        if rc is not None and rc.screen == FORECAST_SCREEN and "forecast" in {s.name for s in ctx.tools.specs()}:
+            # B3.7, D4: Ask Penny from the forecast. The forecast goes with the question (same numbers as the card).
+            names = ["forecast"]
         if state.rules and names and "facts_table" in {s.name for s in ctx.tools.specs()}:
             names.append("facts_table")  # ADR 0058: official rules first, without a tool round trip
         if not names:
@@ -568,7 +573,8 @@ class Penny:
         state.onboarding = is_onboarding(request, ctx)
         game = game_scene.is_game_screen(ctx.request_context or request.context)
         lesson = learn_scene.is_learn_screen(ctx.request_context or request.context)
-        lesson_no_money = lesson and not learn_scene.asks_own_money(request.message)
+        own_money = learn_scene.asks_own_money(learn_scene.question_only(request.message, ctx.scene))
+        lesson_no_money = lesson and not own_money
         if state.onboarding:
             # Onboarding "Meet Penny" chat: public tools only, general answers, no APP DATA (even with user data).
             app_data, state.personal = None, await self._personal_facts(ctx)
@@ -595,6 +601,7 @@ class Penny:
         tools.append(web_search_tool(state.rules))
         messages = build_messages(request, ctx, app_data)
         nudged = rewritten = personal_retried = official_retried = fx_retried = weekly_retried = False
+        refusal_retried = False
         reason = "max_steps"
         streams = bool(getattr(self.llm, "supports_stream", False)) and state.emit is not None and not challenged
         for _ in range(MAX_STEPS):
@@ -636,6 +643,18 @@ class Penny:
             if state.guard is not None:
                 # Before the checks: a dropped pick or quiz answer never causes a rewrite round trip (speed).
                 draft = replace(draft, bubbles=game_scene.guard_bubbles(draft.bubbles, state.guard, state.lang))
+            if state.onboarding:
+                # C5: the onboarding chat never opens with "I can't see your numbers yet"; it answers.
+                stripped = strip_refusals(draft)
+                if not stripped.bubbles:
+                    if not refusal_retried:
+                        refusal_retried = True
+                        messages.append({"role": "assistant", "content": _content(step)})
+                        messages.append({"role": "user", "content": prompts.PENNY_ONBOARDING_RETRY})
+                        continue
+                    stripped = Draft(draft.reaction, [("answer", i18n.ONBOARDING_ANSWER[state.lang])])
+                draft = stripped
+            draft = label_general(draft, state)
             chk = check_draft(draft, state)
             if chk.kind is not None and len(draft.bubbles) > 1:
                 # Speed (V1): keep a good first bubble and drop a failing second one instead of a rewrite.
@@ -731,6 +750,10 @@ class Penny:
             draft = Draft("eyes", [(cast(BubbleKind, kind), body)])
             if fixed_reply(draft, state.lang) is not None:
                 return
+            if state.onboarding and _REFUSAL.search(body.replace("\u2019", "'")):
+                return  # C5: the final answer drops the refusal sentence
+            draft = label_general(draft, state)
+            kind = draft.bubbles[0][0]
             if state.guard is not None and state.guard.changes(body):
                 return  # a pick or a quiz answer: never streamed; the final answer is guarded
             chk = check_draft(draft, state)
@@ -757,6 +780,12 @@ class Penny:
         if draft is not None and not draft.out_of_scope:
             for k, t in draft.bubbles[1:MAX_BUBBLES]:
                 second = Draft(reaction, [(k, t)])
+                if state.onboarding:
+                    second = strip_refusals(second)
+                    if not second.bubbles:
+                        continue
+                second = label_general(second, state)
+                k, t = second.bubbles[0]
                 if fixed_reply(second, state.lang) is None and check_draft(second, state, mode=mode).kind is None:
                     bubbles.append((k, t))
                 if distress_rule(t):
@@ -928,7 +957,7 @@ class Penny:
         else:
             sources = list(state.web_sources.values())
         if any(b.kind == "general_knowledge" for b in bubbles) and checked:
-            sources.append(ChatSource(id="gk", group="general_knowledge", label="General knowledge, no numbers"))
+            sources.append(ChatSource(id="gk", group="general_knowledge", label="General knowledge"))
         question = next((b.text for b in bubbles if b.kind == "question"), None)
         reaction: Reaction = draft.reaction
         if draft.out_of_scope:
@@ -969,9 +998,12 @@ LLM_FAILURES = frozenset(
 )
 NO_ANSWER_TEXT = prompts.UNAVAILABLE_TEXT  # kept for callers of the old name
 NO_USER_DATA = (
-    "NO USER DATA: the user has not added any money data yet (onboarding). Answer in general: student money and "
-    "student life only. Never state or imply numbers about their money, balance, spending or next move. If they "
-    "ask about their own money, say you can answer once they add a statement or enter their numbers."
+    "NO USER DATA: the user has not picked a student or added money data yet (onboarding). Answer the question "
+    "itself, in general: money, student life and uni life. General facts with numbers (opening hours, dates, "
+    "typical costs) are fine; put them in a general_knowledge bubble. Never state or imply numbers about their own "
+    "money, balance, spending or next move. Never open with a refusal such as \"I can't see your numbers yet\". If "
+    "they ask about their own money, explain how it works for a typical student; you may end with one short "
+    "sentence that once they pick a student you will use that student's numbers."
 )
 
 
@@ -987,6 +1019,14 @@ def _content(step: LLMStep) -> Any:
 
 # ---------- prompt building ----------
 
+
+FORECAST_SCREEN = "forecast"
+FORECAST_LINE = (
+    "FORECAST SCREEN: the user is looking at their forecast (APP DATA forecast, the same numbers as the card). "
+    "Answer from the forecast facts in 1 to 3 short bubbles. For the weekly budget: money now, minus bills before "
+    "the next money, minus the buffer, spread over the days until the next money, gives per day and per week; then "
+    "compare per week with usual weekly spending. Use only forecast numbers."
+)
 
 LESSON_INTRO = (
     "LESSON DATA (the Learn lesson the user is looking at: cards, and facts from the official facts table with "
@@ -1015,9 +1055,12 @@ def build_messages(request: ChatRequest, ctx: ChatToolContext, app_data: str | N
     if rc is not None and game_scene.is_game_screen(rc):
         parts.append(game_scene.rules_line(rc, lang, ctx.scene))
     elif rc is not None and learn_scene.is_learn_screen(rc):
-        parts.append(learn_scene.rules_line(rc, ctx.scene, learn_scene.asks_own_money(request.message)))
+        own = learn_scene.asks_own_money(learn_scene.question_only(request.message, ctx.scene))
+        parts.append(learn_scene.rules_line(rc, ctx.scene, own))
     elif getattr(ctx.tools, "has_user_data", True) is False or is_onboarding(request, ctx):
         parts.append(NO_USER_DATA)
+    elif rc is not None and rc.screen == FORECAST_SCREEN:
+        parts.append(FORECAST_LINE)
     line = i18n.language_line(lang)
     if line:
         parts.append(line)
@@ -1140,16 +1183,93 @@ def apply_rules(draft: Draft, challenged: bool) -> Draft:
     return Draft(reaction, bubbles, summary, False, list(draft.suggestions))
 
 
-def unverified_numbers(draft: Draft, facts: list[ChatFact], *, gk_numbers: bool = False) -> list[str]:
-    """Checked mode: every number must match a fact value in a compatible unit. General-knowledge bubbles hold
-    no number, except for rules questions (`gk_numbers`), where official facts back them (ADR 0058)."""
+def unverified_numbers(
+    draft: Draft, facts: list[ChatFact], *, gk_numbers: bool = False, gk_free: bool = False
+) -> list[str]:
+    """Checked mode: every number must match a fact value in a compatible unit.
+
+    General-knowledge bubbles:
+    - `gk_free` (C5, ADR 0072): general numbers (opening hours, days, counts, years) are free. Numbers about money
+      (£, a bare number in a money sentence), rates and any figure in a sentence about the user's own money still
+      must match a fact.
+    - else with `gk_numbers` (rules questions, ADR 0058): every number must match an official fact.
+    - else: no number at all."""
     bad: list[str] = []
     for kind, text in draft.bubbles:
-        for found in extract_numbers(text):
-            gk_blocked = kind == "general_knowledge" and not gk_numbers
-            if gk_blocked or not any(fact_matches(found, f.value, f.unit) for f in facts):
-                bad.append(found.raw)
+        gk = kind == "general_knowledge"
+        for sentence in intl.SENTENCES.split(text) if gk and gk_free else [text]:
+            for found in extract_numbers(sentence):
+                if gk and gk_free and not gk_strict(found, sentence):
+                    continue
+                gk_blocked = gk and not gk_numbers and not gk_free
+                if gk_blocked or not any(fact_matches(found, f.value, f.unit) for f in facts):
+                    bad.append(found.raw)
     return bad
+
+
+# C5: a number followed by one of these units is not money, even in a sentence with a money word.
+_NON_MONEY_AFTER = re.compile(
+    r"^\s*(?:-\s*)?(?:hours?|hrs?|h\b|minutes?|mins?|seconds?|am\b|pm\b|a\.m\.|p\.m\.|o'?clock|:\d\d|km\b|"
+    r"kilometres?|miles?|metres?|meters?|students?|people|books?|seats?|floors?|rooms?|computers?|pages?|"
+    r"credits?|modules?|lectures?|nights?|times?)",
+    re.IGNORECASE,
+)
+_YOUR_MONEY = re.compile(
+    r"\byour (own )?(money|account|accounts|balance|spending|budget|bills?|rent|loan|income|savings|"
+    r"subscriptions?|payments?|transactions?|card|overdraft|debts?|pay|wages?|salary|statement|forecast)\b",
+    re.IGNORECASE,
+)
+
+
+def gk_strict(found: Found, sentence: str) -> bool:
+    """C5: in a general-knowledge bubble, True for a number that must match a fact: money (£), a percent, a number
+    in a sentence about rates, about the user's own money, or with a money word. False for a general number such as
+    opening hours, days or a count ("open 24 hours a day, 7 days a week")."""
+    if found.kind in {"gbp", "percent"} or found.is_ratio or _RATE_WORD.search(sentence):
+        return True
+    if _PERSONAL_CLAIM.search(sentence) or intl.PERSONAL_CLAIM.search(sentence) or _YOUR_MONEY.search(sentence):
+        return True
+    if found.kind is None and _NON_MONEY_AFTER.match(sentence[found.end :]):
+        return False
+    return bool(_MONEY_CONTEXT.search(sentence) or intl.MONEY_CONTEXT.search(sentence))
+
+
+def label_general(draft: Draft, state: TurnState) -> Draft:
+    """C5: an answer or caveat bubble whose numbers are all general numbers (no fact behind any of them, none about
+    money or the user) is a general-knowledge bubble. The app labels it "General knowledge". Not for rules
+    questions (official numbers only) or game and lesson screens (their data only)."""
+    if draft.out_of_scope or state.rules or state.scene:
+        return draft
+    out: list[tuple[BubbleKind, str]] = []
+    changed = False
+    for kind, text in draft.bubbles:
+        if kind in {"answer", "caveat"}:
+            pairs = [(n, s) for s in intl.SENTENCES.split(text) for n in extract_numbers(s)]
+            if pairs and not any(gk_strict(n, s) or _match(n, state.facts) is not None for n, s in pairs):
+                kind, changed = "general_knowledge", True
+        out.append((kind, text))
+    return replace(draft, bubbles=out) if changed else draft
+
+
+_REFUSAL = re.compile(
+    r"\b(i|penny)\s*(can'?t|cannot|can not|don'?t|do not|am not able to|'m not able to|am unable to|"
+    r"'m unable to|have no|haven'?t got|do not have|don'?t have|am not|'m not)\b[^.?]{0,80}\b(see|access|view|check|"
+    r"read|look at|know|have|connected|linked)\b[^.?]{0,60}\b(your|any)\b[^.?]{0,40}\b(numbers?|data|money|"
+    r"accounts?|statements?|balance|spending|finances?|details|information|bank)\b[^.?]*[.?]?",
+    re.IGNORECASE,
+)
+
+
+def strip_refusals(draft: Draft) -> Draft:
+    """C5 onboarding: Penny never opens with "I can't see your numbers yet" or a similar refusal. Those sentences
+    are removed; the rest of the answer stays."""
+    out: list[tuple[BubbleKind, str]] = []
+    for kind, text in draft.bubbles:
+        keep = [s for s in intl.SENTENCES.split(text) if s.strip() and not _REFUSAL.search(s.replace("\u2019", "'"))]
+        body = clean_bubble(" ".join(keep))
+        if body:
+            out.append((kind, body))
+    return replace(draft, bubbles=out)
 
 
 def without_numbers(draft: Draft, bad: list[str], state: TurnState) -> Draft:
@@ -1174,7 +1294,7 @@ _PERSONAL_CLAIM = re.compile(
     r"\b(your (current )?(balance|account|accounts|income|spend|spending|savings|debts?|loan|budget|rent|bills?|"
     r"overdraft|net worth|pay|salary)( \w+)? (is|are|was|comes to|stands at|of)|"
     r"you('ve| have| currently have| now have| still have| spend| spent| owe| earn| get| receive| saved| paid| pay| "
-    r"have got|'ve got)\b)",
+    r"have got|'ve got| can spend| could spend| can still spend| can afford| will have| 'll have|'ll have)\b)",
     re.IGNORECASE,
 )
 _HYPOTHETICAL = re.compile(r"\b(if|say|imagine|suppose|for example|e\.g\.|example|someone|a student who)\b", re.I)
@@ -1295,9 +1415,18 @@ def check_draft(draft: Draft, state: TurnState, mode: ChatMode | None = None) ->
     first bubble."""
     checked = mode == "checked" if mode else (state.app_tool_used() or uses_preloaded(draft, state))
     if checked:
-        bad = unverified_numbers(draft, state.facts, gk_numbers=state.rules)
+        gk_free = not state.rules and not state.scene
+        bad = unverified_numbers(draft, state.facts, gk_numbers=state.rules, gk_free=gk_free)
         if bad:
             return Check("checked", "unverified", tuple(bad))
+        if (
+            mode is None
+            and gk_free
+            and all(k in {"general_knowledge", "question"} for k, _ in draft.bubbles)
+            and not used_fact_ids(draft, state.facts)
+        ):
+            # C5: a general-knowledge answer that quotes no tool fact is a general answer, whatever tools ran.
+            return check_draft(draft, state, mode="general")
         asked = asks_for_public_fact(draft)
         if asked:
             return Check("checked", "asks_public", tuple(asked))
@@ -1382,8 +1511,8 @@ _NO_WEEKLY = re.compile(
 
 
 def denies_weekly(draft: Draft, state: TurnState) -> bool:
-    """V5: Penny must not say she cannot give a weekly figure when the weekly budget facts exist."""
-    if _fact(state, "weekly.safe_weekly_spend") is None:
+    """V5: Penny must not say she cannot give a weekly figure when the weekly budget (or forecast) facts exist."""
+    if _fact(state, "weekly.safe_weekly_spend") is None and _fact(state, "forecast.per_week") is None:
         return False
     return any(_NO_WEEKLY.search(t) for _, t in draft.bubbles)
 
@@ -1392,7 +1521,12 @@ def weekly_draft(draft: Draft, state: TurnState) -> Draft:
     """Fixed answer from the weekly budget facts (after one failed rewrite)."""
     safe, short = _fact(state, "weekly.safe_weekly_spend"), _fact(state, "weekly.shortfall")
     if safe is None:
-        return draft
+        per_week, per_day = _fact(state, "forecast.per_week"), _fact(state, "forecast.per_day")
+        if per_week is None or per_day is None or per_week.value < 1:
+            return draft
+        line = (f"You can spend {format_fact(per_week)} a week, about {format_fact(per_day)} a day, until your "
+                "next money.")
+        return Draft(draft.reaction, [("answer", line)], suggestions=list(draft.suggestions))
     until = safe.label.rsplit(" until ", 1)[-1]
     if safe.value >= 1:
         line = f"You can spend up to {format_fact(safe)} a week until {until}."
@@ -1456,9 +1590,10 @@ def bubble_verified(b: ChatBubble, resp: ChatResponse) -> bool:
     response. General mode: `answer` already blocked personal numbers; other numbers (recipes, dates) are fine."""
     if resp.mode == "general":
         return True
-    nums = extract_numbers(b.text)
     if b.kind == "general_knowledge":
-        return not nums
+        # C5: general numbers are free; money, rates and figures about the user must match a fact.
+        return not unverified_numbers(Draft(resp.reaction, [(b.kind, b.text)]), resp.facts, gk_free=True)
+    nums = extract_numbers(b.text)
     return all(any(fact_matches(n, f.value, f.unit) for f in resp.facts) for n in nums)
 
 
@@ -1531,7 +1666,15 @@ def links_for(
         links.append("test_it")
     if "test_move" in ok:
         links.append("plan")
+    if {"forecast", "forecast_what_if"} & ok and any(u.startswith(("forecast.", "whatif.")) for u in used):
+        # D5 "See the maths": only once the contract lists the link (BOSS request); never an invalid value.
+        links += [x for x in ("maths", "forecast") if x in CONTRACT_LINKS][:1]
     return links[:3]
+
+
+CONTRACT_LINKS: frozenset[str] = frozenset(
+    get_args(get_args(ChatResponse.model_fields["links"].annotation)[0])
+)
 
 
 def confidence(draft: Draft, state: TurnState, verified: bool, bubbles: list[ChatBubble]) -> float:

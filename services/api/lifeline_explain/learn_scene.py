@@ -51,9 +51,47 @@ def _spec(lesson_id: str) -> Any:
     return None
 
 
-def lesson_scene(lesson_id: str | None) -> GameScene | None:
+def _norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9£%]+", " ", (text or "").lower()).strip()
+
+
+def current_card(cards: list[tuple[str, str]], message: str, card_index: int | None = None) -> int | None:
+    """D4: the card the user asks about. ChatContext.card_index when sent; else the card whose text (or heading)
+    the question quotes (the app sends the card text with the question). None when no card matches."""
+    if card_index is not None and 0 <= card_index < len(cards):
+        return card_index
+    msg = _norm(message)
+    if not msg:
+        return None
+    best: tuple[int, int] | None = None
+    for i, (heading, text) in enumerate(cards):
+        body = _norm(text)
+        score = 0
+        if body and (body in msg or (len(body) > 60 and body[:60] in msg)):
+            score = 2
+        elif _norm(heading) and len(_norm(heading)) > 3 and _norm(heading) in msg:
+            score = 1
+        if score and (best is None or score > best[1]):
+            best = (i, score)
+    return best[0] if best else None
+
+
+def question_only(message: str, scene: GameScene | None) -> str:
+    """The user's words without the quoted card text (so card wording never looks like a question about their own
+    money)."""
+    if scene is None or not isinstance(scene.output.result, dict):
+        return message
+    out = message
+    for card in scene.output.result.get("cards", []):
+        text = str(card.get("text") or "")
+        if text and text in out:
+            out = out.replace(text, " ")
+    return out
+
+
+def lesson_scene(lesson_id: str | None, message: str = "", card_index: int | None = None) -> GameScene | None:
     """The lesson's title, cards and facts (with values and official sources). Never its quiz.
-    None for a missing or unknown lesson id."""
+    `current_card` marks the card the user asks about (D4). None for a missing or unknown lesson id."""
     if not lesson_id:
         return None
     try:
@@ -81,6 +119,10 @@ def lesson_scene(lesson_id: str | None) -> GameScene | None:
         "cards": [{"heading": t, "text": x} for t, x in spec.cards],
         "facts": rows,
     }
+    idx = current_card(list(spec.cards), message, card_index)
+    if idx is not None:
+        heading, text = spec.cards[idx]
+        result["current_card"] = {"index": idx, "heading": heading, "text": text}
     out = with_official_sources(ToolOutput(result=result, facts=facts))
     first = out.facts[0].source_id if out.facts else None
     # Numbers written in the cards are lesson content; they may be repeated, under the lesson's first source.
@@ -96,6 +138,11 @@ def rules_line(rc: ChatContext, scene: GameScene | None, own_money: bool) -> str
         "LEARN LESSON SCREEN: the user asks about a Learn lesson. Answer in 1 or 2 short bubbles, in simple words "
         "a 15-year-old understands.",
     ]
+    if scene is not None and isinstance(scene.output.result, dict) and scene.output.result.get("current_card"):
+        parts.append(
+            "The user is on the card in LESSON DATA current_card. Answer their question about that card first; use "
+            "the rest of the lesson only if it helps."
+        )
     if scene is not None:
         parts.append(
             "Explain the lesson from LESSON DATA. Its facts are checked official numbers: quote them exactly, and "

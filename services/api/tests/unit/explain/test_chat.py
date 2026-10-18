@@ -245,10 +245,10 @@ def check_invariants(resp: ChatResponse) -> None:
     from lifeline_contracts.chat import DISCLAIMER
     from lifeline_explain.chat import HIGHLIGHT_UNITS, Draft, _match
 
-    assert 1 <= len(resp.bubbles) <= 2
+    assert 1 <= len(resp.bubbles) <= 3  # D6
     draft = Draft(resp.reaction, [(b.kind, b.text) for b in resp.bubbles])
     if resp.mode == "checked" and resp.verified:
-        assert unverified_numbers(draft, resp.facts) == []
+        assert unverified_numbers(draft, resp.facts, gk_free=True) == []  # C5: general numbers in gk bubbles
     if resp.mode == "general":
         assert resp.highlights == []
     for b in resp.bubbles:
@@ -500,7 +500,7 @@ async def test_g23_style_and_bubble_limits() -> None:
         ),
     )
     r, _ = await ask("How am I doing?", llm)
-    assert len(r.bubbles) == 2 and r.summary_available
+    assert len(r.bubbles) == 3 and r.summary_available  # D6: at most 3
     assert r.bubbles[0].text == "Great news. You spend £1,840.50 a month, that is fine."
 
 

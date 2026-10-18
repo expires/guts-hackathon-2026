@@ -24,7 +24,8 @@ async def test_sample_cards_over_http(client: httpx.AsyncClient) -> None:
         assert all(m["amount"] > 0 and m["dates"] for m in s["money_in"])
     scottish = next(s for s in body["samples"] if s["id"] == "scottish")
     assert scottish["funding_label"].startswith("SAAS")
-    assert {"label": "SAAS loan", "amount": 735.0, "period": "month", "dates": "Mid-month (18 Sep, 16 Oct)"} in (
+    # ADR 0072 reseed: SAAS £9,400 loan in 9 monthly payments.
+    assert {"label": "SAAS loan", "amount": 1044.44, "period": "month", "dates": "Around the 25th, Sep to May"} in (
         scottish["money_in"])
 
 
@@ -66,7 +67,8 @@ async def test_profile_screen_data_is_served(client: httpx.AsyncClient) -> None:
         assert f["text"] and isinstance(f["facts"], dict)
     # ADR 0069 fields: the statement's own income lines, the overdraft, 0 months of cover while overdrawn.
     amounts = {(s["kind"], s["amount"]) for s in prof["income_sources"]}
-    assert ("maintenance_loan", 1638.0) in amounts and any(k == "part_time_job" for k, _ in amounts)
+    # ADR 0072 reseed: reduced SFE loan, household income £60,000, in 3 termly payments.
+    assert ("maintenance_loan", 1962.17) in amounts and any(k == "part_time_job" for k, _ in amounts)
     assert any(d["kind"] == "overdraft" and d["balance"] > 0 for d in prof["debts"])
     assert prof["months_of_cover"] == 0.0
 
@@ -75,6 +77,6 @@ async def test_profile_rent_and_cover_for_a_saver(client: httpx.AsyncClient) -> 
     auth = await sign_in(client, "onboarding-0069-profile-saver")
     assert (await client.post("/v1/samples/scottish/import", headers=auth)).status_code == 201
     prof = (await client.get("/v1/finance/profile", headers=auth)).json()
-    assert prof["monthly_rent"] == 540.0
+    assert prof["monthly_rent"] == 650.0  # ADR 0072 reseed: Marchmont flat £650 a month
     assert prof["months_of_cover"] > 0 and prof["debts"] == []
-    assert {s["amount"] for s in prof["income_sources"]} >= {735.0, 166.0}
+    assert {s["amount"] for s in prof["income_sources"]} >= {1044.44, 222.22}  # SAAS loan and Young Students' Bursary

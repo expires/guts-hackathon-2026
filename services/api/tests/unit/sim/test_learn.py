@@ -109,12 +109,12 @@ def test_translations_cover_every_unit() -> None:
         assert set(units) == {u.id for u in UNITS}
 
 
-def test_sequential_unlock() -> None:
+def test_no_locks_but_order_kept() -> None:
+    """PENNY_V3_BUILD.md E1: every lesson is open; the path keeps the order and next_lesson_id."""
     ids = learn.lesson_ids()
     path = learn.build_path([])
     flat = [s for u in path.units for s in u.lessons]
-    assert [s.status for s in flat[:2]] == ["open", "locked"]
-    assert flat[1].locked_reason == f"Finish {flat[0].title} first"
+    assert all(s.status == "open" and s.locked_reason is None for s in flat)
     assert path.next_lesson_id == ids[0] and path.done == 0 and path.total == len(ids)
     # The first lesson of unit 2 opens when the last lesson of unit 1 is passed.
     unit1 = [s.id for s in path.units[0].lessons]
@@ -123,10 +123,10 @@ def test_sequential_unlock() -> None:
     assert path.units[1].lessons[0].status == "open" and path.next_lesson_id == path.units[1].lessons[0].id
 
 
-def test_life_bonus_does_not_unlock() -> None:
+def test_life_bonus_does_not_pass_a_lesson() -> None:
     path = learn.build_path([], bonus={"pensions"})
     pensions = next(s for u in path.units for s in u.lessons if s.concept_id == "pensions")
-    assert pensions.life_bonus and pensions.status == "locked"
+    assert pensions.life_bonus and pensions.status == "open"
 
 
 def test_grade() -> None:
