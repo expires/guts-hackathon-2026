@@ -251,3 +251,16 @@ async def test_unreachable_model_fails_fast(monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert asyncio.get_running_loop().time() - t0 < 12
     assert r.bubbles[0].text == prompts.UNAVAILABLE_TEXT and not r.verified
+
+
+async def test_what_if_sends_an_acknowledgement_first_and_keeps_every_model_bubble() -> None:
+    """V5 speed: a what-if needs a second model call, so bubble 1 says at once what Penny is doing (no numbers)."""
+    from lifeline_explain import i18n
+
+    llm = StreamingFake(call("forecast_what_if"), final("You stay on track.", "Your plan still works."))
+    ctx = ChatToolContext(tools=make_tools())
+    ev = [e async for e in Penny(llm=llm, settings=SETTINGS).answer_stream(ChatRequest(message="Concert?"), ctx)]
+    bubbles = [e.bubble.bubble.text for e in ev if e.type == "bubble"]
+    assert bubbles[0] == i18n.WHAT_IF_ACK["en"]
+    texts = [b.text for b in ev[-1].response.bubbles]
+    assert texts == [i18n.WHAT_IF_ACK["en"], "You stay on track.", "Your plan still works."]

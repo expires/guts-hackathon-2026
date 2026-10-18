@@ -308,14 +308,47 @@ struct ForecastTests {
         let category = CategoryDetailViewModel(client: client, category: "groceries", label: "Groceries", month: nil)
         await category.load()
         let texts = Self.strings(home.state) + Self.strings(maths.state) + Self.strings(spending.state) + Self.strings(category.state)
-            + Self.strings(ForecastBreakdownState.make(ForecastFixtures.forecast(.onTrack)))
+            + [ForecastFixtures.Student.onTrack, .short, .soon, .overdrawn].flatMap { student in
+                let forecast = ForecastFixtures.forecast(student)
+                return Self.strings(ForecastBreakdownState.make(forecast)) + Self.strings(ForecastMathsState.make(forecast))
+                    + Self.strings(ForecastCardState.make(forecast))
+            }
+            + Self.strings(ForecastFixtures.allSpending) + Self.strings(ForecastFixtures.category)
         #expect(!texts.isEmpty)
         for text in texts {
             #expect(!text.localizedCaseInsensitiveContains("mock data"), "\(text)")
             #expect(!text.localizedCaseInsensitiveContains("sample data"), "\(text)")
+            #expect(!text.contains("Mock"), "\(text)")
+            for cut in ["Land Registry", "Monzo", "Trading 212", "Trading212"] {
+                #expect(!text.localizedCaseInsensitiveContains(cut), "\(text)")
+            }
             #expect(!text.contains("\u{2014}"), "No em dashes: \(text)")
         }
         #expect(!home.state.isSampleData)
+    }
+
+    /// B4: only student-facing sources show; anything else is dropped.
+    @Test func onlyStudentFacingSourcesShow() {
+        for allowed in ["Your statement", "SAAS payment schedule", "Student Finance England payment dates", "Bank of England",
+                        "ONS CPI, 2022", "Nomis", "Octopus Energy", "Frankfurter", "Bank of England MPC dates", "gov.uk"] {
+            #expect(ForecastText.source(allowed) == allowed)
+        }
+        for cut in ["HM Land Registry", "Mock data", "Sample data", "Monzo", "Trading 212"] {
+            #expect(ForecastText.source(cut) == nil)
+        }
+        var forecast = ForecastFixtures.forecast(.onTrack)
+        forecast.steps[0].sources = [.init(label: "Your statement"), .init(label: "HM Land Registry")]
+        let maths = ForecastMathsState.make(forecast)
+        #expect(maths.steps[0].detail == "Your account today · Your statement")
+    }
+
+    /// G3: net worth and "In your account" never show the same amount twice.
+    @Test func equalNetWorthShowsOnce() {
+        var overview = Fixtures.Widgets.ready.overview.value!
+        overview.netWorth = overview.balance
+        #expect(!overview.showsNetWorth)
+        overview.netWorth = overview.balance + 100
+        #expect(overview.showsNetWorth)
     }
 
     /// Every string shown by a Money screen state, except the old parts Money home no longer draws.

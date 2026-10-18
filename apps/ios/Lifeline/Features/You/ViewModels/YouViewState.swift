@@ -17,7 +17,7 @@ struct YouViewState: Equatable, Sendable {
     var profile: Profile?
     /// Real-number sentences, for example "You spend £47 a month on 6 subscriptions."
     var personalFacts: [String]
-    /// "Not connected. The Money tab shows sample data."
+    /// "Not connected. The Money tab shows a sample statement."
     var bankText: String
     /// "live" or "mock".
     var clientText: String

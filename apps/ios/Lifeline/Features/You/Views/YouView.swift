@@ -160,7 +160,8 @@ struct YouView: View {
                     RuleDivider()
                     HStack(spacing: Theme.Spacing.s) {
                         LLIconImage(Theme.icon(for: row.status), size: 24)
-                        Text(row.name).font(.llBody).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(row.name).font(.llBody).lineLimit(2).minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: Theme.Spacing.s)
                         Text(row.detail).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1)
                     }

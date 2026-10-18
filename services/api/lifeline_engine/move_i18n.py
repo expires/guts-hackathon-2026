@@ -941,7 +941,7 @@ _MOVES: tuple[Row, ...] = (
      "在建立期间，每周用于外出和享受的钱会变少。",
      "इसे बनाते समय हर हफ़्ते के पैसे में से घूमने-फिरने और शौक पर कम जाएगा।",
      "यो बनाउँदा हरेक हप्ताको पैसाबाट घुमफिर र रमाइलोमा कम जान्छ।"),
-    ("Keep it in a separate savings pot, so it does not get spent by mistake.",
+    ("Keep it in a separate savings account, so it does not get spent by mistake.",
      "Garde-la sur un compte d'épargne à part, pour ne pas la dépenser par erreur.",
      "Guárdalo en un apartado de ahorro aparte para no gastarlo por error.",
      "Guarda-a numa conta poupança à parte, para não a gastares por engano.",

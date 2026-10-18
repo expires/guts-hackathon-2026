@@ -39,8 +39,17 @@ final class MoneyHomeUITests: XCTestCase {
     private func scrollTo(_ app: XCUIApplication, _ id: String, up: Bool = false) -> XCUIElement {
         let target = element(app, id)
         var swipes = 0
-        while !(target.exists && target.isHittable) && swipes < 10 {
-            up ? app.swipeDown(velocity: .slow) : app.swipeUp(velocity: .slow)
+        // The floating tab bar covers the bottom of the screen: keep the target well above it before tapping.
+        let limit = app.frame.height - 170
+        func visible() -> Bool { target.exists && target.isHittable && target.frame.maxY < limit && target.frame.minY > 60 }
+        while !visible() && swipes < 10 {
+            if target.exists, target.frame.minY <= 60 {
+                app.swipeDown(velocity: .slow)
+            } else if target.exists, target.frame.maxY >= limit {
+                app.swipeUp(velocity: .slow)
+            } else {
+                up ? app.swipeDown(velocity: .slow) : app.swipeUp(velocity: .slow)
+            }
             swipes += 1
         }
         return target

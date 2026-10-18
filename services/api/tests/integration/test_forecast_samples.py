@@ -32,6 +32,8 @@ async def test_sample_forecast_state(client: httpx.AsyncClient, sample_id: str) 
     if left < 0:  # nothing to spend: zeros and the shortfall, never a negative budget
         assert (f["per_day"], f["per_week"], f["to_spend"]) == (0, 0, 0)
         assert f["budget_line"].startswith("You are £") and " short before " in f["budget_line"]
+        if f["bills_total"] == 0:  # overdrawn with no bills due: the headline must not blame bills (V5 F3)
+            assert f["headline"].startswith("You have no money to spend before "), f["headline"]
     else:
         assert abs(left - f["buffer_amount"] - f["per_day"] * f["days"]) < 0.01
     if sample_id in SHORT_WINDOW:

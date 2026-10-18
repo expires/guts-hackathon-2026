@@ -17,3 +17,5 @@ Date: 2026-10-18. Status: accepted. Source of truth: `PENNY_V3_BUILD.md` (repo r
 - **Floating tab bar:** one app-wide bar placed with a bottom safe-area inset, so scrolling screens get bottom padding automatically.
 - **Seed:** Callum's first SFE payment is late (26 Oct) so his overdraft stays inside the £500 limit. The SFE household-income taper is a simple example method (£1 less per £7.08 above £25,000). Tax and NI use 20% and 8% above £1,047.50 a month. `IncomeSchedule` gains "fortnightly".
 - **Timeline:** the user set 10:00 as the hard end (everything complete). From 09:00 fixes only; 09:15 final verifier run; 09:45 merge to main and install on all phones; STATUS.md before 08:30 and final at 10:00.
+- **Penny time limit:** 30 s on Railway (was 12 s). General questions need a web search of about 16 s; the stream sends a keepalive every 2 s during the answer, so the app's 20 s idle limit does not fire. Verified live at 08:00: the library question answers in 20 s.
+- **Short window budget:** under 14 days to next money the card shows a total until that date; overdrawn with nothing left, it shows the amount missing.

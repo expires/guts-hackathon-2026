@@ -575,7 +575,9 @@ def _card_text(state: ForecastState, m: _Maths, usual: Decimal, spare: Decimal |
         return headline, budget, habit
     assert run_out is not None
     if m.left <= 0:
-        headline = f"Your bills take all your money before {when}"
+        # Overdrawn with no bills due (Callum) is not a bills problem: say what is true (V5 F3).
+        headline = (f"Your bills take all your money before {when}" if m.bills_total > 0
+                    else f"You have no money to spend before {when}")
     elif run_out < next_date:
         headline = f"At this pace, you run out on {day_text(run_out)}"
     else:  # the money lasts, but only by using the safety buffer
@@ -653,7 +655,7 @@ def _steps(snap: FinanceSnapshot, m: _Maths, bills: Sequence[ForecastBill], buff
     else:
         t2 = f"No bills or subscriptions are due before {before} in your statement."
     s2 = ForecastStep(id="bills", title=f"Bills before {short_day(next_date)}" if nm else "Bills in the next 4 weeks",
-                      amount=-_f(m.bills_total), text=t2, sources=[SRC_STATEMENT])
+                      amount=0.0 - _f(m.bills_total), text=t2, sources=[SRC_STATEMENT])
 
     if m.left <= 0:
         t3 = f"Nothing is left after bills ({gbp(m.left)}), so there is no buffer."
@@ -665,7 +667,7 @@ def _steps(snap: FinanceSnapshot, m: _Maths, bills: Sequence[ForecastBill], buff
     extra = m.buffer - m.target_buffer
     if extra > 0:
         t3 += f" It includes {int(extra * 100)}p so the days add up exactly."
-    s3 = ForecastStep(id="buffer", title=f"Safety buffer, {buffer_pct}%", amount=-_f(m.buffer), text=t3,
+    s3 = ForecastStep(id="buffer", title=f"Safety buffer, {buffer_pct}%", amount=0.0 - _f(m.buffer), text=t3,
                       sources=[SRC_SETTING])
 
     spend = m.left - m.buffer
@@ -820,7 +822,10 @@ def _summary(before: Forecast, after: Forecast, notes: Sequence[str]) -> str:
            else f"{gbp0(before.to_spend)} in total")
     changed = before.budget_line != after.budget_line
     text = f"With this change {lead}. {after.budget_line}" + (f" (was {was})" if changed else "") + "."
-    if after.state == "running_short" and after.run_out_date and after.run_out_date != after.today:
+    next_money_date = after.next_money.date if after.next_money is not None else None
+    runs_out_first = next_money_date is None or after.run_out_date is None or after.run_out_date < next_money_date
+    if (after.state == "running_short" and after.run_out_date and after.run_out_date != after.today
+            and runs_out_first):  # never a run-out date after the next money arrives (V2 warning)
         text += f" At this pace you run out on {day_text(dates.parse(after.run_out_date))}."
     for n in notes:
         if len(text) + len(n) + 1 <= 240:

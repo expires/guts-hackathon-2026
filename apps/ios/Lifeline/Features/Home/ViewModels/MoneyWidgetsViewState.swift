@@ -46,6 +46,8 @@ struct MoneyWidgetsViewState: Equatable, Sendable {
         var balanceParts: [Part] = []
         /// How the net worth was worked out.
         var netWorthParts: [Part] = []
+        /// G3: never the same amount twice. Net worth shows only when it differs from the balance (whole pounds).
+        var showsNetWorth: Bool { netWorth.rounded() != balance.rounded() }
     }
 
     /// One line of a shown total: "Current account you entered  £1,186".

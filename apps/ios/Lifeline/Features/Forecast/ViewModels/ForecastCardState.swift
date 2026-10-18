@@ -44,6 +44,24 @@ enum ForecastText {
         FinanceMapping.date(month + "-01").map { FinanceMapping.format($0, template: "MMMM") } ?? month
     }
 
+    /// B4: the only sources a student sees. Any other label (Land Registry, mock, cut banks) is dropped.
+    static let allowedSources = [
+        "statement", "gov.uk", "saas", "student finance", "bank of england", "ons", "nomis", "octopus", "frankfurter", "mpc",
+    ]
+
+    /// The label when it is an allowed student-facing source, else nil.
+    static func source(_ label: String) -> String? {
+        let lower = label.lowercased()
+        if lower.contains("mock") || lower.contains("sample") || lower.contains("land registry") { return nil }
+        return allowedSources.contains { lower.contains($0) } ? label : nil
+    }
+
+    /// Allowed labels only, in order, without repeats.
+    static func sources(_ list: [Components.Schemas.ForecastSource]?) -> [String] {
+        var seen = Set<String>()
+        return (list ?? []).compactMap { source($0.label) }.filter { seen.insert($0).inserted }
+    }
+
     static func days(from: String, to: String) -> Int { ForecastMock.dayCount(from: from, to: to) }
     static func addDays(_ days: Int, to raw: String) -> String { ForecastMock.addDays(days, to: raw) }
 
@@ -232,7 +250,7 @@ struct ForecastHelpState: Equatable, Sendable {
         switch suggestion.kind {
         case .saveSpare:
             let rate = suggestion.ratePct.map { $0.formatted(.number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_GB"))) }
-            let source = suggestion.source?.label ?? "Bank of England"
+            let source = suggestion.source.flatMap { ForecastText.source($0.label) } ?? "Bank of England"
             return .init(kind: .save, title: suggestion.text, detail: rate.map { L10n.tr("Easy-access savings pay about \($0)% a year. Source: \(source).") })
         case .cutCategory:
             return .init(

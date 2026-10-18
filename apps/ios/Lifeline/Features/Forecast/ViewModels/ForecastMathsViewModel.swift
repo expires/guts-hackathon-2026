@@ -69,7 +69,7 @@ struct ForecastMathsState: Equatable, Sendable {
         }
         func detail(_ step: Components.Schemas.ForecastStep?) -> String {
             guard let step else { return "" }
-            let sources = (step.sources ?? []).map(\.label)
+            let sources = ForecastText.sources(step.sources)
             return ([step.text] + sources).filter { !$0.isEmpty }.joined(separator: " · ")
         }
         // Step 1 with expected income: "Money now £318 + expected before 2 Nov £40".
@@ -86,7 +86,8 @@ struct ForecastMathsState: Equatable, Sendable {
             Step(
                 number: 4, title: L10n.tr("Next money"),
                 amountText: forecast.nextMoneyIfAny.map { "\(ForecastText.shortDate($0.date)) · \(ForecastText.whole($0.amount))" } ?? L10n.tr("Not found"),
-                detail: forecast.nextMoneyIfAny?.source.label ?? L10n.tr("No regular money coming in found in your statement")
+                detail: forecast.nextMoneyIfAny.map { ForecastText.source($0.source.label) ?? L10n.tr("Your statement") }
+                    ?? L10n.tr("No regular money coming in found in your statement")
             ),
         ]
         if budget, forecast.hasNothingToSpend {
@@ -107,7 +108,7 @@ struct ForecastMathsState: Equatable, Sendable {
         }
         state.habits = habits(forecast)
         if let stress = forecast.stress {
-            state.stress = .result(text: stress.text, source: stress.source.label, stillOK: stress.state == .onTrack)
+            state.stress = .result(text: stress.text, source: ForecastText.source(stress.source.label) ?? "ONS", stillOK: stress.state == .onTrack)
         }
         return state
     }
@@ -264,7 +265,7 @@ final class ForecastMathsViewModel {
                 stress = .failed(L10n.tr("Couldn't run this check. Try again."))
                 return
             }
-            stress = .result(text: test.text, source: test.source.label, stillOK: test.state == .onTrack)
+            stress = .result(text: test.text, source: ForecastText.source(test.source.label) ?? "ONS", stillOK: test.state == .onTrack)
         } catch {
             stress = .failed(L10n.tr("Couldn't run this check. Try again."))
         }
@@ -346,7 +347,7 @@ struct ForecastBreakdownState: Equatable, Sendable {
         for income in forecast.incomeExpected.sorted(by: { $0.date < $1.date }) {
             rows.append(Row(
                 id: rows.count, label: income.label,
-                note: L10n.tr("Expected \(ForecastText.shortDate(income.date))") + " · " + income.source.label,
+                note: ([L10n.tr("Expected \(ForecastText.shortDate(income.date))")] + [ForecastText.source(income.source.label)].compactMap { $0 }).joined(separator: " · "),
                 value: money(income.amount)
             ))
         }
@@ -382,7 +383,7 @@ struct ForecastBreakdownState: Equatable, Sendable {
                 Row(id: 0, label: next.label, note: L10n.tr("Expected \(ForecastText.shortDate(next.date))"), value: money(next.amount)),
                 Row(id: 1, label: L10n.tr("Days to cover"), note: L10n.tr("\(from) to \(to) (today's spending is already in)"), value: "\(forecast.days)"),
                 Row(id: 2, label: L10n.tr("Weeks"), value: weeks, isTotal: true),
-            ], source: next.source.label))
+            ], source: ForecastText.source(next.source.label) ?? L10n.tr("Your statement")))
 
             // 5. The sum
             var sumNote = money(forecast.moneyNow)

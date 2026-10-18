@@ -286,3 +286,16 @@ def language_line(lang: Lang) -> str | None:
         f"ANSWER LANGUAGE: {LANGUAGE_NAMES[lang]}. Write every bubble and every suggestion in "
         f"{LANGUAGE_NAMES[lang]}. Keep numbers as Western digits with £ and % (for example £1,240 and 4.5%)."
     )
+
+
+# V5 speed: Penny's first bubble while the what-if forecast reruns (no numbers; the checked answer follows).
+WHAT_IF_ACK: dict[Lang, str] = {
+    "en": "Let me rerun your forecast with that change.",
+    "fr": "Je recalcule ta prévision avec ce changement.",
+    "es": "Vuelvo a calcular tu previsión con ese cambio.",
+    "pt": "Vou recalcular a tua previsão com essa mudança.",
+    "it": "Ricalcolo la tua previsione con questa modifica.",
+    "zh-Hans": "我用这个变化重新计算一下你的预测。",
+    "hi": "मैं इस बदलाव के साथ आपका पूर्वानुमान फिर से निकालती हूँ।",
+    "ne": "म यो परिवर्तनसहित तपाईंको पूर्वानुमान फेरि निकाल्छु।",
+}

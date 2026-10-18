@@ -266,6 +266,7 @@ class TurnState:
     preloaded_ids: set[str] = field(default_factory=set)
     personal: list[ChatFact] = field(default_factory=list)  # the user's own money facts (general-mode block)
     committed: tuple[BubbleKind, str, ChatMode] | None = None  # bubble 1 already streamed (speed, V1)
+    ack: bool = False  # bubble 1 is the what-if acknowledgement, not the model's first bubble (V5 speed)
     testable: bool = False  # the user's top move can be replayed (Test it)
     lang: i18n.Lang = "en"  # ADR 0063: answer language
     onboarding: bool = False  # ChatContext.screen == "onboarding": public tools only, no links
@@ -617,6 +618,16 @@ class Penny:
                 # The first bubble already went out (stream). Finish with it; later bubbles only if they pass.
                 return self._finish_committed(ids, parse_draft(step.text), state)
             if step.tool_uses:
+                if (streams and state.committed is None and state.emit is not None
+                        and any(tu.name == "forecast_what_if" for tu in step.tool_uses)):
+                    # V5 speed: a what-if needs a second model call; say at once what Penny is doing (no numbers).
+                    ack = i18n.WHAT_IF_ACK[state.lang]
+                    if not state.verifying_sent:
+                        state.verifying_sent = True
+                        _emit(state, "verifying")
+                    state.committed, state.ack = ("answer", ack, "checked"), True
+                    _emit(state, "early_bubble", bubble=ChatBubble(id=f"{ids['message_id']}-b1", kind="answer",
+                                                                   text=ack), highlights=[])
                 messages.append({"role": "assistant", "content": _content(step)})
                 # Parallel tool calls (ADR 0051): all results go back in one user message.
                 results = await asyncio.gather(*(self._run_tool(tu, ctx, state) for tu in step.tool_uses))
@@ -778,7 +789,9 @@ class Penny:
         reaction: Reaction = draft.reaction if draft is not None else "eyes"
         suggestions = list(draft.suggestions) if draft is not None else []
         if draft is not None and not draft.out_of_scope:
-            for k, t in draft.bubbles[1:MAX_BUBBLES]:
+            # After a what-if acknowledgement every model bubble still has to come (V5 speed).
+            first = 0 if state.ack else 1
+            for k, t in draft.bubbles[first:MAX_BUBBLES]:
                 second = Draft(reaction, [(k, t)])
                 if state.onboarding:
                     second = strip_refusals(second)
