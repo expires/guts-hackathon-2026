@@ -2,6 +2,8 @@
 
 ## Penny V3 build (night of 18 Oct), updated 09:50: COMPLETE, merged to main
 
+**Time-box completed** (user deadline 10:00, 18 Oct): work stopped at 09:50. The app is runnable (live on Railway, installed on both phones), all of V1 to V5 and V7 are green on the final build, and this file is complete.
+
 Source of truth: `PENNY_V3_BUILD.md`, ADR 0072 (with "Decisions during the build"). Deadline: everything complete by 10:00.
 
 ### Installed on both phones (08:55, Demo build, talks to Railway)
