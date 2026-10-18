@@ -35,6 +35,9 @@ class LessonFact(_M):
     source_label: str = Field(max_length=120, description="e.g. 'gov.uk · Repaying your student loan'")
     source_url: str = Field(max_length=500)
     checked: str = Field(description="ISO date the fact was checked against the source")
+    why_it_matters: str | None = Field(
+        default=None, max_length=200, description="'Why this matters to you: ...' one line tied to the lesson (E3)"
+    )
 
 
 class LessonChoice(_M):

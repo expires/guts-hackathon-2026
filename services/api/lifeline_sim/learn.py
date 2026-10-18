@@ -25,7 +25,7 @@ from lifeline_contracts.learn import (
     Unit,
 )
 from lifeline_engine import rules
-from lifeline_sim.learn_content import LOCKED_REASON, UNIT_TEXT, UNITS, LessonSpec, UnitSpec
+from lifeline_sim.learn_content import LOCKED_REASON, UNIT_TEXT, UNITS, LessonSpec, UnitSpec, why_it_matters
 
 LANGUAGES: tuple[str, ...] = ("en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne")
 PASS_MARK = 2
@@ -164,16 +164,17 @@ def build_path(passed: Collection[str], bonus: Collection[str] = (), language: s
 
 
 @cache
-def _fact(rule_id: str, text: str) -> LessonFact:
+def _fact(rule_id: str, text: str, why: str | None = None) -> LessonFact:
     f = rules.get(rule_id)
-    return LessonFact(text=text, source_label=SOURCE_LABELS[f.url], source_url=f.url, checked=f.checked)
+    return LessonFact(text=text, source_label=SOURCE_LABELS[f.url], source_url=f.url, checked=f.checked,
+                      why_it_matters=why)
 
 
 @cache
 def _content(lesson_id: str) -> tuple[list[LessonCard], list[LessonFact], list[LessonQuestion]]:
     spec = _flat()[_by_id()[lesson_id]].spec
     cards = [LessonCard(title=t, text=x) for t, x in spec.cards]
-    facts = [_fact(f.rule, f.text) for f in spec.facts]
+    facts = [_fact(f.rule, f.text, why_it_matters(spec.id, f.rule)) for f in spec.facts]  # E3
     quiz = [
         LessonQuestion(id=f"q{i}", text=q.text,
                        choices=[LessonChoice(id=CHOICE_IDS[j], text=c) for j, c in enumerate(q.choices)])

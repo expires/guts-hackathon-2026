@@ -185,3 +185,28 @@ def test_format_value_keeps_pence() -> None:
     assert learn.format_value(rules.get("national_living_wage")) == "£12.71"
     assert learn.format_value(rules.get("state_pension_full_weekly")) == "£241.30"
     assert learn.format_value(rules.get("isa_allowance")) == "£20,000"
+
+
+# ---------- E3: "Why this matters to you" ----------
+
+_DIGITS = __import__("re").compile(r"\d+")
+
+
+@pytest.mark.parametrize("lesson", [s for u in UNITS for s in u.lessons], ids=lambda s: s.id)
+def test_every_fact_says_why_it_matters(lesson: LessonSpec) -> None:
+    built = learn.build_lesson(lesson.id, passed=[])
+    assert len(built.facts) == len(lesson.facts)
+    for spec, fact in zip(lesson.facts, built.facts, strict=True):
+        why = fact.why_it_matters
+        assert why and why.startswith("Why this matters to you: ") and len(why) < 200, (lesson.id, spec.rule)
+        assert len(why) > len("Why this matters to you: ") + 10
+        extra = set(_DIGITS.findall(why)) - set(_DIGITS.findall(spec.text))
+        assert not extra, (lesson.id, spec.rule, extra)  # no new numbers
+        assert "—" not in why and "–" not in why  # no em or en dashes
+
+
+def test_why_lines_cover_exactly_the_facts() -> None:
+    from lifeline_sim.learn_content import _WHY
+
+    keys = {(s.id, f.rule) for u in UNITS for s in u.lessons for f in s.facts}
+    assert set(_WHY) == keys

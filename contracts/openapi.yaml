@@ -5384,6 +5384,10 @@ components:
         checked:
           description: ISO date the fact was checked against the source
           type: string
+        why_it_matters:
+          description: '''Why this matters to you: ...'' one line tied to the lesson (E3)'
+          maxLength: 200
+          type: string
       required:
       - text
       - source_label

@@ -808,3 +808,162 @@ LOCKED_REASON: dict[str, str] = {
     "hi": "पहले «{title}» पूरा करें",
     "ne": "पहिले «{title}» पूरा गर्नुहोस्",
 }
+
+
+# ---------------------------------------------------------------- E3: "Why this matters to you"
+
+WHY_PREFIX = "Why this matters to you: "
+
+# One fixed line per (lesson id, fact rule). Plain English, tied to the lesson and a UK student's life. No numbers
+# (the number is in the fact text above it). English only: lesson text has no translations yet.
+_WHY: dict[tuple[str, str], str] = {
+    ("needs-vs-wants", "railcard_16_25_price_1y"):
+        "travel home and to placements is a need, and the card makes it cheaper.",
+    ("needs-vs-wants", "council_tax_all_students_discount"):
+        "in an all-student house this bill is a need you do not have to pay.",
+    ("budgeting", "maintenance_instalments_england"):
+        "each payment has to last the whole term, so plan your weeks from the day it lands.",
+    ("budgeting", "saas_payment_months_term_time"): "how often your loan arrives decides how you split it into weeks.",
+    ("budgeting", "maintenance_loan_max_away_england"):
+        "this is the ceiling for most students, so your budget starts below it.",
+    ("subscriptions", "distance_cancel_days"):
+        "a free trial you forget can turn into a monthly charge, so cancel early if you do not need it.",
+    ("opportunity-cost", "lisa_bonus_rate"):
+        "spending savings early can cost you free money, so count what you give up.",
+    ("inflation", "boe_inflation_target"):
+        "when prices rise faster than this, your loan and wages buy less food and rent.",
+    ("inflation", "personal_allowance"):
+        "a part-time job below this pays no Income Tax, so you keep more of each shift.",
+    ("emergency-fund", "fscs_deposit_limit"): "a cushion kept in a UK bank account is safe even if the bank fails.",
+    ("emergency-fund", "isa_allowance"): "a cash ISA lets your cushion earn interest you never pay tax on.",
+    ("student-loans", "maintenance_loan_max_away_england"):
+        "this is the most you can borrow for living costs, so check what you will really get.",
+    ("student-loans", "maintenance_instalments_england"):
+        "the money arrives in lumps, so it must stretch until the next term starts.",
+    ("student-loans", "student_loan_rate_plan5"):
+        "you repay from pay after uni, not from your savings, and only when you earn enough.",
+    ("scholarships-bursaries", "maintenance_loan_max_home_england"):
+        "a bursary adds to your loan and never needs paying back, so always ask your uni.",
+    ("renting", "council_tax_all_students_discount"):
+        "check every housemate is a full-time student before you sign, or the house may get a bill.",
+    ("renting", "maintenance_loan_max_london_england"):
+        "studying in London costs more, and the loan only partly covers the higher rent.",
+    ("household-costs", "council_tax_single_adult_discount"):
+        "one non-student housemate can bring a bill, so agree how to split it before you move in.",
+    ("energy-bills", "ofgem_price_cap_typical_bill"):
+        "bills not included in rent can be large, so ask before you sign a tenancy.",
+    ("energy-bills", "maintenance_instalments_england"):
+        "energy is billed monthly but your loan is not, so keep some back for each bill.",
+    ("price-cap", "ofgem_price_cap_typical_bill"):
+        "the cap limits the price per unit, not your bill, so heating less still saves money.",
+    ("shopping-around", "railcard_16_25_price_3y"):
+        "buying for your whole course at once can cost less than renewing each year.",
+    ("overdrafts", "fca_overdraft_simple_rate_year"):
+        "you can compare student overdrafts by one rate and pick the cheapest.",
+    ("overdrafts", "maintenance_instalments_england"):
+        "an overdraft can bridge the gap to your next payment, but plan how you will clear it.",
+    ("buy-now-pay-later", "fca_bnpl_regulated_year"):
+        "you now get affordability checks, but missed payments can still hurt your credit file.",
+    ("credit-cards", "boe_bank_rate"): "a balance you carry on a card costs far more than most other borrowing.",
+    ("debt", "student_loan_rate_plan2"): "a student loan works more like a tax on future pay than a normal debt.",
+    ("debt", "student_loan_interest_plan2_max"):
+        "your balance can rise while you study, but what you repay depends on your pay.",
+    ("scams", "fscs_deposit_limit"):
+        "your bank will never ask you to move money to a safe account, so hang up if anyone does.",
+    ("insurance", "fscs_general_insurance_share"):
+        "contents and travel cover for student life is still worth having even if the insurer fails.",
+    ("crypto-risk", "fscs_deposit_limit"):
+        "rent and food money belongs in a bank, where it is protected, not in crypto.",
+    ("health-cost", "ssp_weekly"):
+        "if you are ill and cannot work your shifts, sick pay may be much less than your usual pay.",
+    ("income-protection", "ssp_weekly"):
+        "sick pay is low, so a small cushion helps if illness stops your part-time job.",
+    ("compound-interest", "isa_allowance"): "small savings started at uni have the longest time to grow.",
+    ("compound-interest", "lisa_bonus_max"): "if you save for a first home, the bonus earns interest too.",
+    ("real-returns", "boe_inflation_target"): "savings that earn less than price rises lose value each year.",
+    ("real-returns", "savings_starting_rate_band"):
+        "on a student income you are unlikely to pay tax on your savings interest.",
+    ("diversification", "isa_allowance"): "you can keep some savings safe in cash and still try investing a little.",
+    ("pound-cost-averaging", "lisa_allowance"):
+        "putting in a small amount each month fits a student budget better than one lump.",
+    ("bonds", "boe_bank_rate"): "rate changes move savings rates and bond prices, so they affect your money too.",
+    ("bonds", "isa_allowance"): "bonds in an ISA pay interest you never pay tax on.",
+    ("pensions", "auto_enrolment_total_min"):
+        "your first graduate job will likely put you in a pension, and staying in is worth it.",
+    ("pensions", "auto_enrolment_employer_min"):
+        "your employer only adds money if you stay in, so opting out gives up free pay.",
+    ("pensions", "basic_rate"): "tax relief makes each pound you save for later worth more.",
+    ("human-capital", "student_loan_plan5_threshold"):
+        "your degree is an investment, and you only repay once it pays off in your wages.",
+    ("currency", "hesa_non_uk_share_2024_25"):
+        "if your money comes from home in another currency, its value in pounds can change.",
+    ("payslips", "personal_allowance"): "most student jobs pay no Income Tax, so check your tax code if tax is taken.",
+    ("payslips", "ni_primary_threshold"):
+        "on part-time pay you often pay no National Insurance, so check your payslip.",
+    ("tax-and-ni", "basic_rate"):
+        "extra hours above the allowance are taxed, so you keep a bit less of each extra shift.",
+    ("tax-and-ni", "ni_main_rate"): "National Insurance is taken from pay above the threshold, as well as Income Tax.",
+    ("tax-and-ni", "state_pension_qualifying_years"):
+        "years you work and pay National Insurance now count towards your pension later.",
+    ("loan-repayments", "student_loan_plan5_threshold"):
+        "you repay nothing until your pay passes this, so the loan should not stop you studying.",
+    ("loan-repayments", "student_loan_plan2_threshold"):
+        "your plan depends on when you started, so check which threshold is yours.",
+    ("loan-repayments", "student_loan_rate_plan5"): "repayments go up with your pay, not with how much you borrowed.",
+    ("tax-bands", "basic_rate_band"): "most student and graduate pay sits in this band.",
+    ("tax-bands", "higher_rate"): "only pay above the band is taxed more, so a raise never leaves you worse off.",
+    ("pay-growth", "national_living_wage"):
+        "check your hourly rate on every payslip, as employers must pay at least this.",
+    ("pay-growth", "minimum_wage_18_20"): "if you are under twenty-one, this is the least your job can pay you.",
+    ("pay-growth", "boe_inflation_target"): "a pay rise below price rises is really a pay cut.",
+    ("negotiation", "national_living_wage"): "know the legal minimum before you accept a job offer.",
+    ("negotiation", "basic_rate"): "a raise still leaves you better off after tax, so it is worth asking.",
+    ("job-security", "uc_standard_single_25_plus"):
+        "most full-time students cannot claim, but you may after uni if work dries up.",
+    ("job-security", "uc_standard_single_under_25"): "benefits are low, so a cushion matters if your job ends.",
+    ("regional-pay", "scot_intermediate_rate"):
+        "if you work in Scotland, Income Tax on your pay is worked out differently.",
+    ("regional-pay", "maintenance_loan_max_london_england"):
+        "where you study changes your rent and how far your loan goes.",
+    ("car-costs", "railcard_16_25_discount"):
+        "for trips home, a train with a railcard is often cheaper than running a car.",
+    ("deposit", "lisa_bonus_max"): "saving a little from your first job for a home deposit gets a government top-up.",
+    ("deposit", "lisa_first_home_price_limit"):
+        "check this limit against prices where you want to live before you rely on the bonus.",
+    ("deposit", "sdlt_first_time_buyer_threshold"):
+        "as a first-time buyer you may pay no Stamp Duty on your first home.",
+    ("interest-rates", "boe_bank_rate"): "Bank Rate moves the rates on your savings, overdraft and future mortgage.",
+    ("interest-rates", "boe_inflation_target"):
+        "rate changes aim to slow price rises that hit your rent and food bills.",
+    ("fixed-vs-variable", "boe_bank_rate"): "a fixed rate keeps your payments steady while you are on a tight budget.",
+    ("owning-vs-renting", "lisa_bonus_rate"):
+        "if you plan to buy one day, starting a Lifetime ISA early adds free money.",
+    ("owning-vs-renting", "sdlt_first_time_buyer_threshold"):
+        "buying costs more than the deposit, so count every cost before you leave renting.",
+    ("benefits", "uc_standard_single_25_plus"): "after uni, or as a student parent or carer, you may be able to claim.",
+    ("benefits", "uc_standard_single_under_25"):
+        "younger claimants get less, so check what you can get before you rely on it.",
+    ("state-pension", "state_pension_full_weekly"):
+        "the State Pension alone is low, so a workplace pension matters too.",
+    ("state-pension", "state_pension_qualifying_years"):
+        "years with low or no pay can leave gaps, so check your record later.",
+    ("state-pension", "ni_primary_threshold"):
+        "part-time work above the threshold starts your National Insurance record now.",
+    ("redundancy", "redundancy_weekly_pay_cap"):
+        "redundancy pay is capped, so a cushion still matters early in your career.",
+    ("redundancy", "redundancy_pay_max"):
+        "you need two years in a job to get statutory redundancy pay, so new starters often get none.",
+    ("employer-risk", "redundancy_pay_max"): "keep your own savings, as your job is not a safety net on its own.",
+    ("employer-risk", "isa_allowance"): "keep your savings away from the company you work for.",
+    ("childcare", "tax_free_childcare_max"):
+        "if you are a student parent who works, this top-up can cut your childcare costs.",
+    ("childcare", "free_childcare_hours_england"):
+        "student parents should check if they qualify through work or a partner's work.",
+    ("childcare", "jisa_allowance"): "even small amounts saved for a child grow tax free until they turn eighteen.",
+}  # fmt: skip
+
+
+def why_it_matters(lesson_id: str, rule: str) -> str | None:
+    """E3: the 'Why this matters to you' line for a fact, or None when there is none."""
+    line = _WHY.get((lesson_id, rule))
+    return WHY_PREFIX + line if line else None
