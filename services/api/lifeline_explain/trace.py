@@ -60,7 +60,8 @@ def forecast_inputs(fc: Forecast) -> dict[str, Any]:
 
 
 def forecast_state(fc: Forecast) -> dict[str, Any]:
-    return {"state": fc.state, "per_week": fc.per_week, "per_day": fc.per_day, "run_out_date": fc.run_out_date,
+    return {"state": fc.state, "per_week": fc.per_week, "per_day": fc.per_day, "budget_period": fc.budget_period,
+            "to_spend": fc.to_spend, "run_out_date": fc.run_out_date,
             "spare": fc.spare, "days": fc.days,
             "next_money_date": None if fc.next_money is None else fc.next_money.date}  # fmt: skip
 

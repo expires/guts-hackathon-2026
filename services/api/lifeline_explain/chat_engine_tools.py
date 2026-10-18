@@ -429,8 +429,10 @@ class EngineToolSet:
         def fact(key: str, value: float, unit: Any, label: str) -> ChatFact:
             return ChatFact(id=f"weekly.{key}", value=round(value, 2), unit=unit, label=label[:120], source_id=sid)
 
+        short_window = wb.weeks_left < 2  # under 14 days the app card shows a total until the date, not a week
         facts = [
-            fact("safe_weekly_spend", wb.safe_weekly, "gbp", f"Safe to spend a week until {until}"),
+            *([] if short_window else
+              [fact("safe_weekly_spend", wb.safe_weekly, "gbp", f"Safe to spend a week until {until}")]),
             fact("shortfall", wb.short_by, "gbp", f"Short before the next money on {until}"),
             fact("weekly_pace", wb.weekly_pace, "gbp", "Usual spending in a week"),
             fact("bills_before", wb.bills_before, "gbp", f"Bills due before {until}"),
@@ -441,10 +443,15 @@ class EngineToolSet:
         ]
         result = dict(out.result) if isinstance(out.result, dict) else {"result": out.result}
         result["weekly_budget"] = {
-            "safe_weekly_spend": round(wb.safe_weekly, 2), "shortfall": round(wb.short_by, 2),
+            "shortfall": round(wb.short_by, 2),
             "next_money_date": wb.next_date.isoformat(), "next_money_month": wb.next_date.strftime("%B"),
             "weekly_pace": round(wb.weekly_pace, 2), "bills_before": round(wb.bills_before, 2),
         }  # fmt: skip
+        if short_window:
+            result["weekly_budget"]["say"] = (f"Under 14 days to {until}: give the total until that date (call "
+                                              "forecast for to_spend), like the app card. No weekly figure.")
+        else:
+            result["weekly_budget"]["safe_weekly_spend"] = round(wb.safe_weekly, 2)
         sources = list(out.sources) + ([ref] if all(source_key(r) != sid for r in out.sources) else [])
         return ToolOutput(result=result, facts=[*out.facts, *facts], sources=sources, links=list(out.links),
                           raw=out.raw)  # fmt: skip

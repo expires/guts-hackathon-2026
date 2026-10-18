@@ -117,6 +117,7 @@ async def test_money_path_and_render_has_no_secrets(client: httpx.AsyncClient, t
     for text in (raw, out):
         assert token not in text and "Bearer" not in text and "sk-" not in text
         assert prompts.PENNY_SYSTEM[:60] not in text and "You are Penny" not in text
+    assert "mock" not in out.lower()  # judges see "sample", never "mock"
     for label in ("SOURCES", "QUESTION", "SCOPE", "TOOL", "ENGINE", "DRAFT", "VERIFY", "ANSWER", "SOURCES USED"):
         assert any(line.startswith(label) for line in out.splitlines()), label
     assert "money now" in out and "buffer" in out
@@ -135,3 +136,11 @@ def test_student_names_map_to_samples() -> None:
     assert tool.sample_id("Eilidh") == "scottish" and tool.sample_id("yutong") == "international"
     assert tool.sample_id("loan_england") == "loan_england" and tool.display_name("scottish") == "Eilidh"
     assert len(tool.STUDENTS) == 10
+
+
+def test_trace_shows_sample_never_mock() -> None:
+    hub = {"sources": [{"name": "Your statement", "status": "mock", "updated_at": "2026-10-17T09:00:00Z"}]}
+    trace = {"question": "Hi", "steps": [{"kind": "scope", "elapsed_ms": 1, "label": "scope",
+                                          "data": {"decision": "money", "check": "strict", "sources": hub}}]}
+    out = _tool().render(trace, "Eilidh", colour=False)
+    assert "mock" not in out.lower() and "sample" in out

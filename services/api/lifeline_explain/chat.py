@@ -1646,16 +1646,26 @@ _NO_WEEKLY = re.compile(
 
 def denies_weekly(draft: Draft, state: TurnState) -> bool:
     """V5: Penny must not say she cannot give a weekly figure when the weekly budget (or forecast) facts exist."""
-    if _fact(state, "weekly.safe_weekly_spend") is None and _fact(state, "forecast.per_week") is None:
-        return False
+    if (_fact(state, "weekly.safe_weekly_spend") is None and _fact(state, "forecast.per_week") is None
+            and _fact(state, "weekly.shortfall") is None):
+        return False  # also under 14 days to the next money: the total until that date replaces a weekly figure
     return any(_NO_WEEKLY.search(t) for _, t in draft.bubbles)
 
 
 def weekly_draft(draft: Draft, state: TurnState) -> Draft:
     """Fixed answer from the weekly budget facts (after one failed rewrite)."""
     safe, short = _fact(state, "weekly.safe_weekly_spend"), _fact(state, "weekly.shortfall")
+    if safe is None and short is not None and short.value > 0:
+        until = short.label.rsplit(" on ", 1)[-1]
+        line = f"You are {format_fact(short)} short before your next money on {until}, so keep to essentials."
+        return Draft(draft.reaction, [("answer", line)], suggestions=list(draft.suggestions))
     if safe is None:
         per_week, per_day = _fact(state, "forecast.per_week"), _fact(state, "forecast.per_day")
+        total = _fact(state, "forecast.to_spend")
+        if total is not None and per_day is not None and total.value >= 1:
+            until = total.label.rsplit(" until ", 1)[-1]
+            line = f"You can spend {format_fact(total)} until {until}, about {format_fact(per_day)} a day."
+            return Draft(draft.reaction, [("answer", line)], suggestions=list(draft.suggestions))
         if per_week is None or per_day is None or per_week.value < 1:
             return draft
         line = (f"You can spend {format_fact(per_week)} a week, about {format_fact(per_day)} a day, until your "

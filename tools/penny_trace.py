@@ -114,9 +114,15 @@ def tool_args(args: dict[str, Any]) -> str:
     return "; ".join(parts)
 
 
+SHOWN_STATUS = {"mock": "sample", "cached": "saved copy"}  # judges see "sample", never "mock"
+
+
 def state_line(s: dict[str, Any]) -> str:
     status = {"on_track": "on track", "running_short": "running short"}.get(str(s.get("state")), str(s.get("state")))
-    line = f"{money(s.get('per_week'))}/week, {status}"
+    if s.get("budget_period") == "until_next_money":
+        line = f"{money(s.get('to_spend'))} until {day(s.get('next_money_date'))}, {status}"
+    else:
+        line = f"{money(s.get('per_week'))}/week, {status}"
     if s.get("run_out_date"):
         line += f", runs out {day(s['run_out_date'])}"
     return line
@@ -145,6 +151,7 @@ def _sources_block(out: Out, hub: dict[str, Any]) -> None:
         values = ", ".join(f"{v.get('label')} {v.get('value')}" for v in latest) or "no number shown"
         status = str(s.get("status"))
         tone = "ok" if status == "live" else "warn" if status in {"cached", "mock"} else "dim"
+        status = SHOWN_STATUS.get(status, status)
         text = f"{s.get('name')} · {out.c(tone, status)} · {hhmm(s.get('updated_at'))} · {values}"
         if first:
             out.line("SOURCES", text)

@@ -40,6 +40,18 @@ WHAT_IF_STEP_LABEL = "Trying your what-if…"
 Unit = Literal["gbp", "gbp_per_month", "gbp_per_year", "percent", "months", "years", "count", "date_year"]
 
 
+def short_window(fc: Forecast) -> bool:
+    """Under 14 days to the next money the card shows the total until that date, never a weekly figure."""
+    return fc.budget_period == "until_next_money"
+
+
+def until_text(fc: Forecast) -> str:
+    if fc.next_money is None:
+        return "the next money"
+    d = date.fromisoformat(fc.next_money.date[:10])
+    return f"{d.day} {d.strftime('%B')}"
+
+
 def statement_ref(fc: Forecast) -> SourceRef:
     return SourceRef(source="statement", series_id="forecast", status=fc.meta.data_status, note="Your statement")
 
@@ -67,7 +79,10 @@ def forecast_output(fc: Forecast, prefix: str = "forecast", label_prefix: str = 
     add("buffer_amount", fc.buffer_amount, "gbp", "Buffer kept aside")
     add("days", fc.days, "count", "Days to cover until the next money")
     add("weeks", round(fc.days / 7, 1), "count", "Weeks to cover until the next money")
-    add("per_week", fc.per_week, "gbp", "You can spend a week")
+    if short_window(fc):
+        add("to_spend", fc.to_spend, "gbp", f"You can spend in total until {until_text(fc)}")
+    else:
+        add("per_week", fc.per_week, "gbp", "You can spend a week")
     add("per_day", fc.per_day, "gbp", "You can spend a day")
     add("usual_weekly", fc.usual_weekly, "gbp", "Usual spending a week (last 4 weeks, no rent or bills)")
     add("usual_daily", fc.usual_daily, "gbp", "Usual spending a day")
@@ -117,7 +132,7 @@ def forecast_output(fc: Forecast, prefix: str = "forecast", label_prefix: str = 
         "buffer_pct": fc.buffer_pct,
         "buffer_amount": fc.buffer_amount,
         "days": fc.days,
-        "per_week": fc.per_week,
+        **_budget(fc),
         "per_day": fc.per_day,
         "usual_weekly": fc.usual_weekly,
         "spare": fc.spare,
@@ -134,8 +149,16 @@ def forecast_output(fc: Forecast, prefix: str = "forecast", label_prefix: str = 
     return ToolOutput(result=result, facts=facts, sources=sources, links=links, raw=fc)
 
 
+def _budget(fc: Forecast) -> dict[str, Any]:
+    if short_window(fc):
+        return {"budget_period": "until_next_money", "to_spend": fc.to_spend,
+                "say": f"Under 14 days to the next money: give the total until {until_text(fc)} (to_spend) and "
+                       "per day, like the app card. Never give a weekly figure."}  # fmt: skip
+    return {"budget_period": "week", "per_week": fc.per_week}
+
+
 def _short(fc: Forecast) -> dict[str, Any]:
-    return {"status": fc.state, "headline": fc.headline, "budget_line": fc.budget_line, "per_week": fc.per_week,
+    return {"status": fc.state, "headline": fc.headline, "budget_line": fc.budget_line, **_budget(fc),
             "per_day": fc.per_day, "money_now": fc.money_now, "bills_total": fc.bills_total, "days": fc.days,
             "spare": fc.spare, "run_out_date": fc.run_out_date,
             "next_money": None if fc.next_money is None else {"label": fc.next_money.label,
@@ -159,9 +182,15 @@ def what_if_output(res: WhatIfResult) -> ToolOutput:
             facts.append(ChatFact(id=f"whatif.change.{i}.day", value=d.day, unit="count",
                                   label=f"What-if day of the month ({d.strftime('%B')}): {what}"[:120],
                                   source_id=sid))  # fmt: skip
-    diff = round(res.after.per_week - res.before.per_week, 2)
-    facts.append(ChatFact(id="whatif.per_week_change", value=diff, unit="gbp",
-                          label="Change in what you can spend a week", source_id=sid))  # fmt: skip
+    if short_window(res.after):
+        diff = round(res.after.to_spend - res.before.to_spend, 2)
+        facts.append(ChatFact(id="whatif.to_spend_change", value=diff, unit="gbp",
+                              label=f"Change in what you can spend until {until_text(res.after)}",
+                              source_id=sid))  # fmt: skip
+    else:
+        diff = round(res.after.per_week - res.before.per_week, 2)
+        facts.append(ChatFact(id="whatif.per_week_change", value=diff, unit="gbp",
+                              label="Change in what you can spend a week", source_id=sid))  # fmt: skip
     seen: set[str] = set()
     sources: list[SourceRef] = []
     links: list[ToolSourceLink | None] = []

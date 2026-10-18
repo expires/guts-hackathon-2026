@@ -65,3 +65,11 @@ async def test_language(client: httpx.AsyncClient) -> None:
     assert hub.sources[2].gives == hub_text.GIVES["boe"]["fr"]
     assert "Une chose qui aide" in hub.sources[2].used_in
     assert (await client.get("/v1/sources/hub", params={"language": "xx"})).status_code in {400, 422}
+
+
+async def test_no_text_says_mock(client: httpx.AsyncClient) -> None:
+    """Users and judges see "sample", never "mock". The `status` enum is a machine field, not shown as text."""
+    for headers in ({}, await sign_in(client, "hub-mock-words")):
+        hub = await _hub(client, headers=headers)
+        text = hub.model_dump(mode="json", exclude={"sources": {"__all__": {"status"}}})
+        assert "mock" not in str(text).lower()
