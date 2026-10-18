@@ -1,85 +1,64 @@
 # Penny
 
-_Your money, played forward._
-
 **Rich or broke, it's about habits.**
 
 GUTS Hackathon 2026 (24 hours). BlackRock / Aladdin challenge: "One app. Every source. One clear decision."
 
 - This README is the submission checklist. Section 15 maps each brief requirement to its evidence.
-- Product direction: [DIRECTION_V2.md](DIRECTION_V2.md), recorded as ADRs 0046 to 0061.
+- Product direction: [DIRECTION_V2.md](DIRECTION_V2.md) (ADRs 0046 to 0061) and the Penny V3 build (ADRs 0062 to 0075).
 - Code names keep the earlier working name "Lifeline": bundle ids, the Xcode project, `LifelineClient`, the Python packages `lifeline_*` (ADR 0040).
 
 > **Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions.**
 
 ## 1. User story
 
-**Who:** a UK student or young graduate who manages money alone for the first time (ADR 0046).
+**Who:** Eilidh Fraser, 19, University of Edinburgh. SAAS loan and bursary plus a café job. Shared flat in Marchmont.
 
-- Income is any mix of maintenance loan, scholarship, bursary, grant, parents or family, part-time job or first salary.
-- Each source arrives on its own schedule: loan instalments, termly bursary payments, weekly shifts, monthly salary.
-- Housing: halls, rent or living with family.
-- Costs: subscriptions, maybe Klarna, an overdraft or a card.
+- Money in: SAAS loan £1,044 a month, Young Students' Bursary £222 a month, café job about £87 a week.
+- Money out: £650 a month rent plus a £35 energy and broadband share, phone, subscriptions, food and nights out.
+- Her money arrives on different schedules, and the gap to the next payment changes each month.
 
-**The one decision:** "Where should my money go this month?"
+**Her decision:** "Will my money last until my next payment, and how much can I spend each week?"
 
-**Examples:** the 4 built-in sample students (synthetic, 3 months each, labelled "Sample data"). The values are the engine's output on 17 Oct 2026, from the V2 and V4 reports. The engine computes them again on every request.
+**The other 9 sample students show that the engine adapts** (ADR 0062). Each has different money in, rent and spending:
 
-| Sample student | Money | Penny's Next Move |
+| Sample student | City | Money in |
 |---|---|---|
-| Scholarship student | Scholarship and bursary, about £420 a month. Halls paid. No debt. | Nothing urgent. Cash covers 5.5 months of spending. |
-| Rich student | About £2,000 a month from parents. City flat, many subscriptions, Klarna. | "Plan for £612 you are missing before 2 November" |
-| Working student | Maintenance loan and bar shifts with pay that changes. Overdrawn. | "Plan for £131 you are missing before 23 October" |
-| Commuter student | Lives with family. Grant and family help. 16-25 Railcard. Saving for a deposit. | "Put £952 in a Lifetime ISA" (£238 bonus) |
+| Eilidh Fraser (Scottish student) | Edinburgh | SAAS loan, Young Students' Bursary, café job |
+| Amara Okoye (scholarship) | Sheffield | Maintenance loan, university bursary |
+| Priya Patel (commuter) | Bolton | Maintenance loan, help from mum |
+| Jordan Hughes (England loan) | Newcastle | Maintenance loan |
+| Callum Reid (working student) | Leeds | Maintenance loan, bar job |
+| Grace Mensah (mature, NHS course) | Birmingham | Maintenance loan, NHS Learning Support Fund, NHS bank shifts |
+| Yutong Chen (international) | Coventry | Parents, by Wise |
+| Sam Whitfield (final year) | Exeter | Summer internship, maintenance loan |
+| Hugo Ashworth (rich student) | Leeds | Parents |
+| Lena Novak (graduate) | London | First graduate salary |
 
-- Habit score (0 to 100, ratios only): scholarship 82, rich 47 (V2 final re-check). Income does not set the score. Habits do.
-- 4 more sample profiles exist for the team phones: fresher in halls, graduate in a first job, placement year, delivery rider.
+- All 10 are synthetic and labelled "Sample" in the app. Their amounts are calibrated to the Save the Student National Student Money Survey 2026, the National Student Accommodation Survey 2026 and the official funding tables. Every figure and its source: [docs/seed_sources.md](docs/seed_sources.md).
+- The engine computes each forecast again on every request. No result is stored in the sample.
 
-## 2. The decision: Next Move
+## 2. The decision: the forecast
 
-`GET /v1/next-move` answers "Where should my money go this month?" (the `question` field in the contract). It returns one top move and up to two runners-up. The engine (`lifeline_engine`) computes and ranks every move. No AI chooses the move.
+The Money tab answers Eilidh's question with one forecast card (ADR 0072): "Will my money last until my next payment, and how much can I spend?" The engine (`lifeline_engine/forecast.py`, `compute`) does every sum. No AI picks a number.
 
-Each move has these parts (`services/api/lifeline_contracts/next_move.py`):
+**The calculation** (`maths`):
 
-| Part | Field | What the user sees |
-|---|---|---|
-| Gain | `impact_per_year`, `cover_months` or `shortfall` (`gain_kind`) | £ a year, months of cover, or "£X short before DATE" |
-| Trade-off | `trade_off.summary`, `trade_off.points` (ADR 0042) | "What you give up" on the card; all points in Why? |
-| Worst case | `worst_case_per_year` | £ a year in the worst matched past period |
-| Confidence | `confidence_level`, `sample_size`, `confidence_label` | For example "Medium confidence (sample: 6 past periods)" |
-| Evidence | `evidence` (exactly 3 points, each number in `facts`) | Three lines in Why? |
-| Sources | `decision_sources`, `decision_source_count` (ADR 0032) | "Based on N sources", each with its status |
+1. **Money now:** current accounts from the statement. An overdraft counts as negative. Savings are not counted.
+2. **Next money:** the next payment of the main income source, which is the recurring source with the largest amount a month (`income_plan`). Payments on the same day join it ("SAAS loan + bursary"). Smaller payments before it count as expected income.
+3. **Bills:** recurring bills and subscriptions found in the statement (`lifeline_engine/money/recurring.py`), due from tomorrow to the day before the next money (`bills_between`).
+4. **Buffer:** 10% of what is left, by default. The user can change it.
+5. **Per day** = (money now + expected income - bills - buffer) / days, rounded down to the penny. **Per week** = per day x 7.
+6. **Short window:** under 14 days to the next money, the card shows the total until that date ("You can spend £930 until 26 October"), not a weekly figure.
+7. **Verdict:** usual spending (average of the last 4 weeks, no rent or bills) is compared with the safe amount. The result is "You'll make it to DATE" with the spare money, or "You could run out on DATE".
 
-Student options (ADR 0046). Trade-off text is quoted from `lifeline_engine/trade_offs.py`. The engine offers a move only when the user's data meets its preconditions (`lifeline_engine/preconditions.py`, ADR 0053 bug 1).
+**The maths** screen shows the 4 steps with the real numbers: money now, bills before the next money, buffer, and what is left per day and per week.
 
-| Option | Move kind | Trade-off it states |
-|---|---|---|
-| Weekly budget until the next money arrives (loan instalment, bursary, family transfer or payday) | `weekly_budget` | "£X a week less to spend until DATE", or "Nothing safe to spend until DATE: bills come first" when money runs short |
-| Build a safety fund | `build_emergency_fund` | "Less money invested, so lower expected growth" |
-| Pay off expensive debt (card, overdraft above the free limit, BNPL with a rate) | `pay_off_debt` | "Less cash on hand" or "£X a month less to spend or save" |
-| Lifetime ISA (25% government bonus) | `lifetime_isa` | "A 25% charge if you take it out for anything but a first home" |
-| Cut subscriptions | `cancel_subscription`, `switch_subscription` | "You lose NAME and anything saved in it", or fewer features on a cheaper plan |
-| Move savings to a better rate | `move_savings` | "The rate can change, and some top rates need notice to take money out" |
-| Keep as cash | `keep_cash` | "Rising prices can make your cash worth less over time" |
+**Detailed breakdown:** each account, each bill with its due date, the next money with its official payment schedule (SAAS, Student Finance England), the 4 weeks of usual spending, and every source. "Based on N sources" opens the sources hub (section 4.4).
 
-- Also in the engine: `cut_budget` (spending above the user's usual level), and `fix_mortgage`, `remortgage`, `switch_energy` only when the user has a mortgage or energy details.
-- `spread_investments` is deprecated (ADR 0046).
+**What-ifs through Penny:** "Can I afford a £60 concert on the 30th?" or "What if my loan is a week late?" Penny calls the `forecast_what_if` tool (`lifeline_explain/forecast_tool.py`). The engine runs the forecast again with the change and returns before and after. Penny explains the difference. Every number she says must match the engine (section 6).
 
-How the engine picks the move:
-
-1. **Candidates.** Only moves whose preconditions match the data.
-2. **Urgent first.** A `weekly_budget` move with a shortfall above £0 always ranks first (ADR 0057). Running out of money before the next payment is the most urgent decision.
-3. **Score.** Twin-based moves simulate similar synthetic people ("twins") through matched past periods and one stress period. The option with the highest `expected - 0.5 x max regret` wins (ADR 0020).
-4. **Rank.** Moves are ranked by `impact + 0.5 x min(0, worst case)`, scaled by confidence.
-5. **Confidence (ADR 0053 amendment).** "High" needs at least 8 independent cases and a 70% share. "Medium" needs 5 cases and 55%. The label names the unit ("6 past periods", "4 of the last 4 weeks"). Plain arithmetic on the user's own numbers says "Based on your own numbers".
-6. **Trade-off.** The engine writes it per move kind (`lifeline_engine/trade_offs.py`). No AI writes it.
-
-Card buttons:
-
-- **Test it:** `POST /v1/next-move/test` plays the user's profile through a past period once per option, on the same seed. Only twin-based moves are testable.
-- **Why?:** evidence, trade-off, sources, confidence and a lesson.
-- **Do this:** `POST /v1/plan` adds the move to the user's plan.
-- **Ask Penny:** switches to the Penny tab with the move loaded.
+**One suggestion under the forecast:** the earlier Next Move engine (`GET /v1/next-move`, `lifeline_engine/next_move.py`, ADR 0018) still ranks the options (safety fund, pay off expensive debt, Lifetime ISA, cut subscriptions, better savings rate) by gain, worst case and confidence. Each option states its trade-off (`lifeline_engine/trade_offs.py`, ADR 0042). The app shows the top one as one suggestion under the forecast.
 
 Accuracy is reported as measured: [docs/prediction.md](docs/prediction.md) (ADR 0023).
 
@@ -167,8 +146,8 @@ Key: **D** = Next Move input (`DECISION_PROVIDERS` in `lifeline_engine/next_move
 | `frankfurter` | Frankfurter FX rates (ECB reference rates) | Exchange rates; Penny's currency conversion | D, P |
 | `coingecko` | CoinGecko | Crypto prices | D |
 | `postcodes` | postcodes.io | Postcode to region | G |
-| `bankholidays` | GOV.UK bank holidays | Bank holidays for "Guess my spend" | G |
-| `openmeteo` | Open-Meteo | Daily weather for "Guess my spend" | G |
+| `bankholidays` | GOV.UK bank holidays | Bank holidays (spending context) | G |
+| `openmeteo` | Open-Meteo | Daily weather (spending context) | G |
 | `yahoo` | Yahoo Finance chart endpoint | Monthly stock market history | G |
 | `fred` | FRED, Federal Reserve Bank of St. Louis | UK 10-year government bond yield (OECD series) | G |
 | `carbonintensity` | Carbon Intensity API | Regional grid carbon intensity | G |
@@ -196,9 +175,9 @@ The user picks one of three inputs in onboarding, under "Connect your money" (AD
 |---|---|---|
 | Upload a statement | Monzo or Revolut CSV. PDF statements are also read; a bank PDF with embedded fonts fails with a clear message to upload the CSV. Max 5 MB, 20,000 rows. | `POST /v1/finance/statements` |
 | Enter your numbers | Student or working, age, postcode, housing, income sources (amount and schedule each), student loan plan, regular costs, savings, debts (card, overdraft, BNPL) | `PUT /v1/finance/manual` |
-| Use a sample statement | One of 4 sample student cards | `GET /v1/samples`, `POST /v1/samples/{id}/import` |
+| Use a sample statement | One of 10 sample student cards | `GET /v1/samples`, `POST /v1/samples/{id}/import` |
 
-- Sample statements are synthetic. Each is a Monzo-style CSV and a PDF with "Sample data" on every page. Files: `demo/statements/`. Generator: `tools/gen_statements.py`.
+- Sample statements are synthetic and labelled "Sample". Each is a CSV and a PDF with a running balance. Files: `demo/statements/`. Generator: `tools/gen_statements.py` (deterministic, no network). Calibration: National Student Money Survey 2026 and the other sources in [docs/seed_sources.md](docs/seed_sources.md).
 - Sample snapshots carry `source="sample"`. The app labels them "Sample data".
 - Every input becomes the same `FinanceSnapshot`. It is stored encrypted in Postgres (section 13).
 
@@ -212,6 +191,15 @@ Penny does not connect to banks. Each route was checked and closed for a student
 - **Apple FinanceKit:** needs a special entitlement from Apple.
 
 Statement upload produces the same `FinanceSnapshot` format as a bank feed. A licensed feed can plug in later with no change to the engine.
+
+### 4.4 Sources hub
+
+"Where Penny's data comes from" (ADR 0073). `GET /v1/sources/hub` and one app screen, opened from the forecast card ("Based on N sources"), from The maths and from You.
+
+- Top line: "Penny uses your statement plus N live UK sources. Here is what each one does."
+- One card per student-facing source: your statement, official facts, Bank of England, ONS, Nomis, Octopus Energy, Frankfurter, Bank of England MPC dates.
+- Each card shows the status (live, saved copy or sample) with its time, what it gives Penny and which screens use it. A tap shows the latest values and a link to the official page.
+- No homeowner sources (Land Registry, EPC, mortgages).
 
 ## 5. Official facts
 
@@ -233,10 +221,16 @@ How Penny looks up a rule (tax, student loans, ISAs, benefits, council tax, Rail
 
 Penny is a full tab (ADR 0051). One chat, two labelled answer modes. The mode depends on what Penny used (`ChatResponse.mode`).
 
+**Scope (ADR 0073):** money and student life.
+
+- Money: budgets, loans, rent, bills, jobs and pay, saving, banking, bursaries, costs of student life. Strict number check.
+- Student life: uni services, studying, housing, getting around, wellbeing services, societies, moving to a new city. "General knowledge" label, relaxed number check. A money angle is added in one line where it fits.
+- Anything else (coding, homework, celebrity news) gets one friendly line and 2 suggestion chips. A fixed rule decides this before the model runs (`lifeline_explain/scope.py`).
+
 | Mode | Label | When | Check |
 |---|---|---|---|
 | `checked` | "Checked with your data" | Penny used an engine tool | The verifier checks every number against the tool facts, with its unit (£ or %) |
-| `general` | "General answer" | No engine tool. Student-focused prompt with web search: concepts, student life, cooking, CVs, study help | If the answer states the user's own numbers, the verifier blocks it and Penny retries with an engine tool |
+| `general` | "General knowledge" | No engine tool. Student-life questions, with web search | If the answer states the user's own numbers, the verifier blocks it and Penny retries with an engine tool |
 
 **Tools** (`lifeline_explain/chat_tools.py`, ADR 0033, 0060):
 
@@ -246,6 +240,8 @@ Penny is a full tab (ADR 0051). One chat, two labelled answer modes. The mode de
 | `test_move` | Test it for a move |
 | `finance_summary` | Summary of the user's money |
 | `user_balance` | The user's balance |
+| `forecast` | The forecast card numbers, The maths and the breakdown |
+| `forecast_what_if` | Runs the forecast again with a change (a cost, a late payment, extra shifts) and returns before and after |
 | `cash_flow_projection` | Cash until the next money arrives |
 | `spend_prediction` | Today's predicted spend |
 | `habit_score` | The 6 habit ratios |
@@ -275,6 +271,16 @@ Penny is a full tab (ADR 0051). One chat, two labelled answer modes. The mode de
 - Chat model: Claude Sonnet 5.5 (`CHAT_MODEL`, default `claude-sonnet-5-5`). Target: first bubble under 3 s.
 - V4 measured the first bubble at 2.2 to 2.5 s in the app for 3 questions. The 1 million yuan question took about 7 s (2 tool calls).
 - Voice: one bubble, two at most. A reaction shows within 1 s. Keep-alive events, then a non-streaming fallback, then "Penny is unavailable right now. Try again."
+
+**penny-trace (ADR 0075):** a demo tool that shows how one real answer is made, on the live server.
+
+```bash
+make penny-trace STUDENT=eilidh BASE=https://api-production-15615.up.railway.app Q="Can I afford a £60 concert on the 30th?"
+```
+
+- It prints SOURCES (status and latest values), QUESTION, SCOPE, TOOL, ENGINE (inputs, each with its source), DRAFT, VERIFY (each number and where it matched), REWRITE, ANSWER and SOURCES USED.
+- `make penny-trace-live BASE=...` prints every real Penny answer from the app as it happens.
+- The server serves traces only with `PENNY_TRACE_ENABLED=1`. The live stream also needs `PENNY_TRACE_TOKEN`. The output never contains keys, tokens, headers or prompts (tested).
 
 ## 7. Play
 
@@ -370,19 +376,22 @@ Hosted API (Railway, `DATA_MODE=live`, ADR 0028): https://api-production-15615.u
 | iOS unit and UI | `apps/ios/LifelineTests`, `apps/ios/LifelineUITests` | `make ios-test` |
 | Secrets | gitleaks over the working tree | `make secrets-scan` |
 
-- `make test` collects 1,602 Python tests: unit 1,412 (api 103, data 297, engine 262, eval 3, explain 235, sim 512), integration 100, contract 90. All passed in a run on 2026-10-17, about 22:50 UTC.
+- Server (`make test`): 2,325 passed, 1 skipped, on `main` (18 Oct 2026, about 80 s). With the live trace commit: 2,341 passed.
+- iOS (`make ios-test`): 395 tests in 45 suites passed, plus the UI tests (`LifelineUITests`), on `main` (18 Oct 2026).
 - Python tests never call the network. They use recorded fixtures under `services/api/tests/fixtures/`.
+- CI: `.github/workflows/ci.yml` runs ruff, mypy, the 3 pytest suites, the contract check and `docker compose build`.
 
-Verifiers V1 to V6 are separate agents. They check the work and write reports to [docs/verify/](docs/verify/). Latest section of each report:
+Verifiers are separate agents. They check the work and write reports to [docs/verify/](docs/verify/). Final run on 18 Oct 2026 (Penny V3 build), all passing:
 
-| Verifier | Latest run | Verdict | Numbers |
-|---|---|---|---|
-| [V1](docs/verify/V1.md) contract | Direction V2 step 5 | PASS | 103 contract tests passed, 1 skipped. Probes: 130 REST checks, 63 WebSocket checks plus a 30-check quiz re-run, 16 cold-start checks. |
-| [V2](docs/verify/V2.md) engine | Direction V2 engine, final re-check | PASS | 762 engine, eval and sim tests passed. 400 fuzzed snapshots, 0 precondition violations. Hand checks of the 4 students' cards. |
-| [V3](docs/verify/V3.md) resilience | Tier 2 | FAIL (1 gate finding, T2-G1) | 267 scratch tests passed, 2 failed. T2-G1: a failed upload stayed in memory. The store now writes memory only after the Postgres commit (`lifeline_data/cache.py`). No V3 re-run is recorded yet. |
-| [V4](docs/verify/V4.md) iOS | Direction V2 steps 1 to 3 | FAIL (7 findings) | 231 Swift tests in 29 suites and 4 UI tests passed. 74 screenshots. Findings: wrong data badge on 3 screens, fallback confidence label, source names, 2 Penny labels, one Ask Penny route. Re-check in progress. |
-| [V5](docs/verify/V5.md) demo | Tier 1 final | PASS | Earlier mortgage demo. The Direction V2 rehearsal has not run yet. |
-| [V6](docs/verify/V6.md) security | Step 5 re-check | PASS | Privacy scan over 4 players: 0 personal amounts. Room abuse, Circle and tool isolation checks pass. Secret scan clean. |
+| Verifier | Report | Verdict |
+|---|---|---|
+| V1 contract | [V1-final.md](docs/verify/V1-final.md) | PASS |
+| V2 engine | [V2-final.md](docs/verify/V2-final.md) | PASS (2 non-blocking warnings) |
+| V3 resilience | [V3-final.md](docs/verify/V3-final.md) | PASS |
+| V4 iOS | [V4-final.md](docs/verify/V4-final.md) | PASS |
+| V5 demo | [V5-final.md](docs/verify/V5-final.md) | PASS after the what-if speed fix (`e73b4f72`, re-checked 09:48) |
+| V6 security | [V6.md](docs/verify/V6.md) | PASS |
+| V7 final | [V7-final-v3.md](docs/verify/V7-final-v3.md) | PASS, all 9 items |
 
 ## 11. Graceful failure
 
@@ -517,13 +526,18 @@ Every decision is an Architecture Decision Record (ADR) in [docs/adr/](docs/adr/
 | [0059](docs/adr/0059-play-contract.md) | Play with friends contract |
 | [0060](docs/adr/0060-instant-screens-and-penny-tools.md) | Instant screens and Penny's full toolset |
 | [0061](docs/adr/0061-student-paths-and-games.md) | Student paths, Quick Life and game content |
+| [0062](docs/adr/0062-ten-sample-students.md) | Ten sample students |
+| [0072](docs/adr/0072-penny-v3-build.md) | Penny V3: the forecast is the decision |
+| [0073](docs/adr/0073-penny-money-only-and-sources-hub.md) | Penny's scope (money and student life) and the sources hub |
+| [0074](docs/adr/0074-quick-life-redesign-and-no-index.md) | Quick Life redesign and no INDEX (planned) |
+| [0075](docs/adr/0075-penny-demo-trace.md) | penny-trace demo tool |
 
 ## 15. Official checklist
 
 | | Brief requirement | Evidence |
 |---|---|---|
-| [x] | Clear user | Section 1. Persona from ADR 0046, shown with 4 sample students. No named real user. |
-| [x] | One clear decision | Section 2. `GET /v1/next-move`, `lifeline_engine/next_move.py`, ADR 0018, 0046 |
+| [x] | Clear user | Section 1. Eilidh Fraser, 19, University of Edinburgh, plus 9 more sample students (ADR 0062). |
+| [x] | One clear decision | Section 2. "Will my money last until my next payment, and how much can I spend each week?" `lifeline_engine/forecast.py`, ADR 0072 |
 | [x] | Evidence | 3 evidence points with facts, worst case, confidence with sample size, decision sources. `lifeline_contracts/next_move.py`, [docs/prediction.md](docs/prediction.md) |
 | [x] | Trade-offs | "What you give up" on every move. `lifeline_engine/trade_offs.py`, ADR 0042 |
 | [x] | Multiple data sources | Section 4: 20 public sources (8 decision inputs) plus the user's own statement or numbers |
@@ -532,7 +546,7 @@ Every decision is an Architecture Decision Record (ADR) in [docs/adr/](docs/adr/
 | [x] | How to run | Section 9, `Makefile` |
 | [x] | Tests | Section 10, `services/api/tests/`, `apps/ios/LifelineTests/`, [docs/verify/](docs/verify/) |
 | [x] | Security | Section 12, [docs/verify/V6.md](docs/verify/V6.md) (latest run PASS), `make secrets-scan` |
-| [ ] | All verifiers green | V3 (Tier 2) and V4 (Direction V2 steps 1 to 3) last reported FAIL. Re-runs pending. V5 Direction V2 rehearsal not run. |
+| [x] | All verifiers green | Section 10. V1 to V7 final reports PASS on 18 Oct 2026. |
 | [x] | Hosted API on the current build | Section 9. https://api-production-15615.up.railway.app runs the V2 backend: `/v1/paths` 401 without a token, 20 sources (17 live), smoke test of 4 sample imports (0.36 to 1.44 s) and Next Move (2.3 to 2.4 s). |
 | [ ] | Demo script | `docs/DEMO.md` is rewritten when the final script arrives (ADR 0055). |
 
