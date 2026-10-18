@@ -61,6 +61,15 @@ class ImportResult(_M):
 # ---------- onboarding: sample statements (ADR 0047) ----------
 
 
+class SampleMoneyIn(_M):
+    """One income line on the student card: amount per month or per term, with dates."""
+
+    label: str = Field(max_length=40, description="e.g. 'SAAS loan', 'Bar job', 'Parents'")
+    amount: float = Field(ge=0)
+    period: Literal["week", "month", "term", "year"]
+    dates: str | None = Field(default=None, max_length=60, description="e.g. 'Sep, Jan, Apr' or '25th each month'")
+
+
 class SampleStatement(_M):
     """A built-in synthetic student statement. Imported data is always labelled "Sample data"."""
 
@@ -70,6 +79,18 @@ class SampleStatement(_M):
     funding: list[IncomeKind] = Field(max_length=8)
     months: int = Field(ge=1, le=12)
     team: bool = Field(default=False, description="Team phone profile, hidden from the judge picker")
+    # Onboarding "Pick your student" card (ADR 0069). All from the sample statement itself.
+    name: str | None = Field(default=None, max_length=24, description="Student's full name, e.g. 'Eilidh Fraser'")
+    age: int | None = Field(default=None, ge=16, le=70)
+    avatar: str | None = Field(default=None, max_length=40, description="Avatar id the app maps to its art")
+    uni: str | None = Field(default=None, max_length=60)
+    city: str | None = Field(default=None, max_length=40)
+    funding_label: str | None = Field(
+        default=None, max_length=60, description="Funding body or type, e.g. 'SAAS', 'Student Finance England'"
+    )
+    money_in: list[SampleMoneyIn] = Field(default_factory=list, max_length=4)
+    housing: str | None = Field(default=None, max_length=60, description="e.g. 'Halls, £165 a week'")
+    habit_line: str | None = Field(default=None, max_length=100, description="One line on their money habits")
 
 
 class SamplesResponse(_M):

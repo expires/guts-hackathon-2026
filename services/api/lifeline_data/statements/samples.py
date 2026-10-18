@@ -3,8 +3,12 @@
 - `samples_dir()`: env `LIFELINE_SAMPLES_DIR`, else the package data folder `statements/samples/`
   (shipped in the API image; demo/statements/ at the repo root is an identical copy for judges).
 - `list_samples(team=None)`: SampleStatement entries from index.json (empty list when the folder is missing).
-- `sample_hints(sample_id)`: the `hints` dict (is_student, age, housing, student_loan_plan, income_sources,
-  debts, monthly_costs, accounts). `accounts` holds closing balances: current account and savings pots.
+  The index holds the 10 student profiles only; `team` is always false (contract field kept). The `team` filter
+  stays so old callers keep working: team=True gives an empty list.
+- `sample_hints(sample_id)`: the `hints` dict (name, is_student, age, housing, student_loan_plan, income_sources,
+  debts, monthly_costs, accounts, budgets, goals). `name` is the account holder, given name first (rooms show the
+  first word). `accounts` holds closing balances: current account and savings pots. `budgets` (BudgetLimit shape) and
+  `goals` (CreateGoalRequest shape plus a stable `gl_sample_` id) are what the API sets up on import (ADR 0070).
 - `load_sample(sample_id, fmt="pdf")`: parse the file with the normal statement parser, then add the hints the
   statement cannot show (age, housing, loan plan, future payment dates, balances owed, account balances).
   Status "mock", source "sample", persona = sample id, so the app labels it "Sample data".
@@ -64,7 +68,7 @@ def _merge_income(found: list[IncomeSource], hinted: list[IncomeSource]) -> list
         i = min(same, key=lambda k: abs(out[k].amount - h.amount))  # closest amount: allowance, not a top-up
         s = out[i]
         dates = sorted({*s.dates, *h.dates})[-60:]
-        out[i] = s.model_copy(update={"dates": dates, "next_date": h.next_date or s.next_date,
+        out[i] = s.model_copy(update={"dates": dates, "next_date": h.next_date,
                                       "schedule": h.schedule})
     return out[:20]
 

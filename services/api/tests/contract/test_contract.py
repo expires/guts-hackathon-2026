@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
+from tests.contract.conftest import BASE
 from tests.contract.spec import operations, spec, validate
 
 TIER0 = {
@@ -46,6 +47,9 @@ TIER1 = {
     "addPlanItem",
 }
 TIER2 = {
+    "getLearnPath",
+    "getLearnLesson",
+    "attemptLearnLesson",
     "askPennyStream",
     "getFinanceHome",
     "askPenny",
@@ -157,7 +161,8 @@ async def test_characters(client: httpx.AsyncClient, auth: dict[str, str]) -> No
     ids = {c["id"] for c in r.json()["presets"]}
     # Direction V2 (ADR 0052, 0061): student path characters are offered; old presets are not.
     assert {"path-uni", "path-apprentice", "path-job18", "path-gap_year", "path-masters"} <= ids
-    assert not ids & {"nurse-leeds", "banker-london", "plumber", "retired"}, "old presets must not be offered"
+    old = {"nurse-leeds", "banker-london", "plumber", "retired", "teacher-glasgow"}
+    assert not ids & old, "only student or graduate presets"
     r2 = await client.get("/v1/characters", params={"seed": 7}, headers=auth)
     assert r2.json()["random"] == r.json()["random"], "random character must be deterministic per seed"
 
@@ -299,7 +304,7 @@ async def test_rooms_http(client: httpx.AsyncClient, auth: dict[str, str]) -> No
     r2 = await client.get(f"/v1/rooms/{r.json()['code']}", headers=auth)
     validate("GET", "/v1/rooms/{code}", r2.status_code, r2.json())
     assert r2.json()["seed"] == r.json()["seed"]
-    r3 = await client.get("/v1/rooms/ZZZZZZ", headers=auth)
+    r3 = await client.get("/v1/rooms/0000", headers=auth)
     assert r3.status_code == 404 and is_error(r3.json())
 
 
@@ -388,7 +393,7 @@ async def test_later_tier_ops_answer_inside_contract(
 ) -> None:
     """Whether built (2xx) or stubbed (501), every response is a declared status with a valid body."""
     life = await new_life(client, auth)
-    concrete = path.replace("{id}", life["id"]).replace("{code}", "ZZZZZZ")
+    concrete = path.replace("{id}", life["id"]).replace("{code}", "0000")
     op = spec()["paths"][path][method.lower()]
     params = {"session": "missing-session"} if op_id == "getBankSummary" else None
     body = _example_body(op)
@@ -475,8 +480,13 @@ async def test_guess_my_spend(client: httpx.AsyncClient) -> None:
     # Fresh device per run: the stack store keeps guesses, and a guess is allowed once per day per user.
     import uuid
 
-    tok = await client.post("/v1/auth/demo", json={"device_id": f"guess-{uuid.uuid4().hex[:12]}"})
+    device = f"guess-{uuid.uuid4().hex[:12]}"
+    tok = await client.post("/v1/auth/demo", json={"device_id": device})
     auth = {"Authorization": f"Bearer {tok.json()['access_token']}"}
+    if not BASE:  # no persona is served; the test seeds one explicitly (in-process only)
+        from tests.integration.personas import seed_persona
+
+        await seed_persona(device)
     pred = (await client.get("/v1/finance/prediction", headers=auth)).json()
     assert pred.get("guess") is None
     assert len(pred["reasons"]) <= 3 and pred["low"] <= pred["predicted"] <= pred["high"]

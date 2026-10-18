@@ -7,8 +7,9 @@ import SwiftUI
 ///
 /// | Slot | Worker | Final call |
 /// |---|---|---|
-/// | `onboarding` | W6 | `OnboardingScreen(client:startAt:onFinished:)` (`startAt` pending; until then `OnboardingScreen(client:onFinished:)`) |
+/// | `onboarding` | W6 | `OnboardingScreen(client:startAt:onLanguage:onFinished:)` (live) |
 /// | `account` | W6 | `AccountScreen(client:onSignedOut:onClose:)` |
+/// | `language` | W6 | `LanguageScreen(onDone:)` (live) |
 /// | `penny` | W7 | `PennyScreen(client:context:onClose:onOpenLink:)` (live) |
 @MainActor
 enum FeatureSlots {
@@ -18,8 +19,13 @@ enum FeatureSlots {
         start: OnboardingStart,
         onFinished: @escaping @MainActor () -> Void
     ) -> some View {
-        // Pending W6 `startAt:`. Then: OnboardingScreen(client: client, startAt: start == .connect ? .connect : .welcome, onFinished: onFinished)
-        OnboardingScreen(client: client, onFinished: onFinished)
+        OnboardingScreen(
+            client: client,
+            startAt: start == .connect ? .connect : .welcome,
+            // Language Confirm (ADR 0063): save the app language; RootScreen switches the app live.
+            onLanguage: { language in AppLanguage.set(language) },
+            onFinished: onFinished
+        )
     }
 
     @ViewBuilder
@@ -60,14 +66,24 @@ extension FeatureSlots {
         case .why: .why
         case .lifeEvent: .lifeEvent
         case .life: .life
+        case .testIt: .testIt
         }
         return PennyContext(
             screen: screen,
             nextMoveID: route.nextMoveID,
             lifeID: route.lifeID,
             eventID: route.eventID,
-            question: route.question
+            question: route.question,
+            title: route.title
         )
+    }
+}
+
+extension FeatureSlots {
+    /// Language screen (ADR 0063), W6. It saves the choice with `AppLanguage.set`; the app switches live.
+    @ViewBuilder
+    static func language(onDone: @escaping @MainActor () -> Void) -> some View {
+        LanguageScreen(onDone: onDone)
     }
 }
 

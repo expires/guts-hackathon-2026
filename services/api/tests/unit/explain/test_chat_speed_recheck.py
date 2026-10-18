@@ -155,3 +155,99 @@ async def test_ending_things_with_a_provider_is_not_distress() -> None:
     r, _ = await ask(message, FakeChatLLM(final("Moving your overdraft can save money.")))
     assert "Samaritans" not in " ".join(b.text for b in r.bubbles)
     assert distress_rule("I'm thinking of ending things")
+
+
+# ---------- V5: weekly budget in one call, verifying before bubbles ----------
+
+
+def working_tools() -> Any:
+    from lifeline_data.macro import mock_macro_table
+    from lifeline_data.statements.samples import load_sample
+    from lifeline_explain.chat_engine_tools import EngineToolSet
+
+    snap = load_sample("working", "csv")
+    return EngineToolSet(snap, mock_macro_table(), date.fromisoformat(snap.as_of))
+
+
+def weekly_answer(messages: list[dict[str, Any]]) -> LLMStep:
+    content = messages[-1]["content"]
+    data, _ = json.JSONDecoder().raw_decode(content[content.index("APP DATA") :].split(": ", 1)[1])
+    facts = {x["id"]: x for x in data["next_move"]["facts"]}
+    short = facts["weekly.shortfall"]["value"]
+    return final(f"You are £{short:,.0f} short before your next money, so keep to essentials this week.")
+
+
+async def test_weekly_question_one_call_under_three_seconds_and_verifying_first() -> None:
+    llm = StreamingFake(weekly_answer, delay=0.8)
+    ctx = ChatToolContext(tools=working_tools())
+    ev = [e async for e in Penny(llm=llm, settings=SETTINGS).answer_stream(
+        ChatRequest(message="How much can I spend this week?"), ctx)]  # fmt: skip
+    types = [e.type for e in ev]
+    first = next(e for e in ev if e.type == "bubble")
+    assert len(llm.requests) == 1 and first.elapsed_ms < 3000
+    assert types.index("verifying") < types.index("bubble")  # contract order
+    assert "tool_step" not in types  # no tool round trip: the weekly budget came with the question
+    r = ev[-1].response
+    assert r.verified and r.mode == "checked" and r.highlights
+    h = r.highlights[0]
+    assert r.bubbles[0].text[h.start : h.start + h.length].startswith("\u00a3")
+
+
+async def test_weekly_figure_never_denied_when_it_exists() -> None:
+    deny = final("I can only forecast one day at a time, not a full week.")
+    llm = FakeChatLLM(deny, deny)
+    r = await Penny(llm=llm, settings=SETTINGS).answer(
+        ChatRequest(message="How much can I spend this week?"), ChatToolContext(tools=working_tools())
+    )
+    assert "weekly budget" in llm.requests[1]["messages"][-1]["content"]
+    assert (
+        r.verified
+        and r.bubbles[0].text.startswith("You are £")
+        and "short before your next money" in (r.bubbles[0].text)
+    )
+
+
+# ---------- V3 final: total answer time capped at 12 s ----------
+
+
+def test_chat_deadline_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    from lifeline_explain.config import load_settings
+
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "40")
+    monkeypatch.delenv("CHAT_TIMEOUT_SECONDS", raising=False)
+    assert load_settings().chat_deadline == 12.0
+    monkeypatch.setenv("CHAT_TIMEOUT_SECONDS", "8")
+    assert load_settings().chat_deadline == 8.0
+
+
+async def test_hanging_model_gives_unavailable_at_the_deadline() -> None:
+    from dataclasses import replace
+
+    from lifeline_explain import prompts
+
+    settings = replace(SETTINGS, timeout_seconds=40.0, chat_timeout_seconds=0.5)
+    llm = FakeChatLLM(final("too late"), delay=60)
+    t0 = asyncio.get_running_loop().time()
+    ev = [e async for e in Penny(llm=llm, settings=settings).answer_stream(
+        ChatRequest(message="What should I do?"), ChatToolContext(tools=make_tools()))]  # fmt: skip
+    assert asyncio.get_running_loop().time() - t0 < 3
+    assert [e.type for e in ev][-2:] == ["error", "done"]
+    assert ev[-1].response.bubbles[0].text == prompts.UNAVAILABLE_TEXT
+
+
+async def test_unreachable_model_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Connection refused (nothing listens on local port 9): the fallback comes well inside 12 s, retries included."""
+    from dataclasses import replace
+
+    from lifeline_explain import prompts
+    from lifeline_explain.chat_llm import AnthropicChatLLM
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-key")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:9")
+    settings = replace(SETTINGS, timeout_seconds=40.0, chat_timeout_seconds=12.0)
+    t0 = asyncio.get_running_loop().time()
+    r = await Penny(llm=AnthropicChatLLM(settings), settings=settings).answer(
+        ChatRequest(message="What should I do?"), ChatToolContext(tools=make_tools())
+    )
+    assert asyncio.get_running_loop().time() - t0 < 12
+    assert r.bubbles[0].text == prompts.UNAVAILABLE_TEXT and not r.verified

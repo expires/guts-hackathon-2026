@@ -1,0 +1,71 @@
+{
+  "paths": [
+    {
+      "id": "uni",
+      "title": "University",
+      "description": "Three years of study with student loans, then a graduate job.",
+      "start_age": 18,
+      "quick": true
+    },
+    {
+      "id": "apprentice",
+      "title": "Apprenticeship",
+      "description": "Earn while you train for three years. No fees, no student loan.",
+      "start_age": 18,
+      "quick": true
+    },
+    {
+      "id": "job18",
+      "title": "Job at 18",
+      "description": "Start work straight after school and live at home.",
+      "start_age": 18,
+      "quick": true
+    },
+    {
+      "id": "gap_year",
+      "title": "Gap year",
+      "description": "Work for a year, then three years at university.",
+      "start_age": 18,
+      "quick": true
+    },
+    {
+      "id": "masters",
+      "title": "Master's degree",
+      "description": "A one-year master's after your degree, paid with a postgraduate loan.",
+      "start_age": 21,
+      "quick": false
+    }
+  ],
+  "quick_students": [
+    {
+      "id": "qs-priya",
+      "name": "Priya",
+      "path_id": "uni",
+      "description": "University in Birmingham, paid with the full student loan."
+    },
+    {
+      "id": "qs-amara",
+      "name": "Amara",
+      "path_id": "uni",
+      "description": "University in London with a £2,000 a year bursary."
+    },
+    {
+      "id": "qs-jordan",
+      "name": "Jordan",
+      "path_id": "apprentice",
+      "description": "Electrician apprentice in Manchester. Paid to train."
+    },
+    {
+      "id": "qs-kai",
+      "name": "Kai",
+      "path_id": "job18",
+      "description": "Starts work at 18 in Leeds and lives at home."
+    },
+    {
+      "id": "qs-maya",
+      "name": "Maya",
+      "path_id": "gap_year",
+      "description": "Works a gap year in Bristol, then goes to university."
+    }
+  ]
+}

@@ -32,7 +32,7 @@ struct RivalStripView: View {
         HStack(spacing: 6) {
             LLIconImage(LLIcon(rawValue: rival.face) ?? .faceTeen, size: 24)
             VStack(alignment: .leading, spacing: 0) {
-                Text(rival.isMe ? "You" : rival.name).font(.llLabelBold).lineLimit(1)
+                Text(rival.isMe ? L10n.tr("You") : rival.name).font(.llLabelBold).lineLimit(1)
                 Text(detail(rival)).font(.llLabel).lineLimit(1).monospacedDigit()
                 if let worth = rival.netWorth {
                     Text(RoomAmount.compact(worth, presentation: presentation))
@@ -56,18 +56,18 @@ struct RivalStripView: View {
     private func detail(_ rival: RivalStripViewState.Rival) -> String {
         let age = rival.age.map(String.init) ?? "-"
         let index = rival.index.map { String(Int($0.rounded())) } ?? "-"
-        if rival.finished { return "Done · \(index)" }
-        if !rival.isConnected { return "Away · \(index)" }
+        if rival.finished { return L10n.tr("Done · \(index)") }
+        if !rival.isConnected { return L10n.tr("Away · \(index)") }
         return "\(age) · \(index)"
     }
 
     private func spoken(_ rival: RivalStripViewState.Rival) -> String {
-        var parts = [rival.isMe ? "You" : rival.name]
-        if let age = rival.age { parts.append("age \(age)") }
-        if let index = rival.index { parts.append("INDEX \(Int(index.rounded()))") }
+        var parts = [rival.isMe ? L10n.tr("You") : rival.name]
+        if let age = rival.age { parts.append(L10n.tr("age \(age)")) }
+        if let index = rival.index { parts.append(L10n.tr("INDEX \(Int(index.rounded()))")) }
         if let worth = rival.netWorth { parts.append(RoomAmount.spoken(worth, presentation: presentation)) }
-        if rival.finished { parts.append("finished") }
-        if !rival.isConnected { parts.append("away") }
+        if rival.finished { parts.append(L10n.tr("finished")) }
+        if !rival.isConnected { parts.append(L10n.tr("away")) }
         return parts.joined(separator: ", ")
     }
 }

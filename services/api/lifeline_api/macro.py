@@ -21,6 +21,7 @@ from lifeline_contracts.macro import MacroTable
 log = logging.getLogger(__name__)
 
 FAST_BUDGET_SECONDS = 0.5
+FIRST_BUILD_SECONDS = 2.5
 POINTER_OWNER, POINTER_KIND = "system", "macro_latest"
 
 
@@ -91,6 +92,12 @@ async def table_fast(state: AppState, budget: float | None = None) -> tuple[Macr
         return result, True
     except TimeoutError:
         last = await _last_good(state)
-        if last is None:
-            return await table(state), True
-        return _as_cached(last), False
+        if last is not None:
+            return _as_cached(last), False
+    # Very first start: no last good table anywhere. Wait a little more, then answer with an empty table
+    # instead of hanging (V3 F4). Callers treat an empty, not fresh table as "live data still loading".
+    try:
+        result = await asyncio.wait_for(asyncio.shield(task), timeout=FIRST_BUILD_SECONDS)
+        return result, True
+    except TimeoutError:
+        return MacroTable(values={}), False

@@ -8,6 +8,7 @@ configs:
   Release: release
 options:
   bundleIdPrefix: com.lifeline
+  developmentLanguage: en
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -24,6 +25,9 @@ settings:
     CODE_SIGN_STYLE: Automatic
     "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "NO"
     ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+    # ADR 0063: String Catalog (Lifeline/Resources/Localizable.xcstrings), English source.
+    LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
+    SWIFT_EMIT_LOC_STRINGS: "YES"
 packages:
   OpenAPIGenerator:
     url: https://github.com/apple/swift-openapi-generator
@@ -55,6 +59,8 @@ targets:
       path: Lifeline/Info.plist
       properties:
         CFBundleDisplayName: $(LIFELINE_DISPLAY_NAME)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, fr, es, pt, it, zh-Hans, hi, ne]
         LifelineCheckpoint: $(LIFELINE_CHECKPOINT)
         LifelineBuildTime: $(LIFELINE_BUILD_TIME)
         LifelineFeatures: $(LIFELINE_FEATURES)

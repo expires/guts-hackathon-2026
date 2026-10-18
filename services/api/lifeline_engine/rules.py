@@ -14,7 +14,8 @@ from typing import Literal
 Unit = Literal["gbp", "gbp_per_month", "gbp_per_year", "percent", "months", "years", "count", "date_year"]
 Topic = Literal[
     "isa", "income_tax", "scotland_income_tax", "national_insurance", "student_loan", "student_finance", "council_tax",
-    "travel",
+    "travel", "economy", "banking", "work", "pensions", "benefits", "childcare", "energy", "inheritance_tax",
+    "property_tax", "consumer",
 ]
 
 TAX_YEAR = "2026/27"
@@ -42,12 +43,41 @@ URL_SAAS = "https://www.saas.gov.uk/files/270/saas-living-cost-loan-application-
 URL_COUNCIL_TAX_STUDENTS = "https://www.gov.uk/council-tax/discounts-for-full-time-students"
 URL_COUNCIL_TAX_WHO = "https://www.gov.uk/council-tax/who-has-to-pay"
 URL_RAILCARD = "https://www.16-25railcard.co.uk/"
+URL_HESA_SB273_FIG7 = "https://www.hesa.ac.uk/data-and-analysis/sb273/figure-7"
+CHECKED_2026_10_18 = "2026-10-18"
+URL_BOE_INFLATION = "https://www.bankofengland.co.uk/monetary-policy/inflation"
+URL_BOE_BANK_RATE = "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate"
+URL_FSCS = "https://www.fscs.org.uk/check/check-your-money-is-protected/"
+URL_SSP = "https://www.gov.uk/statutory-sick-pay"
+URL_STATE_PENSION = "https://www.gov.uk/new-state-pension/what-youll-get"
+URL_WORKPLACE_PENSION = "https://www.gov.uk/workplace-pensions/what-you-your-employer-and-the-government-pay"
+URL_MIN_WAGE = "https://www.gov.uk/national-minimum-wage-rates"
+URL_UNIVERSAL_CREDIT = "https://www.gov.uk/universal-credit/what-youll-get"
+URL_REDUNDANCY = "https://www.gov.uk/redundancy-your-rights/redundancy-pay"
+URL_TAX_FREE_CHILDCARE = "https://www.gov.uk/tax-free-childcare"
+URL_FREE_CHILDCARE = "https://www.gov.uk/free-childcare-if-working"
+URL_OFGEM_CAP_OCT_2026 = "https://www.ofgem.gov.uk/press-release/energy-price-cap-will-rise-4-october-2026"
+URL_SFE_NEW_FULLTIME = "https://www.gov.uk/student-finance/new-fulltime-students"
+URL_INHERITANCE_TAX = "https://www.gov.uk/inheritance-tax"
+URL_SDLT_RATES = "https://www.gov.uk/stamp-duty-land-tax/residential-property-rates"
+URL_DISTANCE_SELLING = "https://www.gov.uk/online-and-distance-selling-for-businesses"
+URL_FCA_OVERDRAFT_CHARGES = "https://www.fca.org.uk/data/changes-overdraft-charges"
+URL_FCA_BNPL = "https://www.fca.org.uk/consumers/buy-now-pay-later"
+URL_FSCS_INSURANCE = "https://www.fscs.org.uk/what-we-cover/insurance/"
 # Official sources that are not on gov.uk (devolved student finance bodies, Rail Delivery Group's Railcard site).
-OFFICIAL_NON_GOVUK: frozenset[str] = frozenset({URL_SAAS, URL_SFW, URL_SFNI, URL_RAILCARD})
+# Bank of England, FSCS and Ofgem are UK public bodies (ADR 0058 domains).
+OFFICIAL_NON_GOVUK: frozenset[str] = frozenset({
+    URL_SAAS, URL_SFW, URL_SFNI, URL_RAILCARD, URL_HESA_SB273_FIG7, URL_BOE_INFLATION, URL_BOE_BANK_RATE, URL_FSCS,
+    URL_OFGEM_CAP_OCT_2026, URL_FCA_OVERDRAFT_CHARGES, URL_FCA_BNPL, URL_FSCS_INSURANCE,
+})
 # ADR 0058: allowed official domains.
 OFFICIAL_DOMAINS: tuple[str, ...] = (
     "www.gov.uk", "www.saas.gov.uk", "www.studentfinancewales.co.uk", "www.studentfinanceni.co.uk",
     "www.railcard.co.uk", "www.16-25railcard.co.uk", "www.legislation.gov.uk", "www.bankofengland.co.uk",
+    "www.hesa.ac.uk",  # ADR 0058 amendment: higher education statistics
+    "www.fscs.org.uk",  # Financial Services Compensation Scheme (UK public body)
+    "www.ofgem.gov.uk",  # Office of Gas and Electricity Markets (UK energy regulator)
+    "www.fca.org.uk",  # Financial Conduct Authority (UK financial regulator)
 )
 
 
@@ -63,8 +93,11 @@ class RuleFact:
     tax_year: str = TAX_YEAR
 
 
-def _f(id_: str, topic: Topic, value: float, unit: Unit, label: str, url: str, checked: str) -> RuleFact:
-    return RuleFact(id=f"rule.{id_}", topic=topic, value=value, unit=unit, label=label, url=url, checked=checked)
+def _f(
+    id_: str, topic: Topic, value: float, unit: Unit, label: str, url: str, checked: str, tax_year: str = TAX_YEAR
+) -> RuleFact:
+    return RuleFact(id=f"rule.{id_}", topic=topic, value=value, unit=unit, label=label, url=url, checked=checked,
+                    tax_year=tax_year)
 
 
 FACTS: tuple[RuleFact, ...] = (
@@ -169,6 +202,10 @@ FACTS: tuple[RuleFact, ...] = (
     _f("saas_payment_months_term_time", "student_finance", 9, "months",
        "SAAS living-cost loan paid monthly over 9 term-time months or 12 months (you choose)",
        URL_SAAS, CHECKED_2026_10_17),
+    # HESA 2024/25 enrolments: 685,565 non-UK of 2,863,180 = 23.94%, shown as 23.9
+    _f("hesa_non_uk_share_2024_25", "student_finance", 23.9, "percent",
+       "Students at UK universities from outside the UK (HESA 2024/25, enrolments)", URL_HESA_SB273_FIG7,
+       CHECKED_2026_10_18, tax_year="2024/25"),
     _f("saas_payment_months_full_year", "student_finance", 12, "months",
        "SAAS living-cost loan paid monthly over 9 term-time months or 12 months (you choose)",
        URL_SAAS, CHECKED_2026_10_17),
@@ -183,12 +220,89 @@ FACTS: tuple[RuleFact, ...] = (
        "16-25 Railcard price for 3 years", URL_RAILCARD, CHECKED_2026_10_17),
     _f("railcard_16_25_discount", "travel", 33.33, "percent", "16-25 Railcard: a third off most rail fares",
        URL_RAILCARD, CHECKED_2026_10_17),
+    # Learn course facts (ADR 0068). Each value checked against its own official page on 2026-10-18.
+    _f("boe_inflation_target", "economy", 2, "percent",
+       "Bank of England inflation target (set by the Government)", URL_BOE_INFLATION, CHECKED_2026_10_18),
+    _f("boe_bank_rate", "economy", 3.75, "percent",
+       "Bank of England Bank Rate (held at the September 2026 meeting)", URL_BOE_BANK_RATE, CHECKED_2026_10_18),
+    _f("fscs_deposit_limit", "banking", 120_000, "gbp",
+       "FSCS deposit protection per eligible person, per bank, building society or credit union (from 1 December "
+       "2025)", URL_FSCS, CHECKED_2026_10_18),
+    _f("ssp_weekly", "work", 123.25, "gbp",
+       "Statutory Sick Pay: up to this amount a week, for up to 28 weeks", URL_SSP, CHECKED_2026_10_18),
+    _f("national_living_wage", "work", 12.71, "gbp",
+       "National Living Wage an hour, age 21 and over (from April 2026)", URL_MIN_WAGE, CHECKED_2026_10_18),
+    _f("minimum_wage_18_20", "work", 10.85, "gbp",
+       "National Minimum Wage an hour, age 18 to 20 (from April 2026)", URL_MIN_WAGE, CHECKED_2026_10_18),
+    _f("redundancy_weekly_pay_cap", "work", 751, "gbp",
+       "Statutory redundancy pay: weekly pay capped at this amount (redundancy on or after 6 April 2026)",
+       URL_REDUNDANCY, CHECKED_2026_10_18),
+    _f("redundancy_pay_max", "work", 22_530, "gbp",
+       "Maximum statutory redundancy pay (redundancy on or after 6 April 2026)", URL_REDUNDANCY, CHECKED_2026_10_18),
+    _f("state_pension_full_weekly", "pensions", 241.30, "gbp",
+       "Full rate of the new State Pension a week", URL_STATE_PENSION, CHECKED_2026_10_18),
+    _f("state_pension_qualifying_years", "pensions", 35, "years",
+       "Qualifying years of National Insurance for the full new State Pension (record started after April 2016)",
+       URL_STATE_PENSION, CHECKED_2026_10_18),
+    _f("auto_enrolment_total_min", "pensions", 8, "percent",
+       "Workplace pension auto-enrolment: total minimum contribution", URL_WORKPLACE_PENSION, CHECKED_2026_10_18),
+    _f("auto_enrolment_employer_min", "pensions", 3, "percent",
+       "Workplace pension auto-enrolment: minimum the employer pays", URL_WORKPLACE_PENSION, CHECKED_2026_10_18),
+    _f("uc_standard_single_25_plus", "benefits", 424.90, "gbp_per_month",
+       "Universal Credit standard allowance, single and 25 or over", URL_UNIVERSAL_CREDIT, CHECKED_2026_10_18),
+    _f("uc_standard_single_under_25", "benefits", 338.58, "gbp_per_month",
+       "Universal Credit standard allowance, single and under 25", URL_UNIVERSAL_CREDIT, CHECKED_2026_10_18),
+    _f("tax_free_childcare_max", "childcare", 2000, "gbp_per_year",
+       "Tax-Free Childcare: government top-up of up to this a year per child (£2 for every £8 you pay in)",
+       URL_TAX_FREE_CHILDCARE, CHECKED_2026_10_18),
+    _f("free_childcare_hours_england", "childcare", 30, "count",
+       "England: hours of free childcare a week for working parents, child aged 9 months to 4 years",
+       URL_FREE_CHILDCARE, CHECKED_2026_10_18),
+    _f("ofgem_price_cap_typical_bill", "energy", 1723, "gbp_per_year",
+       "Ofgem price cap: typical yearly dual fuel Direct Debit bill, 1 October to 31 December 2026",
+       URL_OFGEM_CAP_OCT_2026, CHECKED_2026_10_18),
+    _f("maintenance_loan_max_home_england", "student_finance", 9118, "gbp_per_year",
+       "England: maximum Maintenance Loan 2026/27, living with parents", URL_SFE_NEW_FULLTIME, CHECKED_2026_10_18),
+    _f("maintenance_loan_max_away_england", "student_finance", 10_830, "gbp_per_year",
+       "England: maximum Maintenance Loan 2026/27, living away from parents outside London",
+       URL_SFE_NEW_FULLTIME, CHECKED_2026_10_18),
+    _f("maintenance_loan_max_london_england", "student_finance", 14_135, "gbp_per_year",
+       "England: maximum Maintenance Loan 2026/27, living away from parents in London",
+       URL_SFE_NEW_FULLTIME, CHECKED_2026_10_18),
+    _f("student_loan_interest_plan5", "student_loan", 4.1, "percent",
+       "Plan 5 student loan interest rate (current)", URL_STUDENT_LOAN_PAY, CHECKED_2026_10_18),
+    _f("student_loan_interest_plan2_max", "student_loan", 6, "percent",
+       "Plan 2 student loan interest rate: highest rate (income of £52,885 or more, or while studying)",
+       URL_STUDENT_LOAN_PAY, CHECKED_2026_10_18),
+    _f("inheritance_tax_threshold", "inheritance_tax", 325_000, "gbp",
+       "Inheritance Tax threshold (no tax on the estate below it)", URL_INHERITANCE_TAX, CHECKED_2026_10_18),
+    _f("inheritance_tax_rate", "inheritance_tax", 40, "percent",
+       "Standard Inheritance Tax rate on the part of the estate above the threshold", URL_INHERITANCE_TAX,
+       CHECKED_2026_10_18),
+    _f("sdlt_first_time_buyer_threshold", "property_tax", 300_000, "gbp",
+       "England and Northern Ireland: first-time buyers pay no Stamp Duty up to this price", URL_SDLT_RATES,
+       CHECKED_2026_10_18),
+    _f("sdlt_first_time_buyer_max_price", "property_tax", 500_000, "gbp",
+       "First-time buyer Stamp Duty relief: not available above this price", URL_SDLT_RATES, CHECKED_2026_10_18),
+    _f("distance_cancel_days", "consumer", 14, "count",
+       "Days to cancel an order made online, by phone or by post, after delivery (downloads and streaming differ)",
+       URL_DISTANCE_SELLING, CHECKED_2026_10_18),
+    _f("fca_overdraft_simple_rate_year", "consumer", 2020, "date_year",
+       "Since April 2020, banks can charge overdraft users only a simple annual interest rate, with no extra fees",
+       URL_FCA_OVERDRAFT_CHARGES, CHECKED_2026_10_18),
+    _f("fca_bnpl_regulated_year", "consumer", 2026, "date_year",
+       "The FCA regulates Buy Now Pay Later (Deferred Payment Credit) from 15 July 2026: lenders must check you "
+       "can afford it", URL_FCA_BNPL, CHECKED_2026_10_18),
+    _f("fscs_general_insurance_share", "banking", 90, "percent",
+       "FSCS repays this share of valid general insurance claims (home, travel, pet) if the insurer fails; "
+       "compulsory insurance in full", URL_FSCS_INSURANCE, CHECKED_2026_10_18),
 )
 
 BY_ID: dict[str, RuleFact] = {f.id: f for f in FACTS}
 TOPICS: tuple[Topic, ...] = (
     "isa", "income_tax", "scotland_income_tax", "national_insurance", "student_loan", "student_finance", "council_tax",
-    "travel",
+    "travel", "economy", "banking", "work", "pensions", "benefits", "childcare", "energy", "inheritance_tax",
+    "property_tax", "consumer",
 )
 
 

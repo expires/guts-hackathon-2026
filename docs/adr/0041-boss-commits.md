@@ -12,3 +12,7 @@ Date: 2026-10-17. Status: accepted. Supersedes the "no git writes" rule for BOSS
 - Never push, never force, never rewrite history (no amend, rebase, reset, stash). The user pushes.
 - Workers and verifiers keep the old rule: only `git status` and `git diff`.
 - A milestone commit includes only work that passed its verifier. Work in progress in other paths stays uncommitted.
+
+## Amendment (2026-10-18, user instruction)
+
+- BOSS pushes `main` to origin after each verified commit, with a normal push (no force). All other rules stay: secret scan first, one logical change per commit, tests passing on the committed tree.

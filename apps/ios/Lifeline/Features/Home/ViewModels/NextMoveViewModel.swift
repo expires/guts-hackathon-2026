@@ -5,7 +5,7 @@ import Observation
 @MainActor
 @Observable
 final class NextMoveViewModel {
-    static let loadingMessage = "Finding your next money move"
+    static var loadingMessage: String { L10n.tr("Finding your next money move") }
 
     private let client: any LifelineClient
     private(set) var response: NextMoveResponse?
@@ -88,6 +88,16 @@ final class NextMoveViewModel {
         if let plan = cachedPlan { applyPlan(plan) }
     }
 
+    /// Skeleton in the card while the move loads on its own (home was sent without `next_move`).
+    func showLoading() {
+        phase = .loading(.init(message: Self.loadingMessage))
+    }
+
+    /// The move could not load and no move is shown: the card shows the error with Try again.
+    func showFailure(_ error: APIError) {
+        phase = .failed(.from(error))
+    }
+
     private var cachedPlan: PlanResponse?
 
     private func applyPlan(_ plan: PlanResponse) {
@@ -146,17 +156,17 @@ final class NextMoveViewModel {
     ) -> NextMoveCardState {
         guard let response else {
             return NextMoveCardState(
-                phase: phase, question: "Where should my money go this month?", top: nil, runnersUp: [],
+                phase: phase, question: L10n.tr("Where should my money go this month?"), top: nil, runnersUp: [],
                 backtestText: nil, isSampleData: false, addingMoveID: nil, planMessage: nil, focusedMoveID: nil
             )
         }
         let sourceCount = response.decisionSourceCount ?? 0
         let planMessage = planTotal.map { total in
-            "Added to your plan. Your plan is worth \(Money.format(total)) a year."
+            L10n.tr("Added to your plan. Your plan is worth \(Money.format(total)) a year.")
         }
         return NextMoveCardState(
             phase: phase,
-            question: response.question?.rawValue ?? "Where should my money go this month?",
+            question: response.question?.rawValue ?? L10n.tr("Where should my money go this month?"),
             top: move(response.top, isInPlan: plannedMoveIDs.contains(response.top.id)),
             runnersUp: response.runnersUp.map { move($0, isInPlan: plannedMoveIDs.contains($0.id)) },
             backtestText: response.backtest.map(backtestText),
@@ -164,7 +174,7 @@ final class NextMoveViewModel {
             addingMoveID: nil,
             planMessage: plannedMoveIDs.isEmpty ? nil : planMessage,
             focusedMoveID: nil,
-            sourceCountText: sourceCount > 0 ? (sourceCount == 1 ? "Based on 1 source" : "Based on \(sourceCount) sources") : nil
+            sourceCountText: sourceCount > 0 ? (sourceCount == 1 ? L10n.tr("Based on 1 source") : L10n.tr("Based on \(sourceCount) sources")) : nil
         )
     }
 
@@ -177,10 +187,10 @@ final class NextMoveViewModel {
             impactPerYear: move.impactPerYear,
             impactText: impactText(move.impactPerYear),
             impactAmountText: Money.format(abs(move.impactPerYear.rounded())),
-            impactCaption: move.impactPerYear.rounded() < 0 ? "a year worse off" : "a year better off",
+            impactCaption: move.impactPerYear.rounded() < 0 ? L10n.tr("a year worse off") : L10n.tr("a year better off"),
             confidenceWord: confidenceWord(move.confidence),
             confidenceFilled: confidenceFilled(move.confidence),
-            worstCaseText: "Worst past period: " + impactText(move.worstCasePerYear),
+            worstCaseText: worstCaseText(move.worstCasePerYear),
             confidence: move.confidence,
             confidenceLabel: move.confidenceLabel,
             deadlineText: deadlineText(deadline: move.deadline, daysLeft: move.daysLeft),
@@ -192,25 +202,40 @@ final class NextMoveViewModel {
             isInPlan: isInPlan
         )
         if let summary = move.tradeOff?.summary, !summary.isEmpty {
-            state.tradeOffText = "What you give up: " + summary
+            state.tradeOffText = L10n.tr("What you give up: \(summary)")
         }
         state.tradeOffPoints = move.tradeOff?.points.map(\.text) ?? []
+        if move.kind.rawValue == "lifetime_isa", isYearly(move), move.impactPerYear.rounded() > 0 {
+            // The gain is the government bonus on what you put in, not a yearly saving.
+            state.impactAmountText = Money.format(move.impactPerYear.rounded())
+            state.impactCaption = L10n.tr("government bonus")
+            state.impactText = L10n.tr("\(state.impactAmountText) government bonus")
+        }
         if move.gainKind == .weeksOfCover {
             // Weekly budget (F-R-1): never a £ a year figure.
             state.isMonthsOfCover = true
             state.worstCaseText = ""
             if let shortfall = move.shortfall, shortfall.rounded() > 0 {
-                let before = move.deadline.map { "short before " + longDayText($0) } ?? "short before your next money"
-                state.impactAmountText = Money.format(shortfall.rounded())
-                state.impactCaption = before
-                state.impactText = "\(state.impactAmountText) \(before)"
+                let amount = Money.format(shortfall.rounded())
+                state.impactAmountText = amount
+                if let deadline = move.deadline {
+                    let date = longDayText(deadline)
+                    state.impactCaption = L10n.tr("short before \(date)")
+                    state.impactText = L10n.tr("\(amount) short before \(date)")
+                } else {
+                    state.impactCaption = L10n.tr("short before your next money")
+                    state.impactText = L10n.tr("\(amount) short before your next money")
+                }
             } else if let weekly = move.safeWeeklySpend {
-                let weeks = move.coverWeeks.map(weeksText)
-                state.impactAmountText = Money.format(weekly.rounded())
-                state.impactCaption = ["Spend up to this a week", weeks.map { "\($0) until your next money" }]
-                    .compactMap { $0 }.joined(separator: ". ")
-                state.impactText = "Spend up to \(state.impactAmountText) a week"
-                    + (weeks.map { ". \($0) until your next money" } ?? "")
+                let amount = Money.format(weekly.rounded())
+                state.impactAmountText = amount
+                if let weeks = move.coverWeeks.map(weeksText) {
+                    state.impactCaption = L10n.tr("Spend up to this a week. \(weeks) until your next money")
+                    state.impactText = L10n.tr("Spend up to \(amount) a week. \(weeks) until your next money")
+                } else {
+                    state.impactCaption = L10n.tr("Spend up to this a week")
+                    state.impactText = L10n.tr("Spend up to \(amount) a week")
+                }
             } else {
                 state.impactAmountText = ""
                 state.impactCaption = missingCostsText
@@ -223,8 +248,8 @@ final class NextMoveViewModel {
             if let months = move.coverMonths {
                 let amount = monthsText(months)
                 state.impactAmountText = amount
-                state.impactCaption = "of cover"
-                state.impactText = amount + " of cover"
+                state.impactCaption = L10n.tr("of cover")
+                state.impactText = L10n.tr("\(amount) of cover")
             } else {
                 // No monthly costs entered: never invent a number (bug 5, ADR 0053).
                 state.impactAmountText = ""
@@ -233,21 +258,22 @@ final class NextMoveViewModel {
                 state.isGainMissing = true
             }
         }
-        // Confidence from the engine's level and sample size (bug 4): "High · sample 240".
+        // Plain-English confidence (ADR 0069): the engine's `confidence_text`, else a sentence from its level.
+        // Never "Medium · sample 4".
+        state.confidenceText = confidenceText(move)
         if let level = move.confidenceLevel {
-            let word: String = switch level {
-            case .high: "High"
-            case .medium: "Medium"
-            case .low: "Low"
+            state.confidenceWord = switch level {
+            case .high: L10n.tr("High confidence")
+            case .medium: L10n.tr("Medium confidence")
+            case .low: L10n.tr("Low confidence")
             }
             state.confidenceFilled = switch level {
             case .high: 3
             case .medium: 2
             case .low: 1
             }
-            state.confidenceWord = move.sampleSize.map { "\(word) · sample \($0)" } ?? "\(word) confidence"
         } else {
-            // No engine level (fallback move): show no confidence at all (F2-3).
+            // No engine level (fallback move): no meter and no level word (F2-3).
             state.confidenceWord = ""
             state.confidenceFilled = 0
             state.confidenceLabel = ""
@@ -255,7 +281,21 @@ final class NextMoveViewModel {
         return state
     }
 
-    static let missingCostsText = "Add your monthly costs to see this"
+    /// "Medium confidence: based on your last 4 weeks of spending" (the engine's `confidence_text`).
+    /// Without it, a plain sentence from `confidence_level`. Without a level either, empty (the card hides it).
+    static func confidenceText(_ move: Move) -> String {
+        if let text = move.confidenceText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            return text
+        }
+        guard let level = move.confidenceLevel else { return "" }
+        return switch level {
+        case .high: L10n.tr("High confidence: Penny has seen this work in many similar cases.")
+        case .medium: L10n.tr("Medium confidence: Penny has some similar cases to go on.")
+        case .low: L10n.tr("Low confidence: Penny has only a few similar cases. Use it as a rough guide.")
+        }
+    }
+
+    static var missingCostsText: String { L10n.tr("Add your monthly costs to see this") }
 
     /// True when the move's gain is £ a year. Weekly budget and cover moves are not (F-R-1).
     static func isYearly(_ move: Move) -> Bool {
@@ -276,13 +316,13 @@ final class NextMoveViewModel {
     static func weeksText(_ weeks: Double) -> String {
         let rounded = (weeks * 10).rounded() / 10
         let number = rounded.formatted(.number.precision(.fractionLength(0...1)).locale(Money.locale))
-        return rounded == 1 ? "1 week" : "\(number) weeks"
+        return rounded == 1 ? L10n.tr("1 week") : L10n.tr("\(number) weeks")
     }
 
     /// "2 November".
     static func longDayText(_ raw: String) -> String {
         guard let date = FinanceMapping.date(raw) else { return raw }
-        var format = Date.FormatStyle(date: .omitted, time: .omitted).locale(Money.locale).day().month(.wide)
+        var format = Date.FormatStyle(date: .omitted, time: .omitted).locale(FinanceMapping.dateLocale).day().month(.wide)
         format.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         return date.formatted(format)
     }
@@ -291,35 +331,45 @@ final class NextMoveViewModel {
     static func monthsText(_ months: Double) -> String {
         let rounded = (months * 10).rounded() / 10
         let number = rounded.formatted(.number.precision(.fractionLength(0...1)).locale(Money.locale))
-        return rounded == 1 ? "1 month" : "\(number) months"
+        return rounded == 1 ? L10n.tr("1 month") : L10n.tr("\(number) months")
     }
 
     /// High at 0.75 or more, medium at 0.5 or more, otherwise low.
     static func confidenceWord(_ confidence: Double) -> String {
-        confidence >= 0.75 ? "High confidence" : (confidence >= 0.5 ? "Medium confidence" : "Low confidence")
+        confidence >= 0.75 ? L10n.tr("High confidence") : (confidence >= 0.5 ? L10n.tr("Medium confidence") : L10n.tr("Low confidence"))
     }
 
     static func confidenceFilled(_ confidence: Double) -> Int {
         confidence >= 0.75 ? 3 : (confidence >= 0.5 ? 2 : 1)
     }
 
+    /// "Worst past period: £310 a year worse off" as one sentence per direction.
+    static func worstCaseText(_ value: Double) -> String {
+        let rounded = value.rounded()
+        if rounded > 0 { return L10n.tr("Worst past period: \(Money.format(rounded)) a year better off") }
+        if rounded < 0 { return L10n.tr("Worst past period: \(Money.format(-rounded)) a year worse off") }
+        return L10n.tr("Worst past period: no change a year")
+    }
+
     /// "£1,240 a year better off", "£310 a year worse off", "No change".
     static func impactText(_ value: Double) -> String {
         let rounded = value.rounded()
-        if rounded > 0 { return "\(Money.format(rounded)) a year better off" }
-        if rounded < 0 { return "\(Money.format(-rounded)) a year worse off" }
-        return "No change a year"
+        if rounded > 0 { return L10n.tr("\(Money.format(rounded)) a year better off") }
+        if rounded < 0 { return L10n.tr("\(Money.format(-rounded)) a year worse off") }
+        return L10n.tr("No change a year")
     }
 
     /// "Decide by 31 Mar 2027 (165 days left)".
     static func deadlineText(deadline: String?, daysLeft: Int?) -> String? {
         switch (deadline, daysLeft) {
         case let (deadline?, days?):
-            "Decide by \(FinanceMapping.dayText(deadline)) (\(days == 1 ? "1 day" : "\(days) days") left)"
+            days == 1
+                ? L10n.tr("Decide by \(FinanceMapping.dayText(deadline)) (1 day left)")
+                : L10n.tr("Decide by \(FinanceMapping.dayText(deadline)) (\(days) days left)")
         case let (deadline?, nil):
-            "Decide by \(FinanceMapping.dayText(deadline))"
+            L10n.tr("Decide by \(FinanceMapping.dayText(deadline))")
         case let (nil, days?):
-            days == 1 ? "1 day left" : "\(days) days left"
+            days == 1 ? L10n.tr("1 day left") : L10n.tr("\(days) days left")
         case (nil, nil):
             nil
         }
@@ -327,7 +377,6 @@ final class NextMoveViewModel {
 
     /// "Tested on 58 past cases: right 69% of the time. Always fix for 2 years: 41%."
     static func backtestText(_ backtest: Components.Schemas.NextMoveBacktest) -> String {
-        "Tested on \(backtest.n) past cases: right \(FinanceMapping.percent(backtest.hitRate)) of the time. "
-            + "\(backtest.baseline): \(FinanceMapping.percent(backtest.baselineHitRate))."
+        L10n.tr("Tested on \(backtest.n) past cases: right \(FinanceMapping.percent(backtest.hitRate)) of the time. \(backtest.baseline): \(FinanceMapping.percent(backtest.baselineHitRate)).")
     }
 }

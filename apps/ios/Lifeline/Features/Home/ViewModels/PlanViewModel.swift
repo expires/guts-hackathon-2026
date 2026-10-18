@@ -5,7 +5,7 @@ import Observation
 @MainActor
 @Observable
 final class PlanViewModel {
-    static let loadingMessage = "Loading your plan"
+    static var loadingMessage: String { L10n.tr("Loading your plan") }
 
     private let client: any LifelineClient
     private(set) var plan: PlanResponse?
@@ -53,7 +53,7 @@ final class PlanViewModel {
                 impactPerYear: yearly ? item.impactPerYear : 0,
                 impactText: yearly ? NextMoveViewModel.impactText(item.impactPerYear) : "",
                 isDone: item.status == .done,
-                addedText: "Added " + FinanceMapping.dayText(item.addedAt)
+                addedText: L10n.tr("Added \(FinanceMapping.dayText(item.addedAt))")
             )
         }
         // Only £ a year gains count in the yearly total (F-R-1).
@@ -63,8 +63,8 @@ final class PlanViewModel {
             items: items,
             totalPerYear: total,
             totalText: items.isEmpty
-                ? "Your plan is empty. Tap \"Do this\" on a move to add it."
-                : "Your plan is worth \(Money.format(total)) a year.",
+                ? L10n.tr("Your plan is empty. Tap \"Do this\" on a move to add it.")
+                : L10n.tr("Your plan is worth \(Money.format(total)) a year."),
             isSampleData: isSampleData
         )
     }

@@ -55,8 +55,11 @@ STATE_VARS = (
     "married", "children", "is_renter", "is_owner", "has_mortgage", "on_variable", "bonus", "bonus_net",
     "occ_redundancy_mult", "occ_redundancy_stock", "occ_bonus_share", "public_sector", "pay_cap_active",
     "variable_rate", "on_tracker", "tracker_margin", "tracker_deal_years", "variable_margin",
-    "energy_fixed", "on_path", "is_student",
+    "energy_fixed", "on_path", "is_student", "focus_student",
 )  # fmt: skip
+
+
+STUDENT_TEST_TAGS = frozenset({"weekly_budget", "lifetime_isa"})
 
 
 def state_env(s: SimState) -> dict[str, float]:
@@ -120,6 +123,8 @@ def state_env(s: SimState) -> dict[str, float]:
         "energy_fixed": float(s.energy_fixed_until >= s.year),
         "on_path": float(s.path_id is not None),
         "is_student": float(s.student),
+        # "Test it" for student moves (ADR 0065): the life focuses a student move tag.
+        "focus_student": float(bool(set(s.focus_tags) & STUDENT_TEST_TAGS)),
     }
     return env
 
@@ -396,7 +401,10 @@ def apply_effects(s: SimState, effects: Mapping[str, float | str]) -> Deltas:
             s.living = max(0.0, s.living + value)
             s.living_adj += value
         elif target == "want_weekly":
+            # Path lives rebuild living costs from want_adj each year. Other lives (a student profile in
+            # "Test it") change living costs now, and they then follow CPI as usual.
             s.want_adj += value
+            s.living = max(0.0, s.living + value * 52 / 12)
         elif target in STAT_TARGETS:
             before = getattr(s, target)
             after = int(max(0, min(100, before + round(value))))

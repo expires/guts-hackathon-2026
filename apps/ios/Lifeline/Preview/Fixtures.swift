@@ -108,10 +108,6 @@ enum Fixtures {
             CharacterSelectViewModel.makeState(characters: ContractExamples.characters, phase: .ready, ownsGodMode: false, usesSampleData: true)
         }
 
-        @MainActor static var godModeOwned: CharacterSelectViewState {
-            CharacterSelectViewModel.makeState(characters: ContractExamples.characters, phase: .ready, ownsGodMode: true, usesSampleData: false)
-        }
-
         @MainActor static var loading: CharacterSelectViewState {
             CharacterSelectViewModel.makeState(characters: nil, phase: .loading(.init(message: "Loading characters")), ownsGodMode: false, usesSampleData: false)
         }
@@ -130,12 +126,6 @@ enum Fixtures {
             let model = CharacterFormViewModel(mode: .playYourself)
             model.update(.init(name: "Me", emoji: "🙂", birthYear: 1992, occupation: "nurse", regionID: "yorkshire-and-the-humber", town: "Leeds", income: 0, savings: 0, debt: 0, housing: .rent))
             model.apply(bankProfile: ContractExamples.bankSummary.profile, status: .mock)
-            return model.state
-        }
-
-        @MainActor static var godMode: CharacterFormViewState {
-            let model = CharacterFormViewModel(mode: .godMode)
-            model.quickPick("banker")
             return model.state
         }
     }
@@ -386,20 +376,6 @@ enum Fixtures {
 
         @MainActor static var error: RealLifeDecisionViewState {
             RealLifeDecisionViewModel.makeState(decision: nil, phase: .failed(Fixtures.networkError))
-        }
-    }
-
-    enum Store {
-        @MainActor static var fresh: StoreViewState {
-            StoreViewModel.makeState(owned: [], purchasing: nil, message: nil)
-        }
-
-        @MainActor static var purchasing: StoreViewState {
-            StoreViewModel.makeState(owned: [], purchasing: "lifeline.godmode", message: nil)
-        }
-
-        @MainActor static var owned: StoreViewState {
-            StoreViewModel.makeState(owned: ["lifeline.rewindpass"], purchasing: nil, message: "Unlocked (Demo payment).")
         }
     }
 

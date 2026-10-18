@@ -7,12 +7,13 @@ extension APIError {
     static let rateLimitedQuietCode = "rate_limited_quiet"
 
     /// The calm error after the quiet retries. The UI shows its message as is.
-    static let rateLimitedQuiet = APIError.server(
+    /// Computed, so the message follows the current app language (ADR 0063).
+    static var rateLimitedQuiet: APIError { .server(
         status: 429,
         code: rateLimitedQuietCode,
-        message: "Couldn't load. Pull to refresh.",
+        message: L10n.tr("Couldn't load. Pull to refresh."),
         source: "client"
-    )
+    ) }
 }
 
 /// Retries a 429 response quietly, with exponential backoff that honours `Retry-After`.

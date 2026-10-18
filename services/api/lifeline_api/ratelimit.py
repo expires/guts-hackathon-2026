@@ -103,19 +103,34 @@ class RedisBucket:
 
 
 def client_ip(scope: Scope) -> str:
-    """The address the rate limiter keys on.
+    """The address the limiters key on (V6 final F-1).
 
-    Behind Railway's edge, uvicorn runs with --forwarded-allow-ips='*' and sets scope["client"] from the
-    LEFTMOST X-Forwarded-For entry, which the client controls. The RIGHTMOST entry is the one our edge
-    appended (the address that connected to it), so it is used when the header is present.
+    TRUSTED_PROXY_HOPS (default 1 in prod, 0 elsewhere) says how many proxies we trust. Railway's edge appends
+    the address that connected to it as the RIGHTMOST X-Forwarded-For entry, so with 1 hop that entry is the
+    client. Entries further left are written by the client and are never used. With 0 hops X-Forwarded-For is
+    ignored and the socket peer is used (run uvicorn without --forwarded-allow-ips='*' outside Railway).
     """
-    for name, value in scope.get("headers", []):
-        if name == b"x-forwarded-for":
-            parts = [p.strip() for p in value.decode("latin-1").split(",") if p.strip()]
-            if parts:
-                return str(parts[-1])[:64]
+    hops = _trusted_hops(scope)
+    if hops > 0:
+        for name, value in scope.get("headers", []):
+            if name == b"x-forwarded-for":
+                parts = [p.strip() for p in value.decode("latin-1").split(",") if p.strip()]
+                if len(parts) >= hops:
+                    return str(parts[-hops])[:64]
     client = scope.get("client")
     return str(client[0]) if client else "unknown"
+
+
+def _trusted_hops(scope: Scope) -> int:
+    app = scope.get("app")
+    state = getattr(getattr(app, "state", None), "lifeline", None)
+    settings = getattr(state, "settings", None)
+    if settings is None:
+        return 0
+    hops = getattr(settings, "trusted_proxy_hops", None)
+    if hops is None:
+        return 1 if getattr(settings, "app_env", "") == "prod" else 0
+    return int(hops)
 
 
 class RateLimitMiddleware:

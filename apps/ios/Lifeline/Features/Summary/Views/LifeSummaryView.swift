@@ -104,7 +104,7 @@ struct LifeSummaryView: View {
             }
             .font(.llLabel)
             .foregroundStyle(Theme.Palette.muted)
-            Text("You \(Money.format(state.netWorth)) · Autopilot \(Money.format(state.autopilotNetWorth))")
+            Text(L10n.tr("You \(Money.format(state.netWorth)) · Autopilot \(Money.format(state.autopilotNetWorth))"))
                 .font(.llLabelBold)
         }
         .padding(Theme.Spacing.l)
@@ -143,12 +143,12 @@ struct LifeSummaryView: View {
         .frame(height: 110)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Net worth by age, you against your autopilot twin")
-        .accessibilityValue("You \(Money.spoken(state.netWorth)). Autopilot \(Money.spoken(state.autopilotNetWorth)).")
+        .accessibilityValue(L10n.tr("You \(Money.spoken(state.netWorth)). Autopilot \(Money.spoken(state.autopilotNetWorth))."))
     }
 
     private var ribbons: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BlockTitle(text: "Ribbons · \(state.ribbons.count) earned")
+            BlockTitle(text: L10n.tr("Ribbons · \(state.ribbons.count) earned"))
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Spacing.s, alignment: .top), count: 4), spacing: Theme.Spacing.m) {
                 ForEach(Array(state.ribbons.enumerated()), id: \.element.id) { index, ribbon in
                     VStack(spacing: Theme.Spacing.xs) {

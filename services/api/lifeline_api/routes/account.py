@@ -13,10 +13,12 @@ from fastapi import APIRouter, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from lifeline_api import account, money, onboarding, samples
+from lifeline_api import account, learn_progress, money, onboarding, samples
 from lifeline_api.auth import Subject, _bearer, revoke
 from lifeline_api.errors import ApiError, not_found
+from lifeline_api.routes.finance import DOC_BUDGETS, DOC_GOALS, MAX_GOALS
 from lifeline_api.routes.next_move import _compute as compute_next_move
+from lifeline_api.routes.next_move import valid_items
 from lifeline_api.sim_bridge import call_parse, call_pure
 from lifeline_api.state import AppState, get_state
 from lifeline_contracts.account import (
@@ -31,7 +33,7 @@ from lifeline_contracts.account import (
     ReversePostcode,
     SamplesResponse,
 )
-from lifeline_contracts.finance import FinanceProfile, FinanceSnapshot
+from lifeline_contracts.finance import FinanceProfile, FinanceSnapshot, SavingsGoal
 from lifeline_data import statements
 from lifeline_engine import money as money_engine
 
@@ -202,12 +204,12 @@ async def set_manual_finance(body: ManualFinanceInput, request: Request, sub: Su
 @router.post("/v1/finance/transactions", tags=["finance"], status_code=201, response_model=LoggedPayment,
              response_model_exclude_none=True)
 async def log_payment(body: LogPaymentRequest, request: Request, sub: Subject) -> LoggedPayment:
-    """App Intent "Log a payment". Appends to the user's own data (demo mode: to a copy of their sample data)."""
+    """App Intent "Log a payment". Appends to the user's own data (a new empty snapshot when they have none)."""
     state = get_state(request)
     today = _today()
     tx = onboarding.logged_transaction(body, today)
     async with state.subject_locks[f"{sub}:money"]:
-        base = await money.maybe_snapshot(state, sub)  # own data, else (demo mode) the sample persona
+        base = await money.maybe_snapshot(state, sub)  # own data only; none means a new empty snapshot
         snap = base if base is not None else onboarding.empty_snapshot(today)
         as_of = max(snap.as_of, today.isoformat())
         snap = snap.model_copy(update={"transactions": [*snap.transactions, tx], "as_of": as_of})
@@ -252,7 +254,7 @@ async def reverse_postcode(
 
 @router.get("/v1/samples", tags=["finance"], response_model=SamplesResponse, response_model_exclude_none=True)
 async def list_samples(sub: Subject) -> SamplesResponse:
-    """The built-in student statements. Team profiles have team=true (hidden from the judge picker)."""
+    """The 10 built-in student statements for the judge picker. `team` is always false."""
     return samples.listing()
 
 
@@ -274,6 +276,8 @@ async def import_sample(sample_id: str, request: Request, sub: Subject) -> Impor
         await money.save_snapshot(state, sub, snap)
         await money.save_onboarding(state, sub, is_student=hint.get("is_student"),
                                     housing=hint.get("housing") or "rent", age=hint.get("age"))
+    await _set_up_sample_plan(state, sub, hint, snap)
+    await learn_progress.mark_sample_passed(state, sub)  # ADR 0068: a judge sees Learn progress
     days = [t.date for t in snap.transactions]
     parsed = SimpleNamespace(
         status="done", provider="monzo", transactions=snap.transactions, warnings=[],
@@ -282,3 +286,19 @@ async def import_sample(sample_id: str, request: Request, sub: Subject) -> Impor
     )
     stages = {name: name == "read" for name in STAGE_LABELS}
     return await _finish_import(state, sub, parsed, snap, stages)
+
+
+async def _set_up_sample_plan(state: AppState, sub: str, hint: dict[str, Any], snap: FinanceSnapshot) -> None:
+    """ADR 0070: every sample comes with its budgets and savings goals. The sample's budgets replace the stored
+    limits (the import replaces the user's money data). Goals from any earlier sample import are replaced; goals
+    the user made stay. Stable ids mean a re-import never adds copies. Reset (/v1/me/reset) deletes both docs."""
+    budgets, goal_reqs = samples.plan(hint)
+    async with state.subject_locks[f"{sub}:{DOC_BUDGETS}"]:
+        await state.store.put_doc(sub, DOC_BUDGETS, [b.model_dump(mode="json") for b in budgets])
+    today = money.today(snap)
+    new = [await call_pure(money_engine.goal_from_request, gid, req, today) for gid, req in goal_reqs]
+    async with state.subject_locks[f"{sub}:{DOC_GOALS}"]:
+        kept = [g for g in valid_items(SavingsGoal, await state.store.get_doc(sub, DOC_GOALS))
+                if not g.id.startswith(samples.SAMPLE_GOAL_PREFIX)]
+        goals = [*new, *kept][:MAX_GOALS]
+        await state.store.put_doc(sub, DOC_GOALS, [g.model_dump(mode="json") for g in goals])

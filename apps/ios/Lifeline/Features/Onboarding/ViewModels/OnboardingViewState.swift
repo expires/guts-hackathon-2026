@@ -1,27 +1,36 @@
 import Foundation
 
-/// Onboarding (ADR 0029): welcome (3 pages), sign in, connect your money, importing, Next Move reveal, 3 tips.
+/// Onboarding (ADR 0069): Welcome, Problem, Language, What you can do, Try Penny, Pick your student,
+/// Building their profile, Their profile, How Penny decides, Their Next Move, then Start.
 /// Plain values only. The View never sees contract types (ADR 0011).
 struct OnboardingViewState: Equatable, Sendable {
-    enum Step: Equatable, Sendable {
-        case welcome(page: Int)
-        case signIn
+    enum Step: Equatable, Sendable, CaseIterable {
+        case welcome
+        /// "One app. Every source. One clear decision."
+        case problem
+        /// Language (ADR 0063): live on tap, then Confirm. Skip keeps the current language.
+        case language
+        /// "What you can do": 5 explainer rows, nothing tappable.
+        case features
+        /// "Try Penny": an open Penny chat, not tied to any data.
+        case penny
+        /// "Pick your student": sample student cards, then upload and manual entry.
         case connect
-        /// "Use a sample statement": pick one of the student cards.
-        case samples
         case manual
-        case importing
-        case reveal
-        case tips
+        /// Sign in (kept for a later build; not in the ADR 0069 order).
+        case signIn
+        /// "Building their profile": 8 stages, each tied to a real call.
+        case building
+        /// "Their profile".
+        case profile
+        /// "How Penny decides".
+        case howDecides
+        /// "Their Next Move", then Start.
+        case nextMove
     }
 
-    struct WelcomePage: Equatable, Sendable, Identifiable {
-        var id: Int
-        var title: String
-        var text: String
-        var art: Art
-        enum Art: Equatable, Sendable { case penny, why, test }
-    }
+    /// The flow order (ADR 0069). Manual entry and sign in sit beside "Pick your student".
+    static let order: [Step] = [.welcome, .problem, .language, .features, .penny, .connect, .building, .profile, .howDecides, .nextMove]
 
     struct SignIn: Equatable, Sendable {
         /// The app has the Sign in with Apple capability (checked at run time).
@@ -40,15 +49,138 @@ struct OnboardingViewState: Equatable, Sendable {
         var id: String { kind.rawValue }
     }
 
-    /// One built-in sample student (`GET /v1/finance/samples`).
+    /// One way money arrives, with its amount per period and dates: "£280 a month", "1st of each month".
+    struct MoneyInLine: Equatable, Sendable, Identifiable {
+        var id: String
+        var label: String
+        var amountText: String
+        var dates: String?
+    }
+
+    /// One built-in sample student (`GET /v1/samples`). Missing fields hide their rows.
     struct SampleCard: Equatable, Sendable, Identifiable {
+        var id: String
+        /// "Amara Okoye", or the title when the server sends no name.
+        var title: String
+        /// "Scholarship student" when a name is present.
+        var kindText: String?
+        /// "19"
+        var ageText: String?
+        /// Icon id, for example "face-teen-hijab".
+        var avatar: String?
+        /// "University of Sheffield, Sheffield".
+        var placeText: String?
+        /// "Scholarship + bursary", or the funding kinds joined.
+        var fundingText: String
+        var moneyIn: [MoneyInLine] = []
+        var housing: String?
+        var habitLine: String?
+        /// Shown only when the card has no money-in lines.
+        var text: String
+    }
+
+    /// One "Building their profile" stage.
+    struct BuildStage: Equatable, Sendable, Identifiable {
+        enum Status: Equatable, Sendable { case waiting, running, done, skipped }
+        var id: String
+        var label: String
+        var status: Status = .waiting
+        /// What the call found, for example "412 payments" or "3 bills, 2 subscriptions".
+        var detail: String?
+    }
+
+    struct Building: Equatable, Sendable {
+        var stages: [BuildStage] = []
+        /// True when every stage has ended: the "View profile" button shows.
+        var isFinished = false
+    }
+
+    struct ProfileRow: Equatable, Sendable, Identifiable {
+        var id: String
+        var label: String
+        var valueText: String
+        var detail: String?
+    }
+
+    struct SpendSlice: Equatable, Sendable, Identifiable {
+        var id: String
+        var label: String
+        /// £ for the chart.
+        var amount: Double
+        var amountText: String
+    }
+
+    struct HabitPart: Equatable, Sendable, Identifiable {
+        var id: String
+        var label: String
+        /// 0 to 100.
+        var value: Int
+    }
+
+    /// One of "3 things Penny noticed". Tap shows the evidence (the fact's numbers).
+    struct Noticed: Equatable, Sendable, Identifiable {
+        var id: String
+        var text: String
+        /// Icon id for the small visual, for example "subscriptions".
+        var icon: String
+        var evidence: [ProfileRow]
+        /// "From Sample data".
+        var sourceText: String
+    }
+
+    struct Profile: Equatable, Sendable {
+        var name: String?
+        var subtitle: String?
+        var avatar: String?
+        var incomes: [MoneyInLine] = []
+        var housing: String?
+        var spending: [SpendSlice] = []
+        /// "£1,796 in October".
+        var spendingTotalText: String?
+        var bills: [ProfileRow] = []
+        var debts: [ProfileRow] = []
+        /// Checked for debts and found none.
+        var noDebts = false
+        var savingsText: String?
+        /// "About 3.8 months of spending".
+        var coverText: String?
+        var habitOverall: Int?
+        var habitParts: [HabitPart] = []
+        var noticed: [Noticed] = []
+    }
+
+    /// "How Penny decides".
+    struct Decides: Equatable, Sendable {
+        /// "Penny compared 3 options using this profile and live UK data."
+        var title: String
+        var sources: [SourceChipState]
+    }
+
+    /// One runner-up under "Also considered".
+    struct Runner: Equatable, Sendable, Identifiable {
+        var id: String
+        var action: String
+        var line: String
+    }
+
+    /// "Their Next Move": the engine's top move.
+    struct NextMove: Equatable, Sendable {
+        var action: String
+        var reason: String
+        /// "What you give up: ...". Nil hides it.
+        var tradeOff: String?
+        var impactAmountText: String
+        var impactCaption: String
+        /// Plain English, for example "Medium confidence: based on your last 4 weeks of spending". Empty hides it.
+        var confidenceText: String
+        var confidenceFilled: Int
+        var alsoConsidered: [Runner]
+    }
+
+    struct FeatureRow: Equatable, Sendable, Identifiable {
         var id: String
         var title: String
         var text: String
-        /// "Scholarship · Bursary"
-        var fundingText: String
-        /// "3 months of payments"
-        var monthsText: String
     }
 
     /// One way money arrives (student form). Off until the user turns it on.
@@ -173,76 +305,53 @@ struct OnboardingViewState: Equatable, Sendable {
         }
 
         var dealEndText: String {
-            let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            return "\(months[max(0, min(11, dealEndMonth - 1))]) \(String(dealEndYear))"
+            // Month name in the app language, for example "Mar 2027".
+            var parts = DateComponents()
+            parts.year = dealEndYear
+            parts.month = max(1, min(12, dealEndMonth))
+            parts.day = 1
+            let calendar = Calendar(identifier: .gregorian)
+            guard let date = calendar.date(from: parts) else { return String(dealEndYear) }
+            return date.formatted(.dateTime.month(.abbreviated).year().locale(FinanceMapping.dateLocale))
         }
     }
 
-    struct Stage: Equatable, Sendable, Identifiable {
-        var id: String
-        var label: String
-        var done: Bool
-    }
 
-    /// "Importing your history".
-    struct Importing: Equatable, Sendable {
-        var title: String
-        var stages: [Stage] = []
-        /// Stages shown so far (the view animates them in one by one).
-        var shownCount = 0
-        /// "412 payments, 1 Apr 2026 to 16 Oct 2026". Nil until the import returns.
-        var summary: String?
-        var warnings: [String] = []
-        var isFinished = false
-    }
-
-    /// The Next Move reveal: the engine's top move.
-    struct Reveal: Equatable, Sendable {
-        var action: String
-        var headline: String
-        var impactAmountText: String
-        var impactCaption: String
-        var confidenceWord: String
-        var confidenceFilled: Int
-        var confidenceLabel: String
-        var isSampleData: Bool
-    }
-
-    struct Tip: Equatable, Sendable, Identifiable {
-        var id: String
-        var number: Int
-        var text: String
-    }
-
-    var step: Step = .welcome(page: 0)
-    var pages: [WelcomePage] = OnboardingViewState.welcomePages
+    var step: Step = .welcome
+    /// The language picked on the language screen (the saved app language until then).
+    var language: AppLanguage = .en
     var signIn = SignIn(appleAvailable: false)
     var options: [ConnectOption] = OnboardingViewState.connectOptions
     var manual: Manual
-    /// Sample students. Empty while loading (the view shows skeleton rows).
+    /// Sample students. Empty while loading (the view shows skeleton cards).
     var samples: [SampleCard] = []
     var samplesLoading = false
-    var importing = Importing(title: "Importing your history")
-    var reveal: Reveal?
-    var tips: [Tip] = []
+    var building = Building()
+    var profile: Profile?
+    /// The "3 things Penny noticed" row that shows its evidence.
+    var expandedNoticedID: String?
+    var decides: Decides?
+    var nextMove: NextMove?
     var isBusy = false
     /// Error for the current step, in plain English.
     var errorMessage: String?
-    /// Sample data (mock client): show the "Mock data" badge.
+    /// Sample data (mock client or a sample student): show the badge.
     var isSampleData = false
 
-    static let welcomePages: [WelcomePage] = [
-        .init(id: 0, title: Brand.tagline, text: "\(Brand.productName) uses real UK data to show what your money choices do over the years.", art: .penny),
-        .init(id: 1, title: "One next move.", text: "You get one clear money move, with the evidence and how sure we are.", art: .why),
-        .init(id: 2, title: "Test it first.", text: "Play the move through real years, like the 2022 price rises, and see what would have happened.", art: .test),
-    ]
+    /// "What you can do" (ADR 0069): icon, headline, one line. Explainer only.
+    static var featureRows: [FeatureRow] { [
+        .init(id: "allMoney", title: L10n.tr("See all your money"), text: L10n.tr("Loan, job, bank and bills in one place.")),
+        .init(id: "nextMove", title: L10n.tr("Your next move"), text: L10n.tr("The one thing that helps most this month, with the evidence.")),
+        .init(id: "testIt", title: L10n.tr("Test it first"), text: L10n.tr("Play the move through real years before you do it.")),
+        .init(id: "penny", title: L10n.tr("Ask Penny"), text: L10n.tr("Short answers about money and student life.")),
+        .init(id: "friends", title: L10n.tr("Learn and play with friends"), text: L10n.tr("Short lessons and quizzes. Share habits, never amounts.")),
+    ] }
 
     /// Bank and broker connections are cut (ADR 0046): statement upload and manual entry only.
-    static let connectOptions: [ConnectOption] = [
-        .init(kind: .sample, title: "Use a sample statement", subtitle: "Pick one of 4 students. Shown as sample data.", isUnavailable: false),
-        .init(kind: .statement, title: "Upload a statement", subtitle: "Monzo or Revolut CSV, or a PDF. Max 5 MB.", isUnavailable: false),
-        .init(kind: .manual, title: "Enter your numbers", subtitle: "Takes about 2 minutes", isUnavailable: false),
-    ]
+    static var connectOptions: [ConnectOption] { [
+        .init(kind: .statement, title: L10n.tr("Upload a statement"), subtitle: L10n.tr("Monzo or Revolut CSV, or a PDF. Max 5 MB."), isUnavailable: false),
+        .init(kind: .manual, title: L10n.tr("Enter your numbers"), subtitle: L10n.tr("Takes about 2 minutes"), isUnavailable: false),
+    ] }
 }
 
 /// Where `OnboardingScreen` opens. The router opens `.connect` from Money and You.
@@ -255,7 +364,8 @@ enum OnboardingStep: String, Hashable, Sendable {
 struct OnboardingActions {
     var onNext: () -> Void = {}
     var onBack: () -> Void = {}
-    var onSkipWelcome: () -> Void = {}
+    /// Skip on Language (keeps the current language), Try Penny and How Penny decides.
+    var onSkip: () -> Void = {}
     var onSignInWithApple: () -> Void = {}
     var onContinueWithoutAccount: () -> Void = {}
     var onConnect: (OnboardingViewState.ConnectOption.Kind) -> Void = { _ in }
@@ -264,10 +374,13 @@ struct OnboardingActions {
     var onRemoveCost: (Int) -> Void = { _ in }
     var onUseLocation: () -> Void = {}
     var onSaveManual: () -> Void = {}
+    var onPickLanguage: (AppLanguage) -> Void = { _ in }
+    var onConfirmLanguage: () -> Void = {}
     var onPickSample: (String) -> Void = { _ in }
     var onToggleIncome: (String) -> Void = { _ in }
     var onToggleDebt: (String) -> Void = { _ in }
-    var onStageShown: () -> Void = {}
+    /// "3 things Penny noticed": show or hide one row's evidence.
+    var onToggleNoticed: (String) -> Void = { _ in }
     var onFinish: () -> Void = {}
     var onDismissError: () -> Void = {}
 

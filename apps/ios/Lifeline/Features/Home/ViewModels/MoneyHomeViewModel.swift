@@ -4,7 +4,7 @@ import Observation
 /// Everything the Money tab shows: Next Move card first, then the widgets and "Guess my spend".
 struct MoneyHomeViewState: Equatable, Sendable {
     struct Header: Equatable, Sendable {
-        /// "Morning, Priya" or "Morning" when the profile has no first name.
+        /// "Morning, Priya" or "Morning" when the profile has no first name. Follows local time (ADR 0070).
         var greeting: String
         /// Character emoji from `/v1/finance/profile`. The View maps it to a face icon.
         var faceEmoji: String
@@ -19,7 +19,7 @@ struct MoneyHomeViewState: Equatable, Sendable {
         case ready
     }
 
-    /// "In your account" and "Net worth" tiles, from `GET /v1/finance/home`.
+    /// "In your account" and "Net worth" for the compact line, from `GET /v1/finance/home`.
     struct Tiles: Equatable, Sendable {
         var balance: Double
         var netWorth: Double
@@ -54,8 +54,41 @@ struct MoneyHomeViewState: Equatable, Sendable {
     /// True when any part shows sample data.
     var isSampleData: Bool { homeIsSampleData || nextMove.isSampleData || guess.isSampleData }
 
-    /// True when the tiles, Guess my spend and Coming up show (data exists and loaded).
+    /// True when the money blocks and Guess my spend show (data exists and loaded).
     var showsMoney: Bool { content == .ready }
+
+    /// One block on Money home (ADR 0070).
+    enum Block: String, Equatable, Sendable {
+        case nextMove, weeklyBudget, spending, bills, subscriptions, budgetsAndGoals, accountLine, guess
+    }
+
+    /// Money home blocks, top to bottom (ADR 0070). Empty unless the money loaded.
+    /// Each widget block shows its own skeleton, error or empty text, so only optional blocks drop out.
+    var blocks: [Block] {
+        guard showsMoney else { return [] }
+        var blocks: [Block] = [.nextMove]
+        if weeklyBudget != nil { blocks.append(.weeklyBudget) }
+        blocks += [.spending, .bills, .subscriptions, .budgetsAndGoals]
+        if tiles != nil { blocks.append(.accountLine) }
+        blocks.append(.guess)
+        return blocks
+    }
+
+    /// "In your account £1,186 · Net worth £2,040". Nil without both numbers.
+    var accountLineText: String? {
+        tiles.map { L10n.tr("In your account \(Money.format($0.balance)) · Net worth \(Money.format($0.netWorth))") }
+    }
+
+    /// At most 4 spending categories, largest first. £0 categories are already filtered out.
+    var topCategories: [MoneyWidgetsViewState.Category] {
+        Array((widgets.spending.value?.categories ?? []).sorted { $0.amount > $1.amount }.prefix(4))
+    }
+
+    /// At most 3 bills: from `/v1/finance/bills` once loaded (with price rise chips), else from home.
+    var billsShown: [MoneyWidgetsViewState.Bill] {
+        if let bills = widgets.bills.value { return Array(bills.items.prefix(3)) }
+        return comingUp
+    }
 }
 
 /// Money detail screens opened from the Money tab.
@@ -103,10 +136,15 @@ final class MoneyHomeViewModel {
     let widgets: MoneyWidgetsViewModel
     let guess: GuessSpendViewModel
     private let client: any LifelineClient
+    /// Injected clock and calendar, so tests can fix the greeting's local hour.
     private let now: @Sendable () -> Date
+    private let calendar: Calendar
     private(set) var profile: FinanceProfile?
     private(set) var home: FinanceHome?
     private(set) var homePhase: LoadPhase = .loading(.standard)
+    /// The Next Move from `GET /v1/next-move?language=` in a non-English app language, with its language.
+    /// `/v1/finance/home` sends move text in English only; numbers are the same in every language.
+    private var localizedMove: (language: AppLanguage, response: NextMoveResponse)?
     private var hasLoaded = false
     /// Set when the user leaves to connect their money. The glue reloads on the next appearance.
     private(set) var needsReload = false
@@ -115,11 +153,12 @@ final class MoneyHomeViewModel {
     @ObservationIgnored var onConnectMoney: @MainActor () -> Void = {}
     @ObservationIgnored var onAskPenny: @MainActor (String?) -> Void = { _ in }
 
-    static let connectPrompt = "Connect your money to see your next move"
+    static var connectPrompt: String { L10n.tr("Connect your money to see your next move") }
 
-    init(client: any LifelineClient, now: @escaping @Sendable () -> Date = { Date() }) {
+    init(client: any LifelineClient, now: @escaping @Sendable () -> Date = { Date() }, calendar: Calendar = .current) {
         self.client = client
         self.now = now
+        self.calendar = calendar
         nextMove = NextMoveViewModel(client: client)
         widgets = MoneyWidgetsViewModel(client: client)
         guess = GuessSpendViewModel(client: client)
@@ -130,7 +169,7 @@ final class MoneyHomeViewModel {
 
     var state: MoneyHomeViewState {
         var state = MoneyHomeViewState(
-            header: Self.header(profile: profile, now: now()),
+            header: Self.header(profile: profile, now: now(), calendar: calendar),
             paydayText: guess.prediction?.daysToPayday.map(Self.paydayText),
             nextMove: nextMove.state,
             widgets: widgets.state,
@@ -138,6 +177,7 @@ final class MoneyHomeViewModel {
         )
         state.content = Self.content(phase: homePhase, home: home)
         if let home, home.hasData {
+            // Both numbers or neither: never one of the two from another source.
             state.tiles = home.balance.flatMap { balance in home.netWorth.map { .init(balance: balance, netWorth: $0) } }
             state.comingUp = (home.comingUp ?? []).prefix(3).map(MoneyWidgetsViewModel.bill)
             state.comingUpMore = home.comingUpMore ?? false
@@ -221,8 +261,12 @@ final class MoneyHomeViewModel {
             profile = nil
             return
         }
+        // The blocks under the Next Move (ADR 0070) load in parallel. Each shows from disk first.
+        async let widgetsLoad: Void = self.widgets.load()
+        await loadMoveIfNeeded()
         await nextMove.loadPlan()
         try? await client.load(CachedOps.financeProfile) { [weak self] profile in self?.profile = profile }
+        await widgetsLoad
     }
 
     /// Shows a home value (from disk or the network) at once.
@@ -231,9 +275,48 @@ final class MoneyHomeViewModel {
         homePhase = .ready
         guard loaded.hasData else { return }
         guess.apply(prediction: loaded.prediction)
-        nextMove.show(loaded.nextMove)
+        let language = AppLanguage.current
+        let separate = localizedMove.flatMap { $0.language == language ? $0.response : nil }
+        // English: home's own move is the freshest. Other languages: the move text in that language.
+        if let move = language == .en ? (loaded.nextMove ?? separate) : (separate ?? loaded.nextMove) {
+            showMove(move)
+        } else if nextMove.moves.isEmpty {
+            // A slow server leaves `next_move` out of home. Keep the skeleton; `loadMoveIfNeeded` fetches it.
+            nextMove.showLoading()
+        }
+    }
+
+    private func showMove(_ response: NextMoveResponse?) {
+        nextMove.show(response)
         widgets.moves = nextMove.moves
         guess.moves = nextMove.moves
+    }
+
+    /// Loads `GET /v1/next-move` (in the app language) when home cannot give the move as is:
+    /// - a non-English app language: home sends move text in English only;
+    /// - home came without `next_move` (slow server).
+    /// From disk at once, then fresh. Runs on every load, so a language change reloads it.
+    /// The card shows "No move right now" only when this call also gives no move; an error shows Try again.
+    func loadMoveIfNeeded() async {
+        let language = AppLanguage.current
+        guard language != .en || home?.nextMove == nil else {
+            localizedMove = nil
+            return
+        }
+        do {
+            try await client.load(Self.nextMoveOp(language)) { [weak self] response in
+                guard let self, AppLanguage.current == language else { return }
+                localizedMove = (language, response)
+                showMove(response)
+            }
+        } catch {
+            if nextMove.moves.isEmpty { nextMove.showFailure(APIError.map(error)) }
+        }
+    }
+
+    /// One disk cache file per language, so each language shows its own text at once.
+    static func nextMoveOp(_ language: AppLanguage) -> CachedOp<NextMoveResponse> {
+        CachedOp(key: "getNextMove." + language.rawValue, scope: .user) { try await $0.nextMove() }
     }
 
     /// The weekly budget block from the engine's weekly_budget move (top or runner-up). Nil without
@@ -241,21 +324,65 @@ final class MoneyHomeViewModel {
     static func weeklyBudget(_ moves: [Move]) -> MoneyHomeViewState.WeeklyBudget? {
         guard let move = moves.first(where: { $0.kind.rawValue == "weekly_budget" }),
               let weekly = move.safeWeeklySpend else { return nil }
-        let until = move.deadline.map { "Until " + NextMoveViewModel.longDayText($0) } ?? "Until your next money"
+        let amount = Money.format(weekly.rounded())
+        let text = move.deadline.map { deadline in
+            let date = NextMoveViewModel.longDayText(deadline)
+            return L10n.tr("Until \(date): spend up to \(amount) a week")
+        } ?? L10n.tr("Until your next money: spend up to \(amount) a week")
         return .init(
             moveID: move.id,
-            text: "\(until): spend up to \(Money.format(weekly.rounded())) a week",
-            detail: move.coverWeeks.map { NextMoveViewModel.weeksText($0) + " until your next money" }
+            text: text,
+            detail: move.coverWeeks.map { weeks in
+                let count = NextMoveViewModel.weeksText(weeks)
+                return L10n.tr("\(count) until your next money")
+            }
         )
     }
 
-    /// "Morning, Priya". The name "You" (no real name) gives just "Morning".
-    static func header(profile: FinanceProfile?, now: Date, calendar: Calendar = .init(identifier: .gregorian)) -> MoneyHomeViewState.Header {
-        let hour = calendar.component(.hour, from: now)
-        let part = hour < 12 ? "Morning" : (hour < 18 ? "Afternoon" : "Evening")
+    /// Part of the day for the greeting, by local hour (ADR 0070).
+    enum DayPart: Equatable, Sendable {
+        /// 05:00 to 11:59.
+        case morning
+        /// 12:00 to 17:59.
+        case afternoon
+        /// 18:00 to 22:59.
+        case evening
+        /// 23:00 to 04:59: "Hi".
+        case lateNight
+
+        init(hour: Int) {
+            switch hour {
+            case 5..<12: self = .morning
+            case 12..<18: self = .afternoon
+            case 18..<23: self = .evening
+            default: self = .lateNight
+            }
+        }
+    }
+
+    /// "Morning", or "Morning, Priya" with a first name. Translated (ADR 0063).
+    static func greeting(_ part: DayPart, name: String?) -> String {
+        guard let name, !name.isEmpty else {
+            switch part {
+            case .morning: return L10n.tr("Morning")
+            case .afternoon: return L10n.tr("Afternoon")
+            case .evening: return L10n.tr("Evening")
+            case .lateNight: return L10n.tr("Hi")
+            }
+        }
+        switch part {
+        case .morning: return L10n.tr("Morning, \(name)")
+        case .afternoon: return L10n.tr("Afternoon, \(name)")
+        case .evening: return L10n.tr("Evening, \(name)")
+        case .lateNight: return L10n.tr("Hi, \(name)")
+        }
+    }
+
+    /// "Morning, Priya" by the phone's local time. The name "You" (no real name) gives just "Morning".
+    static func header(profile: FinanceProfile?, now: Date, calendar: Calendar = .current) -> MoneyHomeViewState.Header {
+        let part = DayPart(hour: calendar.component(.hour, from: now))
         let name = profile?.character.name.split(separator: " ").first.map(String.init)
-        let greeting = (name == nil || name == "You") ? part : "\(part), \(name!)"
-        return .init(greeting: greeting, faceEmoji: profile?.character.emoji ?? "🙂")
+        return .init(greeting: greeting(part, name: name == "You" ? nil : name), faceEmoji: profile?.character.emoji ?? "🙂")
     }
 
     /// "Payday in 27 days", "Payday tomorrow", "Payday today".
@@ -263,7 +390,7 @@ final class MoneyHomeViewModel {
         switch days {
         case ..<1: "Payday today"
         case 1: "Payday tomorrow"
-        default: "Payday in \(days) days"
+        default: L10n.tr("Payday in \(days) days")
         }
     }
 }

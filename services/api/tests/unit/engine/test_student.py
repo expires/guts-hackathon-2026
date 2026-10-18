@@ -76,6 +76,9 @@ def test_weekly_budget_move_and_preconditions(macro: MacroTable) -> None:
     # F-R-1: shortfall is plain (not annualised) and impact_per_year equals it.
     assert m.shortfall == pytest.approx(37.14, abs=0.01)  # type: ignore[attr-defined]
     assert m.impact_per_year == pytest.approx(m.shortfall)  # type: ignore[attr-defined]
+    # V5 F2: the sample is the weeks behind the median pace.
+    assert m.sample_size == 4  # type: ignore[attr-defined]
+    assert m.confidence_label.endswith("(sample: 4 weeks of your spending)")  # type: ignore[attr-defined]
     for e in m.evidence:  # type: ignore[attr-defined]
         assert unsupported_numbers(e.text, e.facts) == [], e.text
     assert not pre.weekly_budget(_short_student(2_000.0), TODAY)  # on track: no move
@@ -300,3 +303,79 @@ def test_weekly_pace_is_the_usual_week() -> None:
 def test_urgent_shortfall_ranks_first(macro: MacroTable) -> None:
     ranked = candidates(build_context(_short_student(0.0), macro, TODAY))
     assert ranked[0].move.kind == "weekly_budget" and (ranked[0].move.shortfall or 0) > 0
+
+
+# ---------- Test it for student moves (ADR 0065) ----------
+
+SIM_TEMPLATE = {
+    "weekly_budget": "study.term_budget",
+    "lifetime_isa": "money.lifetime_isa",
+    "build_emergency_fund": "money.emergency_fund_check",
+    "pay_off_debt": "money.card_balance",
+    "cut_budget": "money.budget_overspend",
+}
+
+
+def _student_moves(macro: MacroTable) -> dict[str, object]:
+    from tests.unit.engine.test_next_move import _overspender
+
+    out: dict[str, object] = {}
+    eating_out = snapshot([tx(d, -a, "PRET", "Pret") for d, a in (("2026-06-02", 100.0), ("2026-07-12", 100.0),
+                                                                  ("2026-08-12", 100.0), ("2026-09-12", 260.0))])
+    for snap in (_short_student(120.0), _saver(2006), _overspender(), homeowner(), eating_out):
+        out.update({k: v for k, v in _moves(snap, macro).items() if k in SIM_TEMPLATE and k not in out})
+    return out
+
+
+def test_student_moves_are_testable(macro: MacroTable) -> None:
+    from lifeline_engine.next_move import option_policy, scenario_years
+    from lifeline_sim.api import policy_choice
+
+    moves = _student_moves(macro)
+    assert set(moves) == set(SIM_TEMPLATE)
+    for kind, m in moves.items():
+        assert m.testable and m.test_period is not None, kind  # type: ignore[attr-defined]
+        assert len(m.options) >= 2, kind  # type: ignore[attr-defined]
+        start, end = scenario_years(m)  # type: ignore[arg-type]
+        assert start < end
+        for o in m.options:  # type: ignore[attr-defined]
+            policy = option_policy(m, o.id)  # type: ignore[arg-type]
+            # The sim picks exactly this option for the move's event (same ids as W3's templates).
+            assert policy_choice(SIM_TEMPLATE[kind], policy) == o.id, (kind, o.id)
+    wb = moves["weekly_budget"]
+    assert [o.id for o in wb.options] == ["weekly", "freestyle"]  # type: ignore[attr-defined]
+    assert wb.test_period.label == "This term (2026)"  # type: ignore[attr-defined]
+    assert option_policy(wb, "weekly")["__focus"] == "weekly_budget"  # type: ignore[arg-type]
+    assert [o.id for o in moves["lifetime_isa"].options] == ["open", "not_now"]  # type: ignore[attr-defined]
+
+
+def test_fallback_and_keep_cash_stay_untestable(macro: MacroTable) -> None:
+    from lifeline_engine.next_move import next_move, option_policy
+
+    fb = next_move(snapshot(monthly("2025-11-28", 11, 2000.0, "ACME SALARY")), macro, TODAY).top
+    assert not fb.testable and fb.test_period is None
+    with pytest.raises(ValueError):
+        option_policy(fb, fb.options[0].id)
+    kc = _moves(homeowner().model_copy(update={"savings_rate_pct": 6.0}), macro)["keep_cash"]
+    assert not kc.testable  # type: ignore[attr-defined]
+    with pytest.raises(ValueError):
+        option_policy(kc, kc.options[0].id)  # type: ignore[attr-defined]
+
+
+def test_student_stress_periods_match_evidence(macro: MacroTable) -> None:
+    """ADR 0065: safety fund through the 2022 cost-of-living spike, debt through the 2023 rate rises.
+    Evidence point 3 describes the same period with macro figures (mock table: CPI 2022 10.5%,
+    Bank Rate 3.5% -> 5.25%, card rate 22.48% -> 24.02%)."""
+    from tests.unit.engine.test_next_move import _overspender
+
+    moves = _moves(_overspender(), macro)
+    ef, debt = moves["build_emergency_fund"], moves["pay_off_debt"]
+    assert ef.test_period.label == "2022-2023 cost-of-living spike (stress test)"  # type: ignore[attr-defined]
+    assert debt.test_period.label == "2023 rate rises (stress test)"  # type: ignore[attr-defined]
+    e3 = ef.evidence[2]  # type: ignore[attr-defined]
+    assert e3.text.startswith("In the 2022-2023 cost-of-living spike, prices rose 10.50% in 2022.")
+    d3 = debt.evidence[2]  # type: ignore[attr-defined]
+    assert d3.text.startswith("In the 2023 rate rises, Bank Rate went from 3.50% to 5.25% and card rates from 22.48% "
+                              "to 24.02%.")
+    for e in (e3, d3):
+        assert unsupported_numbers(e.text, e.facts) == [], e.text

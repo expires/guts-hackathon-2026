@@ -9,6 +9,9 @@ A payee is recurring when:
   is within 50% of the median charge.
 - it is still active: the last charge is no more than 1.5 cadence steps before `today`.
 
+Rent and mortgage (category housing): one extra payment to the same payee (rent arrears, a tenancy deposit) is left
+out when the other charges then fit one cadence, and 2 charges a month apart are enough (a new tenancy).
+
 Price rise: the latest charge is above the last different amount before it. `since` is the
 first charge at the new amount.
 """
@@ -191,14 +194,51 @@ def detect_recurring(txs: Iterable[Transaction], today: dates.date | None = None
     return out
 
 
-def _recurring_from(key: str, items: list[Transaction], today: dates.date) -> Recurring | None:
+HOUSING_MIN_CHARGES = 2  # rent or mortgage: 2 charges a month apart are enough
+
+
+def _gaps(items: Sequence[Transaction]) -> list[int]:
     ds = [dates.parse(t.date) for t in items]
-    gaps = [(b - a).days for a, b in zip(ds, ds[1:], strict=False)]
+    return [(b - a).days for a, b in zip(ds, ds[1:], strict=False)]
+
+
+def _day_spread(items: Sequence[Transaction]) -> int:
+    days = [dates.parse(t.date).day for t in items]
+    return max(days) - min(days)
+
+
+def without_one_extra(items: list[Transaction]) -> tuple[list[Transaction], Cadence] | None:
+    """Housing payments with one extra charge (rent arrears, a deposit): the charges without it, when they then
+    fit one cadence. With more than one choice, keep the charges with the most regular day of the month, then the
+    latest charges."""
+    best: tuple[tuple[int, int], list[Transaction], Cadence] | None = None
+    for i in range(len(items)):
+        rest = items[:i] + items[i + 1:]
+        cadence = classify_cadence(_gaps(rest))
+        if cadence is None:
+            continue
+        rank = (_day_spread(rest), -i)  # -i: leaving out a later charge ranks lower
+        if best is None or rank < best[0]:
+            best = (rank, rest, cadence)
+    return None if best is None else (best[1], best[2])
+
+
+def _recurring_from(key: str, items: list[Transaction], today: dates.date) -> Recurring | None:
+    gaps = _gaps(items)
     cadence = classify_cadence(gaps)
     if cadence is None and is_ten_payment_schedule(items, gaps):
         cadence = "monthly"
-    if cadence is None or len(items) < MIN_CHARGES[cadence]:
+    housing = categorise(items[-1]) == "housing"
+    if cadence is None and housing and len(items) >= HOUSING_MIN_CHARGES + 1:
+        found = without_one_extra(items)
+        if found is not None:
+            items, cadence = found
+    if cadence is None:
         return None
+    min_charges = HOUSING_MIN_CHARGES if housing and cadence == "monthly" else MIN_CHARGES[cadence]
+    if len(items) < min_charges:
+        return None
+    ds = [dates.parse(t.date) for t in items]
     if (today - ds[-1]).days > ACTIVE_STEPS * CADENCE_DAYS[cadence]:
         return None
     category = categorise(items[-1])

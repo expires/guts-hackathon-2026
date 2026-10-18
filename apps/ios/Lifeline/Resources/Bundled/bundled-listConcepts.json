@@ -73,7 +73,8 @@
           "Same"
         ],
         "answer_index": 1
-      }
+      },
+      "personal": "Spotify went up from £19.99 to £21.99 a month."
     }
   },
   {
@@ -150,8 +151,7 @@
           "No change"
         ],
         "answer_index": 0
-      },
-      "personal": "Your mortgage rate is 4.42% and your fixed deal ends in 165 days."
+      }
     }
   },
   {
@@ -229,7 +229,7 @@
         ],
         "answer_index": 2
       },
-      "personal": "Your cash and savings cover 3.7 months of spending."
+      "personal": "Your cash and savings cover 0.8 months of spending."
     }
   },
   {
@@ -612,7 +612,7 @@
         ],
         "answer_index": 0
       },
-      "personal": "You spend £38 a month on 2 subscriptions."
+      "personal": "You spend £149 a month on 11 subscriptions."
     }
   },
   {
@@ -668,7 +668,7 @@
           },
           {
             "x": 2026.0,
-            "y": -23.33
+            "y": -23.15
           }
         ],
         "source": {
@@ -767,7 +767,7 @@
         ],
         "answer_index": 0
       },
-      "personal": "Your savings of £6,850 earned £86 in interest in the last year."
+      "personal": "Your savings of £1,150 earned £17 in interest in the last year."
     }
   },
   {

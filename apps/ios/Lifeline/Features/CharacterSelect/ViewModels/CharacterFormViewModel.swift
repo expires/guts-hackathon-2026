@@ -40,7 +40,7 @@ final class CharacterFormViewModel {
     var state: CharacterFormViewState {
         CharacterFormViewState(
             mode: mode,
-            title: mode == .playYourself ? "About you" : "God Mode",
+            title: mode == .playYourself ? L10n.tr("About you") : "God Mode",
             fields: fields,
             regions: UKRegion.allCases.map { PickerOption(id: $0.rawValue, label: $0.displayName) },
             birthYearRange: Self.birthYearRange,
@@ -51,7 +51,7 @@ final class CharacterFormViewModel {
             // Bank connections are cut (ADR 0046): no "Fill in from my bank".
             showsBankConnect: false,
             bankStatusText: bankStatusText,
-            footer: "Your answers stay on our server for this game only. No bank details are needed."
+            footer: L10n.tr("Your answers stay on our server for this game only. No bank details are needed.")
         )
     }
 
@@ -124,7 +124,7 @@ final class CharacterFormViewModel {
         fields.savings = profile.savings
         fields.debt = profile.otherDebt ?? 0
         fields.housing = HousingOption(rawValue: profile.housing.rawValue) ?? .rent
-        bankStatusText = status == .mock ? "Filled from your bank (sample data)" : "Filled from your bank"
+        bankStatusText = status == .mock ? L10n.tr("Filled from your bank (sample data)") : L10n.tr("Filled from your bank")
     }
 
     static func isValid(_ fields: CharacterFormFields) -> Bool {

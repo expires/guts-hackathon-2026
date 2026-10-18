@@ -47,7 +47,7 @@ private struct LifeSelectionFlow: View {
                 switch route {
                 case let .form(mode): path.append(.form(mode))
                 case let .startYear(choice): path.append(.startYear(choice))
-                case .store: sheet = .store
+                case .store: break // The store is cut (ADR 0067).
                 case .rooms: sheet = .rooms
                 case .sources: sheet = .sources
                 case .debugMenu: sheet = .debug
@@ -63,12 +63,8 @@ private struct LifeSelectionFlow: View {
             }
         }
         .preference(key: SetupDepthKey.self, value: path.count)
-        .llCover(item: $sheet.only { [.store, .rooms].contains($0) }) { sheet in
-            let close: @MainActor () -> Void = { self.sheet = nil }
-            switch sheet {
-            case .rooms: RoomLobbyScreen(session: session, onLeave: close)
-            default: StoreScreen(session: session, onClose: close)
-            }
+        .llCover(item: $sheet.only { $0 == .rooms }) { _ in
+            RoomLobbyScreen(session: session) { self.sheet = nil }
         }
         .background {
             Color.clear.llSheet(item: $sheet.only { [.sources, .debug].contains($0) }) { sheet in

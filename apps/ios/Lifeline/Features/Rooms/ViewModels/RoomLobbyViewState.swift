@@ -2,14 +2,17 @@ import Foundation
 
 // View states for Same Life rooms (Play-Lobby, Play-Live, Play-End). Plain values, no networking (ADR 0011).
 
-/// Socket status line on room screens. Nil when the socket is live.
+/// Socket status line on room screens, or the last server error. Nil when the socket is live and all is well.
 struct RoomConnectionState: Equatable, Sendable {
-    enum Kind: Equatable, Sendable { case connecting, reconnecting, offline }
+    /// `error`: the server refused the last message (`RoomSession.lastError`). It clears by itself.
+    enum Kind: Equatable, Sendable { case connecting, reconnecting, offline, error }
     var kind: Kind
-    /// "Connecting to the room", "Reconnecting (try 2)", "Connection lost".
+    /// "Connecting to the room", "Reconnecting (try 2)", "Connection lost", or the server's error message.
     var text: String
     /// Offline only: shows a "Reconnect" button.
     var canRetry: Bool
+    /// Offline or a server error: the banner uses the warning look.
+    var isProblem: Bool { kind == .offline || kind == .error }
 }
 
 /// Room entry (lobby first, ADR 0059): open a lobby, or join by code or QR.
@@ -164,14 +167,19 @@ struct RoomLiveViewState: Equatable, Sendable {
     var isSampleData: Bool
     var connection: RoomConnectionState? = nil
     var event: Event? = nil
-    /// "Age up to 32". Nil hides the button (event open, life over, or no life yet).
-    var ageTitle: String? = nil
+    /// Shows the Age up button. False hides it (event open, life over, or no life yet).
+    var showsAgeUp: Bool = false
+    /// Age after the next tap, from the engine life state (`Life.nextAge`). Nil: the button says "Age up"
+    /// (Quick Life taps move 1 or 2 years by a server plan the app cannot see).
+    var nextAge: Int? = nil
     var isBusy: Bool = false
     /// "Starting your life" while the shared life loads.
     var waitingText: String? = nil
     var canFinish: Bool = true
     /// Shows "Open in Life tab".
     var canOpenLife: Bool = false
+    /// Same Life: your room life did not start. A red banner with "Try again". Nil hides it.
+    var startError: String? = nil
 }
 
 struct RoomLiveActions {
@@ -183,6 +191,10 @@ struct RoomLiveActions {
     var onChoose: @MainActor (String, String) -> Void = { _, _ in }
     var onOpenLife: @MainActor () -> Void = {}
     var onReconnect: @MainActor () -> Void = {}
+    /// "Try again" on the start error banner: starts your room life again.
+    var onRetryStart: @MainActor () -> Void = {}
+    /// "Not sure? Ask Penny" on the open event. Nil hides the button.
+    var onAskPenny: (@MainActor () -> Void)? = nil
 
     static var noop: Self { .init() }
 }
@@ -250,6 +262,8 @@ struct RoomResultViewState: Equatable, Sendable {
     var pendingText: String = ""
     /// Shown instead of splits when other lives are not available.
     var splitsNote: String = ""
+    /// Penny announces the winner in one line (server line, else a template from the result).
+    var pennyLine: String = ""
     /// Quick Life summary card (habit score). Nil for a full Same Life.
     var quickLife: QuickLifeCardState? = nil
     var connection: RoomConnectionState? = nil
@@ -259,6 +273,8 @@ struct RoomResultActions {
     /// "Rematch".
     var onPlayAgain: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
+    /// "Reconnect" on the connection banner.
+    var onReconnect: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }

@@ -46,4 +46,9 @@ async def auth(client: httpx.AsyncClient) -> dict[str, str]:
     r = await client.post("/v1/auth/demo", json={"device_id": "contract-test-device"})
     validate("POST", "/v1/auth/demo", r.status_code, r.json())
     assert r.status_code == 200, r.text
+    if not BASE:
+        # The app never serves a persona (tests only). Give the contract account the Leeds persona as its own data.
+        from tests.integration.personas import seed_persona
+
+        await seed_persona("contract-test-device")
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

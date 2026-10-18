@@ -35,6 +35,11 @@ struct RootScreen: View {
     /// Owns the game session and the Penny chat, so judge mode ("New player", "Reset demo") can replace them.
     @State private var router: AppRouter
     @AppStorage("llPresentationMode") private var presentationMode = false
+    /// App UI language (ADR 0063). A change applies live: `\.locale` for `Text` literals, `appDataVersion`
+    /// for ViewModel strings built with `L10n.tr`.
+    @AppStorage(AppLanguage.storageKey) private var languageRaw = AppLanguage.deviceDefault.rawValue
+
+    private var language: AppLanguage { AppLanguage(rawValue: languageRaw) ?? .en }
 
     init(session: GameSession) {
         _router = State(initialValue: AppRouter(session: session))
@@ -99,8 +104,18 @@ struct RootScreen: View {
             router.selection = .play
             Task { await RoomFlowViewModel.shared(for: session).join(code: route.code) }
         }
+        .background {
+            Color.clear.llSheet(isPresented: $router.showsLanguage) {
+                FeatureSlots.language { router.showsLanguage = false }
+                    .environment(\.appRoutes, router.routes)
+            }
+        }
+        .onChange(of: languageRaw) { _, _ in router.dataVersion += 1 }
         // Presentation mode (You tab toggle): rounds money app-wide, including sheets and covers.
         .llPresentationMode(presentationMode)
+        // Language (ADR 0063): applied last so every screen, sheet and cover gets it.
+        .environment(\.appLanguage, language)
+        .environment(\.locale, language.locale)
     }
 
     private var tabs: some View {
@@ -133,7 +148,8 @@ struct RootScreen: View {
         .alert(
             "Something went wrong",
             isPresented: Binding(
-                get: { session.errorMessage != nil },
+                // A Play solo cover shows its own alert (SessionErrorHosts); only one alert shows at a time.
+                get: { session.errorMessage != nil && SessionErrorHosts.shared.isTop(nil) },
                 set: { if !$0 { session.errorMessage = nil } }
             ),
             presenting: session.errorMessage
@@ -173,7 +189,8 @@ struct RootScreen: View {
                     session: session,
                     onConnectMoney: { router.onboarding = .connect },
                     onNewPlayer: { router.routes.newPlayer() },
-                    onResetDemo: { router.routes.resetDemo() }
+                    onResetDemo: { router.routes.resetDemo() },
+                    onChangeLanguage: { router.routes.changeLanguage() }
                 )
             }
         }
@@ -253,13 +270,10 @@ struct SelectionFlowScreen: View {
             }
         }
         .preference(key: SetupDepthKey.self, value: path.count)
-        // Store and Rooms are full screens with their own header. Sources and Debug are sheets.
-        .llCover(item: $sheet.only { [.store, .rooms].contains($0) }) { sheet in
-            let close: @MainActor () -> Void = { self.sheet = nil }
-            switch sheet {
-            case .rooms: RoomLobbyScreen(session: session, onLeave: close)
-            default: StoreScreen(session: session, onClose: close)
-            }
+        // Rooms is a full screen with its own header. Sources and Debug are sheets.
+        // The store (Penny Plus) is cut (ADR 0067): a `.store` route opens nothing.
+        .llCover(item: $sheet.only { $0 == .rooms }) { _ in
+            RoomLobbyScreen(session: session, onLeave: { self.sheet = nil })
         }
         .background {
             Color.clear.llSheet(item: $sheet.only { [.sources, .debug].contains($0) }) { sheet in

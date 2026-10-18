@@ -80,6 +80,13 @@ class Move(_M):
         default=None, description="'high' only with a sufficient, relevant sample"
     )
     confidence_label: str = Field(description="e.g. '7 in 10 twins in similar past periods did better'")
+    confidence_text: str | None = Field(
+        default=None,
+        max_length=140,
+        description="Plain English for every screen, e.g. 'Medium confidence: based on your last 4 weeks of "
+        "spending'. Never 'Medium · sample 4' (ADR 0069)",
+    )
+    reason: str | None = Field(default=None, max_length=140, description="One plain line: why this move helps")
     evidence: list[EvidencePoint] = Field(min_length=3, max_length=3)
     sources: list[SourceRef]
     options: list[MoveOption] = Field(min_length=1)
@@ -116,6 +123,7 @@ class NextMoveResponse(_M):
     question: Literal["Where should my money go this month?"] = "Where should my money go this month?"
     top: Move
     runners_up: list[Move] = Field(max_length=2)
+    options_compared: int = Field(default=0, ge=0, description="'Penny compared N options' (ADR 0069)")
     backtest: NextMoveBacktest | None = None
     decision_sources: list[SourceRef] = Field(
         default_factory=list,

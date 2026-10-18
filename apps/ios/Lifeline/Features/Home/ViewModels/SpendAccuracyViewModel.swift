@@ -5,7 +5,7 @@ import Observation
 @MainActor
 @Observable
 final class SpendAccuracyViewModel {
-    static let loadingMessage = "Loading the model test"
+    static var loadingMessage: String { L10n.tr("Loading the model test") }
 
     private let client: any LifelineClient
     private(set) var evaluation: PredictionEvaluation?
@@ -45,12 +45,12 @@ final class SpendAccuracyViewModel {
         return SpendAccuracyViewState(
             phase: phase,
             method: evaluation.method,
-            daysText: evaluation.nDays == 1 ? "Tested on 1 day" : "Tested on \(evaluation.nDays) days",
+            daysText: evaluation.nDays == 1 ? L10n.tr("Tested on 1 day") : L10n.tr("Tested on \(evaluation.nDays) days"),
             mae: evaluation.mae,
             baselineMAE: evaluation.baselineMae,
-            modelText: "The model is off by \(FinanceMapping.pounds(evaluation.mae)) on a typical day.",
-            baselineText: "\(evaluation.baseline) is off by \(FinanceMapping.pounds(evaluation.baselineMae)).",
-            coverageText: "\(FinanceMapping.percent(evaluation.intervalCoverage)) of days fell inside the range.",
+            modelText: L10n.tr("The model is off by \(FinanceMapping.pounds(evaluation.mae)) on a typical day."),
+            baselineText: L10n.tr("\(evaluation.baseline) is off by \(FinanceMapping.pounds(evaluation.baselineMae))."),
+            coverageText: L10n.tr("\(FinanceMapping.percent(evaluation.intervalCoverage)) of days fell inside the range."),
             days: evaluation.days.map { day in
                 .init(
                     id: day.date, dateText: FinanceMapping.shortDayText(day.date), predicted: day.predicted,

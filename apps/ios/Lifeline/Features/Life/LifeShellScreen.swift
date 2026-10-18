@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Sheets that the running life can open.
 enum LifeSheet: String, Identifiable {
-    case activities, rewind, concepts, sources, summary, decision, store
+    case activities, rewind, concepts, sources, summary, decision
     // Life action menus (ADR 0016).
     case job, assets, people, money
     var id: String { rawValue }
@@ -10,7 +10,7 @@ enum LifeSheet: String, Identifiable {
     /// W7 screens with their own header show full screen. Menus and lists show as sheets.
     var isFullScreen: Bool {
         switch self {
-        case .rewind, .summary, .decision, .store: true
+        case .rewind, .summary, .decision: true
         case .activities, .concepts, .sources, .job, .assets, .people, .money: false
         }
     }
@@ -43,14 +43,15 @@ struct LifeShellScreen: View {
             set: { if !$0 { showsEvent = false } }
         )) {
             EventSheetScreen(session: session) { showsEvent = false }
+                .sessionErrorAlert(session)
         }
         .llCover(item: $sheet.only(\.isFullScreen)) { sheet in
-            content(for: sheet)
+            content(for: sheet).sessionErrorAlert(session)
         }
         // Each presenter sits on its own view, so the full-screen covers never share one host.
         .background {
             Color.clear.llSheet(item: $sheet.only { !$0.isFullScreen }) { sheet in
-                content(for: sheet)
+                content(for: sheet).sessionErrorAlert(session)
             }
         }
         .fullScreenCover(isPresented: Binding(
@@ -72,6 +73,7 @@ struct LifeShellScreen: View {
                         }
                     }
                 ) { session.pendingLesson = nil }
+                .sessionErrorAlert(session)
             }
         }
     }
@@ -109,7 +111,9 @@ struct LifeShellScreen: View {
             RewindScreen(session: session, decisionID: rewindDecisionID, onClose: {
                 rewindDecisionID = nil
                 close()
-            }) { self.sheet = .store }
+            }) {
+                // The store is cut (ADR 0067): no Rewind Pass to buy.
+            }
         case .concepts:
             ConceptCollectionScreen(client: session.client, unlockedIDs: session.life?.conceptsUnlocked ?? [], onClose: close)
         case .sources:
@@ -128,8 +132,6 @@ struct LifeShellScreen: View {
                 lifeID: session.life?.id,
                 onClose: close
             )
-        case .store:
-            StoreScreen(session: session, onClose: close)
         case .job:
             JobTabScreen(session: session, onClose: close)
         case .assets:

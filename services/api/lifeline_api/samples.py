@@ -6,8 +6,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from pydantic import ValidationError
+
 from lifeline_contracts.account import SamplesResponse
-from lifeline_contracts.finance import Account, FinanceSnapshot
+from lifeline_contracts.finance import Account, BudgetLimit, CreateGoalRequest, FinanceSnapshot
 from lifeline_data.statements import samples as data_samples
 
 # Debts a statement cannot show as a balance. An overdraft already shows as a negative current account.
@@ -19,7 +21,7 @@ DEBT_ACCOUNTS: dict[str, tuple[Any, str]] = {
 
 
 def listing() -> SamplesResponse:
-    return SamplesResponse(samples=data_samples.list_samples(team=False))  # team phones are not offered
+    return SamplesResponse(samples=data_samples.list_samples())  # the 10 student profiles (ADR 0070)
 
 
 def hints(sample_id: str) -> dict[str, Any] | None:
@@ -69,3 +71,29 @@ def months_covered(snap: FinanceSnapshot) -> float:
         return 0.0
     first, last = date.fromisoformat(min(days)), date.fromisoformat(max(days))
     return round(((last - first).days + 1) / 30.44, 1)
+
+
+# ---------- budgets and savings goals that come with a sample (ADR 0070) ----------
+
+SAMPLE_GOAL_PREFIX = "gl_sample_"
+
+
+def plan(hint: dict[str, Any]) -> tuple[list[BudgetLimit], list[tuple[str, CreateGoalRequest]]]:
+    """The sample's budget limits and (id, goal) pairs from its hints. Items that fail the contract are skipped.
+    Goal ids are stable (gl_sample_<sample>_<n>), so a re-import replaces them instead of adding copies."""
+    budgets: list[BudgetLimit] = []
+    for b in hint.get("budgets") or []:
+        try:
+            budgets.append(BudgetLimit.model_validate(b))
+        except ValidationError:
+            continue
+    goals: list[tuple[str, CreateGoalRequest]] = []
+    for g in hint.get("goals") or []:
+        gid = str(g.get("id", "")) if isinstance(g, dict) else ""
+        if not gid.startswith(SAMPLE_GOAL_PREFIX):
+            continue
+        try:
+            goals.append((gid, CreateGoalRequest.model_validate({k: v for k, v in g.items() if k != "id"})))
+        except ValidationError:
+            continue
+    return budgets, goals

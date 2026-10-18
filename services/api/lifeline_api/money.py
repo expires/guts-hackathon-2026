@@ -32,10 +32,9 @@ from lifeline_contracts.finance import (
     SpendPrediction,
     Subscription,
 )
-from lifeline_data.finance import persona_for_subject
 from lifeline_engine import money as money_engine
 from lifeline_engine.money import ProfileHints
-from lifeline_engine.money.profile import is_cash
+from lifeline_engine.money.profile import is_cash, months_of_cover
 
 log = logging.getLogger(__name__)
 
@@ -84,13 +83,11 @@ def forget(state: AppState, sub: str) -> None:
 
 
 async def maybe_snapshot(state: AppState, sub: str) -> FinanceSnapshot | None:
-    """The caller's FinanceSnapshot, or None when there is none (live mode without user data).
+    """The caller's own FinanceSnapshot, or None when they have not given us any money data.
 
-    The hub returns the user's own data first; otherwise the demo persona (demo mode) or None (live mode).
+    Both modes: no data of their own means None. The demo finance personas are never served (tests only).
     """
-    hub: Any = state.hub  # Protocol may still say FinanceSnapshot; W1 returns None in live mode (ADR 0027)
-    snap: FinanceSnapshot | None = await hub.finance_snapshot(sub)
-    return snap
+    return await stored_snapshot(state, sub)
 
 
 def fingerprint(snap: FinanceSnapshot) -> str:
@@ -108,18 +105,6 @@ async def snapshot(state: AppState, sub: str) -> FinanceSnapshot:
 
 def meta(snap: FinanceSnapshot) -> FinanceMeta:
     return money_engine.finance_meta(snap)
-
-
-def hints(state: AppState, sub: str, snap: FinanceSnapshot) -> ProfileHints | None:
-    """Facts that bank data does not carry (name, age, place, job).
-
-    Fixture data: from the persona. User data: None, so the engine reads `snapshot.holder` and `region`.
-    """
-    if snap.source != "fixtures":
-        return None
-    p = persona_for_subject(sub)
-    return ProfileHints(name=p.name, age=p.age(today(snap)), region=p.region, town=p.town, postcode=p.postcode,
-                        occupation=p.occupation)
 
 
 def today(snap: FinanceSnapshot) -> date:
@@ -255,5 +240,13 @@ async def with_onboarding(state: AppState, sub: str, prof: FinanceProfile,
     income = yearly_income(snap) if snap is not None else None
     if income is not None:
         p_upd["annual_income"] = c_upd["annual_income"] = min(income, 10_000_000)
+    # "Their profile" (ADR 0069): the user's own income sources, debts, cover and rent. Rent is the regular rent
+    # payment found in the statement (manual entry adds rent rows, so it is found there too).
+    if (p_upd.get("housing") or prof.profile.housing) == "rent":
+        top["monthly_rent"] = prof.profile.monthly_rent
+    if snap is not None:
+        top["income_sources"] = list(snap.income_sources)
+        top["debts"] = list(snap.debts)
+        top["months_of_cover"] = months_of_cover(snap, today(snap))
     return prof.model_copy(update={**top, "profile": prof.profile.model_copy(update=p_upd),
                                    "character": prof.character.model_copy(update=c_upd)})

@@ -4,6 +4,8 @@ import SwiftUI
 enum PlaySheet: String, Identifiable {
     case concepts
     case solo
+    /// The Learn course path (ADR 0068).
+    case learn
     var id: String { rawValue }
 }
 
@@ -16,7 +18,10 @@ struct PlayScreen: View {
     @State private var sheet: PlaySheet?
     @Bindable private var rooms: RoomFlowViewModel
     @State private var circles: CirclesViewModel
+    /// Learn course progress (ADR 0068): the Play card and the path share it.
+    @State private var learn: LearnPathViewModel
     @Environment(\.appSelectedTab) private var selectedTab
+    @Environment(\.appRoutes) private var routes
 
     init(session: GameSession, onShowLife: @escaping @MainActor () -> Void = {}) {
         self.session = session
@@ -25,12 +30,14 @@ struct PlayScreen: View {
         let rooms = RoomFlowViewModel.shared(for: session)
         self.rooms = rooms
         _circles = State(initialValue: CirclesViewModel(service: rooms.play, isSampleData: session.client.kind == .mock))
+        _learn = State(initialValue: LearnPathViewModel(client: session.client))
     }
 
     private var state: PlayViewState {
         var state = model.state
         state.rooms = rooms.entryState
         state.circles = circles.state
+        state.learn = learn.entry
         return state
     }
 
@@ -41,6 +48,9 @@ struct PlayScreen: View {
         actions.onPlaySolo = { sheet = .solo }
         actions.onPlayWithFriends = { Task { await rooms.openLobby() } }
         actions.onJoin = { rooms.openScanner() }
+        actions.onOpenLearn = { sheet = .learn }
+        // The concepts collection is the Learn course now (ADR 0068).
+        actions.onOpenConcepts = { sheet = .learn }
         return actions
     }
 
@@ -54,7 +64,8 @@ struct PlayScreen: View {
                     switch route {
                     case .life: sheet = .solo
                     case .rooms: rooms.isPresented = true
-                    case .concepts: sheet = .concepts
+                    case .concepts: sheet = .learn
+                    case .money: routes.selectTab(.money)
                     }
                 }
                 // "Open in the Life tab" from a live room: close the room cover, then show the life.
@@ -78,8 +89,22 @@ struct PlayScreen: View {
                 rooms.hideCovers()
             }
             .task { await model.load() }
-            .task { await circles.load() }
-            .refreshable { await model.load() }
+            .task { await learn.load() }
+            // Circles change when a friend joins on another phone: reload every 10 s while Play is open.
+            .task {
+                await circles.load()
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(10))
+                    guard !Task.isCancelled else { break }
+                    await circles.load()
+                }
+            }
+            .refreshable {
+                async let play: Void = model.load()
+                async let friends: Void = circles.load()
+                async let lessons: Void = learn.load()
+                _ = await (play, friends, lessons)
+            }
             .roomObservers(rooms)
             .llCover(item: $sheet) { sheet in
                 switch sheet {
@@ -87,6 +112,8 @@ struct PlayScreen: View {
                     ConceptCollectionScreen(client: session.client, unlockedIDs: session.life?.conceptsUnlocked ?? []) { self.sheet = nil }
                 case .solo:
                     PlaySoloScreen(session: session) { self.sheet = nil }
+                case .learn:
+                    LearnPathScreen(model: learn, client: session.client) { self.sheet = nil }
                 }
             }
             .background {

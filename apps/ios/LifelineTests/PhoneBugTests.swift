@@ -13,14 +13,23 @@ struct PhoneBugTests {
         """)
     }
 
-    @Test func confidenceShowsLevelAndSampleSize() {
-        let high = NextMoveViewModel.move(move(#", "confidence_level": "high", "sample_size": 240"#), isInPlan: false)
-        #expect(high.confidenceWord == "High · sample 240")
+    @Test func confidenceIsPlainEnglishNeverSampleSize() {
+        // ADR 0069: the engine's confidence_text wins.
+        let high = NextMoveViewModel.move(move(#", "confidence_level": "high", "sample_size": 240, "confidence_text": "High confidence: based on 240 similar past years""#), isInPlan: false)
+        #expect(high.confidenceText == "High confidence: based on 240 similar past years")
+        #expect(high.confidenceWord == "High confidence")
         #expect(high.confidenceFilled == 3)
-        // The engine says low with a small sample, even when the raw confidence is high.
+        // Without confidence_text: a plain sentence from the level. Never "Low · sample 6".
         let low = NextMoveViewModel.move(move(#", "confidence_level": "low", "sample_size": 6"#), isInPlan: false)
-        #expect(low.confidenceWord == "Low · sample 6")
+        #expect(low.confidenceText == "Low confidence: Penny has only a few similar cases. Use it as a rough guide.")
+        #expect(!low.confidenceText.contains("sample"))
+        #expect(!low.confidenceText.contains("·"))
         #expect(low.confidenceFilled == 1)
+        let medium = NextMoveViewModel.move(move(#", "confidence_level": "medium", "sample_size": 4"#), isInPlan: false)
+        #expect(medium.confidenceText == "Medium confidence: Penny has some similar cases to go on.")
+        // Why? shows the same sentence.
+        let why = NextMoveWhyViewModel.makeState(move: move(#", "confidence_level": "medium", "sample_size": 4"#), lesson: nil, lessonPhase: .ready, isSampleData: true)
+        #expect(why.confidenceText == medium.confidenceText)
     }
 
     @Test func monthsOfCoverWithoutCostsAsksForThem() {
@@ -108,6 +117,7 @@ struct V4StepThreeTests {
         """)
         let card = NextMoveViewModel.move(move, isInPlan: false)
         #expect(card.confidenceWord.isEmpty)
+        #expect(card.confidenceText.isEmpty)
         #expect(card.confidenceFilled == 0)
         #expect(NextMoveWhyViewModel.makeState(move: move, lesson: nil, lessonPhase: .ready, isSampleData: true).confidenceChip.isEmpty)
     }

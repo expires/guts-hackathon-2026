@@ -10,8 +10,16 @@ import httpx
 from lifeline_api.routes.next_move import scenario_seed, summary_sentence, worst_year_of
 from lifeline_contracts.next_move import OptionOutcome, TestPeriod
 from tests.integration.conftest import sign_in
+from tests.integration.personas import seed_persona
 
 DEMO_DEVICE = "demo-presenter-01"
+
+
+async def _demo(client: httpx.AsyncClient) -> dict[str, str]:
+    """Sign in and give the account the old Leeds homeowner persona as its own data (test-only, explicit)."""
+    auth = await sign_in(client, DEMO_DEVICE)
+    await seed_persona(DEMO_DEVICE)
+    return auth
 
 
 async def _next_move(client: httpx.AsyncClient, auth: dict[str, str]) -> dict[str, Any]:
@@ -23,7 +31,7 @@ async def _next_move(client: httpx.AsyncClient, auth: dict[str, str]) -> dict[st
 async def test_demo_persona_fix_mortgage_test_it(client: httpx.AsyncClient) -> None:
     from lifeline_api.main import app
 
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     nm = await _next_move(client, auth)
     assert nm["meta"]["label"] == "Sample data"
     move = next(m for m in [nm["top"], *nm["runners_up"]] if m["kind"] == "fix_mortgage")
@@ -60,7 +68,7 @@ async def test_demo_persona_fix_mortgage_test_it(client: httpx.AsyncClient) -> N
 
 
 async def test_test_it_errors(client: httpx.AsyncClient) -> None:
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     nm = await _next_move(client, auth)
     r = await client.post("/v1/next-move/test", json={"move_id": "mv_nope"}, headers=auth)
     assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
@@ -76,7 +84,7 @@ async def test_test_it_errors(client: httpx.AsyncClient) -> None:
 
 
 async def test_plan_per_subject(client: httpx.AsyncClient) -> None:
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     nm = await _next_move(client, auth)
     assert (await client.get("/v1/plan", headers=auth)).json() == {"items": [], "total_impact_per_year": 0.0}
     first = await client.post("/v1/plan", json={"move_id": nm["top"]["id"]}, headers=auth)
@@ -94,7 +102,7 @@ async def test_plan_per_subject(client: httpx.AsyncClient) -> None:
 
 
 async def test_budgets_goals_profile(client: httpx.AsyncClient) -> None:
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     r = await client.put("/v1/finance/budgets", json={"items": [{"category": "groceries", "limit": 300}]},
                          headers=auth)
     r = await client.put("/v1/finance/budgets", json={"items": [{"category": "eating_out", "limit": 120}]},
@@ -111,7 +119,7 @@ async def test_budgets_goals_profile(client: httpx.AsyncClient) -> None:
 
 
 async def test_lesson_personal_from_facts(client: httpx.AsyncClient) -> None:
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     facts = (await client.get("/v1/finance/profile", headers=auth)).json()["personal_facts"]
     by_concept = {f["concept_id"]: f["text"] for f in facts}
     concepts = (await client.get("/v1/concepts", headers=auth)).json()["concepts"]
@@ -122,7 +130,7 @@ async def test_lesson_personal_from_facts(client: httpx.AsyncClient) -> None:
 
 
 async def test_decision_uses_server_time(client: httpx.AsyncClient) -> None:
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     prof = (await client.get("/v1/finance/profile", headers=auth)).json()
     d = await client.post("/v1/decisions", json={"profile": prof["profile"]}, headers=auth)
     assert d.status_code == 200
@@ -133,7 +141,7 @@ async def test_total_cost_uses_pinned_table(client: httpx.AsyncClient) -> None:
     from lifeline_api.main import app
     from lifeline_sim import api as sim_api
 
-    auth = await sign_in(client, DEMO_DEVICE)
+    auth = await _demo(client)
     nm = await _next_move(client, auth)
     move = next(m for m in [nm["top"], *nm["runners_up"]] if m["kind"] == "fix_mortgage")
     res = (await client.post("/v1/next-move/test", json={"move_id": move["id"]}, headers=auth)).json()
@@ -165,3 +173,65 @@ def test_helpers() -> None:
     cheaper = [o("a", "A", 1000, cost=10, rec=True), o("b", "B", 1500, cost=20)]
     assert summary_sentence(cheaper, period) == (
         "In the 2021-2023 rate shock (stress test), \u201cA\u201d left you £500 worse off by 2023 than \u201cB\u201d.")
+
+
+async def test_stale_stored_documents_never_500(client: httpx.AsyncClient) -> None:
+    """Live bug: a move stored before the question text changed failed validation and home answered 500."""
+    from lifeline_api.main import app
+
+    auth = await _demo(client)
+    nm = (await client.get("/v1/next-move", headers=auth)).json()
+    state = app.state.lifeline
+    sub = (await client.get("/v1/me", headers=auth)).json()["id"]
+    old = {**nm, "question": "What is my next money move?"}  # the question text of an older version
+    await state.store.put_doc(sub, "next_move", {"response": old, "macro_hash": "x" * 64})
+    home = await client.get("/v1/finance/home", headers=auth)
+    assert home.status_code == 200 and home.json()["has_data"]
+    r = await client.get("/v1/next-move", headers=auth)
+    assert r.status_code == 200 and r.json()["question"] != "What is my next money move?"
+    await state.store.put_doc(sub, "next_move", {"response": old, "macro_hash": "x" * 64})
+    assert (await client.post("/v1/plan", json={"move_id": nm["top"]["id"]}, headers=auth)).status_code == 201
+    await state.store.put_doc(sub, "plan", [{"id": "pl_old", "bogus": 1}])
+    assert (await client.get("/v1/plan", headers=auth)).status_code == 200
+    await state.store.put_doc(sub, "goals", [{"id": "g_old", "name": "x"}])
+    assert (await client.get("/v1/finance/goals", headers=auth)).json()["items"] == []
+    when = "2026-10-01T00:00:00Z"
+    thread = {"id": "th_old", "title": "Old", "created_at": when, "updated_at": when,
+              "messages": [
+                  {"id": "m1", "role": "user", "created_at": "2026-10-01T00:00:00Z", "text": "Hi"},
+                  {"id": "pm1", "role": "penny", "created_at": "2026-10-01T00:00:00Z", "reply_to": "m1",
+                   "response": {"thread_id": "th_old", "message_id": "pm1", "reply_to": "m1", "reaction": "eyes",
+                                "bubbles": [{"id": f"b{i}", "kind": "answer", "text": "Hello"} for i in range(4)],
+                                "confidence": 0.5, "verified": True, "disclaimer": "Not financial advice"}},
+              ]}
+    await state.store.put_doc(sub, "chat:th_old", thread)
+    t = await client.get("/v1/chat/threads/th_old", headers=auth)
+    assert t.status_code == 200 and len(t.json()["messages"]) == 2
+    assert len(t.json()["messages"][1]["response"]["bubbles"]) == 2
+
+
+async def test_next_move_in_the_chosen_language(client: httpx.AsyncClient) -> None:
+    """ADR 0069 point 8: the move text in the chosen language, numbers unchanged, the stored move in English."""
+    import re
+
+    from lifeline_api.main import app
+    from lifeline_engine.move_i18n import untranslated
+
+    auth = await _demo(client)
+    en = await _next_move(client, auth)
+    r = await client.get("/v1/next-move", params={"language": "hi"}, headers=auth)
+    assert r.status_code == 200, r.text
+    hi = r.json()
+    money = re.compile(r"£\d+(?:,\d{3})*(?:\.\d+)?")
+    for a, b in zip([en["top"], *en["runners_up"]], [hi["top"], *hi["runners_up"]], strict=True):
+        assert a["id"] == b["id"] and a["impact_per_year"] == b["impact_per_year"]
+        assert b["action"] != a["action"] and money.findall(b["action"]) == money.findall(a["action"])
+        served = [b["action"], b["confidence_label"], *(o["label"] for o in b["options"])]
+        assert untranslated(served, "hi") == served, "the served text is Hindi, not an English template"
+
+    store = app.state.lifeline.store
+    stored = [v for (owner, kind), v in store._docs.items() if kind == "next_move"]  # MemoryStore in test mode
+    assert stored and all(en["top"]["action"] in v for v in stored), "the stored move stays English"
+
+    xx = (await client.get("/v1/next-move", params={"language": "xx"}, headers=auth)).json()
+    assert xx["top"]["action"] == en["top"]["action"]

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Sheets from the You tab.
 enum YouSheet: String, Identifiable {
-    case bank, plan, sources, evaluation, spendAccuracy, store, debug, aiDisclosure
+    case bank, plan, sources, evaluation, spendAccuracy, debug, aiDisclosure
     var id: String { rawValue }
 }
 
@@ -20,13 +20,17 @@ struct YouScreen: View {
     /// Judge mode routes (BOSS helper: new demo player and demo reset, then onboarding).
     private let onNewPlayer: @MainActor () -> Void
     private let onResetDemo: @MainActor () -> Void
+    /// "Change language" (ADR 0063). RootScreen passes `routes.changeLanguage`.
+    private let onChangeLanguage: @MainActor () -> Void
 
     init(
         session: GameSession,
         onConnectMoney: @escaping @MainActor () -> Void = {},
         onNewPlayer: @escaping @MainActor () -> Void = {},
-        onResetDemo: @escaping @MainActor () -> Void = {}
+        onResetDemo: @escaping @MainActor () -> Void = {},
+        onChangeLanguage: @escaping @MainActor () -> Void = {}
     ) {
+        self.onChangeLanguage = onChangeLanguage
         self.session = session
         self.onConnectMoney = onConnectMoney
         self.onNewPlayer = onNewPlayer
@@ -44,15 +48,15 @@ struct YouScreen: View {
                     case .sources: .sources
                     case .evaluation: .evaluation
                     case .spendAccuracy: .spendAccuracy
-                    case .store: .store
                     case .debug: .debug
                     case .connectMoney: nil
-                    case .askPenny, .newPlayer, .resetDemo, .account: nil
+                    case .askPenny, .newPlayer, .resetDemo, .account, .changeLanguage: nil
                     case .aiDisclosure: .aiDisclosure
                     }
                     // Opens onboarding at "Connect your money", not at the welcome pages.
                     if route == .connectMoney { routes.openConnectMoney() }
                     if route == .account { routes.openAccount() }
+                    if route == .changeLanguage { onChangeLanguage() }
                     // "Ask Penny" switches to the Penny tab (ADR 0051), not a sheet.
                     if route == .askPenny { routes.askPenny(PennyRoute(screen: .other)) }
                     if route == .newPlayer || route == .resetDemo { judgeConfirm = route }
@@ -86,7 +90,6 @@ struct YouScreen: View {
                 case .sources: SourcesScreen(client: session.client, onClose: close)
                 case .evaluation: EvaluationScreen(client: session.client, onClose: close)
                 case .spendAccuracy: SpendAccuracyScreen(client: session.client, onClose: close)
-                case .store: StoreScreen(session: session, onClose: close)
                 case .aiDisclosure: AIDisclosureView(state: .load(), onClose: close)
                 case .debug: DebugMenuScreen(activeKind: session.client.kind, onClose: close)
                 }

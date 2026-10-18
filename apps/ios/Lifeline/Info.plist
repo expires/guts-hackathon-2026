@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>$(LIFELINE_DISPLAY_NAME)</string>
 	<key>CFBundleExecutable</key>
@@ -12,6 +12,17 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+		<string>es</string>
+		<string>pt</string>
+		<string>it</string>
+		<string>zh-Hans</string>
+		<string>hi</string>
+		<string>ne</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>

@@ -1,17 +1,18 @@
-"""Finance data for the Money tab and Next Move (ADR 0016, ADR 0018).
+"""Finance fixture personas (ADR 0016, ADR 0018). TEST-ONLY.
 
-Tier 1: labelled fixture personas (`status="mock"`, `source="fixtures"`), chosen deterministically per
-user subject. Tier 2 adds TrueLayer sandbox data through the bank session.
+User decision: the 4 non-student personas (two nurses, a software tester, a retail supervisor) stay for tests
+only. No app route serves them: `DataHub.finance_snapshot` returns the user's own data or None, and no
+production module imports this package (checked by tests/integration/test_no_persona.py). Tests that need a
+persona store it as an account's own data with `tests/integration/personas.py:seed_persona`.
 
-Public API (stable; W2 and W4 call these):
+Public API (tests):
 - `fixture_snapshot(subject, as_of=None) -> FinanceSnapshot`  sync, pure, offline, never raises.
 - `persona_for_subject(subject) -> PersonaInfo`  region, postcode, age and the rest for profiles.
 - `persona_id_for_subject(subject) -> str`
-- `DataHub.finance_snapshot(subject)` (async) wraps `fixture_snapshot`.
 
 Mapping rule: the demo device `demo-presenter-01` (JWT subject `demo_` + sha256("demo:<device>")[:24])
-gets the Leeds homeowner. A subject `persona:<id>` or a raw persona id selects that persona (tests,
-demo tools). Any other subject maps to a persona by a stable sha256 hash.
+maps to the Leeds homeowner. A subject `persona:<id>` or a raw persona id selects that persona. Any other
+subject maps to a persona by a stable sha256 hash.
 """
 
 from __future__ import annotations

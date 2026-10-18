@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pick a life. Order: Play yourself, presets, Random, God Mode.
+/// Pick a life. Order: Play yourself, presets, Random.
 struct CharacterSelectView: View {
     let state: CharacterSelectViewState
     var actions: CharacterSelectActions = .noop
@@ -9,7 +9,7 @@ struct CharacterSelectView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 ScreenHeader(
-                    title: "Choose a life",
+                    title: L10n.tr("Choose a life"),
                     leading: actions.onClose.map { close in HeaderSquareButton(kind: .back, identifier: "characterSelect.back", action: close) }
                 ) {
                     if state.usesSampleData { DemoDataBadge() }
@@ -31,8 +31,6 @@ struct CharacterSelectView: View {
                 FlowRow(spacing: Theme.Spacing.s) {
                     Button("Play with friends", action: actions.onOpenRooms).buttonStyle(.text)
                         .accessibilityIdentifier("characterSelect.rooms")
-                    Button("Extras (\(Brand.demoPaymentLabel))", action: actions.onOpenStore).buttonStyle(.text)
-                        .accessibilityIdentifier("characterSelect.store")
                     Button("Data sources", action: actions.onOpenSources).buttonStyle(.text)
                         .accessibilityIdentifier("characterSelect.sources")
                 }
@@ -112,18 +110,6 @@ struct CharacterCard: View {
 
 #Preview("Ready · AX3") {
     CharacterSelectView(state: Fixtures.CharacterSelect.ready).previewInNavigation().previewLargeType()
-}
-
-#Preview("God Mode owned · light") {
-    CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned).previewInNavigation()
-}
-
-#Preview("God Mode owned · dark") {
-    CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned).previewInNavigation().previewDark()
-}
-
-#Preview("God Mode owned · AX3") {
-    CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned).previewInNavigation().previewLargeType()
 }
 
 #Preview("Loading · light") {

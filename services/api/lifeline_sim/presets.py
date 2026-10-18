@@ -172,6 +172,9 @@ _PRESETS: list[tuple[CharacterSpec, PresetExtras]] = [
 # No longer offered in Play solo (ADR 0052). Kept so stored lives, rooms and challenges still load by id.
 LEGACY_PRESET_IDS: frozenset[str] = frozenset({"nurse-leeds", "banker-london", "plumber", "pensioner"})
 
+# The only legacy preset still offered: a student (user rule: offered presets are students or graduates).
+OFFERED_LEGACY_IDS: frozenset[str] = frozenset({"student"})
+
 _EXTRAS: dict[str, PresetExtras] = {c.id: e for c, e in _PRESETS if c.id is not None}
 _DEFAULT_EXTRAS = PresetExtras()
 

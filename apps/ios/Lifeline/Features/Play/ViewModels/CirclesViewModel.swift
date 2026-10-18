@@ -8,7 +8,7 @@ final class CirclesViewModel {
     let service: any PlayService
     let isSampleData: Bool
     private(set) var circles: [PlayWire.Circle] = []
-    private(set) var phase: LoadPhase = .loading(.init(message: "Loading your circles"))
+    private(set) var phase: LoadPhase = .loading(.init(message: L10n.tr("Loading your circles")))
     private(set) var selectedID: String?
     private(set) var newName = ""
     private(set) var joinCode = ""
@@ -32,7 +32,7 @@ final class CirclesViewModel {
             onSelect: { [weak self] in self?.selectedID = $0 },
             onNameChange: { [weak self] in self?.newName = String($0.prefix(40)) },
             onCreate: { [weak self] in Task { await self?.create() } },
-            onJoinCodeChange: { [weak self] in self?.joinCode = RoomLink.normalise($0) },
+            onJoinCodeChange: { [weak self] in self?.joinCode = CircleCode.normalise($0) },
             onJoin: { [weak self] in Task { await self?.join() } },
             onLeave: { [weak self] id in Task { await self?.leave(id) } },
             onRetry: { [weak self] in Task { await self?.load() } }
@@ -41,7 +41,7 @@ final class CirclesViewModel {
 
     /// Disk first, then network (ADR 0060): the list shows at once when it was loaded before.
     func load() async {
-        if circles.isEmpty { phase = .loading(.init(message: "Loading your circles")) }
+        if circles.isEmpty { phase = .loading(.init(message: L10n.tr("Loading your circles"))) }
         do {
             try await service.loadCircles { [weak self] circles in
                 self?.circles = circles
@@ -55,7 +55,7 @@ final class CirclesViewModel {
     func create() async {
         let name = newName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty, busyText == nil else { return }
-        await run("Making your circle") {
+        await run(L10n.tr("Making your circle")) {
             let circle = try await self.service.createCircle(name: name)
             self.upsert(circle)
             self.newName = ""
@@ -64,9 +64,9 @@ final class CirclesViewModel {
     }
 
     func join() async {
-        guard RoomLink.isValid(joinCode), busyText == nil else { return }
+        guard CircleCode.isValid(joinCode), busyText == nil else { return }
         let code = joinCode
-        await run("Joining circle \(code)") {
+        await run(L10n.tr("Joining circle \(code)")) {
             let circle = try await self.service.joinCircle(code: code)
             self.upsert(circle)
             self.joinCode = ""
@@ -75,7 +75,7 @@ final class CirclesViewModel {
     }
 
     func leave(_ id: String) async {
-        await run("Leaving the circle") {
+        await run(L10n.tr("Leaving the circle")) {
             try await self.service.leaveCircle(id: id)
             self.circles.removeAll { $0.id == id }
             if self.selectedID == id { self.selectedID = nil }

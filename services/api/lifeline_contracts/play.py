@@ -36,8 +36,18 @@ class StudentPath(_M):
     quick: bool = Field(description="Offered in Quick Life (ages 18 to 25 in 5 to 6 taps)")
 
 
+class QuickStudent(_M):
+    """A premade Quick Life student the host can pick (ADR 0064)."""
+
+    id: ShortId
+    name: str = Field(max_length=24)
+    path_id: ShortId
+    description: str = Field(max_length=120)
+
+
 class PathsResponse(_M):
     paths: list[StudentPath]
+    quick_students: list[QuickStudent] = Field(default_factory=list, max_length=10)
 
 
 class GameOptions(_M):
@@ -45,6 +55,7 @@ class GameOptions(_M):
 
     path_id: ShortId | None = Field(default=None, description="Same Life / Quick Life student path")
     quick: bool = Field(default=True, description="Same Life as a Quick Life round")
+    quick_student_id: ShortId | None = Field(default=None, description="Premade Quick Life student (ADR 0064)")
     start_year: int | None = Field(default=None, ge=1990, le=2026, description="Same Life / Same Decision history year")
     questions: int = Field(default=8, ge=3, le=15, description="Money Quiz length")
     topic: Literal["mixed", "student_finance", "saving", "debt", "tax"] = "mixed"

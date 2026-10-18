@@ -64,26 +64,26 @@ final class LifeViewModel {
         let canAge = life.alive && life.pendingEvents.isEmpty && !isBusy
         let hint: String
         if !life.alive {
-            hint = "This life is over."
+            hint = L10n.tr("This life is over.")
         } else if !life.pendingEvents.isEmpty {
-            hint = "Answer the open event first."
+            hint = L10n.tr("Answer the open event first.")
         } else {
-            hint = "Live one more year."
+            hint = L10n.tr("Live one more year.")
         }
         let hasPass = hasRewindPass || life.rewind.hasPass == true
         let rewindText: String
         if hasPass {
-            rewindText = "Rewind Pass: unlimited rewinds"
+            rewindText = L10n.tr("Rewind Pass: unlimited rewinds")
         } else if life.rewind.freeLeft == 1 {
             rewindText = "1 free rewind left"
         } else {
-            rewindText = "\(life.rewind.freeLeft) free rewinds left"
+            rewindText = L10n.tr("\(life.rewind.freeLeft) free rewinds left")
         }
         let pending = life.pendingEvents.first.map { event in
             LifeViewState.PendingEvent(
                 id: event.id,
                 title: event.title,
-                subtitle: "Choose before you age up",
+                subtitle: L10n.tr("Choose before you age up"),
                 area: area(event.area.rawValue),
                 areaLabel: area(event.area.rawValue).capitalized
             )
@@ -94,7 +94,7 @@ final class LifeViewModel {
                 name: life.character.name,
                 age: life.age,
                 year: life.year,
-                jobTitle: life.job?.title ?? "No job",
+                jobTitle: life.job?.title ?? L10n.tr("No job"),
                 town: life.character.town,
                 isAlive: life.alive,
                 causeOfDeath: life.causeOfDeath
@@ -110,6 +110,7 @@ final class LifeViewModel {
             outcome: outcome.map(StateMapping.outcome),
             canAge: canAge,
             isAging: isBusy,
+            nextAge: life.nextAge(mayBeQuick: life.roomCode != nil),
             ageHint: hint,
             ageCount: ageCount,
             history: StateMapping.history(life.history),
@@ -142,7 +143,7 @@ final class LifeViewModel {
             if let index = groups.firstIndex(where: { $0.year == entry.year }) {
                 groups[index].lines.append(entry.text)
             } else {
-                groups.append(.init(year: entry.year, age: entry.age, title: "\(entry.year) · Age \(entry.age)", lines: [entry.text]))
+                groups.append(.init(year: entry.year, age: entry.age, title: L10n.tr("\(entry.year) · Age \(entry.age)"), lines: [entry.text]))
             }
         }
         return groups.reversed()
@@ -167,4 +168,14 @@ final class LifeViewModel {
         showsSummary: false,
         showsDecision: false
     )
+}
+
+extension Life {
+    /// The age after the next AGE tap, from the engine rule: one tap is one year (`lifeline_sim` `step_year`).
+    /// A Quick Life tap moves 1 or 2 years by a server-side plan the app cannot see, so a life that may be a
+    /// Quick Life (a room life) returns nil until the contract carries the next age. Nil when the life is over.
+    func nextAge(mayBeQuick: Bool) -> Int? {
+        guard alive, !mayBeQuick else { return nil }
+        return age + 1
+    }
 }

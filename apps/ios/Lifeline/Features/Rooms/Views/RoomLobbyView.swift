@@ -9,7 +9,7 @@ struct RoomLobbyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                ScreenHeader(title: "Your lobby", leading: HeaderSquareButton(kind: .back, identifier: "room.leave", action: actions.onLeave)) {
+                ScreenHeader(title: L10n.tr("Your lobby"), leading: HeaderSquareButton(kind: .back, identifier: "room.leave", action: actions.onLeave)) {
                     if state.isSampleData { DemoDataBadge() }
                 }
                 if let connection = state.connection {
@@ -38,18 +38,18 @@ struct RoomLobbyView: View {
 
     @ViewBuilder
     private func content(_ room: RoomLobbyViewState.RoomInfo) -> some View {
-        // Hero: big QR and the short code.
+        // Hero: the QR and, next to it, the 4-digit code, large enough to read aloud (ADR 0064).
         VStack(spacing: Theme.Spacing.m) {
-            RoomQRImage(png: room.qrPNG, size: 220)
-                .accessibilityLabel("QR code for room \(room.code). Friends scan it in Play, Join a game.")
-                .accessibilityIdentifier("room.qr")
-            Text(room.code)
-                .font(.llHero)
-                .tracking(4)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .accessibilityLabel("Room code \(room.code.map(String.init).joined(separator: " "))")
-                .accessibilityIdentifier("room.codeLabel")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Theme.Spacing.l) {
+                    qr(room, size: 160)
+                    code(room)
+                }
+                VStack(spacing: Theme.Spacing.m) {
+                    qr(room, size: 200)
+                    code(room)
+                }
+            }
             Text("Friends scan this, or type the code in Play.")
                 .font(.llLabel)
                 .foregroundStyle(Theme.Palette.muted)
@@ -67,7 +67,7 @@ struct RoomLobbyView: View {
         // Players: faces with a ready tick.
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             HStack {
-                BlockTitle(text: state.playersTitle.isEmpty ? "Players · \(room.players.count) of \(room.maxPlayers)" : state.playersTitle)
+                BlockTitle(text: state.playersTitle.isEmpty ? L10n.tr("Players · \(room.players.count) of \(room.maxPlayers)") : state.playersTitle)
                 Text(room.modeLabel).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1)
             }
             FlowRow(spacing: Theme.Spacing.m) {
@@ -104,7 +104,7 @@ struct RoomLobbyView: View {
         }
         if state.isHost {
             if state.canPickGame {
-                Button(state.game == nil ? "Pick a game" : "Change the game", action: actions.onPickGame)
+                Button(state.game == nil ? L10n.tr("Pick a game") : L10n.tr("Change the game"), action: actions.onPickGame)
                     .buttonStyle(state.game == nil ? AnyButtonStyle(.main) : AnyButtonStyle(.second))
                     .accessibilityIdentifier("room.pickGame")
             }
@@ -123,6 +123,29 @@ struct RoomLobbyView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .accessibilityIdentifier("room.waiting")
         }
+    }
+
+    private func qr(_ room: RoomLobbyViewState.RoomInfo, size: CGFloat) -> some View {
+        RoomQRImage(png: room.qrPNG, size: size)
+            .accessibilityLabel(L10n.tr("QR code for room \(room.code). Friends scan it in Play, Join a game."))
+            .accessibilityIdentifier("room.qr")
+    }
+
+    private func code(_ room: RoomLobbyViewState.RoomInfo) -> some View {
+        VStack(spacing: Theme.Spacing.xs) {
+            Text("Room code").llEyebrow()
+            Text(room.code)
+                .font(.llHero)
+                .scaleEffect(1.4)
+                .padding(.vertical, Theme.Spacing.s)
+                .tracking(6)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr("Room code \(room.code.map(String.init).joined(separator: " "))"))
+        .accessibilityIdentifier("room.codeLabel")
     }
 }
 
@@ -146,13 +169,20 @@ struct LobbyFace: View {
                         .accessibilityHidden(true)
                 }
             }
-            Text(player.isMe ? "You" : player.name).font(.llLabelBold).lineLimit(1)
-            Text(player.isHost ? "Host" : player.statusText).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1)
+            Text(player.isMe ? L10n.tr("You") : player.name).font(.llLabelBold).lineLimit(1)
+            Text(player.isHost ? L10n.tr("Host") : player.statusText).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1)
         }
         .frame(width: 76)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(player.isMe ? "You" : player.name)\(player.isHost ? ", host" : ""), \(player.statusText)")
+        .accessibilityLabel(spoken(player))
         .accessibilityIdentifier("room.player.\(player.id)")
+    }
+}
+
+extension LobbyFace {
+    fileprivate func spoken(_ player: RoomLobbyViewState.Player) -> String {
+        let name = player.isMe ? L10n.tr("You") : player.name
+        return player.isHost ? L10n.tr("\(name), host, \(player.statusText)") : L10n.tr("\(name), \(player.statusText)")
     }
 }
 

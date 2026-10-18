@@ -32,13 +32,11 @@ extension Fixtures {
                     .init(id: "money.offline", title: "Money home", detail: "Offline"),
                 ]),
                 .init(id: "select", title: "Choose a life", entries: [
-                    .init(id: "select.ready", title: "Character select", detail: "Presets, Random, locked God Mode"),
-                    .init(id: "select.godOwned", title: "Character select", detail: "God Mode owned"),
+                    .init(id: "select.ready", title: "Character select", detail: "Play yourself, presets, Random"),
                     .init(id: "select.loading", title: "Character select", detail: "Loading"),
                     .init(id: "select.offline", title: "Character select", detail: "Offline error"),
                     .init(id: "form.self", title: "Play yourself form", detail: "Empty"),
                     .init(id: "form.bank", title: "Play yourself form", detail: "Filled from bank (sample)"),
-                    .init(id: "form.god", title: "God Mode form", detail: "Banker quick pick"),
                     .init(id: "year.preset", title: "Start year", detail: "Preset"),
                     .init(id: "year.starting", title: "Start year", detail: "Starting"),
                 ]),
@@ -91,9 +89,6 @@ extension Fixtures {
                     .init(id: "decision.ready", title: "Real-life decision", detail: "Fix for 5 years"),
                     .init(id: "decision.loading", title: "Real-life decision", detail: "Loading"),
                     .init(id: "decision.error", title: "Real-life decision", detail: "Error"),
-                    .init(id: "store.fresh", title: "Store", detail: "Demo payment"),
-                    .init(id: "store.purchasing", title: "Store", detail: "Purchasing"),
-                    .init(id: "store.owned", title: "Store", detail: "Rewind Pass owned"),
                     .init(id: "bank.intro", title: "Bank connect", detail: "Intro"),
                     .init(id: "bank.connecting", title: "Bank connect", detail: "Connecting"),
                     .init(id: "bank.connected", title: "Bank connect", detail: "Connected, sample data"),
@@ -153,7 +148,6 @@ extension Fixtures {
                         .init(id: "w7rooms.result", title: "Room result", detail: "End"),
                         .init(id: "w7play.withRoom", title: "Play tab", detail: "With a room"),
                         .init(id: "w7you.full", title: "You tab", detail: "Full"),
-                        .init(id: "w7store.godMode", title: "Paywall", detail: "God Mode selected"),
                     ]
                 ),
                 .init(id: "testit", title: "Test it (W7)", entries: TestItFixtures.all.map {

@@ -14,7 +14,7 @@ struct AIDisclosureViewState: Equatable, Sendable, Decodable {
 
     /// Shown when the bundled file is missing or unreadable.
     static let fallback = AIDisclosureViewState(
-        title: "How \(Brand.productName) uses AI",
+        title: L10n.tr("How \(Brand.productName) uses AI"),
         sections: [
             .init(heading: "Where AI is used", points: ["An AI model rewords text on our server. The app never calls it."]),
             .init(heading: "What stays deterministic", points: ["Every number comes from your data, a public data source or the engine."]),

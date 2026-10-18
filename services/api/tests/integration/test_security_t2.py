@@ -72,20 +72,29 @@ async def test_failed_money_write_is_503_and_not_used(client: httpx.AsyncClient,
     assert me["has_finance_data"] is False and me["finance_inputs"] == []
 
 
-def test_client_ip_uses_rightmost_forwarded_entry() -> None:
-    def scope(xff: str | None) -> dict[str, Any]:
-        headers = [(b"x-forwarded-for", xff.encode())] if xff is not None else []
-        return {"client": ("10.0.0.9", 1234), "headers": headers}
+def test_client_ip_trusts_only_the_proxy_hop() -> None:
+    from types import SimpleNamespace
 
-    assert client_ip(scope("6.6.6.6, 203.0.113.7")) == "203.0.113.7", "the leftmost entry is client-controlled"
-    assert client_ip(scope("203.0.113.7")) == "203.0.113.7"
-    assert client_ip(scope(None)) == "10.0.0.9"
+    def scope(xff: str | None, hops: int | None, env: str = "dev") -> dict[str, Any]:
+        settings = SimpleNamespace(trusted_proxy_hops=hops, app_env=env)
+        app = SimpleNamespace(state=SimpleNamespace(lifeline=SimpleNamespace(settings=settings)))
+        headers = [(b"x-forwarded-for", xff.encode())] if xff is not None else []
+        return {"client": ("10.0.0.9", 1234), "headers": headers, "app": app}
+
+    # Behind Railway (1 trusted hop): the rightmost entry is the client; entries to its left are client-written.
+    assert client_ip(scope("6.6.6.6, 203.0.113.7", 1)) == "203.0.113.7"
+    assert client_ip(scope("6.6.6.6, 203.0.113.7", None, env="prod")) == "203.0.113.7", "prod default: 1 hop"
+    # No trusted proxy (local, tests): X-Forwarded-For is ignored entirely, so it cannot be faked.
+    assert client_ip(scope("6.6.6.6, 203.0.113.7", 0)) == "10.0.0.9"
+    assert client_ip(scope("203.0.113.7", None)) == "10.0.0.9"
+    assert client_ip(scope(None, 1)) == "10.0.0.9"
 
 
 @pytest.fixture
 async def strict_auth(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[httpx.AsyncClient]:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("AUTH_RATE_LIMIT_PER_MINUTE", "3")
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")  # as on Railway
     from lifeline_api.main import app
 
     transport = httpx.ASGITransport(app=app)

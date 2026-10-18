@@ -17,6 +17,7 @@ struct YouView: View {
                 case .ready:
                     header
                 }
+                if let habits = state.habits { habitCard(habits) }
                 scores
                 if !state.personalFacts.isEmpty { facts }
                 bankAndData
@@ -27,7 +28,7 @@ struct YouView: View {
                         ForEach(state.credits, id: \.self) {
                             Text($0).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                         }
-                        Text("Version \(state.versionText) · \(state.clientText) data")
+                        Text(L10n.tr("Version \(state.versionText) · \(state.clientText) data"))
                             .font(.llLabel).foregroundStyle(Theme.Palette.muted)
                     }
                     .accessibilityElement(children: .combine)
@@ -76,6 +77,38 @@ struct YouView: View {
             .accessibilityHint("Opens your account: sign out, reset or delete")
             .accessibilityIdentifier("you.profile")
         }
+    }
+
+    /// Habit score (ADR 0066): overall 0-100 and six ratios as bars. No amounts.
+    private func habitCard(_ card: HabitCard) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Money habits").font(.llBodyBold)
+                Spacer()
+                if let overall = card.overall {
+                    Text("\(overall)").font(.llHero).contentTransition(.numericText(value: Double(overall)))
+                    Text("/ 100").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                }
+            }
+            ForEach(card.rows) { row in
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    HStack {
+                        Text(row.name).font(.llLabel)
+                        Spacer()
+                        Text("\(row.value)").font(.llLabelBold)
+                    }
+                    InkProgressBar(value: Double(row.value) / 100, height: 12)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(row.name))
+                .accessibilityValue("\(row.value) out of 100")
+            }
+        }
+        .padding(Theme.Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .inkSurface(.card)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("you.habits")
     }
 
     private var scores: some View {
@@ -139,9 +172,10 @@ struct YouView: View {
             VStack(spacing: 0) {
                 row(icon: .why, title: "Ask Penny", id: "you.askPenny", action: actions.onAskPenny)
                 RuleDivider()
-                row(icon: .lesson, title: "How \(Brand.productName) uses AI", id: "you.aiDisclosure", action: actions.onOpenAIDisclosure)
+                row(icon: .travel, title: "Change language", id: "you.changeLanguage", action: actions.onChangeLanguage)
                 RuleDivider()
-                // Store hidden under V2 until everything else is green (BOSS).
+                row(icon: .lesson, title: L10n.tr("How \(Brand.productName) uses AI"), id: "you.aiDisclosure", action: actions.onOpenAIDisclosure)
+                RuleDivider()
                 row(icon: .check, title: "Your plan", id: "you.plan", action: actions.onOpenPlan)
                 RuleDivider()
                 if state.showsEvaluation {

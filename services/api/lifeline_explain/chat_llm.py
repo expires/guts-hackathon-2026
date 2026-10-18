@@ -102,7 +102,9 @@ class AnthropicChatLLM:
         elif "haiku" in self._model:
             self._thinking = {"thinking": {"type": "disabled"}}
         self._client = AsyncAnthropic(
-            api_key=os.environ["ANTHROPIC_API_KEY"], timeout=settings.timeout_seconds, max_retries=1
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+            timeout=settings.chat_deadline,  # Penny also cancels the whole answer at this deadline
+            max_retries=1,
         )
 
     def __repr__(self) -> str:

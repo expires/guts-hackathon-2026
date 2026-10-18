@@ -10,13 +10,17 @@ final class PlayViewModel {
         case life
         case rooms
         case concepts
+        /// Show the Money tab: a "you" challenge is scored on your own money, not on a life.
+        case money
     }
 
-    static let loadingMessage = "Loading your lives"
+    static var loadingMessage: String { L10n.tr("Loading your lives") }
 
     private let session: GameSession
     private(set) var lives: [LifeListItem] = []
     private(set) var challenges: [Challenge] = []
+    /// The caller's progress on "you" challenges (scored on their own money data). Not disk cached: it is per user.
+    private(set) var progress: [ChallengeProgress] = []
     private(set) var conceptsTotal = 0
     private(set) var phase: LoadPhase = .loading(.init(message: PlayViewModel.loadingMessage))
     @ObservationIgnored var onRoute: @MainActor (Route) -> Void = { _ in }
@@ -27,7 +31,7 @@ final class PlayViewModel {
 
     var state: PlayViewState {
         Self.makeState(
-            lives: lives, challenges: challenges, conceptsTotal: conceptsTotal, phase: phase,
+            lives: lives, challenges: challenges, progress: progress, conceptsTotal: conceptsTotal, phase: phase,
             current: session.life, isSampleData: session.usesSampleData, isBusy: session.isBusy
         )
     }
@@ -55,6 +59,7 @@ final class PlayViewModel {
             self?.challenges = challenges
             self?.phase = .ready
         }
+        if let progress = try? await client.listChallengeProgress() { self.progress = progress }
         do {
             lives = try await client.listLives().lives
             phase = .ready
@@ -72,8 +77,13 @@ final class PlayViewModel {
     }
 
     /// Starts the challenge's preset character in its start year.
+    /// A "you" challenge has no life: it shows the Money tab instead (POST /v1/lives would return 404).
     func startChallenge(_ id: String) async {
         guard let challenge = challenges.first(where: { $0.id == id }) else { return }
+        if challenge.scope == .you {
+            onRoute(.money)
+            return
+        }
         let request = CreateLifeRequest(mode: .preset, startYear: challenge.startYear, presetId: challenge.characterId)
         if await session.startLife(request) { onRoute(.life) }
     }
@@ -83,6 +93,7 @@ final class PlayViewModel {
     static func makeState(
         lives: [LifeListItem],
         challenges: [Challenge],
+        progress: [ChallengeProgress] = [],
         conceptsTotal: Int,
         phase: LoadPhase,
         current: Life?,
@@ -91,7 +102,6 @@ final class PlayViewModel {
     ) -> PlayViewState {
         let ribbons = lives.reduce(0) { $0 + $1.ribbons }
         let unlocked = current?.conceptsUnlocked.count ?? 0
-        let lifeWord = lives.count == 1 ? "life" : "lives"
         return PlayViewState(
             phase: phase,
             lives: lives.map { item in
@@ -99,7 +109,7 @@ final class PlayViewModel {
                     id: item.id,
                     emoji: item.emoji,
                     name: item.name,
-                    detail: item.alive ? "Age \(item.age) in \(item.year)" : "Died at \(item.age) in \(item.year)",
+                    detail: item.alive ? L10n.tr("Age \(item.age) in \(String(item.year))") : L10n.tr("Died at \(item.age) in \(String(item.year))"),
                     isAlive: item.alive,
                     index: item.index,
                     netWorth: item.netWorth,
@@ -107,19 +117,47 @@ final class PlayViewModel {
                     isCurrent: item.id == current?.id
                 )
             },
-            challenges: challenges.map {
-                .init(id: $0.id, emoji: $0.emoji, title: $0.title, description: $0.description, detail: "Starts in \($0.startYear)")
-            },
+            challenges: challenges.map { challengeRow($0, progress: progress) },
             ribbonsTotal: ribbons,
-            ribbonsText: "\(ribbons == 1 ? "1 ribbon" : "\(ribbons) ribbons") across \(lives.count) \(lifeWord)",
+            ribbonsText: ribbonsText(ribbons: ribbons, lives: lives.count),
             conceptsUnlocked: unlocked,
             conceptsTotal: conceptsTotal,
-            conceptsText: "\(unlocked) of \(conceptsTotal) concepts collected",
+            conceptsText: L10n.tr("\(unlocked) of \(conceptsTotal) concepts collected"),
             continueText: current.flatMap { life in
-                life.alive ? "Continue as \(life.character.name), age \(life.age)" : nil
+                life.alive ? L10n.tr("Continue as \(life.character.name), age \(life.age)") : nil
             },
             isSampleData: isSampleData,
             isBusy: isBusy
         )
+    }
+
+    /// A life challenge shows its start year. A "you" challenge shows its progress on your own money.
+    static func challengeRow(_ challenge: Challenge, progress: [ChallengeProgress]) -> PlayViewState.ChallengeRow {
+        guard challenge.scope == .you else {
+            return .init(id: challenge.id, emoji: challenge.emoji, title: challenge.title, description: challenge.description,
+                         detail: L10n.tr("Starts in \(String(challenge.startYear))"))
+        }
+        let entry = progress.first { $0.challengeId == challenge.id && $0.lifeId == nil }
+        let status: PlayViewState.ChallengeRow.Status? = switch entry?.status {
+        case .won: .won
+        case .lost: .lost
+        case .inProgress: .inProgress
+        case nil: nil
+        }
+        return .init(
+            id: challenge.id, emoji: challenge.emoji, title: challenge.title, description: challenge.description,
+            detail: entry?.detail ?? L10n.tr("Scored on your own money. Tap to see it."),
+            isYou: true, status: status
+        )
+    }
+
+    /// "4 ribbons across 3 lives", with singular forms as full sentences for translation.
+    static func ribbonsText(ribbons: Int, lives: Int) -> String {
+        switch (ribbons == 1, lives == 1) {
+        case (true, true): L10n.tr("1 ribbon across 1 life")
+        case (true, false): L10n.tr("1 ribbon across \(lives) lives")
+        case (false, true): L10n.tr("\(ribbons) ribbons across 1 life")
+        case (false, false): L10n.tr("\(ribbons) ribbons across \(lives) lives")
+        }
     }
 }

@@ -406,6 +406,7 @@ actor MockClient: LifelineClient {
 
     func listConcepts() async throws -> [Concept] { data.concepts }
     func listChallenges() async throws -> [Challenge] { data.challenges }
+    func listChallengeProgress() async throws -> [ChallengeProgress] { [] }
 
     // MARK: Decision
 
@@ -427,14 +428,24 @@ actor MockClient: LifelineClient {
         return room
     }
 
-    func listPaths() async throws -> [StudentPath] {
-        [
-            .init(id: "uni", title: "University", description: "3-year degree with a maintenance loan", startAge: 18, quick: true),
-            .init(id: "apprentice", title: "Apprenticeship", description: "Earn while you learn", startAge: 18, quick: true),
-            .init(id: "job18", title: "Job at 18", description: "Start work straight after school", startAge: 18, quick: true),
-            .init(id: "gap_year", title: "Gap year", description: "Work and travel, then decide", startAge: 18, quick: true),
-            .init(id: "masters", title: "Master's", description: "One more year of study after a degree", startAge: 21, quick: false),
-        ]
+    /// The server's 5 paths and 5 Quick Life students (`lifeline_sim/paths.py`, ADR 0064).
+    func listPaths() async throws -> PathsResponse {
+        PathsResponse(
+            paths: [
+                .init(id: "uni", title: "University", description: "Three years of study with student loans, then a graduate job.", startAge: 18, quick: true),
+                .init(id: "apprentice", title: "Apprenticeship", description: "Earn while you train for three years. No fees, no student loan.", startAge: 18, quick: true),
+                .init(id: "job18", title: "Job at 18", description: "Start work straight after school and live at home.", startAge: 18, quick: true),
+                .init(id: "gap_year", title: "Gap year", description: "Work for a year, then three years at university.", startAge: 18, quick: true),
+                .init(id: "masters", title: "Master's degree", description: "A one-year master's after your degree, paid with a postgraduate loan.", startAge: 21, quick: false),
+            ],
+            quickStudents: [
+                .init(id: "qs-priya", name: "Priya", pathId: "uni", description: "University in Birmingham, paid with the full student loan."),
+                .init(id: "qs-amara", name: "Amara", pathId: "uni", description: "University in London with a £2,000 a year bursary."),
+                .init(id: "qs-jordan", name: "Jordan", pathId: "apprentice", description: "Electrician apprentice in Manchester. Paid to train."),
+                .init(id: "qs-kai", name: "Kai", pathId: "job18", description: "Starts work at 18 in Leeds and lives at home."),
+                .init(id: "qs-maya", name: "Maya", pathId: "gap_year", description: "Works a gap year in Bristol, then goes to university."),
+            ]
+        )
     }
 
     func listCircles() async throws -> [PlayCircle] { circles }
@@ -766,10 +777,22 @@ enum MockExamples {
     {"samples": [
      {"id": "scholarship", "title": "Scholarship student",
       "description": "Scholarship and bursary, about £420 a month, no debt",
-      "funding": ["scholarship", "bursary"], "months": 3, "team": false},
+      "funding": ["scholarship", "bursary"], "months": 3, "team": false,
+      "name": "Amara Okoye", "age": 19, "avatar": "face-teen-hijab", "uni": "University of Sheffield", "city": "Sheffield",
+      "funding_label": "Scholarship + bursary",
+      "money_in": [{"label": "Scholarship", "amount": 280.0, "period": "month", "dates": "1st of each month"},
+                   {"label": "University bursary", "amount": 140.0, "period": "month", "dates": "15th of each month"}],
+      "housing": "Halls, paid by the scholarship",
+      "habit_line": "Not counting rent and bills, spends most on food shopping; saved £180 in 3 months"},
      {"id": "working", "title": "Working student",
       "description": "Maintenance loan and part-time pay, uses an overdraft",
-      "funding": ["maintenance_loan", "part_time_job"], "months": 3, "team": false}]}
+      "funding": ["maintenance_loan", "part_time_job"], "months": 3, "team": false,
+      "name": "Callum Reid", "age": 21, "avatar": "face-man-beard", "uni": "University of Leeds", "city": "Leeds",
+      "funding_label": "Student Finance England + bar job",
+      "money_in": [{"label": "Maintenance loan", "amount": 1638.0, "period": "term", "dates": "28 Sep, 18 Jan, 26 Apr"},
+                   {"label": "Bar job", "amount": 85.67, "period": "week", "dates": "Every Friday, pay varies"}],
+      "housing": "Shared house in Hyde Park, £460 a month",
+      "habit_line": "Not counting rent and bills, spends most on shopping; often in the overdraft"}]}
     """#) as Components.Schemas.SamplesResponse).samples
 
     static let habits: HabitScore = ContractExamples.decode(#"""
@@ -807,8 +830,7 @@ enum MockExamples {
     {"thread_id": "th_1", "message_id": "msg_2", "reply_to": "msg_1", "reaction": "brain",
      "bubbles": [
       {"id": "b1", "kind": "answer", "text": "Yes, for about 4 months. Your savings cover your bills and mortgage until April."},
-      {"id": "b2", "kind": "caveat", "text": "This assumes your bills stay the same and you spend nothing extra."},
-      {"id": "b3", "kind": "question", "text": "Do you want me to add a holiday in June?"}],
+      {"id": "b2", "kind": "caveat", "text": "This assumes your bills stay the same and you spend nothing extra."}],
      "highlights": [{"bubble_id": "b1", "start": 17, "length": 8, "fact_id": "f_cover", "source_id": "s_you"}],
      "facts": [{"id": "f_cover", "value": 4.0, "unit": "months", "label": "Months of cover", "source_id": "s_you"}],
      "sources": [
@@ -818,7 +840,7 @@ enum MockExamples {
        "ref": {"source": "boe", "series_id": "IUMBEDR", "status": "live"}, "updated_at": "2026-10-17T12:00:00Z"}],
      "follow_up_question": "Do you want me to add a holiday in June?", "confidence": 0.8,
      "tool_calls": [{"name": "cash_flow_projection", "ok": true, "duration_ms": 120}],
-     "verified": true, "summary_available": false, "links": [], "disclaimer": "Not financial advice"}
+     "verified": true, "summary_available": false, "links": []}
     """#)
 
     /// Out-of-scope reply (ADR 0031): fixed text, reaction `shrug`, link to the Next Move.
@@ -826,7 +848,7 @@ enum MockExamples {
     {"thread_id": "th_1", "message_id": "msg_2", "reply_to": "msg_1", "reaction": "shrug",
      "bubbles": [{"id": "b1", "kind": "answer", "text": "I cannot help with that. I can show you your next money move."}],
      "highlights": [], "facts": [], "sources": [], "confidence": 1.0, "tool_calls": [],
-     "verified": true, "summary_available": false, "links": ["next_move"], "disclaimer": "Not financial advice"}
+     "verified": true, "summary_available": false, "links": ["next_move"]}
     """#)
 
     static let chatThreads: ChatThreadsResponse = ContractExamples.decode(#"""
@@ -963,5 +985,16 @@ private actor MockRoomState {
         change(&player)
         you = player
         room.players[position] = player
+    }
+}
+
+// MARK: Learn (ADR 0068)
+extension MockClient: LearnService {
+    func learnPath(language: AppLanguage) async throws -> LearnWire.Path { try await MockLearnService.shared.learnPath(language: language) }
+    func learnLesson(id: String, language: AppLanguage) async throws -> LearnWire.Lesson {
+        try await MockLearnService.shared.learnLesson(id: id, language: language)
+    }
+    func attemptLearnLesson(id: String, answers: [String: String], language: AppLanguage) async throws -> LearnWire.AttemptResult {
+        try await MockLearnService.shared.attemptLearnLesson(id: id, answers: answers, language: language)
     }
 }

@@ -24,8 +24,8 @@ final class PennyTabModel {
         chat.isTab = true
     }
 
-    /// "Ask Penny" from Money, Why?, a Life event or the Next Move card: loads the context into this chat
-    /// and sends its question, if any.
+    /// "Ask Penny" from Money, Why?, Test it or the Next Move card. With a question: a NEW chat with this
+    /// context, question sent at once. Without a question: the same chat with the new context.
     func ask(_ context: PennyContext) {
         chat.ask(context)
     }

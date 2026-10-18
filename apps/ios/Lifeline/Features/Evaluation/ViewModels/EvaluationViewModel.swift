@@ -5,7 +5,7 @@ import Observation
 @MainActor
 @Observable
 final class EvaluationViewModel {
-    static let loadingMessage = "Loading the backtest"
+    static var loadingMessage: String { L10n.tr("Loading the backtest") }
 
     private let client: any LifelineClient
     private(set) var evaluation: Evaluation?
@@ -55,13 +55,13 @@ final class EvaluationViewModel {
             method: evaluation.method,
             hitRate: evaluation.hitRate,
             baselineHitRate: evaluation.baselineHitRate,
-            hitText: "Right in \(FinanceMapping.percent(evaluation.hitRate)) of \(evaluation.n) past \(periodWord).",
-            baselineText: "\(evaluation.baseline.prefix(1).uppercased() + evaluation.baseline.dropFirst()): right in \(FinanceMapping.percent(evaluation.baselineHitRate)).",
+            hitText: L10n.tr("Right in \(FinanceMapping.percent(evaluation.hitRate)) of \(evaluation.n) past \(periodWord)."),
+            baselineText: L10n.tr("\(evaluation.baseline.prefix(1).uppercased() + evaluation.baseline.dropFirst()): right in \(FinanceMapping.percent(evaluation.baselineHitRate))."),
             periods: evaluation.periods.map { period in
                 .init(
                     id: "\(period.start)-\(period.end)",
                     rangeText: "\(period.start) to \(period.end)",
-                    detail: "Advice: \(optionLabel(period.recommended)). Best in hindsight: \(optionLabel(period.realisedBest)).",
+                    detail: L10n.tr("Advice: \(optionLabel(period.recommended)). Best in hindsight: \(optionLabel(period.realisedBest))."),
                     isHit: period.hit
                 )
             },

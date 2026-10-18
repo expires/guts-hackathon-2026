@@ -23,6 +23,7 @@ from lifeline_contracts.finance import (
 )
 from lifeline_engine.money import dates
 from lifeline_engine.money.categorise import categorise
+from lifeline_engine.money.categorise import label as category_label
 from lifeline_engine.money.recurring import detect_recurring, detect_salary, detect_subscriptions
 from lifeline_engine.money.spending import by_category, monthly_totals
 from lifeline_engine.money.text import clean_name, gbp, money_value
@@ -353,9 +354,20 @@ def profile(
 # ---------- personal facts ----------
 
 
+PERSONAL_FACTS_SHOWN = 3  # "3 things Penny noticed" (ADR 0069)
+# Rent and bills are not an everyday habit; money moved, cash and uncategorised rows are not a named habit.
+NOT_HABIT_CATEGORIES = ("housing", "bills", "other", "transfers", "savings", "cash", "fees", "income")
+
+
+def _plural(n: int, one: str, many: str | None = None) -> str:
+    return f"{n} {one if n == 1 else (many or one + 's')}"
+
+
 def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
     """Sentences with the user's real numbers. Every number in `text` is a value in `facts`.
-    Concept ids exist in lifeline_sim concepts. Reference day is the snapshot's as_of."""
+    Concept ids exist in lifeline_sim concepts. Reference day is the snapshot's as_of.
+    The main facts come first; extra facts (biggest spending, next money in, buy now pay later) fill the list up
+    to PERSONAL_FACTS_SHOWN when the data allows (ADR 0069)."""
     today = dates.parse(snapshot.as_of)
     out: list[PersonalFact] = []
     subs = detect_subscriptions(snapshot.transactions, today)
@@ -365,7 +377,7 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
             PersonalFact(
                 id="subscriptions_total",
                 concept_id="budgeting",
-                text=f"You spend {gbp(total)} a month on {len(subs)} subscriptions.",
+                text=f"You spend {gbp(total)} a month on {_plural(len(subs), 'subscription')}.",
                 facts={"monthly_total": money_value(total), "count": float(len(subs))},
             )
         )
@@ -390,14 +402,15 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
     cash = liquid(snapshot)
     if spend is not None:
         months = round(max(0.0, cash) / spend, 1)
-        out.append(
-            PersonalFact(
-                id="emergency_months",
-                concept_id="emergency-fund",
-                text=f"Your cash and savings cover {months:g} months of {costs_word(snapshot, today)}.",
-                facts={"months": months, "liquid": money_value(cash), "monthly_spend": money_value(spend)},
-            )
-        )
+        # Signed cash: an overdrawn account is negative cash and covers 0 months, never "+£371 liquid".
+        signed = {"months": months, "liquid": float(round(cash)), "monthly_spend": money_value(spend)}
+        if cash < 0:
+            text = (f"You are {gbp(cash)} in your overdraft, so your cash covers 0 months of "
+                    f"{costs_word(snapshot, today)}.")
+            signed["months"] = 0.0
+        else:
+            text = f"Your cash and savings cover {months:g} months of {costs_word(snapshot, today)}."
+        out.append(PersonalFact(id="emergency_months", concept_id="emergency-fund", text=text, facts=signed))
     debt = debt_total(snapshot)
     if debt > 0:
         out.append(
@@ -429,7 +442,62 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
                 facts={"savings": money_value(sav), "interest": money_value(interest)},
             )
         )
+    for extra in (_top_category_fact, _next_money_fact, _bnpl_fact):
+        if len(out) >= PERSONAL_FACTS_SHOWN:
+            break
+        fact = extra(snapshot, today, debt)
+        if fact is not None:
+            out.append(fact)
     return out
+
+
+def _top_category_fact(snapshot: FinanceSnapshot, today: dates.date, _debt: float) -> PersonalFact | None:
+    """Biggest everyday spending category in the last full month of data. Rent and bills are left out."""
+    months = full_data_months(snapshot, full_months_before(today, 1))
+    if not months:
+        return None
+    month = months[-1]
+    spend = {c: v for c, (v, _) in by_category(snapshot.transactions, month).items()
+             if c not in NOT_HABIT_CATEGORIES and v > 0}
+    if not spend:
+        return None
+    top = max(spend, key=lambda c: (spend[c], c))
+    name = category_label(top).lower()
+    return PersonalFact(
+        id=f"top_category_{top}",
+        concept_id="budgeting",
+        text=f"Not counting rent and bills, you spent the most on {name} last month: {gbp(spend[top])}.",
+        facts={"amount": money_value(spend[top])},
+    )
+
+
+def _next_money_fact(snapshot: FinanceSnapshot, today: dates.date, _debt: float) -> PersonalFact | None:
+    """The next payment in from the income sources (statement dates and known schedules)."""
+    upcoming = [(dates.parse(s.next_date), s) for s in snapshot.income_sources
+                if s.next_date is not None and dates.parse(s.next_date) > today and s.amount > 0]
+    if not upcoming:
+        return None
+    day, src = min(upcoming, key=lambda x: (x[0], -x[1].amount))
+    days = (day - today).days
+    return PersonalFact(
+        id=f"next_money_{src.id}",
+        concept_id="budgeting",
+        text=f"Your next money in is {gbp(src.amount)} in {_plural(days, 'day')}.",
+        facts={"amount": money_value(src.amount), "days_left": float(days)},
+    )
+
+
+def _bnpl_fact(snapshot: FinanceSnapshot, _today: dates.date, debt: float) -> PersonalFact | None:
+    """Buy now, pay later still owed, when no card or loan account already shows it."""
+    owed = round(sum(d.balance for d in snapshot.debts if d.kind == "bnpl"), 2)
+    if owed <= 0 or debt > 0:
+        return None
+    return PersonalFact(
+        id="bnpl_owed",
+        concept_id="debt",
+        text=f"You still owe {gbp(owed)} on buy now, pay later plans.",
+        facts={"owed": money_value(owed)},
+    )
 
 
 def interest_earned(snapshot: FinanceSnapshot, today: dates.date) -> float:

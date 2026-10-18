@@ -159,7 +159,9 @@ struct LiveClient: LifelineClient {
     // MARK: Next Move
 
     func nextMove() async throws -> NextMoveResponse {
-        try await call { try await client.getNextMove().ok.body.json }
+        // Move text in the app language (ADR 0069); numbers are the same in every language.
+        let language = Operations.GetNextMove.Input.Query.LanguagePayload(rawValue: AppLanguage.current.rawValue)
+        return try await call { try await client.getNextMove(query: .init(language: language)).ok.body.json }
     }
 
     func testNextMove(moveID: String, optionIDs: [String]?) async throws -> TestMoveResult {
@@ -184,6 +186,10 @@ struct LiveClient: LifelineClient {
 
     func listChallenges() async throws -> [Challenge] {
         try await call { try await client.listChallenges().ok.body.json.challenges }
+    }
+
+    func listChallengeProgress() async throws -> [ChallengeProgress] {
+        try await call { try await client.listChallenges().ok.body.json.progress ?? [] }
     }
 
     // MARK: Decision
@@ -222,8 +228,8 @@ struct LiveClient: LifelineClient {
         try await call { try await client.getHabits().ok.body.json }
     }
 
-    func listPaths() async throws -> [StudentPath] {
-        try await call { try await client.listPaths().ok.body.json.paths }
+    func listPaths() async throws -> PathsResponse {
+        try await call { try await client.listPaths().ok.body.json }
     }
 
     func listCircles() async throws -> [PlayCircle] {
@@ -331,11 +337,21 @@ struct LiveClient: LifelineClient {
     // MARK: Ask Penny
 
     func askPenny(_ request: ChatRequest) async throws -> ChatResponse {
-        try await call { try await client.askPenny(body: .json(request)).ok.body.json }
+        let request = Self.withLanguage(request)
+        return try await call { try await client.askPenny(body: .json(request)).ok.body.json }
+    }
+
+    /// Penny answers in the app language (ADR 0063) unless the caller set `language`.
+    static func withLanguage(_ request: ChatRequest, language: AppLanguage = .current) -> ChatRequest {
+        guard request.language == nil else { return request }
+        var request = request
+        request.language = .init(rawValue: language.rawValue)
+        return request
     }
 
     func askPennyStream(_ request: ChatRequest) -> AsyncThrowingStream<ChatStreamEvent, any Error> {
         let client = self.client
+        let request = Self.withLanguage(request)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -502,5 +518,28 @@ enum DeviceIdentity {
     /// Matches the contract: `^[A-Za-z0-9-]+$`, 8 to 64 characters.
     static func isValid(_ id: String) -> Bool {
         (8...64).contains(id.count) && id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+    }
+}
+
+// MARK: Learn (ADR 0068)
+extension LiveClient: LearnService {
+    func learnPath(language: AppLanguage) async throws -> LearnWire.Path {
+        try await call { try await client.getLearnPath(query: .init(language: .init(rawValue: language.rawValue))).ok.body.json }
+    }
+
+    func learnLesson(id: String, language: AppLanguage) async throws -> LearnWire.Lesson {
+        try await call {
+            try await client.getLearnLesson(path: .init(lessonId: id), query: .init(language: .init(rawValue: language.rawValue))).ok.body.json
+        }
+    }
+
+    func attemptLearnLesson(id: String, answers: [String: String], language: AppLanguage) async throws -> LearnWire.AttemptResult {
+        try await call {
+            try await client.attemptLearnLesson(
+                path: .init(lessonId: id),
+                query: .init(language: .init(rawValue: language.rawValue)),
+                body: .json(.init(answers: .init(additionalProperties: answers)))
+            ).ok.body.json
+        }
     }
 }

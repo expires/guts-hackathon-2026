@@ -7,7 +7,7 @@ import Observation
 @MainActor
 @Observable
 final class NextMoveWhyViewModel {
-    static let loadingMessage = "Loading the lesson"
+    static var loadingMessage: String { L10n.tr("Loading the lesson") }
 
     private let client: any LifelineClient
     let move: Move
@@ -46,6 +46,16 @@ final class NextMoveWhyViewModel {
             onRetry: { [weak self] in Task { await self?.load() } },
             onClose: { [weak self] in self?.onClose() }
         )
+    }
+
+    /// "High", "Medium" or "Low": the same level as the card (the engine's confidence_level). Empty without a level.
+    static func confidenceChip(_ move: Move) -> String {
+        guard let level = move.confidenceLevel else { return "" }
+        return switch level {
+        case .high: L10n.tr("High")
+        case .medium: L10n.tr("Medium")
+        case .low: L10n.tr("Low")
+        }
     }
 
     /// Mortgage moves have a full decision screen (`POST /v1/decisions`).
@@ -94,11 +104,12 @@ final class NextMoveWhyViewModel {
             isSampleData: isSampleData,
             confidence: move.confidence,
             // Same level as the card (the engine's confidence_level), so Why? and the card agree.
-            confidenceChip: String(NextMoveViewModel.move(move, isInPlan: false).confidenceWord.split(separator: " ").first ?? ""),
-            worstCaseText: NextMoveViewModel.isYearly(move) ? "Worst past period: " + NextMoveViewModel.impactText(move.worstCasePerYear) : "",
+            confidenceChip: confidenceChip(move),
+            worstCaseText: NextMoveViewModel.isYearly(move) ? NextMoveViewModel.worstCaseText(move.worstCasePerYear) : "",
             rates: rates(move),
             ratesSourceText: sourcesLine(move.sources + move.evidence.compactMap(\.source) + (move.tradeOff?.points.compactMap(\.source) ?? []))
         )
+        state.confidenceText = NextMoveViewModel.confidenceText(move)
         state.sourceSentences = sourceSentences(move)
         state.tradeOffSummary = move.tradeOff?.summary
         state.tradeOff = (move.tradeOff?.points ?? []).enumerated().map { offset, point in
@@ -129,17 +140,17 @@ final class NextMoveWhyViewModel {
                 }
             }
             if let current = facts["current_rate"] {
-                add(id: "current_rate", label: "Your rate now", value: current, optionID: nil, reference: true)
+                add(id: "current_rate", label: L10n.tr("Your rate now"), value: current, optionID: nil, reference: true)
             }
             for key in facts.keys.sorted() where key.hasPrefix("bank_rate") {
-                if let value = facts[key] { add(id: key, label: "Bank Rate", value: value, optionID: nil, reference: true) }
+                if let value = facts[key] { add(id: key, label: L10n.tr("Bank Rate"), value: value, optionID: nil, reference: true) }
             }
         }
         let top = bars.map(\.value).max() ?? 1
         return bars.map { var bar = $0; bar.fraction = top > 0 ? bar.value / top : 0; return bar }
     }
 
-    static let combiningSentence = "Together: the move weighs all of these at once, which is better than any one source alone."
+    static var combiningSentence: String { L10n.tr("Together: the move weighs all of these at once, which is better than any one source alone.") }
 
     /// One sentence per key source (the first sentence of its first evidence point), at most 3,
     /// then the combining sentence. Empty when no evidence point names a source.
@@ -151,7 +162,8 @@ final class NextMoveWhyViewModel {
             let name = StateMapping.sourceName(ref.source)
             guard !seen.contains(name), lines.count < 3 else { continue }
             seen.append(name)
-            lines.append("\(name): \(firstSentence(point.text))")
+            let sentence = firstSentence(point.text)
+            lines.append(L10n.tr("\(name): \(sentence)"))
         }
         guard !lines.isEmpty else { return [] }
         return lines + [combiningSentence]
@@ -189,7 +201,7 @@ final class NextMoveWhyViewModel {
 
     /// "fix_5y" -> "5-year fix", "fix_2y" -> "2-year fix", "bank_rate" -> "Bank Rate".
     static func rateLabel(_ id: String) -> String {
-        if id.hasPrefix("bank_rate") { return "Bank Rate" }
+        if id.hasPrefix("bank_rate") { return L10n.tr("Bank Rate") }
         if id.hasPrefix("fix_"), let years = Int(id.dropFirst(4).dropLast()) { return "\(years)-year fix" }
         return id.replacingOccurrences(of: "_", with: " ").capitalized
     }

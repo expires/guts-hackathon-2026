@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request
 
-from lifeline_api import challenges, macro
+from lifeline_api import challenges, macro, student_challenges
 from lifeline_api.auth import OptionalSubject, Subject
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.explain_bridge import explain_new_events, explain_outcome
@@ -144,8 +144,21 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
         room = await state.rooms.get(body.room_code)
         if room is None or room.player_of(sub) is None:
             raise not_found("Room not found")
+        seat = room.player_of(sub)
+        if seat is not None and seat.get("life_id"):
+            # The server already made this player's room life at start: return it, never a second one (V5).
+            rec = await state.store.get(seat["life_id"], sub)
+            if rec is not None:
+                return rec.life
         seed = room.seed
         start_year = (room.options or {}).get("start_year") or room.start_year or start_year
+        quick_student_id = (room.options or {}).get("quick_student_id")
+        if quick_student_id:
+            # The host picked a premade Quick Life student: everyone plays the same one (ADR 0064).
+            table, digest = await _current_macro(state, persist=True)
+            life = await call_pure(sim_api.quick_life, new_life_id(), seed=seed, macro=table,
+                                   quick_student_id=quick_student_id, start_year=(room.options or {}).get("start_year"))
+            return await _store_new(state, sub, body, life, digest)
     table, digest = await _current_macro(state, persist=True)
 
     path_id = body.path_id
@@ -162,6 +175,9 @@ async def create_life(body: CreateLifeRequest, request: Request, sub: Subject) -
     if body.mode == "preset":
         if not body.preset_id:
             raise ApiError(422, "validation_error", "preset_id: required when mode is preset")
+        if body.preset_id == student_challenges.YOU:
+            # Student challenges (scope "you") are scored on the user's own money, not on a game life.
+            raise ApiError(422, "validation_error", "This challenge uses your own money, not a game life")
         match = next((p for p in await _presets() if p.id == body.preset_id), None)
         if match is None:
             raise not_found(f"Unknown preset {body.preset_id}")

@@ -223,6 +223,8 @@ def _move_facts(fx: _Facts, prefix: str, mv: Move) -> dict[str, Any]:
     fx.add(f"{prefix}.worst_case_per_year", mv.worst_case_per_year, "gbp_per_year",
            f"{mv.action}: worst case a year")
     fx.add(f"{prefix}.confidence", mv.confidence * 100, "percent", f"{mv.action}: confidence")
+    if mv.sample_size is not None:
+        fx.add(f"{prefix}.sample_size", mv.sample_size, "count", f"{mv.action}: cases behind the confidence")
     if mv.days_left is not None:
         fx.add(f"{prefix}.days_left", mv.days_left, "count", "Days until the deadline")
     if mv.test_period is not None:
@@ -243,6 +245,8 @@ def _move_facts(fx: _Facts, prefix: str, mv: Move) -> dict[str, Any]:
         "action": mv.action,
         "headline": mv.headline,
         "confidence_label": mv.confidence_label,
+        "confidence_text": mv.confidence_text,
+        "reason": mv.reason,
         "evidence": [e.text for e in mv.evidence],
         "options": [{"id": o.id, "label": o.label, "recommended": o.is_recommended} for o in mv.options],
         "testable": mv.testable,
@@ -265,6 +269,7 @@ def tool_next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.da
                "Backtest: always fix for 2 years right")
         fx.add("next_move.backtest.n", r.backtest.n, "count", "Backtest: years tested")
     fx.add("next_move.decision_source_count", r.decision_source_count, "count", "Decision sources")
+    fx.add("next_move.options_compared", r.options_compared, "count", "Moves Penny compared")
     for ref in r.decision_sources:
         fx.src(ref)
     return fx.done(prefix="next_move", result={
@@ -273,6 +278,7 @@ def tool_next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.da
         "runners_up": runners,
         "backtest": r.backtest.model_dump() if r.backtest else None,
         "decision_source_count": r.decision_source_count,
+        "options_compared": r.options_compared,
     })
 
 

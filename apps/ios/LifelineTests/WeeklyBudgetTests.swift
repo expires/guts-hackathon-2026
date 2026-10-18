@@ -67,11 +67,13 @@ struct DirectionV2ScreenTests {
     }
 
     @Test func whyOpensWithOneSentencePerSourceAndATogetherLine() {
-        let move = move(#"""
-        , "evidence": [
+        let move: Move = ContractExamples.decode(#"""
+        {"id": "mv_s", "kind": "weekly_budget", "action": "Set a weekly budget", "headline": "h",
+         "impact_per_year": 0, "worst_case_per_year": 0, "confidence": 0.8, "confidence_label": "x",
+         "sources": [], "options": [], "testable": false, "evidence": [
           {"text": "Your loan arrives on 2 November. That is 3 weeks away.", "facts": {}, "source": {"source": "govuk", "series_id": "loan", "status": "cached"}},
           {"text": "You spend £120 a week on average", "facts": {}, "source": {"source": "bank:sample", "series_id": "s", "status": "mock"}},
-          {"text": "A second gov.uk line.", "facts": {}, "source": {"source": "govuk", "series_id": "x", "status": "cached"}}]
+          {"text": "A second gov.uk line.", "facts": {}, "source": {"source": "govuk", "series_id": "x", "status": "cached"}}]}
         """#)
         let lines = NextMoveWhyViewModel.sourceSentences(move)
         #expect(lines == [
@@ -88,5 +90,20 @@ struct DirectionV2ScreenTests {
             #expect(text.contains(word))
         }
         #expect(!text.contains("\u{2014}"))
+    }
+}
+
+@MainActor
+struct LifetimeISATests {
+    @Test func lifetimeISAShowsGovernmentBonus() {
+        let move: Move = ContractExamples.decode("""
+        {"id": "mv_lisa", "kind": "lifetime_isa", "action": "Open a Lifetime ISA", "headline": "h",
+         "impact_per_year": 238, "worst_case_per_year": 0, "confidence": 0.8, "confidence_label": "x",
+         "evidence": [], "sources": [], "options": [], "testable": false}
+        """)
+        let card = NextMoveViewModel.move(move, isInPlan: false)
+        #expect(card.impactText == "£238 government bonus")
+        #expect(card.impactCaption == "government bonus")
+        #expect(!card.impactText.contains("a year better off"))
     }
 }

@@ -27,6 +27,9 @@ struct NextMoveCardState: Equatable, Sendable {
         var impactCaption: String
         /// "High confidence", "Medium confidence" or "Low confidence".
         var confidenceWord: String
+        /// Plain English for every screen (ADR 0069): "Medium confidence: based on your last 4 weeks of spending".
+        /// Empty hides the confidence block.
+        var confidenceText: String = ""
         /// Filled segments of the 3-segment meter.
         var confidenceFilled: Int
         /// "Worst past period: £310 a year worse off".

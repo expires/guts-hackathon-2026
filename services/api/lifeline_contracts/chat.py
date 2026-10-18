@@ -49,7 +49,9 @@ class RateDecisions(_M):
 # ---------- chat (ADR 0031) ----------
 
 Reaction = Literal["eyes", "brain", "thumbs", "tick", "question", "shrug"]
-Screen = Literal["money", "next_move", "why", "life_event", "life", "other"]
+Screen = Literal[
+    "money", "next_move", "why", "life_event", "life", "onboarding", "room_round", "test_it", "learn_lesson", "other"
+]
 
 
 class ChatContext(_M):
@@ -57,6 +59,19 @@ class ChatContext(_M):
     life_id: ShortId | None = None
     event_id: ShortId | None = None
     screen: Screen | None = None
+    title: str | None = Field(
+        default=None,
+        max_length=80,
+        description="Thread title for a NEW thread, e.g. 'Safety fund, age 19'. Used instead of the first message.",
+    )
+    multiplayer: bool = Field(
+        default=False, description="Room round: Penny explains trade-offs and never picks an option."
+    )
+    room_code: str | None = Field(default=None, max_length=8, description="Room of the round (screen room_round)")
+    lesson_id: ShortId | None = Field(default=None, description="Learn lesson (screen learn_lesson, ADR 0068)")
+    round_id: str | None = Field(
+        default=None, max_length=40, description="Same Decision prompt id; the server loads its options and game money"
+    )
 
 
 class ChatRequest(_M):
@@ -64,6 +79,9 @@ class ChatRequest(_M):
     thread_id: ShortId | None = Field(default=None, description="Omit to start a new thread")
     reply_to: ShortId | None = Field(default=None, description="Message id this question replies to")
     context: ChatContext | None = None
+    language: Literal["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"] = Field(
+        default="en", description="Answer language (ADR 0063); numbers stay in Western digits with £"
+    )
 
 
 ChatMode = Literal["checked", "general"]

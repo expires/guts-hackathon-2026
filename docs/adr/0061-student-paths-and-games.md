@@ -15,3 +15,8 @@ Date: 2026-10-17. Status: accepted. Implements ADR 0052 and 0059 in `lifeline_si
 
 - The game ledger records weekly "wants" spending (baseline £35 students / £90 workers, 2024 prices, CPI-scaled); Quick Life choices raise or lower it. Living costs by path and region are labelled game assumptions in `lifeline_sim/params.py`.
 - Card debt in a Quick Life is capped at a realistic credit limit for an 18 to 25 year old (£3,000 at most); overspending beyond the limit shows as missed payments and a lower habit score, not unlimited debt. Default choices are the neutral option, so a player who taps through gets a middle result, not a debt spiral.
+
+## Amendment (user rule)
+
+- Every offered Life preset is a student or graduate profile. The teacher preset is removed from the offered list too; old ids still load for stored lives.
+- The job-at-18 path keeps its "school leaver" character: it is one of the student-lifecycle start paths (user decision, 2026-10-18).

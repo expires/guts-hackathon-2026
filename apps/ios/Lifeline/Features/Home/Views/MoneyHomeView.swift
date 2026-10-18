@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Money tab (handoff A2-Money, theme Paper, card White; then Money-More when scrolled).
-/// Order: header, Next Move hero, account tiles, spending, coming up, Guess my spend, then the "More" widgets.
+/// Money tab (handoff A2-Money, theme Paper, card White). Order (ADR 0070): header, Next Move, weekly budget,
+/// spending this month, bills, subscriptions, budgets and savings goals, the account line, Guess my spend.
+/// `state.blocks` sets the order; this View only draws each block.
 struct MoneyHomeView: View {
     let state: MoneyHomeViewState
     var actions: MoneyHomeActions = .noop
@@ -19,24 +20,11 @@ struct MoneyHomeView: View {
                 case let .failed(error):
                     ErrorStateView(state: error, onRetry: { Task { await actions.onRefresh() } })
                 case .ready:
-                    NextMoveCardView(state: state.nextMove, actions: actions.nextMove)
-                        .padding(.top, 18)
-                    if let moveID = state.nextMove.displayedMove?.id {
-                        Button { actions.onAskPenny(moveID) } label: {
-                            HStack(spacing: Theme.Spacing.s) {
-                                PennyView(mood: .thinking, size: 28)
-                                Text("Ask Penny about this move")
-                            }
-                        }
-                        .buttonStyle(.text)
-                        .accessibilityIdentifier("money.askPennyMove")
+                    ForEach(state.blocks, id: \.self) { block in
+                        self.block(block)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("money.block.\(block.rawValue)")
                     }
-                    if let budget = state.weeklyBudget {
-                        WeeklyBudgetBlock(budget: budget) { actions.nextMove.onFocus(budget.moveID) }
-                    }
-                    tiles.padding(.top, Theme.Spacing.xs)
-                    GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess)
-                    comingUp
                 }
             }
             .padding(.horizontal, Theme.Spacing.margin)
@@ -72,90 +60,274 @@ struct MoneyHomeView: View {
         .frame(minHeight: 44)
     }
 
-    private var tiles: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.m) {
-            if let tiles = state.tiles {
-                Button { actions.onOpenDetail(.accounts) } label: {
-                    Tile(shape: .card, title: "In your account", value: tiles.balance, caption: state.paydayText)
+    @ViewBuilder
+    private func block(_ block: MoneyHomeViewState.Block) -> some View {
+        switch block {
+        case .nextMove:
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                NextMoveCardView(state: state.nextMove, actions: actions.nextMove)
+                    .padding(.top, 18)
+                if let moveID = state.nextMove.displayedMove?.id {
+                    Button { actions.onAskPenny(moveID) } label: {
+                        HStack(spacing: Theme.Spacing.s) {
+                            PennyView(mood: .thinking, size: 28)
+                            Text("Ask Penny about this move")
+                        }
+                        .frame(minHeight: Theme.minTarget)
+                    }
+                    .buttonStyle(.text)
+                    .accessibilityIdentifier("money.askPennyMove")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("money.balance")
-                Button { actions.onOpenDetail(.netWorth) } label: {
-                    Tile(shape: .cardAlt, title: "Net worth", value: tiles.netWorth)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("money.netWorth")
             }
+        case .weeklyBudget:
+            if let budget = state.weeklyBudget {
+                WeeklyBudgetBlock(budget: budget) { actions.nextMove.onFocus(budget.moveID) }
+            }
+        case .spending:
+            HomeBlock(section: state.widgets.spending, onRetry: actions.widgets.onRetry) { spending in
+                SpendingBlock(spending: spending, top: state.topCategories)
+            }
+        case .bills:
+            if state.widgets.bills.value == nil, !state.comingUp.isEmpty {
+                // Home's own next bills show at once while the full bills list loads.
+                BillsBlock(bills: state.comingUp, total: nil)
+            } else {
+                HomeBlock(section: state.widgets.bills, onRetry: actions.widgets.onRetry) { bills in
+                    BillsBlock(bills: Array(bills.items.prefix(3)), total: bills.totalNext30Days)
+                }
+            }
+        case .subscriptions:
+            HomeBlock(section: state.widgets.subscriptions, onRetry: actions.widgets.onRetry) { SubscriptionsBlock(subscriptions: $0) }
+        case .budgetsAndGoals:
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                BudgetsGoalsBlock(budgets: state.widgets.budgets, goals: state.widgets.goals, onRetry: actions.widgets.onRetry)
+                seeAll
+            }
+        case .accountLine:
+            if let text = state.accountLineText {
+                AccountLine(text: text) { actions.onOpenDetail(.netWorth) }
+            }
+        case .guess:
+            GuessTeaserCard(state: state.guess, onOpen: actions.onOpenGuess)
         }
     }
 
-    /// "Coming up": at most 3 bills, then "See all" for the full money details.
-    private var comingUp: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Coming up").font(.llSection).padding(.bottom, Theme.Spacing.xs)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("money.comingUp")
-            if state.comingUp.isEmpty {
-                Text("No bills in the next 30 days.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+    /// "See all" opens the full money details screen.
+    private var seeAll: some View {
+        Button { actions.onOpenDetail(.all) } label: {
+            HStack {
+                Text("See all: spending, subscriptions, budgets, goals").font(.llBodyBold).lineLimit(2)
+                Spacer()
+                Chevron()
             }
-            ForEach(state.comingUp) { bill in
-                HStack(spacing: Theme.Spacing.m) {
-                    Text(bill.shortDateText).font(.llLabel).foregroundStyle(Theme.Palette.muted).frame(width: 48, alignment: .leading)
-                    Text(bill.name).font(.llBody).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                    if let chip = bill.priceRiseChip { Chip(text: chip, fill: Theme.Palette.health) }
-                    Text(Money.format(bill.amount)).font(.llBodyBold)
-                }
-                .frame(minHeight: 40)
-                .accessibilityElement(children: .combine)
-                RuleDivider()
-            }
-            Button { actions.onOpenDetail(.all) } label: {
-                HStack {
-                    Text("See all: spending, subscriptions, budgets, goals").font(.llBodyBold).lineLimit(2)
-                    Spacer()
-                    Chevron()
-                }
-                .frame(minHeight: Theme.minTarget)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("money.seeAll")
+            .frame(minHeight: Theme.minTarget)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("money.seeAll")
+    }
+}
+
+/// One widget block on Money home: a small skeleton while loading (or nothing cached yet), a calm error, else the content.
+private struct HomeBlock<Value: Equatable & Sendable, Content: View>: View {
+    let section: WidgetSection<Value>
+    let onRetry: @MainActor () -> Void
+    @ViewBuilder let content: (Value) -> Content
+
+    var body: some View {
+        switch section.phase {
+        case .loading:
+            SkeletonList(rows: 2).padding(.vertical, Theme.Spacing.s)
+        case let .failed(error):
+            ErrorStateView(state: error, onRetry: onRetry)
+        case .ready:
+            if let value = section.value { content(value) }
         }
     }
 }
 
-/// Small number tile: label, £ value (24), caption, optional sparkline.
-private struct Tile: View {
-    let shape: HandCut
-    let title: String
-    let value: Double
-    var caption: String?
-    var sparkline: [Double] = []
+/// Block title with an optional right-hand figure: "Spending this month   £412 in October 2026".
+private struct HomeBlockTitle: View {
+    let title: LocalizedStringKey
+    var trailing: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text(title).font(.llLabel).foregroundStyle(Theme.Palette.muted)
-            HStack(spacing: 6) {
-                Text(Money.format(value))
-                    .font(.llTitle)
-                    .contentTransition(.numericText(value: value))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if sparkline.count > 1 {
-                    Sparkline(values: sparkline).frame(width: 48, height: 22)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.llSection)
+                Spacer(minLength: Theme.Spacing.s)
+                if let trailing { Text(trailing).font(.llLabelBold).lineLimit(1) }
             }
-            if let caption {
-                Text(caption).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.llSection)
+                if let trailing { Text(trailing).font(.llLabelBold) }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, Theme.Spacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .inkSurface(shape)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue([Money.spoken(value), caption].compactMap { $0 }.joined(separator: ". "))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// "Spending this month": one category bar, then the top categories (£0 categories never reach here).
+private struct SpendingBlock: View {
+    let spending: MoneyWidgetsViewState.Spending
+    let top: [MoneyWidgetsViewState.Category]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            HomeBlockTitle(title: "Spending this month", trailing: L10n.tr("\(Money.format(spending.total)) in \(spending.monthText)"))
+            if spending.categories.isEmpty {
+                Text("No spending this month yet.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+            } else {
+                SpendingBar(categories: spending.categories)
+                VStack(spacing: 0) {
+                    ForEach(Array(top.enumerated()), id: \.element.id) { offset, category in
+                        HStack(spacing: Theme.Spacing.m) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill((Area(rawValue: category.area) ?? .other).color)
+                                .strokeBorder(Theme.Palette.ink, lineWidth: 2)
+                                .frame(width: 12, height: 12)
+                                .accessibilityHidden(true)
+                            Text(category.label).font(.llBody).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                            Text(category.shareText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                            Text(Money.format(category.amount)).font(.llBodyBold).monospacedDigit()
+                        }
+                        .frame(minHeight: 40)
+                        .accessibilityElement(children: .combine)
+                        if offset < top.count - 1 { RuleDivider() }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// "Bills, next 30 days": at most 3 bills and the 30-day total.
+private struct BillsBlock: View {
+    let bills: [MoneyWidgetsViewState.Bill]
+    let total: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HomeBlockTitle(title: "Bills, next 30 days", trailing: total.map(Money.format)).padding(.bottom, Theme.Spacing.xs)
+            if bills.isEmpty {
+                Text("No bills in the next 30 days.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+            }
+            ForEach(Array(bills.enumerated()), id: \.element.id) { offset, bill in
+                HStack(spacing: Theme.Spacing.m) {
+                    // Fixed size, so "10月18日" stays on one line.
+                    Text(bill.shortDateText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                        .lineLimit(1).fixedSize().frame(minWidth: 48, alignment: .leading)
+                    Text(bill.name).font(.llBody).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    if let chip = bill.priceRiseChip { Chip(text: chip, fill: Theme.Palette.health) }
+                    Text(Money.format(bill.amount)).font(.llBodyBold).monospacedDigit()
+                }
+                .frame(minHeight: 40)
+                .accessibilityElement(children: .combine)
+                if offset < bills.count - 1 { RuleDivider() }
+            }
+        }
+    }
+}
+
+/// "Subscriptions": monthly total and count, then at most 3 subscriptions.
+private struct SubscriptionsBlock: View {
+    let subscriptions: MoneyWidgetsViewState.Subscriptions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HomeBlockTitle(
+                title: "Subscriptions",
+                trailing: L10n.tr("\(Money.format(subscriptions.monthlyTotal)) a month · \(subscriptions.countText)")
+            )
+            .padding(.bottom, Theme.Spacing.xs)
+            if subscriptions.items.isEmpty {
+                Text("No subscriptions found.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+            }
+            let items = Array(subscriptions.items.prefix(3))
+            ForEach(Array(items.enumerated()), id: \.element.id) { offset, item in
+                HStack(spacing: 10) {
+                    LLIconImage(LLIcon.from(emoji: item.emoji, fallback: .subscriptions), size: 24)
+                    Text(item.merchant).font(.llBody).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    if let chip = item.priceRiseChip { Chip(text: chip, fill: Theme.Palette.health) }
+                    Text(item.monthlyCostText).font(.llBodyBold).monospacedDigit()
+                }
+                .frame(minHeight: 40)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(item.priceRiseText ?? "")
+                if offset < items.count - 1 { RuleDivider() }
+            }
+        }
+    }
+}
+
+/// "Budgets and savings goals": at most 3 budgets and 2 goals, each with its progress bar.
+private struct BudgetsGoalsBlock: View {
+    let budgets: WidgetSection<MoneyWidgetsViewState.Budgets>
+    let goals: WidgetSection<[MoneyWidgetsViewState.Goal]>
+    let onRetry: @MainActor () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HomeBlockTitle(title: "Budgets and savings goals")
+            HomeBlock(section: budgets, onRetry: onRetry) { budgets in
+                if budgets.items.isEmpty {
+                    Text("No budgets set.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+                }
+                ForEach(budgets.items.prefix(3)) { budget in
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(budget.label).font(.llLabelBold)
+                            Text(budget.statusText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                            Spacer(minLength: Theme.Spacing.s)
+                            Text(budget.detailText).font(.llLabel)
+                        }
+                        InkProgressBar(value: budget.progress, color: (Area(rawValue: budget.area) ?? .other).color, height: 14)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            HomeBlock(section: goals, onRetry: onRetry) { goals in
+                if goals.isEmpty {
+                    Text("No savings goals yet.").font(.llBody).foregroundStyle(Theme.Palette.muted)
+                }
+                ForEach(goals.prefix(2)) { goal in
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(goal.name).font(.llLabelBold)
+                            Spacer(minLength: Theme.Spacing.s)
+                            Text(goal.detailText).font(.llLabel)
+                        }
+                        InkProgressBar(value: goal.progress, color: Theme.Palette.money, height: 14)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+}
+
+/// "In your account £1,186 · Net worth £2,040": one compact line. Tapping opens the details screen.
+private struct AccountLine: View {
+    let text: String
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: Theme.Spacing.s) {
+                LLIconImage(.bank, size: 24)
+                Text(text).font(.llLabelBold).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Chevron()
+            }
+            .foregroundStyle(Theme.Palette.ink)
+            .frame(minHeight: Theme.minTarget)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(text)
+        .accessibilityHint("Opens your accounts and net worth")
+        .accessibilityIdentifier("money.accountLine")
     }
 }
 
@@ -190,7 +362,7 @@ private struct GuessTeaserCard: View {
             PennyView(mood: .neutral, size: 48)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Guess my spend").font(.llSection)
-                Text(state.stage == .guessing ? "How much will you spend today?" : (state.reveal?.comparisonText ?? ""))
+                Text(state.stage == .guessing ? L10n.tr("How much will you spend today?") : (state.reveal?.comparisonText ?? ""))
                     .font(.llLabel)
                 if !state.streakText.isEmpty {
                     Text(state.streakText).font(.llLabel).foregroundStyle(Theme.Palette.muted)

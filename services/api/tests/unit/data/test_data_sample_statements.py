@@ -23,15 +23,19 @@ DEMO_COPY = REPO / "demo" / "statements"
 INDEX = json.loads((SAMPLES / "index.json").read_text())["samples"]
 IDS = [s["id"] for s in INDEX]
 
+JUDGE_IDS = ["scholarship", "scottish", "commuter", "loan_england", "working", "mature", "international",
+             "final_year", "rich", "graduate"]
 EXPECTED_KINDS = {
     "scholarship": {"scholarship", "bursary"},
-    "rich": {"family"},
-    "working": {"maintenance_loan", "part_time_job"},
+    "scottish": {"maintenance_loan", "bursary", "part_time_job"},
     "commuter": {"grant", "family"},
-    "team1": {"maintenance_loan", "part_time_job"},
-    "team2": {"salary"},
-    "team3": {"salary", "bursary"},
-    "team4": {"part_time_job", "family"},
+    "loan_england": {"maintenance_loan"},
+    "working": {"maintenance_loan", "part_time_job"},
+    "mature": {"maintenance_loan", "grant", "part_time_job"},
+    "international": {"family"},
+    "final_year": {"salary", "maintenance_loan"},
+    "rich": {"family"},
+    "graduate": {"salary", "family"},
 }
 
 
@@ -43,16 +47,16 @@ def _snap(sample_id: str, fmt: str) -> FinanceSnapshot:
 
 
 def test_index_matches_contract():
-    assert IDS == ["scholarship", "rich", "working", "commuter", "team1", "team2", "team3", "team4"]
+    assert JUDGE_IDS == IDS  # the 10 student profiles only (ADR 0070); team phone profiles are gone
     for entry in INDEX:
         SampleStatement.model_validate({k: v for k, v in entry.items() if k != "hints"})
-        assert set(entry["hints"]) == {"is_student", "age", "housing", "student_loan_plan", "income_sources",
-                                       "debts", "monthly_costs", "accounts"}
+        assert set(entry["hints"]) == {"name", "is_student", "age", "housing", "student_loan_plan", "income_sources",
+                                       "debts", "monthly_costs", "accounts", "budgets", "goals"}
         assert entry["hints"]["housing"] in {"rent", "own", "mortgage", "parents"}
-        assert entry["team"] == entry["id"].startswith("team")
+        assert entry["team"] is False
         assert set(entry["funding"]) == EXPECTED_KINDS[entry["id"]]
-    assert [s.id for s in list_samples(team=False)] == ["scholarship", "rich", "working", "commuter"]
-    assert len(list_samples(team=True)) == 4
+    assert [s.id for s in list_samples()] == [s.id for s in list_samples(team=False)] == JUDGE_IDS
+    assert list_samples(team=True) == []
 
 
 @pytest.mark.parametrize("sample_id", IDS)
@@ -63,7 +67,7 @@ def test_each_sample_imports_fast(sample_id, fmt):
     assert time.perf_counter() - start < 2.0
     assert snap.transactions[0].date >= "2026-07-17" and snap.as_of <= "2026-10-16"
     assert {s.kind for s in snap.income_sources} == EXPECTED_KINDS[sample_id]
-    assert snap.is_student is (None if sample_id == "team2" else True)
+    assert snap.is_student is (None if sample_id == "graduate" else True)
     assert snap.age is None and snap.student_loan_plan is None  # not shown on a statement
 
 
@@ -95,7 +99,8 @@ def test_working_overdraft():
 
 
 def test_no_debt_for_scholarship_and_commuter():
-    for sample_id in ("scholarship", "commuter", "team1", "team2", "team3"):
+    for sample_id in ("scholarship", "scottish", "commuter", "loan_england", "mature", "international",
+                      "final_year", "graduate"):
         assert _snap(sample_id, "pdf").debts == []
 
 
@@ -179,9 +184,19 @@ def test_package_and_demo_copies_identical():
     assert samples_dir() == SAMPLES
     names = sorted(f.name for f in SAMPLES.iterdir() if f.is_file())
     assert names == sorted(f.name for f in DEMO_COPY.iterdir() if f.is_file())
-    assert len(names) == 17  # 8 CSV + 8 PDF + index.json
+    assert len(names) == 2 * len(IDS) + 1  # CSV + PDF per sample, plus index.json
     for name in names:
         assert (SAMPLES / name).read_bytes() == (DEMO_COPY / name).read_bytes(), name
+
+
+def test_every_sample_has_a_holder_name():
+    """Rooms and circles show the first word of hints.name for a demo account (W4).
+    The generator writes the PDF's account holder here, so the names match."""
+    names = [sample_hints(i)["name"] for i in IDS]
+    for sample_id, name in zip(IDS, names, strict=True):
+        assert isinstance(name, str) and name.strip() == name and 0 < len(name) < 24, sample_id
+        assert len(name.split(" ")) >= 2, sample_id  # given name first, then family name
+    assert len({n.split(" ")[0] for n in names}) == len(names)  # first names are unique across samples
 
 
 def test_unknown_sample():
@@ -272,3 +287,57 @@ def test_pdf_time_budget_stops_work():
     start = time.perf_counter()
     rows, _ = pdf_reader.extract_rows(content, budget_s=0.0)
     assert time.perf_counter() - start < 0.5 and len(rows) < 15_000
+
+
+# --- ADR 0062: income does not predict the habit score -------------------------------------------
+
+
+def _spearman(xs: list[float], ys: list[float]) -> float:
+    def ranks(v: list[float]) -> list[float]:
+        order = sorted(range(len(v)), key=lambda i: v[i])
+        out = [0.0] * len(v)
+        i = 0
+        while i < len(v):
+            j = i
+            while j + 1 < len(v) and v[order[j + 1]] == v[order[i]]:
+                j += 1
+            for k in range(i, j + 1):
+                out[order[k]] = (i + j) / 2 + 1
+            i = j + 1
+        return out
+
+    rx, ry = ranks(xs), ranks(ys)
+    mx, my = sum(rx) / len(rx), sum(ry) / len(ry)
+    cov = sum((a - mx) * (b - my) for a, b in zip(rx, ry, strict=True))
+    return cov / (sum((a - mx) ** 2 for a in rx) * sum((b - my) ** 2 for b in ry)) ** 0.5
+
+
+def test_habit_score_not_predicted_by_income():
+    from datetime import date
+
+    from lifeline_engine.habits import habit_score, monthly_income
+
+    today = date(2026, 10, 17)
+    rows = []
+    for sample_id in JUDGE_IDS:
+        snap = load_sample(sample_id)
+        income, score = monthly_income(snap, today), habit_score(snap, today).overall
+        assert income is not None and income > 0 and score is not None, sample_id
+        rows.append((sample_id, income, score))
+    assert len(rows) == 10
+    rho = _spearman([r[1] for r in rows], [r[2] for r in rows])
+    assert abs(rho) < 0.3, rho
+    # At least one lower-income student has a better habit score than a higher-income one.
+    assert any(a[1] < b[1] and a[2] > b[2] for a in rows for b in rows)
+    by_id = {r[0]: r for r in rows}
+    assert by_id["scholarship"][2] > by_id["rich"][2] and by_id["scholarship"][1] < by_id["rich"][1]
+
+
+def test_international_fx_descriptions():
+    snap = _snap("international", "csv")
+    wise = [t for t in snap.transactions if t.amount > 0]
+    assert len(wise) == 4
+    assert all(t.description.startswith("WISE CNY 14,000.00 > GBP AT 0.1") for t in wise)
+    for t in wise:
+        rate = float(t.description.split(" AT ")[1].split()[0])
+        assert t.amount == round(14000 * rate, 2)

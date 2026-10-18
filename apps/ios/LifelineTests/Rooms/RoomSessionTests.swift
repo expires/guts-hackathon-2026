@@ -74,6 +74,27 @@ struct RoomSessionTests {
         #expect(finished == 1)
     }
 
+    @Test func finishedCarriesWinnerLineAndRanking() async throws {
+        let transport = FakeRoomTransport()
+        let session = makeSession(transport)
+        await session.open(room: transport.room, name: "Ash")
+        let socket = try #require(transport.latest)
+        socket.push(RoomTestData.welcome())
+        let done = RoomTestData.room(status: .finished, players: [
+            RoomTestData.player("p1", "Ash", host: true, finished: true),
+            RoomTestData.player("p2", "Ava", finished: true),
+        ])
+        socket.push(.init(
+            _type: .finished, room: done,
+            ranking: [.init(playerId: "p2", name: "Ava", score: 131, rank: 1), .init(playerId: "p1", name: "Ash", score: 104, rank: 2)],
+            winnerLine: "Ava wins with INDEX 131 and a habit score of 70."
+        ))
+        #expect(await eventually { session.winnerLine == "Ava wins with INDEX 131 and a habit score of 70." })
+        #expect(session.ranking.map(\.playerId) == ["p2", "p1"])
+        await session.leave()
+        #expect(session.winnerLine == nil)
+    }
+
     @Test func reconnectsAfterDropAndRejoinsWithPlayerID() async throws {
         let transport = FakeRoomTransport()
         let session = makeSession(transport)
@@ -186,5 +207,62 @@ struct RoomSessionTests {
         await session.ready()
         #expect(socket.sent.last?._type == .ready)
         #expect(socket.sent.last?.playerId == "p2")
+    }
+
+    @Test func hostSendsReadyOnceAfterWelcomeInLobby() async throws {
+        let room = RoomTestData.room(players: [RoomTestData.player("p1", "Ash", host: true, ready: false)])
+        let transport = FakeRoomTransport(room: room)
+        let session = makeSession(transport)
+        await session.open(room: room, name: "Ash")
+        let socket = try #require(transport.latest)
+        socket.push(RoomTestData.welcome(room: room))
+        #expect(await eventually { socket.sent.contains { $0._type == .ready } })
+        let ready = try #require(socket.sent.first { $0._type == .ready })
+        #expect(ready.playerId == "p1")
+        #expect(socket.sent.filter { $0._type == .ready }.count == 1)
+    }
+
+    @Test func guestOrReadyHostSendsNoReadyOnWelcome() async throws {
+        let transport = FakeRoomTransport()
+        let session = makeSession(transport)
+        await session.open(room: transport.room, name: "Ash")
+        let socket = try #require(transport.latest)
+        socket.push(RoomTestData.welcome())
+        #expect(await eventually { session.link == .live })
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(!socket.sent.contains { $0._type == .ready })
+    }
+
+    @Test func serverErrorShowsThenClearsOnNextMessage() async throws {
+        let transport = FakeRoomTransport()
+        let session = makeSession(transport)
+        await session.open(room: transport.room, name: "Ash")
+        let socket = try #require(transport.latest)
+        socket.push(RoomTestData.welcome())
+        #expect(await eventually { session.link == .live })
+        socket.push(.init(_type: .error, error: .init(code: "not_host", message: "Only the host can start.", source: "rooms")))
+        #expect(await eventually { session.lastError == "Only the host can start." })
+        let model = RoomFlowViewModel(game: GameSession(client: MockClient()), session: session)
+        #expect(model.lobbyState?.connection?.kind == .error)
+        #expect(model.lobbyState?.connection?.text == "Only the host can start.")
+
+        socket.push(.init(_type: .pong))
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(session.lastError != nil, "A pong does not clear the error")
+        socket.push(.init(_type: .roster, room: transport.room))
+        #expect(await eventually { session.lastError == nil })
+        #expect(model.lobbyState?.connection == nil)
+    }
+
+    @Test func serverErrorClearsAfterItsLifetime() async throws {
+        let transport = FakeRoomTransport()
+        let session = RoomSession(transport: transport, retryDelays: [], pingInterval: nil, errorLifetime: .milliseconds(30))
+        await session.open(room: transport.room, name: "Ash")
+        let socket = try #require(transport.latest)
+        socket.push(RoomTestData.welcome())
+        #expect(await eventually { session.link == .live })
+        socket.push(.init(_type: .error, error: .init(code: "bad", message: "Try again.", source: "rooms")))
+        #expect(await eventually { session.lastError == "Try again." })
+        #expect(await eventually { session.lastError == nil })
     }
 }

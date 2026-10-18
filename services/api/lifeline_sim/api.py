@@ -30,7 +30,7 @@ from lifeline_contracts.domain import (
     YearLog,
 )
 from lifeline_contracts.macro import MacroKey, MacroTable
-from lifeline_contracts.play import DecisionOutcome, DecisionPrompt, StudentPath
+from lifeline_contracts.play import DecisionOutcome, DecisionPrompt, QuickStudent, StudentPath
 from lifeline_sim import params as p
 from lifeline_sim.actions import (
     action_decision_id,
@@ -58,12 +58,14 @@ from lifeline_sim.paths import (
     QUICK_DEFAULT_START_YEAR,
     QUICK_END_AGE,
     QUICK_START_AGE,
+    QUICK_STUDENTS,
     path_character,
     path_def,
+    quick_student_def,
     stage_starts,
 )
 from lifeline_sim.paths import paths as _paths
-from lifeline_sim.presets import LEGACY_PRESET_IDS
+from lifeline_sim.presets import OFFERED_LEGACY_IDS
 from lifeline_sim.presets import god_mode_options as _god_mode_options
 from lifeline_sim.presets import presets as _presets
 from lifeline_sim.project import index_state, to_life
@@ -105,6 +107,7 @@ __all__ = [
     "quick_finished",
     "quick_life",
     "quick_life_plan",
+    "quick_students",
     "quiz_questions",
     "best_option_ids",
     "decision_prompt",
@@ -281,6 +284,7 @@ def new_path_life(
     quick: bool = False,
     mode: LifeMode = "random",
     name: str | None = None,
+    quick_student_id: str | None = None,
 ) -> Life:
     """A life on a student path. `quick=True` gives a Quick Life: ages 18 to 25 in 5 or 6 AGE taps with 2 or
     3 events, then `summary` with the habit score. Same path, start year and seed give the same life.
@@ -289,6 +293,7 @@ def new_path_life(
       Quick Life, else the year the person reaches `start_age` with the default Quick Life year of birth.
     - Quick Life needs a path with `quick=True` and a start year of QUICK_LAST_START_YEAR or earlier.
     - `name`: the player's display name for the character (optional).
+    - `quick_student_id`: a premade student (`quick_students`); its path must be `path_id`.
     """
     d = path_def(path_id)
     if d is None:
@@ -301,10 +306,17 @@ def new_path_life(
         raise SimError("invalid_input", f"Quick Life runs 7 years. Start in {QUICK_LAST_START_YEAR} or earlier.")
     if start_year > PRESENT_YEAR:
         raise SimError("invalid_input", f"Start in {PRESENT_YEAR} or earlier.")
-    character = path_character(path_id, start_year, view_for(macro))
+    if quick_student_id is not None:
+        qs = quick_student_def(quick_student_id)
+        if qs is None:
+            raise SimError("not_found", f"No Quick Life student {quick_student_id}.")
+        if qs.path_id != path_id:
+            raise SimError("invalid_input", f"{qs.name} is on the {qs.path_id} path, not {path_id}.")
+    character = path_character(path_id, start_year, view_for(macro), quick_student_id)
     if name:
         character = character.model_copy(update={"name": name[:40]})
-    return _new_life(life_id, character, mode, start_year, seed, macro, Setup(path=path_id, quick=quick))
+    setup = Setup(path=path_id, quick=quick, student=quick_student_id)
+    return _new_life(life_id, character, mode, start_year, seed, macro, setup)
 
 
 def life_path(life: Life) -> str | None:
@@ -959,12 +971,13 @@ def presets() -> list[CharacterSpec]:
 
 
 def offered_presets(macro: MacroTable | None = None, start_year: int = QUICK_DEFAULT_START_YEAR) -> list[CharacterSpec]:
-    """Characters offered in Play solo (ADR 0052): one per student path, then the legacy `student` and
-    `teacher-glasgow` presets. Banker, plumber, pensioner and nurse are no longer offered. With `macro`,
-    each path character's starting pay is the path's stage pay for `start_year`."""
+    """Characters offered in Play solo: students and recent graduates only (ADR 0052, user rule). One per
+    student path, then the legacy `student` preset. Every other preset (banker, plumber, pensioner, nurse,
+    teacher) is no longer offered; `presets()` still loads them for stored lives. With `macro`, each path
+    character's starting pay is the path's stage pay for `start_year`."""
     mv = view_for(macro) if macro is not None else None
     out = [path_character(pid, start_year, mv) for pid in PATH_IDS]
-    out += [c for c in _presets() if c.id not in LEGACY_PRESET_IDS]
+    out += [c for c in _presets() if c.id in OFFERED_LEGACY_IDS]
     return out
 
 
@@ -1057,16 +1070,32 @@ def challenges() -> list[Challenge]:
 def quick_life(
     life_id: str,
     *,
-    path_id: str,
     seed: int,
     macro: MacroTable,
+    path_id: str | None = None,
+    quick_student_id: str | None = None,
     start_year: int | None = None,
     mode: LifeMode = "random",
     name: str | None = None,
 ) -> Life:
-    """A new Quick Life: `new_path_life(..., quick=True)`. Tap AGE until `quick_finished`, answering the open
-    event when a tap stops on one, then call `summary(life, macro)` for the card with the habit score."""
-    return new_path_life(life_id, path_id, start_year, seed, macro, quick=True, mode=mode, name=name)
+    """A new Quick Life: `new_path_life(..., quick=True)`. Pass `quick_student_id` (a premade student, ADR 0064)
+    or `path_id`. Same student (or path), start year and seed give the same events for everyone. Tap AGE until
+    `quick_finished`, answering the open event when a tap stops on one, then call `summary(life, macro)`."""
+    if quick_student_id is not None:
+        qs = quick_student_def(quick_student_id)
+        if qs is None:
+            raise SimError("not_found", f"No Quick Life student {quick_student_id}.")
+        path_id = qs.path_id
+    if path_id is None:
+        raise SimError("invalid_input", "Quick Life needs a path or a premade student.")
+    return new_path_life(
+        life_id, path_id, start_year, seed, macro, quick=True, mode=mode, name=name, quick_student_id=quick_student_id
+    )
+
+
+def quick_students() -> list[QuickStudent]:
+    """The five premade Quick Life students (ADR 0064), for `PathsResponse.quick_students` and the game sheet."""
+    return [QuickStudent(id=q.id, name=q.name, path_id=q.path_id, description=q.description) for q in QUICK_STUDENTS]
 
 
 def quiz_questions(seed: int, *, topic: QuizTopic = "mixed", n: int = 8) -> list[QuizItem]:

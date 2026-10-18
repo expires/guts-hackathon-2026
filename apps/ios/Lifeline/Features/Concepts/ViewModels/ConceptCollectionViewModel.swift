@@ -8,7 +8,7 @@ final class ConceptCollectionViewModel {
     private let client: any LifelineClient
     private let unlocked: Set<String>
     private(set) var concepts: [Concept] = []
-    private(set) var phase: LoadPhase = .loading(.init(message: "Loading concepts"))
+    private(set) var phase: LoadPhase = .loading(.init(message: L10n.tr("Loading concepts")))
     /// Set when the player taps a concept. The glue presents the lesson.
     var selectedLesson: Lesson?
     @ObservationIgnored var onClose: @MainActor () -> Void = {}
@@ -33,7 +33,7 @@ final class ConceptCollectionViewModel {
     }
 
     func load() async {
-        phase = .loading(.init(message: "Loading concepts"))
+        phase = .loading(.init(message: L10n.tr("Loading concepts")))
         do {
             concepts = try await client.listConcepts()
             phase = .ready

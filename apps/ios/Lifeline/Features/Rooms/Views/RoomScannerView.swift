@@ -10,7 +10,7 @@ struct RoomScannerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-            ScreenHeader(title: "Scan a room code", leading: HeaderSquareButton(kind: .close, identifier: "scanner.close", action: actions.onClose))
+            ScreenHeader(title: L10n.tr("Scan a room code"), leading: HeaderSquareButton(kind: .close, identifier: "scanner.close", action: actions.onClose))
             switch state.status {
             case .asking:
                 LLSkeleton(.block(height: 320))

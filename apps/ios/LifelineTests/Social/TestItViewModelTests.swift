@@ -165,3 +165,15 @@ private actor FlakyLoader {
         return try await TestItFixtures.mockLoader(moveID, optionIDs)
     }
 }
+
+/// Test it intro: one full sentence per case (translator note). W7.
+@MainActor
+@Suite("Test it intro sentences")
+struct TestItIntroTests {
+    @Test func introIsOneSentencePerCase() {
+        #expect(TestItViewModel.intro(name: "You", optionCount: 2) == "Two of you. Same life. One choice is different.")
+        #expect(TestItViewModel.intro(name: "", optionCount: 3) == "Three of you. Same life. One choice is different.")
+        #expect(TestItViewModel.intro(name: "Priya", optionCount: 2) == "Two versions of Priya. Same life. One choice is different.")
+        #expect(TestItViewModel.intro(name: "Priya", optionCount: 5) == "One life. One choice.")
+    }
+}

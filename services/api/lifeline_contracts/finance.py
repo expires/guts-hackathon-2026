@@ -306,6 +306,17 @@ class FinanceProfile(_M):
     character: CharacterSpec
     personal_facts: list[PersonalFact]
     is_student: bool | None = Field(default=None, description="As entered at onboarding (ADR 0049)")
+    # "Their profile" (ADR 0069). From the user's own data only.
+    income_sources: list[IncomeSource] = Field(
+        default_factory=list, max_length=20, description="Each payment: kind, amount, schedule, dates, next_date"
+    )
+    debts: list[DebtItem] = Field(
+        default_factory=list, max_length=20, description="Overdraft, card, BNPL, loan: balance, rate, due date"
+    )
+    months_of_cover: float | None = Field(
+        default=None, ge=0, description="Cash and savings / usual monthly spending. None when spending is unknown"
+    )
+    monthly_rent: float | None = Field(default=None, ge=0, description="Rent found in the statement or entered")
 
 
 class LifeListItem(_M):

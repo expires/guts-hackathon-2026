@@ -49,6 +49,8 @@ struct NextMoveWhyViewState: Equatable, Sendable {
     var confidence: Double = 0
     /// "Medium".
     var confidenceChip: String = ""
+    /// Plain English (ADR 0069): "Medium confidence: based on your last 4 weeks of spending". Empty hides it.
+    var confidenceText: String = ""
     /// "Worst past period: £310 a year worse off".
     var worstCaseText: String = ""
     /// Rate bars taken from the evidence facts (keys ending in `_pct`).

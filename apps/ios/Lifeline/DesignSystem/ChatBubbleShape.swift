@@ -104,10 +104,10 @@ extension View {
 
 #Preview("Chat bubbles") {
     VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-        Text("Yes, for about 4 months. Your savings cover your bills and mortgage until April.")
+        Text(verbatim: "Yes, for about 4 months. Your savings cover your bills and mortgage until April.")
             .font(.llBody)
             .llChatBubble(.left)
-        Text("What if I lose my job?")
+        Text(verbatim: "What if I lose my job?")
             .font(.llBody)
             .foregroundStyle(Theme.Palette.onArea)
             .llChatBubble(.right, fill: Theme.Palette.work)

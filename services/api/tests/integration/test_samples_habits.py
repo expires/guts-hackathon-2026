@@ -213,3 +213,130 @@ async def test_cold_start_import_then_next_move_under_3_seconds(client: httpx.As
     assert r.status_code == 200 and elapsed < 3.0, f"import + next move took {elapsed:.1f} s"
     home = await client.get("/v1/finance/home", headers=auth)
     assert home.status_code == 200 and "next_move" in home.json()
+
+
+@pytest.mark.parametrize("sample_id", ["rich", "working", "commuter"])
+async def test_student_moves_can_be_tested(client: httpx.AsyncClient, sample_id: str) -> None:
+    """ADR 0065: testable student moves run Test it, one stored life per option, same seed."""
+    auth = await sign_in(client, f"student-test-it-{sample_id}")
+    await client.post(f"/v1/samples/{sample_id}/import", headers=auth)
+    nm = (await client.get("/v1/next-move", headers=auth)).json()
+    moves = [m for m in [nm["top"], *nm["runners_up"]] if m["testable"]]
+    assert moves, "a student has at least one testable move"
+    for m in moves:
+        r = await client.post("/v1/next-move/test", json={"move_id": m["id"]}, headers=auth)
+        assert r.status_code == 200, (m["kind"], r.text)
+        res = r.json()
+        assert [o["option_id"] for o in res["outcomes"]] == [o["id"] for o in m["options"]]
+        seeds = {(await client.get(f"/v1/lives/{o['life_id']}", headers=auth)).json()["seed"] for o in res["outcomes"]}
+        assert len(seeds) == 1
+    untestable = [m for m in [nm["top"], *nm["runners_up"]] if not m["testable"]]
+    for m in untestable:
+        r = await client.post("/v1/next-move/test", json={"move_id": m["id"]}, headers=auth)
+        assert r.status_code == 409 and r.json()["error"]["code"] == "not_testable"
+
+
+async def test_fresh_database_with_sources_down_never_hangs(client: httpx.AsyncClient,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    """V3 F4: no last good table anywhere and a build that takes very long: home answers in time without
+    the next move, and GET /v1/next-move answers 503 data_warming with Retry-After."""
+    import asyncio
+
+    from lifeline_api import macro
+    from lifeline_api.main import app
+
+    state = app.state.lifeline
+    state.memo.pop(("macro-build",), None)
+    state.memo.pop(("macro-last",), None)
+
+    async def no_pointer(owner: str, kind: str) -> None:
+        return None
+
+    real_get_doc = state.store.get_doc
+
+    async def get_doc(owner: str, kind: str) -> object:
+        return None if (owner, kind) == (macro.POINTER_OWNER, macro.POINTER_KIND) else await real_get_doc(owner, kind)
+
+    async def very_slow(*a: object, **k: object) -> object:
+        await asyncio.sleep(30)
+        raise AssertionError("not reached")
+
+    monkeypatch.setattr(state.store, "get_doc", get_doc)
+    monkeypatch.setattr(state.hub, "macro_table", very_slow)
+    auth = await sign_in(client, "fresh-db-device-01")
+    assert (await client.post("/v1/samples/working/import", headers=auth)).status_code == 201
+    t0 = time.monotonic()
+    home = await client.get("/v1/finance/home", headers=auth)
+    assert home.status_code == 200 and time.monotonic() - t0 < 3.5
+    assert home.json()["has_data"] and "next_move" not in home.json()
+    r = await client.get("/v1/next-move", headers=auth)
+    assert r.status_code == 503 and r.json()["error"]["code"] == "data_warming" and r.headers["retry-after"]
+    for task in list(state.games):
+        task.cancel()
+    build = state.memo.pop(("macro-build",), None)
+    if build is not None:
+        build.cancel()
+
+
+STUDENT_IDS = ["scholarship", "scottish", "commuter", "loan_england", "working", "mature", "international",
+               "final_year", "rich", "graduate"]
+
+
+async def test_samples_are_exactly_the_10_students(client: httpx.AsyncClient) -> None:
+    auth = await sign_in(client, "samples-device-ten")
+    body = (await client.get("/v1/samples", headers=auth)).json()
+    assert [s["id"] for s in body["samples"]] == STUDENT_IDS
+    assert all(s["team"] is False for s in body["samples"])
+
+
+async def _plan(client: httpx.AsyncClient, auth: dict[str, str]) -> tuple[list[dict], list[dict]]:
+    budgets = (await client.get("/v1/finance/budgets", headers=auth)).json()["items"]
+    goals = (await client.get("/v1/finance/goals", headers=auth)).json()["items"]
+    return budgets, goals
+
+
+async def test_sample_import_sets_up_budgets_and_goals(client: httpx.AsyncClient) -> None:
+    """ADR 0070: each sample comes with its budgets and goals; re-import never adds copies; a user goal stays;
+    another sample replaces the first sample's plan; reset clears it."""
+    auth = await sign_in(client, "samples-plan-01")
+    assert (await client.post("/v1/samples/loan_england/import", headers=auth)).status_code == 201
+    budgets, goals = await _plan(client, auth)
+    hints = samples.hints("loan_england") or {}
+    assert {(b["category"], b["limit"]) for b in budgets} == {(b["category"], b["limit"]) for b in hints["budgets"]}
+    assert [g["name"] for g in goals] == [g["name"] for g in hints["goals"]]
+    assert goals[0]["id"] == "gl_sample_loan_england_1" and goals[0]["target"] == hints["goals"][0]["target"]
+    assert goals[0]["target_date"] == hints["goals"][0]["target_date"] and goals[0]["monthly_needed"] > 0
+
+    own = await client.post("/v1/finance/goals", headers=auth, json={"name": "New bike", "target": 300})
+    assert own.status_code == 201
+    assert (await client.post("/v1/samples/loan_england/import", headers=auth)).status_code == 201
+    budgets2, goals2 = await _plan(client, auth)
+    assert len(budgets2) == len(budgets)
+    assert sorted(g["name"] for g in goals2) == sorted([*(g["name"] for g in hints["goals"]), "New bike"])
+
+    assert (await client.post("/v1/samples/commuter/import", headers=auth)).status_code == 201
+    budgets3, goals3 = await _plan(client, auth)
+    commuter = samples.hints("commuter") or {}
+    assert {b["category"] for b in budgets3} == {b["category"] for b in commuter["budgets"]}
+    assert not any(g["id"].startswith("gl_sample_loan_england") for g in goals3)
+    pot_goal = next(g for g in goals3 if g["id"] == "gl_sample_commuter_1")
+    pots = sum(a["balance"] for a in commuter["accounts"] if a["kind"] == "savings")
+    assert pot_goal["saved"] == round(pots, 2) and 0 < pot_goal["progress"] < 1
+
+    assert (await client.post("/v1/me/reset", headers=auth)).status_code == 200
+    budgets4 = (await client.get("/v1/finance/budgets", headers=auth))
+    goals4 = (await client.get("/v1/finance/goals", headers=auth))
+    assert budgets4.status_code != 200 or budgets4.json()["items"] == []
+    assert goals4.status_code != 200 or goals4.json()["items"] == []
+
+
+@pytest.mark.parametrize("sample_id", STUDENT_IDS)
+async def test_every_sample_gets_a_budget_and_a_goal(client: httpx.AsyncClient, sample_id: str) -> None:
+    auth = await sign_in(client, f"samples-plan-{sample_id.replace('_', '-')}")
+    assert (await client.post(f"/v1/samples/{sample_id}/import", headers=auth)).status_code == 201
+    budgets, goals = await _plan(client, auth)
+    assert budgets and goals
+    spend = (await client.get("/v1/finance/spending", headers=auth)).json()
+    assert all(c["amount"] > 0 for c in spend["categories"]), "no £0 categories"
+    other = sum(c["amount"] for c in spend["categories"] if c["category"] == "other")
+    assert other < 0.15 * spend["total"]

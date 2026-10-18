@@ -32,7 +32,7 @@ enum StateMapping {
         case "guardian": "The Guardian"
         default:
             // Never show an internal code such as "bank:xyz": the part before ":" names the kind of source.
-            if id.hasPrefix("bank:") { "Your bank" } else { id.replacingOccurrences(of: "_", with: " ").capitalized }
+            if id.hasPrefix("bank:") { L10n.tr("Your bank") } else { id.replacingOccurrences(of: "_", with: " ").capitalized }
         }
     }
 

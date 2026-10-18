@@ -18,10 +18,10 @@ struct LifeView: View {
                             .transition(Motion.transition(reduceMotion: reduceMotion))
                     }
                     if state.showsSummary {
-                        PrimaryButton(title: "See your life summary", icon: .ribbon, action: actions.onOpenSummary)
+                        PrimaryButton(title: L10n.tr("See your life summary"), icon: .ribbon, action: actions.onOpenSummary)
                             .accessibilityIdentifier("life.summary")
                     } else if state.showsDecision {
-                        PrimaryButton(title: "Your real-life decision", icon: .why, action: actions.onOpenDecision)
+                        PrimaryButton(title: L10n.tr("Your real-life decision"), icon: .why, action: actions.onOpenDecision)
                             .accessibilityIdentifier("life.decision")
                     }
                     feed
@@ -62,7 +62,7 @@ struct LifeView: View {
                     Text("Age \(state.header.age)")
                         .contentTransition(.numericText(value: Double(state.header.age)))
                         .accessibilityIdentifier("life.age")
-                    Text("· \(state.header.jobTitle) · \(state.header.town)").lineLimit(1)
+                    Text(L10n.tr("· \(state.header.jobTitle) · \(state.header.town)")).lineLimit(1)
                 }
                 .font(.llLabel)
                 .foregroundStyle(Theme.Palette.muted)
@@ -81,7 +81,7 @@ struct LifeView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.Palette.ink)
-            .accessibilityLabel("In the bank, \(Money.spoken(state.cash)). Open finances")
+            .accessibilityLabel(L10n.tr("In the bank, \(Money.spoken(state.cash)). Open finances"))
             .accessibilityIdentifier("life.money")
         }
         .padding(.horizontal, Theme.Spacing.margin)
@@ -150,7 +150,7 @@ struct LifeView: View {
                 .disabled(!state.canRewind)
                 .accessibilityHint(state.rewindText)
                 .accessibilityIdentifier("life.rewind")
-            Button("Concepts (\(state.conceptsUnlocked))", action: actions.onOpenConcepts)
+            Button(L10n.tr("Concepts (\(state.conceptsUnlocked))"), action: actions.onOpenConcepts)
                 .buttonStyle(.text)
                 .accessibilityIdentifier("life.concepts")
             Button("Data sources", action: actions.onOpenSources)
@@ -164,18 +164,21 @@ struct LifeView: View {
 
     // MARK: Bottom bar
 
+    /// Age up pill centred on its own row (below the bar's top line), the 4 menus under it.
     private var bottomBar: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            menuButton(.job)
-            menuButton(.assets)
+        VStack(spacing: Theme.Spacing.m) {
             AgeButton(state: state, onAge: actions.onAge)
-                .frame(maxWidth: .infinity)
-            menuButton(.people)
-            menuButton(.activities)
+                .padding(.bottom, Theme.heroShadow.height)
+            HStack(alignment: .bottom, spacing: 0) {
+                menuButton(.job)
+                menuButton(.assets)
+                menuButton(.people)
+                menuButton(.activities)
+            }
         }
         .padding(.horizontal, Theme.Spacing.m)
-        .padding(.top, Theme.Spacing.s)
-        .padding(.bottom, Theme.Spacing.m)
+        .padding(.top, Theme.Spacing.m)
+        .padding(.bottom, Theme.Spacing.s)
         .background(Theme.Palette.surface)
         .overlay(alignment: .top) { Rectangle().fill(Theme.Palette.ink).frame(height: Theme.outline) }
     }
@@ -229,44 +232,16 @@ struct StatRow: View {
     }
 }
 
-/// The Age button: almost-round, outlined, offset shadow, age icon and the current age (40).
+/// The Age up pill (`LLAgeUpButton`): "Age up → 30" from the engine's next age, pulsing cake while a year runs.
 struct AgeButton: View {
     let state: LifeViewState
     let onAge: () -> Void
 
     var body: some View {
-        Button(action: onAge) {
-            VStack(spacing: 0) {
-                if state.isAging {
-                    ProgressView()
-                } else {
-                    LLIconImage(.age, size: 24)
-                }
-                Text("\(state.header.age)")
-                    .font(.llHero)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .contentTransition(.numericText(value: Double(state.header.age)))
-            }
-            .foregroundStyle(Theme.Palette.ink)
-            .frame(width: 92, height: 92)
-            .background {
-                ZStack {
-                    HandCut.blob.fill(Theme.Palette.ink).offset(x: 5, y: 6)
-                    HandCut.blob.fill(Theme.Palette.surface)
-                    HandCut.blob.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .offset(y: -28)
-        .padding(.bottom, -28)
-        .disabled(!state.canAge)
-        .opacity(state.canAge || state.isAging ? 1 : 0.5)
-        .sensoryFeedback(.impact(weight: .medium), trigger: state.ageCount)
-        .accessibilityLabel("Age up to \(state.header.age + 1)")
-        .accessibilityHint(state.ageHint)
-        .accessibilityIdentifier("life.ageButton")
+        LLAgeUpButton(nextAge: state.nextAge, isProcessing: state.isAging, hint: state.ageHint, action: onAge)
+            .disabled(!state.canAge)
+            .sensoryFeedback(.impact(weight: .medium), trigger: state.ageCount)
+            .accessibilityIdentifier("life.ageButton")
     }
 }
 
@@ -356,4 +331,11 @@ struct OutcomeBanner: View {
 
 #Preview("Dead · AX3") {
     LifeView(state: Fixtures.LifeScreen.dead).previewInNavigation().previewLargeType()
+}
+
+#Preview("Aging (processing) · light") {
+    var state = Fixtures.LifeScreen.newLife
+    state.isAging = true
+    state.canAge = false
+    return LifeView(state: state).previewInNavigation()
 }

@@ -62,10 +62,21 @@ async def ask_penny(body: ChatRequest, request: Request, sub: Subject) -> ChatRe
         resp = chat_service.unavailable_response(thread, user_mid)
     else:
         resp = await penny.answer(body, ctx)
-        await chat_service.store_tool_lives(state, sub, ctx, digest)
-    chat_service.add_penny_message(thread, resp)
-    await chat_service.save_thread(state, sub, thread)
+        try:
+            await chat_service.store_tool_lives(state, sub, ctx, digest)
+        except Exception as exc:
+            log.warning("chat: tool lives not stored (%s)", type(exc).__name__)
+    await _save(state, sub, thread, resp)
     return resp
+
+
+async def _save(state: Any, sub: str, thread: dict[str, Any], resp: ChatResponse) -> None:
+    """Store the answer in the thread. A failed save never stops the answer (V3 F1): the user still gets it."""
+    chat_service.add_penny_message(thread, resp)
+    try:
+        await chat_service.save_thread(state, sub, thread)
+    except Exception as exc:
+        log.warning("chat: thread not saved (%s)", type(exc).__name__)
 
 
 KEEPALIVE_SECONDS = 2.0
@@ -92,8 +103,7 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
         return f"data: {ev.model_dump_json(exclude_none=True)}\n\n"
 
     async def finish(resp: ChatResponse) -> None:
-        chat_service.add_penny_message(thread, resp)
-        await chat_service.save_thread(state, sub, thread)
+        await _save(state, sub, thread, resp)
 
     async def events() -> AsyncIterator[str]:
         nonlocal seq
@@ -118,7 +128,10 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
             if ev.type == "reaction":
                 continue  # already sent
             if ev.type == "done" and ev.response is not None:
-                await chat_service.store_tool_lives(state, sub, ctx, digest)
+                try:
+                    await chat_service.store_tool_lives(state, sub, ctx, digest)
+                except Exception as exc:
+                    log.warning("chat stream: tool lives not stored (%s)", type(exc).__name__)
                 await finish(ev.response)
             ev = ev.model_copy(update={"seq": seq, "elapsed_ms": int((time.monotonic() - t0) * 1000)})
             seq += 1

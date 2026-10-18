@@ -27,25 +27,31 @@ enum APIError: Error, Equatable, Sendable {
 
     var userMessage: String {
         switch self {
-        case let .server(_, code, message, _):
+        case let .server(status, code, message, _):
             switch code {
+            case "rate_limited":
+                return L10n.tr("Too many tries. Try again in a moment.")
             case "unauthorized":
-                return "Your session ended. Try again."
+                return L10n.tr("Your session ended. Try again.")
             case "invalid_input":
-                return "The game cannot start a life with these details. The character must be at least 16 in the start year. Check the details and try again."
+                return L10n.tr("The game cannot start a life with these details. The character must be at least 16 in the start year. Check the details and try again.")
             case "validation_error":
-                return "Some details are not valid. Check them and try again."
+                return L10n.tr("Some details are not valid. Check them and try again.")
+            case APIError.rateLimitedQuietCode:
+                return L10n.tr("Couldn't load. Pull to refresh.")
             case APIError.noFinanceDataCode:
-                return "Open Life and tap Play yourself to add your job, pay and savings. Then your money shows here."
+                return L10n.tr("Open Life and tap Play yourself to add your job, pay and savings. Then your money shows here.")
             default:
-                return message.isEmpty ? "Something went wrong. Try again." : message
+                // Any other 429 also gets the client text, so it follows the app language (ADR 0063).
+                if status == 429 { return L10n.tr("Too many tries. Try again in a moment.") }
+                return message.isEmpty ? L10n.tr("Something went wrong. Try again.") : message
             }
         case .network:
-            return "Cannot reach the \(Brand.productName) server. Check your connection and try again."
+            return L10n.tr("Cannot reach the \(Brand.productName) server. Check your connection and try again.")
         case let .unexpected(status):
-            return "Something went wrong (code \(status)). Try again."
+            return L10n.tr("Something went wrong (code \(status)). Try again.")
         case .decoding:
-            return "The server sent data the app cannot read. Update the app and try again."
+            return L10n.tr("The server sent data the app cannot read. Update the app and try again.")
         }
     }
 

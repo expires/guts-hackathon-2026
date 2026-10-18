@@ -59,14 +59,14 @@ struct ErrorViewState: Equatable, Sendable {
     static func from(_ error: APIError) -> ErrorViewState {
         // Rate limiting: the client already retried quietly. Calm text, no button; pull to refresh.
         if case let .server(status, _, _, _) = error, status == 429 {
-            return ErrorViewState(title: "Couldn't load", message: "Pull to refresh.", canRetry: false)
+            return ErrorViewState(title: L10n.tr("Couldn't load"), message: L10n.tr("Pull to refresh."), canRetry: false)
         }
         if error.isNoFinanceData {
-            return ErrorViewState(title: "Connect your money first", message: error.userMessage, canRetry: true, isUnavailable: true)
+            return ErrorViewState(title: L10n.tr("Connect your money first"), message: error.userMessage, canRetry: true, isUnavailable: true)
         }
         switch error {
         case .network:
-            return ErrorViewState(title: "You are offline", message: error.userMessage, canRetry: true)
+            return ErrorViewState(title: L10n.tr("You are offline"), message: error.userMessage, canRetry: true)
         default:
             return ErrorViewState(title: "Something went wrong", message: error.userMessage, canRetry: true)
         }

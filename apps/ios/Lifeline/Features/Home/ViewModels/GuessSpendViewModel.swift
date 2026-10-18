@@ -5,7 +5,7 @@ import Observation
 @MainActor
 @Observable
 final class GuessSpendViewModel {
-    static let loadingMessage = "Loading today's spend"
+    static var loadingMessage: String { L10n.tr("Loading today's spend") }
     static let maxGuess: Double = 100_000
 
     private let client: any LifelineClient
@@ -75,7 +75,7 @@ final class GuessSpendViewModel {
     func submit(_ text: String) async {
         guard !isSubmitting, let prediction else { return }
         guard let amount = Self.parseGuess(text) else {
-            errorMessage = "Enter an amount in pounds, for example 25."
+            errorMessage = L10n.tr("Enter an amount in pounds, for example 25.")
             return
         }
         isSubmitting = true
@@ -113,10 +113,12 @@ final class GuessSpendViewModel {
         let streak = guesses?.streak ?? 0
         let best = guesses?.bestStreak ?? 0
         // No guess history from the API: no streak line (never show an invented 0).
-        let streakText = guesses == nil ? "" : (streak == 1 ? "1 day in a row" : "\(streak) days in a row") + " with 70 points or more. Best: \(best)."
+        let streakText = guesses == nil ? "" : (streak == 1
+            ? L10n.tr("1 day in a row with 70 points or more. Best: \(best).")
+            : L10n.tr("\(streak) days in a row with 70 points or more. Best: \(best)."))
         guard let prediction else {
             return GuessSpendViewState(
-                phase: phase, initialGuess: initialGuess(guesses), dayChip: "Streak \(streak)", date: today ?? "", dateText: "Today", isToday: true, stage: .guessing, reveal: nil,
+                phase: phase, initialGuess: initialGuess(guesses), dayChip: L10n.tr("Streak \(streak)"), date: today ?? "", dateText: L10n.tr("Today"), isToday: true, stage: .guessing, reveal: nil,
                 weatherText: nil, history: history, pointsTotal: guesses?.pointsTotal ?? 0, streak: streak,
                 bestStreak: best, streakText: streakText, accuracyText: nil,
                 isSampleData: guesses.map { FinanceMapping.isSample($0.meta) } ?? false,
@@ -128,21 +130,21 @@ final class GuessSpendViewModel {
         return GuessSpendViewState(
             phase: phase,
             initialGuess: initialGuess(guesses),
-            dayChip: "Streak \(streak)",
+            dayChip: L10n.tr("Streak \(streak)"),
             date: prediction.date,
-            dateText: isToday ? "Today, \(dayText)" : dayText,
+            dateText: isToday ? L10n.tr("Today, \(dayText)") : dayText,
             isToday: isToday,
             stage: prediction.guess == nil ? .guessing : .revealed,
             reveal: prediction.guess.map { reveal(prediction, guess: $0) },
             weatherText: prediction.weather.map { weather in
-                "\(weather.summary), \(weather.tempMaxC.formatted(.number.precision(.fractionLength(0...1))))°C"
+                L10n.tr("\(weather.summary), \(weather.tempMaxC.formatted(.number.precision(.fractionLength(0...1))))°C")
             },
             history: history,
             pointsTotal: guesses?.pointsTotal ?? 0,
             streak: streak,
             bestStreak: best,
             streakText: streakText,
-            accuracyText: "The model is off by \(FinanceMapping.pounds(prediction.model.mae)) on a typical day.",
+            accuracyText: L10n.tr("The model is off by \(FinanceMapping.pounds(prediction.model.mae)) on a typical day."),
             isSampleData: FinanceMapping.isSample(prediction.meta),
             isSubmitting: false,
             errorMessage: nil,
@@ -162,14 +164,15 @@ final class GuessSpendViewModel {
         let gap = guess.amount - prediction.predicted
         let comparison: String
         if abs(gap) < 0.005 {
-            comparison = "Your guess matches the model."
+            comparison = L10n.tr("Your guess matches the model.")
         } else {
-            comparison = "Your guess is \(FinanceMapping.pounds(abs(gap))) \(gap < 0 ? "under" : "over") the model."
+            let amount = FinanceMapping.pounds(abs(gap))
+            comparison = gap < 0 ? L10n.tr("Your guess is \(amount) under the model.") : L10n.tr("Your guess is \(amount) over the model.")
         }
         var result: String?
         if let points = guess.points {
-            let beat = guess.beatModel == true ? "You beat the model." : "The model was closer."
-            result = "\(beat) \(points) points."
+            let beat = guess.beatModel == true ? L10n.tr("You beat the model.") : L10n.tr("The model was closer.")
+            result = L10n.tr("\(beat) \(points) points.")
         }
         return .init(
             guess: guess.amount,
@@ -178,7 +181,7 @@ final class GuessSpendViewModel {
             predictedText: FinanceMapping.pounds(prediction.predicted),
             low: prediction.low,
             high: prediction.high,
-            rangeText: "Likely between \(FinanceMapping.pounds(prediction.low)) and \(FinanceMapping.pounds(prediction.high))",
+            rangeText: L10n.tr("Likely between \(FinanceMapping.pounds(prediction.low)) and \(FinanceMapping.pounds(prediction.high))"),
             reasons: prediction.reasons.map { reason in
                 .init(
                     id: reason.feature,
@@ -189,11 +192,11 @@ final class GuessSpendViewModel {
             },
             comparisonText: comparison,
             actual: prediction.actual,
-            actualText: prediction.actual.map { "You spent \(FinanceMapping.pounds($0))." },
+            actualText: prediction.actual.map { L10n.tr("You spent \(FinanceMapping.pounds($0)).") },
             points: guess.points,
             beatModel: guess.beatModel,
             resultText: result,
-            rangeShortText: "\(Money.format(prediction.low)) – \(Money.format(prediction.high))",
+            rangeShortText: L10n.tr("\(Money.format(prediction.low)) – \(Money.format(prediction.high))"),
             scaleMax: scaleMax,
             scaleMaxText: Money.format(scaleMax),
             lowFraction: fraction(prediction.low),
@@ -201,16 +204,17 @@ final class GuessSpendViewModel {
             predictedFraction: fraction(prediction.predicted),
             guessFraction: fraction(guess.amount),
             isGuessInRange: guess.amount >= prediction.low && guess.amount <= prediction.high,
-            baselineText: "Your normal day is \(FinanceMapping.pounds(prediction.baseline))."
+            baselineText: L10n.tr("Your normal day is \(FinanceMapping.pounds(prediction.baseline)).")
         )
     }
 
     static func pastDay(_ day: Components.Schemas.GuessDay) -> GuessSpendViewState.PastDay {
-        var parts = ["You guessed \(FinanceMapping.pounds(day.guess))"]
-        if let actual = day.actual { parts[0] += ", spent \(FinanceMapping.pounds(actual))" }
-        var summary = parts[0] + "."
-        if let points = day.points { summary += " \(points) points." }
-        if let beat = day.beatModel { summary += beat ? " You beat the model." : " The model was closer." }
+        let guessed = FinanceMapping.pounds(day.guess)
+        var summary = day.actual.map { actual in
+            L10n.tr("You guessed \(guessed), spent \(FinanceMapping.pounds(actual)).")
+        } ?? L10n.tr("You guessed \(guessed).")
+        if let points = day.points { summary += " " + L10n.tr("\(points) points.") }
+        if let beat = day.beatModel { summary += " " + (beat ? L10n.tr("You beat the model.") : L10n.tr("The model was closer.")) }
         return .init(
             id: day.date,
             dateText: FinanceMapping.shortDayText(day.date),

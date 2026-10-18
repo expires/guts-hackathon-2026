@@ -27,9 +27,17 @@ struct RoomResultView: View {
                     if state.isSampleData { DemoDataBadge() }
                 }
                 if let connection = state.connection {
-                    RoomConnectionBanner(state: connection)
+                    RoomConnectionBanner(state: connection, onRetry: actions.onReconnect)
                 }
                 winner
+                if !state.pennyLine.isEmpty {
+                    HStack(alignment: .top, spacing: Theme.Spacing.m) {
+                        LLIconImage(.pennyHappy, size: 40)
+                        Text(state.pennyLine).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("roomResult.penny")
+                }
                 if let quick = state.quickLife { QuickLifeCard(state: quick) }
                 ranking
                 if !state.pendingText.isEmpty {
@@ -54,7 +62,7 @@ struct RoomResultView: View {
         HStack(spacing: 14) {
             LLIconImage(.trophy, size: 64)
             VStack(alignment: .leading, spacing: 2) {
-                Text(state.pendingText.isEmpty ? "Winner" : "Leader").llEyebrow()
+                Text(state.pendingText.isEmpty ? L10n.tr("Winner") : L10n.tr("Leader")).llEyebrow()
                 Text(state.winnerLine.isEmpty ? state.winnerName : state.winnerLine).font(.llTitle)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if !state.winnerNote.isEmpty {
@@ -93,7 +101,7 @@ struct RoomResultView: View {
                     LLIconImage(LLIcon(rawValue: row.face) ?? .faceTeen, size: 32)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
-                            Text(row.isMe ? "You" : row.name).font(.llLabelBold).lineLimit(1)
+                            Text(row.isMe ? L10n.tr("You") : row.name).font(.llLabelBold).lineLimit(1)
                             Spacer(minLength: 4)
                             if row.note.isEmpty {
                                 LLAmount(row.netWorth, style: .compact).font(.llLabel).foregroundStyle(Theme.Palette.muted).lineLimit(1)
@@ -105,7 +113,7 @@ struct RoomResultView: View {
                         if row.ribbonsKnown, row.ribbons > 0 {
                             HStack(spacing: 4) {
                                 LLIconImage(.ribbon, size: 24)
-                                Text(row.ribbons == 1 ? "1 ribbon" : "\(row.ribbons) ribbons").font(.llLabel)
+                                Text(row.ribbons == 1 ? L10n.tr("1 ribbon") : L10n.tr("\(row.ribbons) ribbons")).font(.llLabel)
                             }
                         }
                     }
@@ -126,9 +134,9 @@ struct RoomResultView: View {
     @ViewBuilder
     private var splits: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            BlockTitle(text: "Where your lives split")
+            BlockTitle(text: L10n.tr("Where your lives split"))
             if state.splits.isEmpty {
-                Text(state.splitsNote.isEmpty ? "No split points yet." : state.splitsNote)
+                Text(state.splitsNote.isEmpty ? L10n.tr("No split points yet.") : state.splitsNote)
                     .font(.llBody)
                     .foregroundStyle(Theme.Palette.muted)
                     .accessibilityIdentifier("roomResult.splitsNote")
@@ -137,8 +145,8 @@ struct RoomResultView: View {
                     ForEach(Array(state.splits.enumerated()), id: \.element.id) { offset, split in
                         if offset > 0 { RuleDivider() }
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("\(String(split.year)) · Age \(split.age)").font(.llLabelBold).foregroundStyle(Theme.Palette.muted)
-                            Text("You: \(split.myChoice)").font(.llBody).fixedSize(horizontal: false, vertical: true)
+                            Text(L10n.tr("\(String(split.year)) · Age \(split.age)")).font(.llLabelBold).foregroundStyle(Theme.Palette.muted)
+                            Text(L10n.tr("You: \(split.myChoice)")).font(.llBody).fixedSize(horizontal: false, vertical: true)
                             Text("\(split.rivalName): \(split.rivalChoice)").font(.llBody).fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -157,7 +165,7 @@ struct RoomResultView: View {
     private var earned: some View {
         if !state.earned.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                BlockTitle(text: "You earned")
+                BlockTitle(text: L10n.tr("You earned"))
                 FlowRow(spacing: Theme.Spacing.l) {
                     ForEach(state.earned) { item in
                         HStack(spacing: Theme.Spacing.s) {
@@ -199,8 +207,8 @@ struct RoomResultView: View {
     }
 
     private func spoken(_ row: RoomResultViewState.Row) -> String {
-        var parts = ["\(row.rank). \(row.isMe ? "You" : row.name)", "INDEX \(Int(row.index.rounded()))", RoomAmount.spoken(row.netWorth, presentation: presentation)]
-        if row.ribbonsKnown { parts.append(row.ribbons == 1 ? "1 ribbon" : "\(row.ribbons) ribbons") }
+        var parts = [L10n.tr("\(row.rank). \(row.isMe ? L10n.tr("You") : row.name)"), L10n.tr("INDEX \(Int(row.index.rounded()))"), RoomAmount.spoken(row.netWorth, presentation: presentation)]
+        if row.ribbonsKnown { parts.append(row.ribbons == 1 ? L10n.tr("1 ribbon") : L10n.tr("\(row.ribbons) ribbons")) }
         if !row.finished { parts.append("still playing") }
         return parts.joined(separator: ", ")
     }
@@ -214,17 +222,17 @@ struct QuickLifeCard: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Text(state.title).font(.llBodyBold).accessibilityAddTraits(.isHeader)
             HStack(spacing: Theme.Spacing.l) {
-                stat(value: "\(Int(state.index.rounded()))", label: "INDEX")
+                stat(value: "\(Int(state.index.rounded()))", label: L10n.tr("INDEX"))
                 VStack(alignment: .leading, spacing: 0) {
                     LLAmount(state.gameNetWorth, style: .compact).font(.llTitle).lineLimit(1).minimumScaleFactor(0.7)
                     Text("Game net worth").font(.llLabel).foregroundStyle(Theme.Palette.muted)
                 }
-                stat(value: "\(state.ribbons)", label: state.ribbons == 1 ? "Ribbon" : "Ribbons")
+                stat(value: "\(state.ribbons)", label: state.ribbons == 1 ? L10n.tr("Ribbon") : L10n.tr("Ribbons"))
             }
             HStack(spacing: Theme.Spacing.s) {
                 Text("Habit score").font(.llLabelBold)
                 Spacer()
-                Text(state.habitOverall.map { "\($0) of 100" } ?? "Not available yet")
+                Text(state.habitOverall.map { L10n.tr("\($0) of 100") } ?? L10n.tr("Not available yet"))
                     .font(.llBodyBold)
                     .accessibilityIdentifier("quickLife.habit")
             }
@@ -235,7 +243,7 @@ struct QuickLifeCard: View {
                     Text("\(habit.value)").font(.llLabelBold).frame(width: 32, alignment: .trailing)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(habit.label) \(habit.value) out of 100")
+                .accessibilityLabel(L10n.tr("\(habit.label) \(habit.value) out of 100"))
             }
         }
         .padding(Theme.Spacing.l)

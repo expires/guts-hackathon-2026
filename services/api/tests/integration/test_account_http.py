@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from lifeline_api.onboarding import health_effect
 from lifeline_contracts.account import HealthSignal
 from tests.integration.conftest import sign_in
+from tests.integration.personas import seed_persona
 
 MANUAL_MORTGAGE: dict[str, Any] = {
     "postcode": "LS6 1AN",
@@ -73,16 +74,19 @@ async def _make_records(client: httpx.AsyncClient, auth: dict[str, str]) -> None
 async def _is_empty(client: httpx.AsyncClient, auth: dict[str, str]) -> None:
     assert (await client.get("/v1/lives", headers=auth)).json()["lives"] == []
     assert (await client.get("/v1/plan", headers=auth)).json()["items"] == []
-    assert (await client.get("/v1/finance/goals", headers=auth)).json()["items"] == []
-    assert (await client.get("/v1/finance/budgets", headers=auth)).json()["items"] == []
-    assert (await client.get("/v1/finance/guesses", headers=auth)).json()["items"] == []
+    for path in ("/v1/finance/goals", "/v1/finance/budgets", "/v1/finance/guesses"):
+        r = await client.get(path, headers=auth)
+        # No money data any more (no persona replaces it): 409 no_finance_data, or an empty list.
+        assert (r.status_code == 409 and r.json()["error"]["code"] == "no_finance_data") or r.json()["items"] == []
+    assert (await client.get("/v1/me", headers=auth)).json()["has_finance_data"] is False
 
 
 async def test_delete_account_removes_everything(client: httpx.AsyncClient) -> None:
     from lifeline_api.main import app
 
     auth = await sign_in(client, "account-device-02")
-    sub = (await client.get("/v1/me", headers=auth)).json()["id"]
+    sub = await seed_persona("account-device-02")
+    assert (await client.get("/v1/me", headers=auth)).json()["id"] == sub
     await _make_records(client, auth)
     store = app.state.lifeline.store
     assert await store.list_docs(sub, "") and await store.list_by_owner(sub)
@@ -95,6 +99,7 @@ async def test_delete_account_removes_everything(client: httpx.AsyncClient) -> N
 
 async def test_reset_keeps_account_and_token(client: httpx.AsyncClient) -> None:
     auth = await sign_in(client, "account-device-03")
+    await seed_persona("account-device-03")
     before = (await client.get("/v1/me", headers=auth)).json()
     await _make_records(client, auth)
     await client.put("/v1/finance/manual", json=MANUAL_MORTGAGE, headers=auth)
@@ -127,7 +132,7 @@ async def test_manual_entry_unlocks_live_mode(live: httpx.AsyncClient) -> None:
 
 
 async def test_manual_entry_overrides_sample_data(client: httpx.AsyncClient) -> None:
-    """Demo mode: the user's own entry replaces the sample persona, and drives the next move."""
+    """Demo mode: no persona before the entry; the user's own entry drives the next move."""
     auth = await sign_in(client, "account-device-08")
     assert (await client.put("/v1/finance/manual", json=MANUAL_MORTGAGE, headers=auth)).status_code == 200
     nm = (await client.get("/v1/next-move", headers=auth)).json()
@@ -315,7 +320,10 @@ async def test_finance_home_with_and_without_data(live: httpx.AsyncClient) -> No
 
 
 async def test_finance_home_demo(client: httpx.AsyncClient) -> None:
+    """Demo mode with data: home shows it. The presenter device gets no persona by itself (see test_no_persona)."""
     auth = await sign_in(client, "demo-presenter-01")
+    assert (await client.get("/v1/finance/home", headers=auth)).json()["has_data"] is False
+    await seed_persona("demo-presenter-01")
     home = (await client.get("/v1/finance/home", headers=auth)).json()
     assert home["has_data"] and home["meta"]["label"] == "Sample data"
     assert home["next_move"]["top"]["kind"] == "fix_mortgage"

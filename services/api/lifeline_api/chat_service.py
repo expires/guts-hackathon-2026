@@ -6,20 +6,24 @@ Threads are per-user documents `chat:<thread_id>`, so DELETE /v1/me and /v1/me/r
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import secrets
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from lifeline_api import macro, money, prediction
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.routes.lives import new_life_id
-from lifeline_api.routes.next_move import DOC_NEXT_MOVE, subject_seed
+from lifeline_api.routes.next_move import stored_next_move, subject_seed
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeRecord, macro_hash
 from lifeline_contracts.chat import (
     ChatBubble,
+    ChatContext,
     ChatMessage,
     ChatRequest,
     ChatResponse,
@@ -30,8 +34,9 @@ from lifeline_contracts.chat import (
 from lifeline_contracts.domain import Life
 from lifeline_contracts.finance import Account, FinanceSnapshot
 from lifeline_contracts.next_move import NextMoveResponse
+from lifeline_explain import game_scene, learn_scene
 from lifeline_explain.chat_engine_tools import EngineToolSet
-from lifeline_explain.chat_tools import ChatToolContext, ChatTurn
+from lifeline_explain.chat_tools import ChatToolContext, ChatTurn, GameScene, ToolSet
 from lifeline_explain.prompts import UNAVAILABLE_TEXT
 
 log = logging.getLogger(__name__)
@@ -40,6 +45,7 @@ THREAD_PREFIX = "chat:"
 HISTORY_TURNS = 12
 MAX_MESSAGES_PER_THREAD = 200
 TITLE_CHARS = 60
+SCENE_SECONDS = 1.5  # speed: the first bubble still arrives under 3 s
 
 
 def _now() -> str:
@@ -75,7 +81,31 @@ def _with_reply_counts(messages: list[dict[str, Any]]) -> list[ChatMessage]:
     for m in messages:
         if m["role"] == "user" and m.get("reply_to"):
             counts[m["reply_to"]] = counts.get(m["reply_to"], 0) + 1
-    return [ChatMessage.model_validate({**m, "replies": counts.get(m["id"], 0)}) for m in messages]
+    out: list[ChatMessage] = []
+    for m in messages:
+        msg = _message(m, counts.get(m["id"], 0))
+        if msg is not None:
+            out.append(msg)
+    return out
+
+
+def _message(m: dict[str, Any], replies: int) -> ChatMessage | None:
+    """A stored message. One saved by an older version (e.g. an old disclaimer, 3 or 4 bubbles) is brought up
+    to the current contract where that is safe, else skipped. Never a 500."""
+    try:
+        return ChatMessage.model_validate({**m, "replies": replies})
+    except ValidationError:
+        pass
+    resp = dict(m.get("response") or {})
+    if resp:
+        resp.pop("disclaimer", None)  # the current disclaimer applies
+        resp["bubbles"] = list(resp.get("bubbles", []))[:2]
+        resp["tool_calls"] = list(resp.get("tool_calls", []))[:5]
+    try:
+        return ChatMessage.model_validate({**m, "replies": replies, "response": resp or None})
+    except ValidationError:
+        log.info("stale chat message skipped")
+        return None
 
 
 def thread_view(thread: dict[str, Any]) -> ChatThread:
@@ -102,7 +132,8 @@ async def open_thread(state: AppState, sub: str, req: ChatRequest) -> dict[str, 
         return thread
     if req.reply_to:
         raise not_found("Message to reply to not found")
-    title = " ".join(req.message.split())[:TITLE_CHARS]
+    given = req.context.title if req.context is not None else None
+    title = " ".join((given or req.message).split())[:TITLE_CHARS]
     return {"id": f"th_{secrets.token_hex(8)}", "title": title or "Chat", "created_at": _now(),
             "updated_at": _now(), "messages": []}
 
@@ -143,10 +174,8 @@ def no_data_snapshot(today: date) -> FinanceSnapshot:
 
 
 async def _stored_next_move(state: AppState, sub: str) -> NextMoveResponse | None:
-    doc = await state.store.get_doc(sub, DOC_NEXT_MOVE)
-    if doc is None:
-        return None
-    return NextMoveResponse.model_validate(doc["response"])
+    stored = await stored_next_move(state, sub)  # a stale stored move is dropped, never a 500
+    return None if stored is None else stored[0]
 
 
 async def context_life(state: AppState, sub: str, req: ChatRequest) -> Life | None:
@@ -157,6 +186,71 @@ async def context_life(state: AppState, sub: str, req: ChatRequest) -> Life | No
     if rec is None:
         raise not_found("Life not found")
     return rec.life
+
+
+# ---------- game screens (Life event, room round) ----------
+
+
+async def life_event_scene(tools: ToolSet, req: ChatRequest) -> GameScene | None:
+    """The open Life event with its choices and their engine projections (event_choices). None when it is not open."""
+    rc = req.context
+    if rc is None or rc.screen != "life_event" or "event_choices" not in {s.name for s in tools.specs()}:
+        return None
+    try:
+        out = await asyncio.wait_for(tools.call("event_choices", {}), timeout=SCENE_SECONDS)
+    except Exception as exc:  # event closed, life ended or slow: Penny answers without game numbers
+        log.info("chat: life event scene unavailable (%s)", type(exc).__name__)
+        return None
+    return game_scene.life_event_scene(out)
+
+
+def _round_index(items: list[dict[str, Any]], gs: dict[str, Any], round_id: str | None) -> int | None:
+    if round_id is None:
+        return min(int(gs.get("round", 0)), len(items) - 1) if items else None
+    for i, item in enumerate(items):
+        rid = (item.get("prompt") or item.get("question") or {}).get("id")
+        if rid == round_id:
+            return i
+    return None
+
+
+async def room_round_scene(state: AppState, sub: str, rc: ChatContext | None) -> GameScene | None:
+    """The room's Same Decision prompt or Money Quiz question, from the server-side room document.
+
+    Only for a player in that room (anyone else gets nothing, and no hint that the room exists). Before the reveal
+    the scene holds the option labels and context text only: no outcome and no future game money. An open quiz
+    question never carries its correct answer."""
+    if rc is None or rc.screen != "room_round" or not rc.room_code:
+        return None
+    try:
+        doc = await state.rooms.get(rc.room_code)
+    except Exception as exc:
+        log.info("chat: room unavailable (%s)", type(exc).__name__)
+        return None
+    if doc is None or doc.player_of(sub) is None:
+        return None
+    gs = doc.game_state
+    items = list(gs.get("items") or [])
+    idx = _round_index(items, gs, rc.round_id)
+    if idx is None:
+        return None
+    revealed = int(gs.get("round", 0)) > idx  # the round counter moves on only at the reveal
+    item = items[idx]
+    if gs.get("kind") == "quiz" or "question" in item:
+        return game_scene.room_quiz_scene(item, revealed)
+    return game_scene.room_decision_scene(item, revealed)
+
+
+def lesson_scene(rc: ChatContext | None) -> GameScene | None:
+    """The Learn lesson on screen (ADR 0068): title, cards and facts with their official sources. Never the quiz.
+    In-memory content, so no wait (speed). None for another screen or an unknown lesson id (general answer)."""
+    if rc is None or rc.screen != "learn_lesson":
+        return None
+    try:
+        return learn_scene.lesson_scene(rc.lesson_id)
+    except Exception as exc:  # broken content: Penny answers in general
+        log.info("chat: lesson scene unavailable (%s)", type(exc).__name__)
+        return None
 
 
 async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dict[str, Any], user_message_id: str,
@@ -197,6 +291,8 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
         weather=weather,
         life_id_prefix="chat",
     )
+    scene = (lesson_scene(req.context) or await life_event_scene(tools, req)
+             or await room_round_scene(state, sub, req.context))  # fmt: skip
     ctx = ChatToolContext(
         tools=tools,
         thread_id=thread["id"],
@@ -204,6 +300,7 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
         history=history({"messages": thread["messages"][:-1]}),  # earlier turns; the new message is the request
         known={"name": display_name} if display_name else {},
         request_context=req.context,
+        scene=scene,
     )
     return ctx, digest
 

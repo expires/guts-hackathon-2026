@@ -161,7 +161,7 @@ struct LessonChart: View {
             .frame(height: 150)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(chart.title)
-            .accessibilityValue(chart.points.map { "\($0.label ?? String(Int($0.x))): \(LessonViewModel.format($0.y, unit: chart.yLabel))" }.joined(separator: ", "))
+            .accessibilityValue(chart.points.map { L10n.tr("\($0.label ?? String(Int($0.x))): \(LessonViewModel.format($0.y, unit: chart.yLabel))") }.joined(separator: ", "))
             if let source = chart.source {
                 SourceChip(source: source)
             }
@@ -205,7 +205,7 @@ struct QuizCard: View {
                     .accessibilityIdentifier("lesson.option.\(index)")
                 }
                 if quiz.isAnswered {
-                    Text(quiz.isCorrect ? "Right!" : "Not quite. The answer is \(quiz.options[quiz.answerIndex]).")
+                    Text(quiz.isCorrect ? "Right!" : L10n.tr("Not quite. The answer is \(quiz.options[quiz.answerIndex])."))
                         .font(.llBodyBold)
                         .accessibilityIdentifier("lesson.feedback")
                 }

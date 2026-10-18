@@ -29,11 +29,11 @@ struct RoomEntryContent: View {
                     .accessibilityIdentifier("room.openLobby")
             }
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                BlockTitle(text: "Join a game")
+                BlockTitle(text: L10n.tr("Join a game"))
                 HStack(spacing: Theme.Spacing.s) {
-                    TextField("Room code", text: Binding(get: { state.joinCode }, set: actions.onJoinCodeChange))
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
+                    TextField("4-digit code", text: Binding(get: { state.joinCode }, set: actions.onJoinCodeChange))
+                        .keyboardType(.numberPad)
+                        .monospacedDigit()
                         .font(.llTitle)
                         .padding(.horizontal, Theme.Spacing.m)
                         .frame(minHeight: Theme.buttonHeight)
@@ -75,7 +75,7 @@ struct RoomEntryContent: View {
             .foregroundStyle(Theme.Palette.ink)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Back to room \(active.code). \(active.detail)")
+        .accessibilityLabel(L10n.tr("Back to room \(active.code). \(active.detail)"))
         .accessibilityIdentifier("roomEntry.active")
     }
 }

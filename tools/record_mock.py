@@ -31,7 +31,7 @@ BUNDLED = Path(__file__).resolve().parents[1] / "apps" / "ios" / "Lifeline" / "R
 # key (CachedOps.<x>.key in DiskCache.swift) -> (path, field to unwrap or None for the whole body)
 BUNDLED_OPS: dict[str, tuple[str, str | None]] = {
     "listCharacters": ("/v1/characters", None),
-    "listPaths": ("/v1/paths", "paths"),
+    "listPathsResponse": ("/v1/paths", None),
     "listConcepts": ("/v1/concepts", "concepts"),
     "listChallenges": ("/v1/challenges", "challenges"),
     "listSamples": ("/v1/samples", "samples"),

@@ -7,6 +7,8 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
+from tests.integration.personas import seed_persona
+
 
 @pytest.fixture
 async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[httpx.AsyncClient]:
@@ -144,6 +146,7 @@ async def test_prediction_validation(client: httpx.AsyncClient) -> None:
     assert (await client.get("/v1/finance/prediction")).status_code == 401
     assert (await client.get("/v1/finance/prediction/evaluation")).status_code == 401
     auth = await _auth(client)
+    await seed_persona("unit-device-001")
     r = await client.get("/v1/finance/prediction", params={"date": "2026-10"}, headers=auth)
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
     r = await client.get("/v1/finance/prediction/evaluation", headers=auth)
@@ -168,6 +171,7 @@ async def test_reads_survive_store_down(client: httpx.AsyncClient) -> None:
     from lifeline_api.store import StoreUnavailable
 
     auth = await _auth(client, "demo-presenter-01")
+    await seed_persona("demo-presenter-01")
 
     class DownStore:
         def __getattr__(self, name: str) -> object:
@@ -344,6 +348,7 @@ async def test_reads_have_a_larger_budget_than_writes(monkeypatch: pytest.Monkey
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app), httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         auth = await _auth(c, "budget-device-01")
+        await seed_persona("budget-device-01")
         reads = [(await c.get("/v1/plan", headers=auth)).status_code for _ in range(7)]
         assert reads == [200] * 6 + [429]
         body = {"name": "Trip", "target": 100}

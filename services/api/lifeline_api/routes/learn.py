@@ -111,5 +111,6 @@ async def list_challenges(request: Request, sub: OptionalSubject) -> ChallengesR
 
 @router.get("/v1/paths", tags=["play"], response_model=PathsResponse, response_model_exclude_none=True)
 async def list_paths(sub: Subject) -> PathsResponse:
-    """Student start paths (W3): university, apprenticeship, job at 18, gap year, master's."""
-    return PathsResponse(paths=await call_pure(sim_api.paths))
+    """Student start paths (W3): university, apprenticeship, job at 18, gap year, master's; and the premade
+    Quick Life students the host can pick (ADR 0064)."""
+    return PathsResponse(paths=await call_pure(sim_api.paths), quick_students=await call_pure(sim_api.quick_students))

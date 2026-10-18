@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import logging
 import secrets
@@ -17,6 +18,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Request
+from pydantic import ValidationError
 
 from lifeline_api import macro, money
 from lifeline_api.auth import Subject
@@ -40,6 +42,7 @@ from lifeline_contracts.next_move import (
     TestMoveResult,
     TestPeriod,
 )
+from lifeline_engine import move_i18n
 from lifeline_engine import next_move as next_move_engine
 from lifeline_sim import api as sim_api
 
@@ -61,7 +64,7 @@ def subject_seed(sub: str) -> int:
     return int.from_bytes(digest[:8], "big") % (MAX_SEED + 1)
 
 
-REWORD_BUDGET_SECONDS = 2.0
+REWORD_BUDGET_SECONDS = 1.0
 
 
 async def _compute(state: AppState, sub: str, *, reword: bool = True,
@@ -71,14 +74,27 @@ async def _compute(state: AppState, sub: str, *, reword: bool = True,
     Never waits for a cold MacroTable build or a slow LLM (V1 O1): it uses the last good table (labelled
     cached) and engine wording when needed, answers, and finishes the stored move in the background.
     """
+    resp, _, digest = await _compute_both(state, sub, reword=reword, fresh_only=fresh_only)
+    return resp, digest
+
+
+async def _compute_both(state: AppState, sub: str, *, reword: bool = True,
+                        fresh_only: bool = False) -> tuple[NextMoveResponse, NextMoveResponse, str]:
+    """(served English response, the same response with the engine's own wording, macro hash). The engine
+    wording is what the fixed translation tables know (ADR 0069 point 8); the stored move stays English."""
     snap = await money.snapshot(state, sub)
     if fresh_only:
         table, fresh = await macro.table(state), True
     else:
         table, fresh = await macro.table_fast(state)
+    if not fresh and not table.values:
+        _finish_later(state, sub, reword=reword)
+        raise ApiError(503, "data_warming", "Live data is still loading. Try again in a minute.",
+                       source="data", headers={"Retry-After": "30"})
     digest = macro_hash(table)
     resp = await call_pure(next_move_engine.next_move, snap, table, money.today(snap), subject_seed(sub))
     resp = resp.model_copy(update={"meta": money.meta(snap), "generated_at": _utc_now()})
+    engine_wording = resp
     reworded = False
     if reword:  # the LLM may only reword text
         try:
@@ -89,7 +105,7 @@ async def _compute(state: AppState, sub: str, *, reword: bool = True,
     await _store(state, sub, resp, table, digest)
     if not fresh or (reword and not reworded):
         _finish_later(state, sub, reword=reword)
-    return resp, digest
+    return resp, engine_wording, digest
 
 
 async def _store(state: AppState, sub: str, resp: NextMoveResponse, table: Any, digest: str) -> None:
@@ -129,12 +145,36 @@ def _finish_later(state: AppState, sub: str, *, reword: bool) -> None:
     task.add_done_callback(done)
 
 
-async def _latest(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
-    """The stored next move for this subject, or a fresh one if none is stored."""
+async def stored_next_move(state: AppState, sub: str) -> tuple[NextMoveResponse, str] | None:
+    """The stored next move, or None. A stored move that no longer matches the contract (it was saved by an
+    older version, e.g. before the question text changed) is stale: it is deleted and never causes a 500."""
     doc = await state.store.get_doc(sub, DOC_NEXT_MOVE)
     if doc is None:
-        return await _compute(state, sub)
-    return NextMoveResponse.model_validate(doc["response"]), str(doc["macro_hash"])
+        return None
+    try:
+        return NextMoveResponse.model_validate(doc["response"]), str(doc["macro_hash"])
+    except (ValidationError, KeyError, TypeError) as exc:
+        log.info("stale stored next move dropped (%s)", type(exc).__name__)
+        with contextlib.suppress(StoreUnavailable):
+            await state.store.delete_doc(sub, DOC_NEXT_MOVE)
+        return None
+
+
+async def _latest(state: AppState, sub: str) -> tuple[NextMoveResponse, str]:
+    """The stored next move for this subject, or a fresh one if none is stored (or the stored one is stale)."""
+    stored = await stored_next_move(state, sub)
+    return stored if stored is not None else await _compute(state, sub)
+
+
+def valid_items(model: Any, docs: Any) -> list[Any]:
+    """Stored items that still match the contract. An item saved by an older version is skipped, never a 500."""
+    out = []
+    for x in docs or []:
+        try:
+            out.append(model.model_validate(x))
+        except ValidationError:
+            log.info("stale stored %s skipped", getattr(model, "__name__", "item"))
+    return out
 
 
 def _find(resp: NextMoveResponse, move_id: str) -> Move | None:
@@ -154,9 +194,12 @@ async def _find_move(state: AppState, sub: str, move_id: str) -> tuple[Move, str
 
 
 @router.get("/v1/next-move", response_model=NextMoveResponse, response_model_exclude_none=True)
-async def get_next_move(request: Request, sub: Subject) -> NextMoveResponse:
-    resp, _ = await _compute(get_state(request), sub)
-    return resp
+async def get_next_move(request: Request, sub: Subject, language: str = "en") -> NextMoveResponse:
+    """`language` (ADR 0069 point 8): the move text in one of the 8 app languages, from fixed tables at response
+    time; numbers stay the same. Unknown languages get English. The stored move stays English."""
+    resp, engine_wording, _ = await _compute_both(get_state(request), sub)
+    lang = move_i18n.language_of(language)
+    return resp if lang == "en" else move_i18n.translate_response(engine_wording, lang)
 
 
 # ---------- Test it ----------
@@ -251,7 +294,10 @@ def _evidence_sentence(move: Move) -> str:
 async def _play(state: AppState, sub: str, character: CharacterSpec, move: Move, option_id: str, seed: int,
                 table: MacroTable, digest: str) -> Life:
     start, end = next_move_engine.scenario_years(move)
-    policy: dict[str, str] = await call_pure(next_move_engine.option_policy, move, option_id)
+    try:
+        policy: dict[str, str] = await call_pure(next_move_engine.option_policy, move, option_id)
+    except ValueError as exc:  # the engine has no policy for this move or option
+        raise ApiError(409, "not_testable", "This move cannot be tested in a past period yet") from exc
     life_id = new_life_id()
     life: Life = await call_pure(sim_api.play_scenario, life_id, character, start, end, policy, seed, table)
     await state.store.create(LifeRecord(id=life.id, owner=sub, life=life, macro_hash=digest))
@@ -279,7 +325,7 @@ async def test_next_move(body: TestMoveRequest, request: Request, sub: Subject) 
         await state.store.put_macro(digest, table)
 
     snap = await money.snapshot(state, sub)
-    _, character = await call_pure(money.engine_profile, snap, money.hints(state, sub, snap))
+    _, character = await call_pure(money.engine_profile, snap, None)
     # The sim runs events from start + 1, so start is the year before the test period (W2 scenario_years).
     start, _ = next_move_engine.scenario_years(move)
     character = shift_to_period(character, money.today(snap).year, start)
@@ -312,7 +358,7 @@ def _plan_response(items: list[PlanItem]) -> PlanResponse:
 
 async def _plan_items(state: AppState, sub: str) -> list[PlanItem]:
     doc = await state.store.get_doc(sub, DOC_PLAN)
-    return [PlanItem.model_validate(x) for x in (doc or [])]
+    return valid_items(PlanItem, doc)
 
 
 @router.get("/v1/plan", response_model=PlanResponse, response_model_exclude_none=True)

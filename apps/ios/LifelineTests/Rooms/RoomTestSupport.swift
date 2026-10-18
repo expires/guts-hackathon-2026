@@ -73,7 +73,7 @@ enum RoomTestData {
 
     static func room(status: Room.StatusPayload = .lobby, players: [RoomWire.Player]? = nil) -> Room {
         var room = ContractExamples.room
-        room.code = "K7Q2ZP"
+        room.code = "1234"
         room.mode = .group
         room.maxPlayers = 6
         room.status = status

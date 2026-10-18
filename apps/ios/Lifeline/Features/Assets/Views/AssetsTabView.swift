@@ -7,14 +7,14 @@ struct AssetsTabView: View {
 
     var body: some View {
         SheetContainer(title: "Assets", closeIdentifier: "menu.close", onClose: actions.onClose) {
-            RowGroup(title: "Things I own") {
+            RowGroup(title: L10n.tr("Things I own")) {
                 if state.items.isEmpty {
-                    ListRow(icon: .home, title: "Nothing yet", subtitle: "Buy something below", showsChevron: false)
+                    ListRow(icon: .home, title: L10n.tr("Nothing yet"), subtitle: L10n.tr("Buy something below"), showsChevron: false)
                 }
                 ForEach(state.items) { item in
                     ListRow(icon: LLIcon.from(emoji: item.emoji, fallback: item.kindLabel.lowercased().contains("home") ? .home : .savings), title: item.name, subtitle: item.kindLabel, trailing: Money.format(item.value), showsChevron: false)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(item.name), \(item.kindLabel), \(Money.spoken(item.value))")
+                        .accessibilityLabel(L10n.tr("\(item.name), \(item.kindLabel), \(Money.spoken(item.value))"))
                 }
             }
             HStack {
@@ -22,8 +22,8 @@ struct AssetsTabView: View {
                 Spacer()
                 Text(Money.format(state.totalValue)).font(.llTitle).contentTransition(.numericText(value: state.totalValue))
             }
-            RowGroupTitle(text: "What you can do")
-            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
+            RowGroupTitle(text: L10n.tr("What you can do"))
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: L10n.tr("Nothing to do here this year."))
         }
     }
 }

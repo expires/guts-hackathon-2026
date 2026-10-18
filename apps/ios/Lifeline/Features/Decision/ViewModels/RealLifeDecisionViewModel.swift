@@ -98,17 +98,17 @@ final class RealLifeDecisionViewModel {
 
     /// 0.7 -> "7 in 10". Rounds to the nearest tenth.
     static func successText(_ rate: Double) -> String {
-        "\(Int((min(1, max(0, rate)) * 10).rounded())) in 10"
+        L10n.tr("\(Int((min(1, max(0, rate)) * 10).rounded())) in 10")
     }
 
     /// "Based on 40 similar lives in 1989-1991, 2006-2008 and 2022-2024."
     static func basisSentence(twins: Int, periods: [String]) -> String {
         let lives = twins == 1 ? "1 similar life" : "\(twins) similar lives"
-        guard !periods.isEmpty else { return "Based on \(lives)." }
+        guard !periods.isEmpty else { return L10n.tr("Based on \(lives).") }
         let joined = periods.count == 1
             ? periods[0]
             : periods.dropLast().joined(separator: ", ") + " and " + periods[periods.count - 1]
-        return "Based on \(lives) in \(joined)."
+        return L10n.tr("Based on \(lives) in \(joined).")
     }
 
     static func makeState(

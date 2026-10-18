@@ -8,7 +8,7 @@ struct SpendAccuracyView: View {
     var actions: SpendAccuracyActions = .noop
 
     var body: some View {
-        SheetContainer(title: "How good is the model?", closeIdentifier: "accuracy.close", onClose: actions.onClose) {
+        SheetContainer(title: L10n.tr("How good is the model?"), closeIdentifier: "accuracy.close", onClose: actions.onClose) {
             switch state.phase {
             case let .loading(loading):
                 LoadingStateView(state: loading)

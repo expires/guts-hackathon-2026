@@ -14,6 +14,9 @@ struct RoomLiveView: View {
                 if let connection = state.connection {
                     RoomConnectionBanner(state: connection, onRetry: actions.onReconnect)
                 }
+                if let error = state.startError {
+                    startErrorBanner(error)
+                }
             }
             .padding(.horizontal, Theme.Spacing.m)
             .padding(.vertical, 10)
@@ -35,6 +38,28 @@ struct RoomLiveView: View {
             }
         }
         .paperBackground()
+    }
+
+    /// Same Life start failed: the red error banner with "Try again".
+    private func startErrorBanner(_ text: String) -> some View {
+        HStack(spacing: Theme.Spacing.m) {
+            LLIconImage(.crash, size: 24)
+            Text(text)
+                .font(.llLabelBold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Try again", action: actions.onRetryStart)
+                .buttonStyle(.text)
+                .disabled(state.isBusy)
+                .frame(minHeight: Theme.minTarget)
+                .accessibilityIdentifier("room.startRetry")
+        }
+        .foregroundStyle(Theme.Palette.onArea)
+        .padding(.horizontal, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.s)
+        .frame(minHeight: Theme.minTarget)
+        .inkSurface(.badge, fill: Theme.Palette.health, lineWidth: Theme.chipOutline)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("room.startError")
     }
 
     private var header: some View {
@@ -109,6 +134,17 @@ struct RoomLiveView: View {
                 .disabled(state.isBusy)
                 .accessibilityIdentifier("roomLive.choice.\(choice.id)")
             }
+            if let onAskPenny = actions.onAskPenny {
+                Button(action: onAskPenny) {
+                    HStack(spacing: Theme.Spacing.s) {
+                        PennyView(mood: .thinking, size: 28)
+                        Text("Not sure? Ask Penny")
+                    }
+                }
+                .buttonStyle(.text)
+                .frame(minHeight: Theme.minTarget)
+                .accessibilityIdentifier("roomLive.askPenny")
+            }
         }
         .padding(Theme.Spacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -127,23 +163,18 @@ struct RoomLiveView: View {
                         .contentTransition(.numericText(value: Double(stat.value)))
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(stat.title) \(stat.value) out of 100")
+                .accessibilityLabel(L10n.tr("\(stat.title) \(stat.value) out of 100"))
             }
         }
     }
 
     @ViewBuilder
     private var controls: some View {
-        if let ageTitle = state.ageTitle {
-            Button(action: actions.onAge) {
-                HStack(spacing: 10) {
-                    LLIconImage(.age, size: 24)
-                    Text(ageTitle).lineLimit(1)
-                }
-            }
-            .buttonStyle(.main)
-            .disabled(state.isBusy)
-            .accessibilityIdentifier("roomLive.age")
+        if state.showsAgeUp {
+            LLAgeUpButton(nextAge: state.nextAge, isProcessing: state.isBusy, action: actions.onAge)
+                .padding(.bottom, Theme.heroShadow.height)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("roomLive.age")
         }
         if state.canOpenLife {
             Button("Open in the Life tab", action: actions.onOpenLife)
@@ -170,6 +201,11 @@ struct RoomLiveView: View {
 #Preview("Age · light") { RoomLiveView(state: RoomFlowFixtures.liveAge) }
 #Preview("Age · dark") { RoomLiveView(state: RoomFlowFixtures.liveAge).previewDark() }
 #Preview("Age · AX3") { RoomLiveView(state: RoomFlowFixtures.liveAge).previewLargeType() }
+#Preview("Age processing · light") {
+    var state = RoomFlowFixtures.liveAge
+    state.isBusy = true
+    return RoomLiveView(state: state)
+}
 #Preview("Event · light") { RoomLiveView(state: RoomFlowFixtures.liveEvent) }
 #Preview("Event · dark") { RoomLiveView(state: RoomFlowFixtures.liveEvent).previewDark() }
 #Preview("Event · AX3") { RoomLiveView(state: RoomFlowFixtures.liveEvent).previewLargeType() }

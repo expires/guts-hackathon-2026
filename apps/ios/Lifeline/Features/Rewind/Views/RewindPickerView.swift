@@ -45,7 +45,7 @@ struct RewindPickerView: View {
                 ForEach(state.options) { option in
                     let isOn = option.id == state.selected?.id
                     Button { actions.onSelect(option.id) } label: {
-                        Text("\(String(option.year)) · Age \(option.age)")
+                        Text(L10n.tr("\(String(option.year)) · Age \(option.age)"))
                             .font(.llLabelBold)
                             .foregroundStyle(isOn ? Theme.Palette.surface : Theme.Palette.ink)
                             .padding(.horizontal, Theme.Spacing.m)
@@ -66,9 +66,9 @@ struct RewindPickerView: View {
     private func timelineCard(_ selected: RewindPickerViewState.Option) -> some View {
         InkCard(shape: HandCut((18, 24, 16, 22), (22, 16, 24, 18))) {
             VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                Text("Back to \(String(selected.year)) · Age \(selected.age)").font(.llBodyBold)
+                Text(L10n.tr("Back to \(String(selected.year)) · Age \(selected.age)")).font(.llBodyBold)
                 RewindTimeline(labels: state.timeline)
-                Text("What you learned stays. Money and stats go back to \(String(selected.year)).")
+                Text(L10n.tr("What you learned stays. Money and stats go back to \(String(selected.year))."))
                     .font(.llLabel)
                     .foregroundStyle(Theme.Palette.muted)
             }
@@ -155,18 +155,11 @@ struct RewindPickerView: View {
     private func buttons(_ selected: RewindPickerViewState.Option) -> some View {
         VStack(spacing: Theme.Spacing.s) {
             if state.needsPass {
-                Button(action: actions.onBuyPass) {
-                    HStack(spacing: 10) {
-                        LLIconImage(.demoPay, size: 24)
-                        Text("Get the Rewind Pass")
-                    }
-                }
-                .buttonStyle(.main)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .accessibilityLabel("Get the Rewind Pass. \(Brand.demoPaymentLabel)")
-                .accessibilityIdentifier("rewind.buyPass")
-                DemoPaymentLabel()
+                // Penny Plus is cut (ADR 0067): no purchase, just the plain fact.
+                Text("No rewinds left in this life.")
+                    .font(.llBodyBold)
+                    .frame(maxWidth: .infinity, minHeight: Theme.buttonHeight)
+                    .accessibilityIdentifier("rewind.noneLeft")
             } else {
                 Button { actions.onPick(selected.id) } label: {
                     HStack(spacing: 10) {
@@ -175,7 +168,7 @@ struct RewindPickerView: View {
                         } else {
                             LLIconImage(.rewind, size: 24)
                         }
-                        Text("Replay from \(String(selected.year))")
+                        Text(L10n.tr("Replay from \(String(selected.year))"))
                     }
                 }
                 .buttonStyle(.main)
@@ -239,7 +232,7 @@ private struct RewindTimeline: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Timeline from \(labels.first ?? "") to now. The handle is at \(labels.first ?? "").")
+        .accessibilityLabel(L10n.tr("Timeline from \(labels.first ?? "") to now. The handle is at \(labels.first ?? "")."))
     }
 }
 

@@ -16,6 +16,7 @@ enum PlayWire {
     typealias PlayerChoice = Components.Schemas.PlayerChoice
     typealias Score = Components.Schemas.PlayerScore
     typealias Path = Components.Schemas.StudentPath
+    typealias Student = Components.Schemas.QuickStudent
     typealias Circle = Components.Schemas.Circle
     typealias Member = Components.Schemas.CircleMember
     typealias Habits = Components.Schemas.HabitScore
@@ -32,17 +33,17 @@ enum RoomGameKind: String, CaseIterable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .quiz: "Money Quiz"
-        case .sameDecision: "Same Decision"
-        case .sameLife: "Same Life"
+        case .quiz: L10n.tr("Money Quiz")
+        case .sameDecision: L10n.tr("Same Decision")
+        case .sameLife: L10n.tr("Same Life")
         }
     }
 
     var detail: String {
         switch self {
-        case .quiz: "Quick questions on student money. 15 seconds each."
-        case .sameDecision: "One money choice in real history. See what everyone picked."
-        case .sameLife: "Everyone lives the same student life. Who ends up best?"
+        case .quiz: L10n.tr("Quick questions on student money. 15 seconds each.")
+        case .sameDecision: L10n.tr("One money choice in real history. See what everyone picked.")
+        case .sameLife: L10n.tr("Everyone lives the same student life. Who ends up best?")
         }
     }
 
@@ -61,6 +62,12 @@ enum RoomGameKind: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// Student paths plus the premade Quick Life students.
+struct PlayPaths: Sendable, Equatable {
+    var paths: [PlayWire.Path]
+    var students: [PlayWire.Student]
+}
+
 protocol PlayService: Sendable {
     /// Student start paths (`GET /v1/paths`).
     func paths() async throws -> [PlayWire.Path]
@@ -71,14 +78,16 @@ protocol PlayService: Sendable {
     /// Your account name (`GET /v1/me` display_name). Nil when unknown; the server then names you "Player N".
     func myName() async -> String?
     /// Disk first, then network (ADR 0060). `onUpdate` runs once or twice.
-    func loadPaths(_ onUpdate: @escaping @MainActor @Sendable ([PlayWire.Path]) -> Void) async throws
+    /// Paths and the 5 premade Quick Life students (`GET /v1/paths`, ADR 0064).
+    func loadPaths(_ onUpdate: @escaping @MainActor @Sendable (PlayPaths) -> Void) async throws
+    func quickStudents() async throws -> [PlayWire.Student]
     func loadCircles(_ onUpdate: @escaping @MainActor @Sendable ([PlayWire.Circle]) -> Void) async throws
 }
 
 extension PlayService {
     /// No cache: one network call.
-    func loadPaths(_ onUpdate: @escaping @MainActor @Sendable ([PlayWire.Path]) -> Void) async throws {
-        let value = try await paths()
+    func loadPaths(_ onUpdate: @escaping @MainActor @Sendable (PlayPaths) -> Void) async throws {
+        let value = PlayPaths(paths: try await paths(), students: (try? await quickStudents()) ?? [])
         await onUpdate(value)
     }
 
@@ -92,14 +101,17 @@ extension PlayService {
 struct ClientPlayService: PlayService {
     let client: any LifelineClient
 
-    func paths() async throws -> [PlayWire.Path] { try await client.listPaths() }
+    func paths() async throws -> [PlayWire.Path] { try await client.listPaths().paths }
     func circles() async throws -> [PlayWire.Circle] { try await client.listCircles() }
     func createCircle(name: String) async throws -> PlayWire.Circle { try await client.createCircle(name: name) }
     func joinCircle(code: String) async throws -> PlayWire.Circle { try await client.joinCircle(code: code) }
     func leaveCircle(id: String) async throws { try await client.leaveCircle(id: id) }
+    func quickStudents() async throws -> [PlayWire.Student] { try await client.listPaths().quickStudents ?? [] }
 
-    func loadPaths(_ onUpdate: @escaping @MainActor @Sendable ([PlayWire.Path]) -> Void) async throws {
-        try await client.load(CachedOps.paths, onUpdate: onUpdate)
+    func loadPaths(_ onUpdate: @escaping @MainActor @Sendable (PlayPaths) -> Void) async throws {
+        try await client.load(CachedOps.paths) { response in
+            onUpdate(PlayPaths(paths: response.paths, students: response.quickStudents ?? []))
+        }
     }
 
     func loadCircles(_ onUpdate: @escaping @MainActor @Sendable ([PlayWire.Circle]) -> Void) async throws {
@@ -129,6 +141,7 @@ actor MockPlayService: PlayService {
     }
 
     nonisolated func paths() async throws -> [PlayWire.Path] { MockPlayData.paths }
+    nonisolated func quickStudents() async throws -> [PlayWire.Student] { MockPlayData.quickStudents }
     func circles() async throws -> [PlayWire.Circle] { stored }
 
     func createCircle(name: String) async throws -> PlayWire.Circle {
@@ -143,7 +156,7 @@ actor MockPlayService: PlayService {
 
     func joinCircle(code: String) async throws -> PlayWire.Circle {
         if let circle = stored.first(where: { $0.code == code }) { return circle }
-        guard RoomLink.isValid(code) else {
+        guard CircleCode.isValid(code) else {
             throw APIError.server(status: 422, code: "validation_error", message: "code: 6 letters or digits", source: "mock")
         }
         var circle = MockPlayData.circles[0]
@@ -165,11 +178,20 @@ actor MockPlayService: PlayService {
 /// Mock data for paths, circles, quiz questions and decisions. Facts are real UK rules with their official source.
 enum MockPlayData {
     static let paths: [PlayWire.Path] = [
-        .init(id: "university", title: "University", description: "Three-year degree with a Plan 5 student loan.", startAge: 18, quick: true),
-        .init(id: "apprenticeship", title: "Apprenticeship", description: "Earn while you learn. No tuition loan.", startAge: 18, quick: true),
+        .init(id: "uni", title: "University", description: "Three-year degree with a Plan 5 student loan.", startAge: 18, quick: true),
+        .init(id: "apprentice", title: "Apprenticeship", description: "Earn while you learn. No tuition loan.", startAge: 18, quick: true),
         .init(id: "job18", title: "Job at 18", description: "Start full-time work straight after school.", startAge: 18, quick: true),
         .init(id: "gap_year", title: "Gap year", description: "Work and travel for a year, then decide.", startAge: 18, quick: false),
-        .init(id: "masters", title: "Master's", description: "A degree, then a one-year master's with a postgraduate loan.", startAge: 21, quick: false),
+        .init(id: "masters", title: "Master's degree", description: "A degree, then a one-year master's with a postgraduate loan.", startAge: 21, quick: false),
+    ]
+
+    /// The server's five premade Quick Life students (W3, lifeline_sim/paths.py).
+    static let quickStudents: [PlayWire.Student] = [
+        .init(id: "qs-priya", name: "Priya", pathId: "uni", description: "University in Birmingham, paid with the full student loan."),
+        .init(id: "qs-amara", name: "Amara", pathId: "uni", description: "University in London with a £2,000 a year bursary."),
+        .init(id: "qs-jordan", name: "Jordan", pathId: "apprentice", description: "Electrician apprentice in Manchester. Paid to train."),
+        .init(id: "qs-kai", name: "Kai", pathId: "job18", description: "Starts work at 18 in Leeds and lives at home."),
+        .init(id: "qs-maya", name: "Maya", pathId: "gap_year", description: "Works a gap year in Bristol, then goes to university."),
     ]
 
     static func habits(_ values: [Int], overall: Int) -> PlayWire.Habits {

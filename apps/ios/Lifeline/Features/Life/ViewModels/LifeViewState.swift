@@ -50,6 +50,8 @@ struct LifeViewState: Equatable, Sendable {
     var outcome: OutcomeState?
     var canAge: Bool
     var isAging: Bool
+    /// Age after the next AGE tap, from the engine life state (`Life.nextAge`). Nil: the button says "Age up".
+    var nextAge: Int? = nil
     /// Plain English reason when AGE is blocked, or "Live one more year."
     var ageHint: String
     /// Changes after each AGE. Drives the age-up haptic.

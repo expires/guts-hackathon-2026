@@ -37,7 +37,7 @@ async def inputs(state: AppState, sub: str) -> Inputs:
     hit = state.memo.get(key)
     if hit is not None:
         return cast(Inputs, hit)
-    profile, _ = await call_pure(money.engine_profile, snap, money.hints(state, sub, snap))
+    profile, _ = await call_pure(money.engine_profile, snap, None)
     hub: Any = state.hub  # bank_holidays and daily_weather are on lifeline_data.hub.DataHub (ADR 0017)
     holidays: set[date] = await hub.bank_holidays(profile.region)
     rows: list[dict[str, Any]] = await hub.daily_weather(profile.region, first, last, today=as_of)

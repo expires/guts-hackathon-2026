@@ -1,7 +1,7 @@
 import Foundation
 
-/// Onboarding fixtures for previews, the Playground and tests.
-/// Numbers come from the recorded engine output (`PreviewData`) and the contract examples.
+/// Onboarding fixtures for previews, the Playground and tests (ADR 0069).
+/// Numbers come from responses recorded from the local API (`OnboardingRecorded`) and the contract examples.
 @MainActor
 enum OnboardingFixtures {
     private static func base(_ step: OnboardingViewState.Step, appleAvailable: Bool = false) -> OnboardingViewState {
@@ -14,20 +14,133 @@ enum OnboardingFixtures {
         return state
     }
 
-    static var welcome: OnboardingViewState { base(.welcome(page: 0)) }
-    static var welcomeLast: OnboardingViewState { base(.welcome(page: 2)) }
-    static var signInDemoOnly: OnboardingViewState { base(.signIn) }
-    static var signInApple: OnboardingViewState { base(.signIn, appleAvailable: true) }
+    static var welcome: OnboardingViewState { base(.welcome) }
+    static var problem: OnboardingViewState { base(.problem) }
+    static var language: OnboardingViewState { base(.language) }
 
-    static var connect: OnboardingViewState {
-        var state = base(.connect)
-        state.signIn.note = "Sign in with Apple is not set up in this build. You use a demo account on this phone."
+    /// French picked: the language screen redraws in French before Confirm.
+    static var languageFrench: OnboardingViewState {
+        var state = base(.language)
+        state.language = .fr
         return state
     }
 
-    static var connectError: OnboardingViewState {
+    static var features: OnboardingViewState { base(.features) }
+
+    /// "Pick your student" with the sample students (all ADR 0069 card fields).
+    static var pickStudent: OnboardingViewState {
         var state = base(.connect)
-        state.errorMessage = "This file is larger than 5 MB. Export a shorter period and try again."
+        state.samples = OnboardingViewModel.sampleCards(OnboardingRecorded.samples.samples)
+        return state
+    }
+
+    /// Older server: cards without the ADR 0069 fields (rows hide).
+    static var pickStudentOldServer: OnboardingViewState {
+        var state = base(.connect)
+        let samples: [SampleStatement] = ContractExamples.decode(#"""
+        [{"id": "scholarship", "title": "Scholarship student", "description": "Scholarship and bursary, about £420 a month, no debt",
+          "funding": ["scholarship", "bursary"], "months": 3}]
+        """#)
+        state.samples = OnboardingViewModel.sampleCards(samples)
+        return state
+    }
+
+    static var samplesLoading: OnboardingViewState {
+        var state = base(.connect)
+        state.samplesLoading = true
+        return state
+    }
+
+    static var signInDemoOnly: OnboardingViewState { base(.signIn) }
+    static var signInApple: OnboardingViewState { base(.signIn, appleAvailable: true) }
+
+    static var connectError: OnboardingViewState {
+        var state = pickStudent
+        state.errorMessage = L10n.tr("This file is larger than 5 MB. Export a shorter period and try again.")
+        return state
+    }
+
+    /// The recorded responses for the sample student "scottish".
+    static var collected: OnboardingViewModel.Collected {
+        .init(
+            profile: OnboardingRecorded.profile,
+            spending: OnboardingRecorded.spending,
+            bills: OnboardingRecorded.bills,
+            subscriptions: OnboardingRecorded.subscriptions,
+            overview: OnboardingRecorded.overview,
+            sources: nil,
+            habits: OnboardingRecorded.habits,
+            nextMove: OnboardingRecorded.nextMove
+        )
+    }
+
+    static var scottish: SampleStatement? {
+        OnboardingRecorded.samples.samples.first { $0.id == "scottish" }
+    }
+
+    /// Building, stage 4 of 8 running.
+    static var building: OnboardingViewState {
+        var state = base(.building)
+        state.building.stages = OnboardingViewModel.stages(firstLabel: L10n.tr("Reading the statement"))
+        let details = [OnboardingViewModel.importSummary(OnboardingRecorded.importResult), OnboardingViewModel.incomeDetail(sample: scottish, profile: OnboardingRecorded.profile),
+                       OnboardingViewModel.spendingTotalText(OnboardingRecorded.spending)]
+        for index in 0..<3 {
+            state.building.stages[index].status = .done
+            state.building.stages[index].detail = details[index]
+        }
+        state.building.stages[3].status = .running
+        return state
+    }
+
+    /// Building finished: "View profile" shows. One stage skipped (its call failed).
+    static var buildingDone: OnboardingViewState {
+        var state = building
+        for index in state.building.stages.indices {
+            state.building.stages[index].status = .done
+        }
+        state.building.stages[3].detail = OnboardingViewModel.billsDetail(bills: OnboardingRecorded.bills, subscriptions: OnboardingRecorded.subscriptions)
+        state.building.stages[4].detail = L10n.tr("No debts found")
+        state.building.stages[5].status = .skipped
+        state.building.stages[5].detail = L10n.tr("Not available right now")
+        state.building.stages[6].detail = L10n.tr("Habit score \(OnboardingRecorded.habits.overall ?? 0) out of 100")
+        state.building.stages[7].detail = L10n.tr("Next move ready")
+        state.building.isFinished = true
+        return state
+    }
+
+    static var profile: OnboardingViewState {
+        var state = base(.profile)
+        state.profile = OnboardingViewModel.makeProfile(sample: scottish, collected: collected)
+        return state
+    }
+
+    /// One "3 things Penny noticed" row open on its evidence.
+    static var profileEvidence: OnboardingViewState {
+        var state = profile
+        state.expandedNoticedID = state.profile?.noticed.first?.id
+        return state
+    }
+
+    static var howDecides: OnboardingViewState {
+        var state = base(.howDecides)
+        state.decides = OnboardingViewModel.makeDecides(OnboardingRecorded.nextMove)
+        return state
+    }
+
+    static var nextMove: OnboardingViewState {
+        var state = base(.nextMove)
+        state.nextMove = OnboardingViewModel.makeNextMove(OnboardingRecorded.nextMove)
+        return state
+    }
+
+    /// Older server: no reason, confidence_text or runners-up. Confidence falls back to a plain sentence.
+    static var nextMoveFallback: OnboardingViewState {
+        var response = OnboardingRecorded.nextMove
+        response.top.reason = nil
+        response.top.confidenceText = nil
+        response.runnersUp = []
+        var state = base(.nextMove)
+        state.nextMove = OnboardingViewModel.makeNextMove(response)
         return state
     }
 
@@ -77,17 +190,6 @@ enum OnboardingFixtures {
         return manual
     }
 
-    static var samples: OnboardingViewState {
-        var state = base(.samples)
-        state.samples = OnboardingViewModel.sampleCards(MockExamples.samples)
-        return state
-    }
-
-    static var samplesLoading: OnboardingViewState {
-        var state = base(.samples)
-        state.samplesLoading = true
-        return state
-    }
 
     static var student: OnboardingViewState {
         var state = base(.manual)
@@ -101,42 +203,29 @@ enum OnboardingFixtures {
         return state
     }
 
-    static var importing: OnboardingViewState {
-        var state = base(.importing)
-        state.importing = OnboardingViewModel.makeImporting(OnboardingExamples.importResult, shown: 3)
-        state.importing.stages[2].done = false
-        state.importing.isFinished = false
-        return state
-    }
-
-    static var reveal: OnboardingViewState {
-        var state = base(.reveal)
-        state.reveal = OnboardingViewModel.makeReveal(PreviewData.nextMove)
-        return state
-    }
-
-    static var tips: OnboardingViewState {
-        var state = base(.tips)
-        state.tips = OnboardingViewModel.makeTips(PreviewData.financeProfile)
-        return state
-    }
-
     /// Every state, for the Playground gallery.
     static var all: [(id: String, title: String, state: OnboardingViewState)] {
         [
-            ("welcome", "Welcome, page 1", welcome),
-            ("welcomeLast", "Welcome, page 3", welcomeLast),
+            ("welcome", "Welcome", welcome),
+            ("problem", "Problem", problem),
+            ("language", "Language", language),
+            ("languageFrench", "Language, French picked", languageFrench),
+            ("features", "What you can do", features),
+            ("pickStudent", "Pick your student", pickStudent),
+            ("pickStudentOld", "Pick your student, older server", pickStudentOldServer),
+            ("samplesLoading", "Pick your student, loading", samplesLoading),
+            ("connectError", "Pick your student, with an error", connectError),
             ("signInDemo", "Sign in, Apple not set up", signInDemoOnly),
             ("signInApple", "Sign in with Apple", signInApple),
-            ("connect", "Connect your money", connect),
-            ("connectError", "Connect, with an error", connectError),
-            ("samples", "Pick a sample student", samples),
-            ("samplesLoading", "Sample students, loading", samplesLoading),
             ("student", "Enter your numbers, student", student),
             ("manual", "Enter your numbers, working", manual),
-            ("importing", "Importing your history", importing),
-            ("reveal", "Next Move reveal", reveal),
-            ("tips", "3 tips", tips),
+            ("building", "Building their profile", building),
+            ("buildingDone", "Building their profile, done", buildingDone),
+            ("profile", "Their profile", profile),
+            ("profileEvidence", "Their profile, evidence open", profileEvidence),
+            ("howDecides", "How Penny decides", howDecides),
+            ("nextMove", "Their Next Move", nextMove),
+            ("nextMoveFallback", "Their Next Move, older server", nextMoveFallback),
         ]
     }
 }

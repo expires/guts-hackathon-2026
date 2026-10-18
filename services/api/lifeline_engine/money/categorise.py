@@ -1,11 +1,12 @@
 """Transaction categorisation (ADR 0016). Merchant table plus keyword rules. No LLM.
 
 Order of rules for one transaction:
-1. Money in (amount > 0): salary words give `income`; transfer words give `transfers`;
-   a known merchant gives that merchant's category (a refund); anything else is `income`.
-2. Money out: known merchant (matched on the merchant field, then on the description),
-   then keyword rules on the description, then the bank's own label (`provider_category`),
-   else `other`.
+1. Money in (amount > 0): salary and student-funding words (loan, grant, bursary, family) give
+   `income`; transfer words give `transfers`; a known merchant gives that merchant's category
+   (a refund); anything else is `income`.
+2. Money out: savings words (incl. "... pot", a Monzo pot transfer) give `savings`; then a known
+   merchant (longest key over the merchant field and the description), then keyword rules on the
+   description, then the bank's own label (`provider_category`), else `other`.
 Matching is on lower case text. Longer keys win, so "amazon prime" beats "amazon".
 """
 
@@ -57,6 +58,13 @@ _MERCHANTS: dict[str, Category] = {
     "ocado": "groceries",
     "m&s food": "groceries",
     "kirkgate market": "groceries",
+    "m&s": "groceries",
+    "marks & spencer": "groceries",
+    "scotmid": "groceries",
+    "wing yip": "groceries",
+    "farmfoods": "groceries",
+    "home bargains": "groceries",
+    "b&m": "groceries",
     # eating out
     "pret": "eating_out",
     "greggs": "eating_out",
@@ -73,6 +81,29 @@ _MERCHANTS: dict[str, Category] = {
     "wetherspoon": "eating_out",
     " pub ": "eating_out",
     "prince of wales": "eating_out",
+    "domino": "eating_out",
+    "subway": "eating_out",
+    "burger king": "eating_out",
+    "five guys": "eating_out",
+    "dishoom": "eating_out",
+    "mooboo": "eating_out",
+    "caffe nero": "eating_out",
+    "spoons": "eating_out",
+    "stag and hounds": "eating_out",
+    "tavern": "eating_out",
+    " arms ": "eating_out",
+    # students' union cafes, bars and shops: mostly food and drink
+    "students' union": "eating_out",
+    "students union": "eating_out",
+    "student union": "eating_out",
+    "students' association": "eating_out",
+    "students' guild": "eating_out",
+    "university union": "eating_out",
+    " su bar": "eating_out",
+    " su cafe": "eating_out",
+    " su coffee": "eating_out",
+    "yusu": "eating_out",
+    "nusu": "eating_out",
     # transport
     "tfl": "transport",
     "trainline": "transport",
@@ -83,7 +114,7 @@ _MERCHANTS: dict[str, Category] = {
     "shell": "transport",
     "esso": "transport",
     "texaco": "transport",
-    "bp ": "transport",
+    " bp ": "transport",
     "ringgo": "transport",
     "first bus": "transport",
     "stagecoach": "transport",
@@ -94,6 +125,14 @@ _MERCHANTS: dict[str, Category] = {
     "bee network": "transport",
     "metrolink": "transport",
     "tfgm": "transport",
+    "bolt": "transport",
+    "railcard": "transport",
+    "go north east": "transport",
+    "national express": "transport",
+    "nxwm": "transport",
+    "megabus": "transport",
+    "scotrail": "transport",
+    "lothian buses": "transport",
     # shopping
     "amazon": "shopping",
     "argos": "shopping",
@@ -107,12 +146,30 @@ _MERCHANTS: dict[str, Category] = {
     "uniqlo": "shopping",
     "tiktok shop": "shopping",
     "klarna": "shopping",
+    "clearpay": "shopping",
+    "paypal pay in 3": "shopping",
+    "apple store": "shopping",
+    "jd sports": "shopping",
+    "halfords": "shopping",
+    "shein": "shopping",
+    "depop": "shopping",
+    "vinted": "shopping",
+    "h&m": "shopping",
+    "tk maxx": "shopping",
+    "sports direct": "shopping",
     # entertainment
     "odeon": "entertainment",
     "vue": "entertainment",
     "cineworld": "entertainment",
     "ticketmaster": "entertainment",
     "steam": "entertainment",
+    # nights out
+    "nightclub": "entertainment",
+    "timepiece": "entertainment",
+    "revolution": "entertainment",
+    "digital newcastle": "entertainment",
+    "o2 academy": "entertainment",
+    "bowling": "entertainment",
     # subscriptions
     "netflix": "subscriptions",
     "spotify": "subscriptions",
@@ -137,6 +194,8 @@ _MERCHANTS: dict[str, Category] = {
     "strava": "subscriptions",
     "headspace": "subscriptions",
     "paramount": "subscriptions",
+    "apple": "subscriptions",
+    "disney+": "subscriptions",
     # bills
     "british gas": "bills",
     "octopus": "bills",
@@ -164,11 +223,22 @@ _MERCHANTS: dict[str, Category] = {
     "admiral": "bills",
     "hyperoptic": "bills",
     "united utilities": "bills",
+    "thames water": "bills",
+    "tv licensing": "bills",
+    " ee ": "bills",
+    "smarty": "bills",
+    "voxi": "bills",
+    "lebara": "bills",
+    " bills ": "bills",
+    "bills share": "bills",
     # housing
     "rent": "housing",
     "letting": "housing",
     "landlord": "housing",
     "mortgage": "housing",
+    "student lets": "housing",
+    "unite students": "housing",
+    "accommodation": "housing",
     # health
     "boots": "health",
     "pharmacy": "health",
@@ -190,6 +260,10 @@ _MERCHANTS: dict[str, Category] = {
     "udemy": "education",
     "coursera": "education",
     "university": "education",
+    "waterstones": "education",
+    "blackwell": "education",
+    "print shop": "education",
+    "uni print": "education",
     # gifts
     "moonpig": "gifts",
     "funky pigeon": "gifts",
@@ -197,7 +271,33 @@ _MERCHANTS: dict[str, Category] = {
 }
 _MERCHANT_KEYS: tuple[str, ...] = tuple(sorted(_MERCHANTS, key=lambda k: (-len(k), k)))
 
-_INCOME_WORDS = ("salary", "payroll", "wages", "pay from", "hmrc", "dwp", "pension payment", "interest")
+_INCOME_WORDS = (
+    "salary",
+    "payroll",
+    "wages",
+    "pay from",
+    "hmrc",
+    "dwp",
+    "pension payment",
+    "interest",
+    # student money in (same words as lifeline_data.statements.detect)
+    "bursary",
+    "scholarship",
+    " grant",
+    "student loans",
+    "student finance",
+    " slc ",
+    "maintenance loan",
+    "saas ",
+    "allowance",
+    "family support",
+    "rider payment",
+    "payout",
+    " mum ",
+    " dad ",
+    " parents ",
+    "rent help",
+)
 _TRANSFER_WORDS = (
     "transfer",
     "from savings",
@@ -207,7 +307,7 @@ _TRANSFER_WORDS = (
     "standing order from",
     "payment received",
 )
-_SAVINGS_OUT_WORDS = ("to savings", " isa ", "saver", "save the change", "savings pot", "round up")
+_SAVINGS_OUT_WORDS = ("to savings", " isa ", "saver", "save the change", "savings pot", "round up", " pot ")
 _CARD_LOAN_WORDS = (
     "credit card",
     "card payment to",
@@ -265,9 +365,19 @@ def merchant_category(text: str | None) -> Category | None:
     return None
 
 
+def _merchant_of(tx: Transaction) -> Category | None:
+    """Known merchant in the merchant field or the description. The longest key over both wins, so
+    "Apple" + "APPLE STORE" is shopping and "University of York" + "ACCOMMODATION" is housing."""
+    m, d = _norm(tx.merchant), _norm(tx.description)
+    for key in _MERCHANT_KEYS:
+        if key in m or key in d:
+            return _MERCHANTS[key]
+    return None
+
+
 def categorise(tx: Transaction) -> Category:
     desc = _norm(tx.description)
-    merchant = merchant_category(tx.merchant) or merchant_category(tx.description)
+    merchant = _merchant_of(tx)
     if tx.amount > 0:
         if _has(desc, _INCOME_WORDS):
             return "income"

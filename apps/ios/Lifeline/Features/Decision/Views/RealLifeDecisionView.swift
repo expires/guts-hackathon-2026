@@ -40,8 +40,8 @@ struct RealLifeDecisionView: View {
                     InkProgressBar(value: state.successRate, color: Theme.Palette.money)
                         .accessibilityElement()
                         .accessibilityLabel("Success rate")
-                        .accessibilityValue("\(Int((state.successRate * 100).rounded())) percent")
-                    Text("Based on \(state.twinsCount) similar lives in \(state.periods.joined(separator: ", ")).")
+                        .accessibilityValue(L10n.tr("\(Int((state.successRate * 100).rounded())) percent"))
+                    Text(L10n.tr("Based on \(state.twinsCount) similar lives in \(state.periods.joined(separator: ", "))."))
                         .font(.llLabel)
                         .foregroundStyle(Theme.Palette.muted)
                 }
@@ -59,7 +59,7 @@ struct RealLifeDecisionView: View {
                         HStack(alignment: .firstTextBaseline) {
                             Text(alternative.label).fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: Theme.Spacing.m)
-                            Text("\(Int((alternative.successRate * 10).rounded())) in 10 did better")
+                            Text(L10n.tr("\(Int((alternative.successRate * 10).rounded())) in 10 did better"))
                                 .font(.llBody.monospacedDigit())
                                 .foregroundStyle(Theme.Palette.muted)
                         }

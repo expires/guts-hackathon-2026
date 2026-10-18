@@ -46,9 +46,9 @@ struct AccountView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .inkSurface(.card)
         .accessibilityElement(children: .combine)
-        RowGroup(title: "Your money data") {
+        RowGroup(title: L10n.tr("Your money data")) {
             if profile.dataSources.isEmpty {
-                ListRow(icon: .lock, title: "No money data yet", subtitle: "Connect your money to get a Next Move.", showsChevron: false)
+                ListRow(icon: .lock, title: L10n.tr("No money data yet"), subtitle: L10n.tr("Connect your money to get a Next Move."), showsChevron: false)
             } else {
                 ForEach(profile.dataSources, id: \.self) { source in
                     ListRow(icon: .check, title: source, showsChevron: false)

@@ -108,8 +108,9 @@ def test_money_quiz_four_players(tc: TestClient) -> None:
         assert all(f == final[0] for f in final) and len(final[0]) == 4
         for f in final[0]:
             assert (f["score"] >= 100) == (f["player_id"] in ever_right), "100 points per correct answer"
-        done = _until(w0, "finished")["room"]
-        assert done["status"] == "finished"
+        done_msg = _until(w0, "finished")
+        assert done_msg["room"]["status"] == "finished"
+        assert done_msg["winner_line"] and "points" in done_msg["winner_line"]
 
 
 def test_quiz_answer_rules(tc: TestClient) -> None:
@@ -240,7 +241,7 @@ def test_paths_and_quick_life_room(tc: TestClient) -> None:
         assert over.status_code == 409 and over.json()["error"] == {
             "code": "finished", "message": "This Quick Life is over", "source": "sim"}
         other = tc.post("/v1/lives", json={"mode": "random", "start_year": 2015, "path_id": "uni", "quick": True,
-                                           "room_code": "ZZZZZZ"}, headers=auths[0])
+                                           "room_code": "9999" if code != "9999" else "9998"}, headers=auths[0])
         assert other.status_code == 404
 
 
@@ -285,10 +286,144 @@ def test_shared_names_are_cleaned_and_unique(tc: TestClient) -> None:
 
 def test_wrong_circle_codes_are_limited(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
-    monkeypatch.setenv("AUTH_RATE_LIMIT_PER_MINUTE", "3")
+    monkeypatch.setenv("WRONG_CODE_PER_MINUTE", "3")
     from lifeline_api.main import app
 
     with TestClient(app) as c:
         h = {"Authorization": f"Bearer {_token(c, 'guess-device-01')}"}
         codes = [c.post("/v1/circles/join", json={"code": f"ZZZZZ{i}"}, headers=h).status_code for i in range(5)]
-        assert codes[:2] == [404, 404] and 429 in codes
+        assert codes == [404, 404, 404, 429, 429]
+
+
+def test_quick_life_room_on_a_premade_student(tc: TestClient) -> None:
+    tokens = [_token(tc, d) for d in DEVICES[:3]]
+    auths = [{"Authorization": f"Bearer {t}"} for t in tokens]
+    paths = tc.get("/v1/paths", headers=auths[0]).json()
+    students = paths["quick_students"]
+    assert len(students) == 5
+    student = students[0]
+    code = _lobby(tc, tokens)
+    with (tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[0]}") as w0,
+          tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[1]}") as w1,
+          tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[2]}") as w2):
+        sockets = [w0, w1, w2]
+        you = _join_all(sockets)
+        w0.send_json({"type": "pick_game", "game": "same_life",
+                      "options": {"quick": True, "quick_student_id": student["id"]}})
+        _until(w0, "game_picked")
+        w0.send_json({"type": "start"})
+        room = _until(w0, "started")["room"]
+        life_ids = {p["id"]: p["life_id"] for p in room["players"]}
+        assert all(life_ids.values())
+        again = tc.post("/v1/lives", json={"mode": "random", "start_year": 2015, "path_id": student["path_id"],
+                                           "quick": True, "room_code": code}, headers=auths[0])
+        assert again.status_code == 201 and again.json()["id"] == life_ids[you[0]["id"]], "no orphaned second life"
+        assert len(tc.get("/v1/lives", headers=auths[0]).json()["lives"]) == 1
+        events_seen = []
+        for i, y in enumerate(you):
+            life = tc.get(f"/v1/lives/{life_ids[y['id']]}", headers=auths[i]).json()
+            assert life["seed"] == room["seed"]
+            for _ in range(12):
+                for ev in life["pending_events"]:
+                    events_seen.append((i, ev["template_id"]))
+                    ch = ev["choices"][i % len(ev["choices"])]
+                    life = tc.post(f"/v1/lives/{life['id']}/choices",
+                                   json={"event_id": ev["id"], "choice_id": ch["id"]}, headers=auths[i]).json()["life"]
+                r = tc.post(f"/v1/lives/{life['id']}/age", headers=auths[i])
+                if r.status_code == 409:
+                    break
+                life = r.json()["life"]
+            sockets[i].send_json({"type": "finish"})
+        per_player = [[t for p, t in events_seen if p == i] for i in range(3)]
+        assert per_player[0] and per_player[0] == per_player[1] == per_player[2], "same events for everyone"
+        ranking = _until(w2, "ranking")["ranking"]
+        assert [r["rank"] for r in ranking] == sorted(r["rank"] for r in ranking) and len(ranking) == 3
+        finished = _until(w2, "finished")
+        assert finished["room"]["status"] == "finished"
+        assert finished["winner_line"].startswith(ranking[0]["name"]) and "INDEX" in finished["winner_line"]
+
+
+def _kill_drivers(tc: TestClient, code: str) -> None:
+    """Simulate an API restart: the in-process game driver dies and its heartbeat lapses."""
+    from lifeline_api.main import app
+
+    state = app.state.lifeline
+    for task in list(state.games):
+        tc.portal.call(lambda t=task: t.cancel())
+    tc.portal.call(state.rooms.redis.delete, f"lifeline:room:{code}:driver")
+
+
+def test_quiz_resumes_after_restart_and_resends_the_question(tc: TestClient) -> None:
+    tokens = [_token(tc, d) for d in DEVICES[:2]]
+    code = _lobby(tc, tokens)
+    with tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[0]}") as w0:
+        with tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[1]}") as w1:
+            you = _join_all([w0, w1])
+            w0.send_json({"type": "pick_game", "game": "quiz", "options": {"questions": 3}})
+            _until(w0, "game_picked")
+            w0.send_json({"type": "start"})
+            q1 = _until(w1, "question")["question"]
+            _kill_drivers(tc, code)
+        # Player 2 comes back after the "restart": the watchdog resumes the game within a few seconds and the
+        # open question comes again with a full answer window.
+        import time as _time
+
+        from lifeline_api.main import app
+
+        t0 = _time.monotonic()
+        with tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[1]}") as w1b:
+            w1b.send_json({"type": "join", "player_id": you[1]["id"]})
+            _until(w1b, "welcome")
+            again = _until(w1b, "question")["question"]
+            assert again["id"] == q1["id"] and _time.monotonic() - t0 < 5
+            doc = tc.portal.call(app.state.lifeline.rooms.get, code)
+            assert doc.game_state["deadline_ms"] - int(_time.time() * 1000) > 12_000, "a full window, not a closed one"
+            for ws in (w0, w1b):
+                ws.send_json({"type": "answer", "question_id": q1["id"], "choice_id": q1["choices"][0]["id"]})
+            assert _until(w1b, "quiz_reveal")["quiz_reveal"]["question_id"] == q1["id"]
+            q2 = _until(w1b, "question")["question"]
+            assert q2["id"] != q1["id"] and q2["index"] == 1, "the game moved on to the next question"
+
+
+def test_host_restarts_a_stuck_game(tc: TestClient) -> None:
+    tokens = [_token(tc, d) for d in DEVICES[:2]]
+    code = _lobby(tc, tokens)
+    with (tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[0]}") as w0,
+          tc.websocket_connect(f"/v1/rooms/{code}?token={tokens[1]}") as w1):
+        _join_all([w0, w1])
+        w0.send_json({"type": "pick_game", "game": "quiz", "options": {"questions": 3}})
+        _until(w0, "game_picked")
+        w0.send_json({"type": "start"})
+        q1 = _until(w0, "question")["question"]
+        w0.send_json({"type": "start"})
+        assert _until_error(w0) == "already_started", "a live game is not restarted"
+        _kill_drivers(tc, code)
+        w0.send_json({"type": "start"})  # stuck: the host restarts it
+        for ws in (w0, w1):
+            ws.send_json({"type": "answer", "question_id": q1["id"], "choice_id": q1["choices"][0]["id"]})
+        assert _until(w1, "quiz_reveal")["quiz_reveal"]["question_id"] == q1["id"]
+
+
+def _until_error(ws: WebSocketTestSession, limit: int = 60) -> str:
+    for _ in range(limit):
+        msg: dict[str, Any] = ws.receive_json()
+        if msg["type"] == "error":
+            return str(msg["error"]["code"])
+    raise AssertionError("no error")
+
+
+
+def test_room_names_use_the_sample_student(tc: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """V5: demo accounts have no display name; a player who imported a sample is named after that student."""
+    from lifeline_api import samples
+
+    real = samples.hints
+    monkeypatch.setattr(samples, "hints", lambda sid: {**(real(sid) or {}), "name": "Priya Shah"})
+    tokens = [_token(tc, d) for d in ("sample-name-01", "sample-name-02")]
+    auths = [{"Authorization": f"Bearer {t}"} for t in tokens]
+    assert tc.post("/v1/samples/scholarship/import", headers=auths[0]).status_code == 201
+    room = tc.post("/v1/rooms", json={}, headers=auths[0]).json()
+    assert room["players"][0]["name"] == "Priya"
+    with tc.websocket_connect(f"/v1/rooms/{room['code']}?token={tokens[1]}") as ws:
+        ws.send_json({"type": "join"})
+        assert _until(ws, "welcome")["you"]["name"] == "Player 2", "no sample imported: Player N"

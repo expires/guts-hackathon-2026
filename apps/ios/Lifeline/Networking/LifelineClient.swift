@@ -18,7 +18,10 @@ typealias Outcome = Components.Schemas.Outcome
 typealias Lesson = Components.Schemas.Lesson
 typealias Concept = Components.Schemas.Concept
 typealias Challenge = Components.Schemas.Challenge
+typealias ChallengeProgress = Components.Schemas.ChallengeProgress
 typealias StudentPath = Components.Schemas.StudentPath
+typealias PathsResponse = Components.Schemas.PathsResponse
+typealias QuickStudent = Components.Schemas.QuickStudent
 typealias HabitScore = Components.Schemas.HabitScore
 typealias SampleStatement = Components.Schemas.SampleStatement
 typealias GameOptions = Components.Schemas.GameOptions
@@ -117,6 +120,8 @@ protocol LifelineClient: Sendable {
     // Learn
     func listConcepts() async throws -> [Concept]
     func listChallenges() async throws -> [Challenge]
+    /// The caller's progress on challenges (scope "you" challenges are scored on money data, not a life).
+    func listChallengeProgress() async throws -> [ChallengeProgress]
 
     // Decision
     func createDecision(profile: DecisionProfile, lifeID: String?) async throws -> Decision
@@ -151,7 +156,8 @@ protocol LifelineClient: Sendable {
     // Rooms
     func createRoom(_ request: CreateRoomRequest) async throws -> Room
     // Play with friends and Circles (ADR 0059)
-    func listPaths() async throws -> [StudentPath]
+    /// `GET /v1/paths`: student start paths and the premade Quick Life students (ADR 0064).
+    func listPaths() async throws -> PathsResponse
     func listCircles() async throws -> [PlayCircle]
     func createCircle(name: String) async throws -> PlayCircle
     func joinCircle(code: String) async throws -> PlayCircle
@@ -208,6 +214,13 @@ protocol LifelineClient: Sendable {
 
 extension LifelineClient {
     func clearResponseCache() async {}
+
+    /// Paths only. Kept so older call sites with an explicit `[StudentPath]` type still compile.
+    @available(*, deprecated, message: "listPaths() returns PathsResponse; use .paths and .quickStudents")
+    func listPaths() async throws -> [StudentPath] {
+        let response: PathsResponse = try await listPaths()
+        return response.paths
+    }
 
     var diskCache: DiskCache? { nil }
 

@@ -44,7 +44,6 @@ from lifeline_data.adapters.postcodes import LAT_RANGE, LON_RANGE, normalise_pos
 from lifeline_data.base import Adapter, CircuitBreaker, PayloadError, utcnow
 from lifeline_data.cache import ObservationCache, SnapshotStore, UserSnapshotStore, obs_key
 from lifeline_data.crypto import Sealer
-from lifeline_data.finance import DEMO_PERSONA_ID, fixture_snapshot
 from lifeline_data.logsafe import quiet_http_loggers, redact_urls
 from lifeline_data.macro import build_macro_table, mock_macro_table
 from lifeline_data.mocks import mock_postcode, mock_series
@@ -411,23 +410,12 @@ class DataHub:
     # --- finance (ADR 0016, ADR 0018) ---------------------------------------------------------
 
     async def finance_snapshot(self, subject: str) -> FinanceSnapshot | None:
-        """Accounts, 12 months of transactions, mortgage and energy for one user. Never raises.
+        """The user's own money data (statement import, manual entry, logged payments), or None. Never raises.
 
-        Demo mode: labelled fixture persona (status "mock", source "fixtures"), chosen per subject.
-        Live mode (ADR 0027): fixtures are never served; returns None (the API answers 409
-        no_finance_data) until the user's own data exists.
-        Both modes: the user's own data (statement import or manual entry, `set_user_snapshot`) wins.
+        Both modes: no data of their own means None (the API answers has_data=false or 409 no_finance_data).
+        The demo finance personas (`lifeline_data.finance`) are never served: they exist for tests only.
         """
-        user = await self.get_user_snapshot(subject)
-        if user is not None:
-            return user
-        if self.live_mode:
-            return None
-        try:
-            return fixture_snapshot(subject)
-        except Exception:
-            log.exception("finance snapshot failed; using the demo persona")
-            return fixture_snapshot(DEMO_PERSONA_ID)
+        return await self.get_user_snapshot(subject)
 
     async def reverse_postcode(self, lat: float, lon: float) -> dict[str, str] | None:
         """{'postcode', 'region', 'town', 'status'} for the nearest postcode, via postcodes.io. Never raises.

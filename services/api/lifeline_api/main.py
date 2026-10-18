@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from starlette.requests import Request
 from starlette.types import Scope
 
@@ -20,10 +21,23 @@ from lifeline_api import logsafe, macro
 from lifeline_api.apple import AppleVerifier
 from lifeline_api.auth import bearer_subject
 from lifeline_api.bodylimit import BodySizeLimitMiddleware
-from lifeline_api.errors import CatchAllMiddleware, install_error_handlers
+from lifeline_api.errors import CatchAllMiddleware, error_response, install_error_handlers
 from lifeline_api.ratelimit import Limiter, MemoryBucket, RateLimitMiddleware, RedisBucket
-from lifeline_api.rooms import RoomHub
-from lifeline_api.routes import account, auth, chat, circles, finance, later, learn, lives, meta, next_move, rooms
+from lifeline_api.rooms import RoomHub, RoomsUnavailable
+from lifeline_api.routes import (
+    account,
+    auth,
+    chat,
+    circles,
+    course,
+    finance,
+    later,
+    learn,
+    lives,
+    meta,
+    next_move,
+    rooms,
+)
 from lifeline_api.settings import Settings
 from lifeline_api.state import AppState
 from lifeline_api.store import LifeStore, MemoryLifeStore, PostgresLifeStore
@@ -42,7 +56,9 @@ def _redis_client(settings: Settings) -> Any | None:
     if settings.is_test:
         import fakeredis  # dev dependency; only used in test mode
 
-        return fakeredis.FakeAsyncRedis()
+        # A fresh server per app start: no limiter or room state leaks between tests (fakeredis instances
+        # created with default arguments share one server).
+        return fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer())
     if not settings.redis_url:
         return None
     import redis.asyncio as aioredis
@@ -126,6 +142,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Keep serving; /v1/health reports postgres as down and the store retries on first use.
         log.error("lives store did not start: %s", type(exc).__name__)
     app.state.lifeline = state
+    watchdog = rooms.start_watchdog(state)
     warm: asyncio.Task[Any] | None = None
     if not state.settings.is_test:
         # Build the MacroTable in the background so the first life or room start does not wait for it.
@@ -135,6 +152,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if warm is not None and not warm.done():
             warm.cancel()
+        watchdog.cancel()
+        for task in list(state.games):
+            task.cancel()
         await state.store.close()
         hub_close = getattr(state.hub, "aclose", None) or getattr(state.hub, "close", None)
         if hub_close is not None:
@@ -149,6 +169,12 @@ def _subject_from_scope(scope: Scope) -> str | None:
     return bearer_subject(Request(scope))
 
 
+async def _rooms_unavailable(_: Request, exc: Exception) -> JSONResponse:
+    """Redis down for rooms (V3 F2): 503 in the shared error format."""
+    return error_response(503, "rooms_unavailable", "Play with friends is unavailable right now. Try again shortly.",
+                          "rooms", {"Retry-After": "10"})
+
+
 def create_app() -> FastAPI:
     logsafe.install()
     app = FastAPI(
@@ -159,8 +185,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
     install_error_handlers(app)
+    app.add_exception_handler(RoomsUnavailable, _rooms_unavailable)
     for r in (meta.router, auth.router, lives.router, finance.router, next_move.router, learn.router, account.router,
-              chat.router, rooms.router, circles.router,
+              chat.router, rooms.router, circles.router, course.router,
               later.router):
         app.include_router(r)
     # Order: last added runs first. Outermost: catch-all, then body limit, then rate limit.

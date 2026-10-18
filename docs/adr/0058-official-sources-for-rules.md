@@ -13,3 +13,4 @@ Date: 2026-10-17. Status: accepted. Source: user instruction.
 ## Amendment (W3 quiz sources)
 
 - The official list also includes `www.ons.gov.uk` and `www.nomisweb.co.uk` (Office for National Statistics and its labour-market service). They are official statistics publishers; some lesson charts have official pages only there.
+- `www.hesa.ac.uk` (Higher Education Statistics Agency, official statistics on UK higher education) is also on the list.

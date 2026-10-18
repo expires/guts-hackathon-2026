@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     chat_rate_limit_per_minute: int = Field(default=6, ge=1, le=1000)
     # Demo sign-in per IP, so rotating device ids cannot mint fresh per-user buckets.
     auth_rate_limit_per_minute: int = Field(default=20, ge=1, le=10_000)
+    # Wrong room or circle codes per minute (V6 final F-1). Codes are short. Per ACCOUNT is the real limit;
+    # per IP is only a flood guard, high enough for a whole venue on one Wi-Fi (V3 final).
+    wrong_code_per_minute: int = Field(default=10, ge=1, le=10_000)
+    wrong_code_ip_per_minute: int = Field(default=120, ge=1, le=100_000)
+    # Proxies in front of the API whose X-Forwarded-For entry we trust. None: 1 in prod (Railway), else 0.
+    trusted_proxy_hops: int | None = Field(default=None, ge=0, le=5)
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_seconds: int = Field(default=30 * 24 * 3600, ge=60)
     apple_bundle_id: str = "com.lifeline.app"

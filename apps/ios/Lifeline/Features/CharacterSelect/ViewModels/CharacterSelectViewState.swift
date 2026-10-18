@@ -23,7 +23,7 @@ struct CharacterSelectViewState: Equatable, Sendable {
 
     var phase: LoadPhase
     var intro: String
-    /// Order: Play yourself, presets, Random, God Mode.
+    /// Order: Play yourself, presets, Random. God Mode is cut (ADR 0067).
     var cards: [Card]
     var usesSampleData: Bool
     /// For example "Penny 1.0 (1)". Long-press opens the debug menu in Debug builds.

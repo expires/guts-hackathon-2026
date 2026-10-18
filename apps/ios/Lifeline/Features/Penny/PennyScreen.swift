@@ -2,22 +2,11 @@ import SwiftUI
 
 /// Glue: owns `PennyViewModel` and feeds `PennyChatView` (ADR 0011, ADR 0031).
 ///
-/// Entry points present it in our own sheet:
-/// ```swift
-/// @State private var penny: PennyContext?
-/// ...
-/// .llSheet(item: $penny) { context in
-///     PennyScreen(client: client, context: context, onClose: { penny = nil }, onOpenLink: { link in /* route */ })
-/// }
-/// // "Not sure? Ask Penny" on a life event:
-/// penny = PennyContext(screen: .lifeEvent, lifeID: life.id, eventID: event.id)
-/// // "Ask Penny" on the Next Move card:
-/// penny = PennyContext(screen: .nextMove, nextMoveID: move.id)
-/// // Penny icon in the Money header:
-/// penny = PennyContext(screen: .money)
-/// // "Ask Penny a follow-up" in Why?:
-/// penny = PennyContext(screen: .why, nextMoveID: move.id, question: "Why this move?")
-/// ```
+/// Entry points (Ask Penny context fix). Each one starts a NEW chat and sends its question at once:
+/// - Life event and room rounds: `.pennySheet($penny, client:)` (PennySheet.swift) over the event, with
+///   `PennyContext.lifeEvent(...)` or `PennyContext.roomRound(...)`.
+/// - Next Move ("Why this move?"), Why? ("Explain this simply") and Test it ("What does this result mean?"):
+///   `routes.askPenny(PennyRoute(...))` switches to the Penny tab (`PennyTabModel.ask`).
 struct PennyScreen: View {
     @State private var model: PennyViewModel
     private let onClose: @MainActor () -> Void

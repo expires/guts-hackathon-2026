@@ -103,3 +103,9 @@ async def test_challenges_route_and_latching(monkeypatch: pytest.MonkeyPatch) ->
         body = (await c.get("/v1/challenges", headers=auth)).json()
         assert not [p for p in body["progress"] if p.get("life_id") == life["id"]], "only offered challenges listed"
         assert (await c.get("/v1/challenges")).json().get("progress", []) == [], "no progress without a token"
+        # A "you" challenge has no preset: starting a life from it is a clear 422, not "Unknown preset you".
+        you = next(ch for ch in listed if ch.get("scope") == "you")
+        bad = await c.post("/v1/lives", json={"mode": "preset", "preset_id": you["character_id"],
+                                              "start_year": you["start_year"]}, headers=auth)
+        assert bad.status_code == 422
+        assert bad.json()["error"]["code"] == "validation_error"

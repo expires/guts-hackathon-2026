@@ -7,7 +7,7 @@ struct EvaluationView: View {
     var actions: EvaluationActions = .noop
 
     var body: some View {
-        SheetContainer(title: "How good is the advice?", closeIdentifier: "evaluation.close", onClose: actions.onClose) {
+        SheetContainer(title: L10n.tr("How good is the advice?"), closeIdentifier: "evaluation.close", onClose: actions.onClose) {
             switch state.phase {
             case let .loading(loading):
                 LoadingStateView(state: loading)
@@ -21,10 +21,12 @@ struct EvaluationView: View {
                         Text(state.baselineText).font(.llBody)
                     }
                 }
-                RowGroup(title: "Past periods") {
+                RowGroup(title: L10n.tr("Past periods")) {
                     ForEach(state.periods) { period in
                         ListRow(icon: period.isHit ? .check : .statusMock, title: period.rangeText, subtitle: period.detail, showsChevron: false)
-                            .accessibilityLabel("\(period.rangeText). \(period.isHit ? "Right" : "Wrong"). \(period.detail)")
+                            .accessibilityLabel(period.isHit
+                                ? L10n.tr("\(period.rangeText). Right. \(period.detail)")
+                                : L10n.tr("\(period.rangeText). Wrong. \(period.detail)"))
                     }
                 }
                 Text("\(state.method). \(state.generatedText).").font(.llLabel).foregroundStyle(Theme.Palette.muted)

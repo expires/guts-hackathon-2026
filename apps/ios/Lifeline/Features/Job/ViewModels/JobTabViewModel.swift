@@ -35,7 +35,7 @@ final class JobTabViewModel {
                 employer: job.employer,
                 annualIncome: job.annualIncome,
                 yearsInRole: job.yearsInRole ?? 0,
-                employerStatus: job.employerStatus == .insolvent ? "Employer in trouble" : nil,
+                employerStatus: job.employerStatus == .insolvent ? L10n.tr("Employer in trouble") : nil,
                 employerAtRisk: job.employerStatus == .insolvent
             )
         }

@@ -35,6 +35,9 @@ struct GamePickerViewState: Equatable, Sendable {
     var paths: [Option]
     var pathID: String?
     var pathsPhase: LoadPhase
+    /// Quick Life: the 5 premade students (name and one line).
+    var students: [Option]
+    var studentID: String?
     var quick: Bool
     /// Same Decision and Same Life history year.
     var startYear: Int
@@ -49,6 +52,7 @@ struct GamePickerActions {
     var onQuestions: @MainActor (Int) -> Void = { _ in }
     var onTopic: @MainActor (String) -> Void = { _ in }
     var onPath: @MainActor (String) -> Void = { _ in }
+    var onStudent: @MainActor (String) -> Void = { _ in }
     var onQuick: @MainActor (Bool) -> Void = { _ in }
     var onYear: @MainActor (Int) -> Void = { _ in }
     var onConfirm: @MainActor () -> Void = {}
@@ -105,6 +109,8 @@ struct RoundActions {
     var onAnswer: @MainActor (String) -> Void = { _ in }
     var onLeave: @MainActor () -> Void = {}
     var onReconnect: @MainActor () -> Void = {}
+    /// "Not sure? Ask Penny" (Same Decision, before you answer). Nil hides the button.
+    var onAskPenny: (@MainActor () -> Void)? = nil
 
     static var noop: Self { .init() }
 }

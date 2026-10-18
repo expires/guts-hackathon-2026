@@ -15,8 +15,10 @@ import pytest
 from lifeline_contracts.chat import BubbleEvent, ChatBubble, ChatRequest, ChatResponse, ChatStreamEvent
 from lifeline_explain.chat_tools import ChatToolContext
 from tests.integration.conftest import sign_in
+from tests.integration.personas import seed_persona
 
 SEEN: list[ChatToolContext] = []
+REQUESTS: list[ChatRequest] = []
 
 
 def _resp(req: ChatRequest, ctx: ChatToolContext, text: str) -> ChatResponse:
@@ -28,6 +30,7 @@ def _resp(req: ChatRequest, ctx: ChatToolContext, text: str) -> ChatResponse:
 
 async def fake_answer(req: ChatRequest, ctx: ChatToolContext) -> ChatResponse:
     SEEN.append(ctx)
+    REQUESTS.append(req)
     if "test" in req.message.lower():
         out = await ctx.tools.call("test_move", {"move_id": "top"})
         ctx.outputs.append(("test_move", out))
@@ -78,6 +81,7 @@ async def test_chat_thread_and_history(client: httpx.AsyncClient) -> None:
 
 async def test_tool_lives_are_stored_for_the_caller(client: httpx.AsyncClient) -> None:
     auth = await sign_in(client, "demo-presenter-01")
+    await seed_persona("demo-presenter-01")
     await client.get("/v1/next-move", headers=auth)
     r = await client.post("/v1/chat", json={"message": "Test the top move"}, headers=auth)
     assert r.status_code == 200
@@ -253,3 +257,29 @@ async def test_million_yuan_uses_fx_convert(client: httpx.AsyncClient, monkeypat
     assert r.status_code == 200, r.text
     names = [t["name"] for t in r.json()["tool_calls"]]
     assert "fx_convert" in names, r.json()
+
+
+
+async def test_language_reaches_penny(client: httpx.AsyncClient) -> None:
+    auth = await sign_in(client, "chat-device-0030")
+    r = await client.post("/v1/chat", json={"message": "Bonjour", "language": "fr"}, headers=auth)
+    assert r.status_code == 200 and REQUESTS[-1].language == "fr"
+    bad = await client.post("/v1/chat", json={"message": "Hi", "language": "de"}, headers=auth)
+    assert bad.status_code == 422
+
+
+async def test_stream_finishes_when_saving_is_down(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """V3 F1: Postgres down at the end of a turn still ends the stream with `done`."""
+    from lifeline_api import chat_service
+    from lifeline_api.store import StoreUnavailable
+
+    auth = await sign_in(client, "chat-device-0040")
+
+    async def down(*a: Any, **k: Any) -> None:
+        raise StoreUnavailable()
+
+    monkeypatch.setattr(chat_service, "save_thread", down)
+    events = await _stream(client, auth, "Why?")
+    assert events[-1]["type"] == "done" and events[-1]["response"]["bubbles"]
+    r = await client.post("/v1/chat", json={"message": "Why?"}, headers=auth)
+    assert r.status_code == 200 and r.json()["bubbles"]

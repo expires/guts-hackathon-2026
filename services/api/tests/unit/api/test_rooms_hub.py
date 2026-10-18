@@ -11,7 +11,7 @@ import pytest
 from lifeline_api.rooms import RoomDoc, RoomHub, qr_png_base64
 
 
-def _doc(code: str = "ABC123") -> RoomDoc:
+def _doc(code: str = "4321") -> RoomDoc:
     return RoomDoc(code=code, mode="duel", seed=7, preset_id="nurse-leeds", start_year=2006, max_players=2)
 
 
@@ -26,12 +26,12 @@ async def test_two_replicas_share_rooms_and_events(shared: bool) -> None:
     doc = _doc()
     doc.add_player("sub-1", "Ana", host=True)
     assert await a.create(doc) and not await b.create(_doc()), "codes are unique across replicas"
-    got = await b.get("ABC123")
+    got = await b.get("4321")
     assert got is not None and got.players[0]["name"] == "Ana"
     assert got.public().players[0].model_dump().get("sub") is None, "the account id never leaves the server"
-    async with b.subscribe("ABC123") as queue:
+    async with b.subscribe("4321") as queue:
         await asyncio.sleep(0.05)
-        await a.publish("ABC123", {"type": "pong"})
+        await a.publish("4321", {"type": "pong"})
         assert await asyncio.wait_for(queue.get(), 2) == '{"type": "pong"}'
 
 
@@ -40,7 +40,7 @@ async def test_lock_is_exclusive() -> None:
     order: list[str] = []
 
     async def worker(name: str) -> None:
-        async with hub.lock("ABC123"):
+        async with hub.lock("4321"):
             order.append(f"{name}-in")
             await asyncio.sleep(0.02)
             order.append(f"{name}-out")
@@ -50,5 +50,5 @@ async def test_lock_is_exclusive() -> None:
 
 
 def test_qr_is_png() -> None:
-    raw = base64.b64decode(qr_png_base64("lifeline://join/ABC123"))
+    raw = base64.b64decode(qr_png_base64("lifeline://join/4321"))
     assert raw.startswith(b"\x89PNG\r\n\x1a\n") and b"IEND" in raw[-12:]

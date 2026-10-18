@@ -50,6 +50,8 @@ struct RoomFlowScreen: View {
         .llCover(isPresented: $model.showsGamePicker) {
             GamePickerView(state: model.pickerState, actions: model.pickerActions)
         }
+        // "Not sure? Ask Penny": a sheet, so the round and its timer stay on screen and keep running.
+        .pennySheet($model.penny, client: model.game.client)
     }
 }
 

@@ -69,7 +69,7 @@ private struct NetWorthCard: View {
             .chartXAxis(.hidden)
             .chartYAxis { AxisMarks { _ in AxisGridLine().foregroundStyle(Theme.Palette.rule) } }
             .frame(height: 84)
-            .accessibilityLabel(overview.netWorthChangeText ?? "Net worth over time")
+            .accessibilityLabel(overview.netWorthChangeText ?? L10n.tr("Net worth over time"))
             // At most 4 month labels (first, last and 2 between), so the row never gets wider than the card.
             let labels = Self.axisLabels(overview.monthLabels)
             HStack(spacing: 0) {
@@ -82,7 +82,7 @@ private struct NetWorthCard: View {
                 Text(change).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
             if !overview.netWorthParts.isEmpty {
-                CalculationList(title: "How we worked it out", parts: overview.netWorthParts, total: overview.netWorth, totalLabel: "Net worth")
+                CalculationList(title: L10n.tr("How we worked it out"), parts: overview.netWorthParts, total: overview.netWorth, totalLabel: "Net worth")
                     .accessibilityIdentifier("money.netWorthCalculation")
             }
         }
@@ -107,7 +107,7 @@ private struct AccountsCard: View {
             Text("In your account").font(.llLabel).foregroundStyle(Theme.Palette.muted)
             Text(Money.format(overview.balance)).font(.llHero)
             if !overview.balanceParts.isEmpty {
-                CalculationList(title: "How we worked it out", parts: overview.balanceParts, total: overview.balance, totalLabel: "In your account")
+                CalculationList(title: L10n.tr("How we worked it out"), parts: overview.balanceParts, total: overview.balance, totalLabel: "In your account")
                     .padding(Theme.Spacing.l)
                     .inkSurface(.cardAlt)
                     .accessibilityIdentifier("money.balanceCalculation")
@@ -166,26 +166,9 @@ private struct SpendingSummary: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Spending this month").font(.llBodyBold)
                 Spacer()
-                Text("\(Money.format(spending.total)) in \(spending.monthText)").font(.llLabelBold)
+                Text(L10n.tr("\(Money.format(spending.total)) in \(spending.monthText)")).font(.llLabelBold)
             }
-            GeometryReader { proxy in
-                HStack(spacing: 0) {
-                    ForEach(spending.categories) { category in
-                        Rectangle()
-                            .fill((Area(rawValue: category.area) ?? .other).color)
-                            .frame(width: max(0, proxy.size.width * CGFloat(category.share)))
-                            .overlay(alignment: .trailing) { Rectangle().fill(Theme.Palette.ink).frame(width: 2) }
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            .frame(height: 20)
-            .background(Theme.Palette.surface)
-            .clipShape(HandCut.bar)
-            .overlay(HandCut.bar.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Spending by category")
-            .accessibilityValue(spending.categories.map { "\($0.label) \(Money.spoken($0.amount))" }.joined(separator: ", "))
+            SpendingBar(categories: spending.categories)
             FlowRow(spacing: 14) {
                 ForEach(spending.categories) { category in
                     HStack(spacing: 6) {
@@ -200,6 +183,33 @@ private struct SpendingSummary: View {
                 }
             }
         }
+    }
+}
+
+/// One horizontal bar, one coloured part per category, sized by the API's `share`. Used on Money home and in details.
+struct SpendingBar: View {
+    let categories: [MoneyWidgetsViewState.Category]
+    var height: CGFloat = 20
+
+    var body: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                ForEach(categories) { category in
+                    Rectangle()
+                        .fill((Area(rawValue: category.area) ?? .other).color)
+                        .frame(width: max(0, proxy.size.width * CGFloat(category.share)))
+                        .overlay(alignment: .trailing) { Rectangle().fill(Theme.Palette.ink).frame(width: 2) }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(height: height)
+        .background(Theme.Palette.surface)
+        .clipShape(HandCut.bar)
+        .overlay(HandCut.bar.strokeBorder(Theme.Palette.ink, lineWidth: Theme.outline))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spending by category")
+        .accessibilityValue(categories.map { "\($0.label) \(Money.spoken($0.amount))" }.joined(separator: ", "))
     }
 }
 
@@ -240,7 +250,7 @@ private struct SubscriptionsList: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Subscriptions").font(.llBodyBold)
                 Spacer()
-                Text("\(Money.format(subscriptions.monthlyTotal)) a month · \(subscriptions.countText)")
+                Text(L10n.tr("\(Money.format(subscriptions.monthlyTotal)) a month · \(subscriptions.countText)"))
                     .font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
             .padding(.bottom, Theme.Spacing.xs)

@@ -122,4 +122,15 @@ def to_life(
         rewind=rewind,
         room_code=room_code,
         reached_present=s.year >= p.PRESENT_YEAR,
+        next_age=_next_age(s),
     )
+
+
+def _next_age(s: SimState) -> int | None:
+    """One year per tap, except Quick Life, whose next tap ends at the plan's next stop."""
+    if not s.alive:
+        return None
+    if not s.quick:
+        return s.age + 1
+    stop = next((y for y in s.quick_stops if y > s.year), None)
+    return None if stop is None else s.age + (stop - s.year)

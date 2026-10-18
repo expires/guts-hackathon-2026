@@ -28,6 +28,8 @@ for dev in d.get("result",{}).get("devices",[]):
 PY
 )
 rm -f "$json"
+# DEVICE_UDID=<udid> installs on a specific phone when several are connected.
+[[ -n "${DEVICE_UDID:-}" ]] && udid="$DEVICE_UDID"
 if [[ -z "$udid" ]]; then
   echo "DEVICE: no connected iPhone with Developer Mode on (unlock it, connect by cable or same Wi-Fi, trust this Mac)" >&2; exit 3
 fi

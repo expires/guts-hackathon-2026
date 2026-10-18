@@ -6,10 +6,10 @@ import Observation
 @Observable
 final class YouViewModel {
     enum Route: Equatable {
-        case bank, plan, sources, evaluation, spendAccuracy, store, debug, connectMoney, askPenny, aiDisclosure, newPlayer, resetDemo, account
+        case bank, plan, sources, evaluation, spendAccuracy, debug, connectMoney, askPenny, aiDisclosure, newPlayer, resetDemo, account, changeLanguage
     }
 
-    static let loadingMessage = "Loading your profile"
+    static var loadingMessage: String { L10n.tr("Loading your profile") }
 
     private let client: any LifelineClient
     private(set) var profile: FinanceProfile?
@@ -21,6 +21,8 @@ final class YouViewModel {
     private(set) var meFailed = false
     /// Backtest cases from `GET /v1/evaluation`. Nil until loaded.
     private(set) var evaluationCount: Int?
+    /// `GET /v1/habits` (cached). Nil until loaded.
+    private(set) var habitScore: HabitScore?
     /// Concepts unlocked in the running life. The glue sets it from `GameSession`.
     var conceptsUnlocked: Int?
     private let credits = CreditsFile.load()
@@ -36,30 +38,32 @@ final class YouViewModel {
             profile: profile, phase: phase, clientKind: client.kind, isDebugBuild: ClientFactory.isDebugBuild,
             lives: lives, conceptsUnlocked: conceptsUnlocked, conceptsTotal: conceptsTotal, sources: sources, credits: credits,
             connectMoneyText: Self.connectMoneyText(inputs: me?.financeInputs.map(\.rawValue), failed: meFailed),
-            evaluationCount: evaluationCount
+            evaluationCount: evaluationCount,
+            habits: habitScore
         )
     }
 
+    /// Built by assignment, so a new closure never depends on the memberwise argument order.
     var actions: YouActions {
-        YouActions(
-            onConnectMoney: { [weak self] in self?.onRoute(.connectMoney) },
-            onOpenAccount: { [weak self] in self?.onRoute(.account) },
-            onAskPenny: { [weak self] in self?.onRoute(.askPenny) },
-            onNewPlayer: { [weak self] in self?.onRoute(.newPlayer) },
-            onResetDemo: { [weak self] in self?.onRoute(.resetDemo) },
-            onOpenAIDisclosure: { [weak self] in self?.onRoute(.aiDisclosure) },
-            onRefresh: { [weak self] in await self?.load() },
-            onConnectBank: { [weak self] in self?.onRoute(.bank) },
-            onOpenPlan: { [weak self] in self?.onRoute(.plan) },
-            onOpenSources: { [weak self] in self?.onRoute(.sources) },
-            onOpenEvaluation: { [weak self] in self?.onRoute(.evaluation) },
-            onOpenSpendAccuracy: { [weak self] in self?.onRoute(.spendAccuracy) },
-            onOpenStore: { [weak self] in self?.onRoute(.store) },
-            onOpenDebug: { [weak self] in
+        var actions = YouActions()
+        actions.onConnectMoney = { [weak self] in self?.onRoute(.connectMoney) }
+        actions.onOpenAccount = { [weak self] in self?.onRoute(.account) }
+        actions.onAskPenny = { [weak self] in self?.onRoute(.askPenny) }
+        actions.onNewPlayer = { [weak self] in self?.onRoute(.newPlayer) }
+        actions.onResetDemo = { [weak self] in self?.onRoute(.resetDemo) }
+        actions.onOpenAIDisclosure = { [weak self] in self?.onRoute(.aiDisclosure) }
+        actions.onChangeLanguage = { [weak self] in self?.onRoute(.changeLanguage) }
+        actions.onRefresh = { [weak self] in await self?.load() }
+        actions.onConnectBank = { [weak self] in self?.onRoute(.bank) }
+        actions.onOpenPlan = { [weak self] in self?.onRoute(.plan) }
+        actions.onOpenSources = { [weak self] in self?.onRoute(.sources) }
+        actions.onOpenEvaluation = { [weak self] in self?.onRoute(.evaluation) }
+        actions.onOpenSpendAccuracy = { [weak self] in self?.onRoute(.spendAccuracy) }
+        actions.onOpenDebug = { [weak self] in
                 if ClientFactory.isDebugBuild { self?.onRoute(.debug) }
-            },
-            onRetry: { [weak self] in Task { await self?.load() } }
-        )
+            }
+        actions.onRetry = { [weak self] in Task { await self?.load() } }
+        return actions
     }
 
     /// Instant screen (ADR 0060): cached values show at once, the network copy replaces them quietly.
@@ -75,6 +79,7 @@ final class YouViewModel {
         }
         async let conceptsLoad: Void = client.load(CachedOps.concepts) { [weak self] value in self?.conceptsTotal = value.count }
         async let sourcesLoad: Void = client.load(CachedOps.sources) { [weak self] value in self?.sources = value }
+        async let habitsLoad: Void = client.load(CachedOps.habits) { [weak self] value in self?.habitScore = value }
         do {
             try await client.load(CachedOps.financeProfile) { [weak self] value in
                 self?.profile = value
@@ -88,6 +93,7 @@ final class YouViewModel {
         do { try await meLoad } catch { meFailed = me == nil }
         _ = try? await conceptsLoad
         _ = try? await sourcesLoad
+        _ = try? await habitsLoad
         if let value = try? await lives { self.lives = value.lives }
         if let value = try? await evaluation { evaluationCount = value.n }
     }
@@ -96,7 +102,7 @@ final class YouViewModel {
     static func calmError(_ error: APIError) -> ErrorViewState {
         let mapped = ErrorViewState.from(error)
         if mapped.isUnavailable { return mapped }
-        return ErrorViewState(title: "Couldn't load", message: "Pull to refresh.", canRetry: true)
+        return ErrorViewState(title: L10n.tr("Couldn't load"), message: L10n.tr("Pull to refresh."), canRetry: true)
     }
 
     static var versionText: String {
@@ -120,6 +126,7 @@ final class YouViewModel {
         credits: CreditsFile? = nil,
         connectMoneyText: String? = nil,
         evaluationCount: Int? = nil,
+        habits: HabitScore? = nil,
         buildInfo: YouBuildInfo = .current()
     ) -> YouViewState {
         let isSample = profile.map { FinanceMapping.isSample($0.meta) } ?? (clientKind == .mock)
@@ -131,8 +138,8 @@ final class YouViewModel {
             profile: profile.map(Self.profile),
             personalFacts: profile?.personalFacts.map(\.text) ?? [],
             bankText: isSample
-                ? "Not connected. The Money tab shows sample data."
-                : "Connected. The Money tab uses your bank data.",
+                ? L10n.tr("Not connected. The Money tab shows sample data.")
+                : L10n.tr("Connected. The Money tab uses your bank data."),
             clientText: clientKind.rawValue,
             versionText: versionText,
             showsDebugMenu: isDebugBuild,
@@ -147,34 +154,35 @@ final class YouViewModel {
         state.bankName = isSample ? "Demo Bank" : "Your bank"
         state.bankDetail = isSample ? "Fake accounts, not your bank" : "Connected"
         state.dataRows = sources.filter { !isCutSource($0) }.map(dataRow)
-        state.dataBadgeText = profile.flatMap { FinanceMapping.badgeText($0.meta) } ?? (profile == nil && clientKind == .mock ? "Mock data" : nil)
+        state.dataBadgeText = profile.flatMap { FinanceMapping.badgeText($0.meta) } ?? (profile == nil && clientKind == .mock ? L10n.tr("Mock data") : nil)
         state.showsEvaluation = (evaluationCount ?? 0) > 0
+        state.habits = habits.flatMap(habitCard)
         state.credits = creditLines(credits)
         state.buildInfo = buildInfo
         state.connectMoneyText = connectMoneyText
         return state
     }
 
-    static let connectMoneyError = "Couldn't load. Pull to refresh."
+    static var connectMoneyError: String { L10n.tr("Couldn't load. Pull to refresh.") }
 
     /// `Me.finance_inputs` to one calm line. No bank connections in V2 (ADR 0046): a statement wins over
     /// manual entry. Nil inputs: still loading (nil) or failed (the calm error, never the raw API message).
     static func connectMoneyText(inputs: [String]?, failed: Bool) -> String? {
         guard let inputs else { return failed ? connectMoneyError : nil }
-        if inputs.contains("sample") { return "Sample statement" }
-        if inputs.contains("statement") { return "Statement imported" }
-        if inputs.contains("manual") { return "Entered by hand" }
-        if !inputs.isEmpty { return "Money added" }
-        return "Not added yet"
+        if inputs.contains("sample") { return L10n.tr("Sample statement") }
+        if inputs.contains("statement") { return L10n.tr("Statement imported") }
+        if inputs.contains("manual") { return L10n.tr("Entered by hand") }
+        if !inputs.isEmpty { return L10n.tr("Money added") }
+        return L10n.tr("Not added yet")
     }
 
     /// Onboarding's words for housing (DIRECTION_V2 section 4).
     static func housingLabel(_ raw: String) -> String {
         switch raw {
-        case "rent": "Renting"
-        case "parents": "Lives with family"
-        case "own": "Owns a home"
-        case "mortgage": "Has a mortgage"
+        case "rent": L10n.tr("Renting")
+        case "parents": L10n.tr("Lives with family")
+        case "own": L10n.tr("Owns a home")
+        case "mortgage": L10n.tr("Has a mortgage")
         default: raw.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
@@ -183,8 +191,29 @@ final class YouViewModel {
     /// `isStudent` from onboarding wins; the occupation text is the fallback when it is nil.
     static func profileLine(age: Int, isStudent: Bool? = nil, occupation: String, housing: String) -> String {
         let student = isStudent ?? occupation.lowercased().contains("student")
-        let work = student ? "Student" : "Working"
-        return ["Age \(age)", work, housingLabel(housing)].joined(separator: " · ")
+        let work = student ? L10n.tr("Student") : L10n.tr("Working")
+        return [L10n.tr("Age \(age)"), work, housingLabel(housing)].joined(separator: " · ")
+    }
+
+    /// Plain names for the six habit ratios, in display order (ADR 0066).
+    static var habitNames: [(id: String, name: String)] { [
+        ("savings_rate", L10n.tr("Savings rate")), ("months_of_cover", L10n.tr("Months of cover")), ("spend_stability", L10n.tr("Spend stability")),
+        ("discretionary_share", L10n.tr("Discretionary share")), ("subscription_creep", L10n.tr("Subscription creep")), ("debt_pressure", L10n.tr("Debt pressure")),
+    ] }
+
+    /// Ratios present in the response, in a fixed order. Nil when there is nothing to show.
+    static func habitCard(_ score: HabitScore) -> HabitCard? {
+        let c = score.components
+        let values: [String: Int?] = [
+            "savings_rate": c.savingsRate, "months_of_cover": c.monthsOfCover, "spend_stability": c.spendStability,
+            "discretionary_share": c.discretionaryShare, "subscription_creep": c.subscriptionCreep, "debt_pressure": c.debtPressure,
+        ]
+        let rows = habitNames.compactMap { item -> HabitCard.Row? in
+            guard let value = values[item.id] ?? nil else { return nil }
+            return .init(id: item.id, name: item.name, value: min(100, max(0, value)))
+        }
+        guard !rows.isEmpty || score.overall != nil else { return nil }
+        return HabitCard(overall: score.overall, rows: rows)
     }
 
     /// Sources cut in V2 (no bank connections, no investments, no jobs or car data). W1 removes them
@@ -199,10 +228,10 @@ final class YouViewModel {
     static func dataRow(_ source: SourceStatus) -> YouViewState.DataRow {
         let status = StateMapping.status(source.status.rawValue)
         let detail: String = switch status {
-        case .live: "Live"
-        case .cached: "Saved copy"
-        case .mock: "Mock data"
-        case .unavailable: "Unavailable"
+        case .live: L10n.tr("Live")
+        case .cached: L10n.tr("Saved copy")
+        case .mock: L10n.tr("Mock data")
+        case .unavailable: L10n.tr("Unavailable")
         }
         return .init(id: source.id, name: source.name, status: status, detail: detail)
     }
@@ -210,7 +239,7 @@ final class YouViewModel {
     /// Credits sentence plus one line per font licence. Empty when the file is missing.
     static func creditLines(_ credits: CreditsFile?) -> [String] {
         guard let credits else { return [] }
-        return ["Credits: rates from the Bank of England. Icons, characters and design by the \(Brand.productName) team. Made in 24 hours at \(credits.event)."]
+        return [L10n.tr("Credits: rates from the Bank of England. Icons, characters and design by the \(Brand.productName) team. Made in 24 hours at \(credits.event).")]
             + credits.fonts.map { "\($0.name) by \($0.authors). \($0.licence)." }
     }
 

@@ -24,7 +24,7 @@ final class CoreFlowUITests: XCTestCase {
         // "Play yourself" is the first card.
         let playYourself = app.buttons["character.self"]
         XCTAssertTrue(playYourself.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["character.god"].exists)
+        XCTAssertFalse(app.buttons["character.god"].exists, "God Mode is cut (ADR 0067)")
 
         let amira = app.buttons["character.preset.nurse-leeds"]
         XCTAssertTrue(amira.waitForExistence(timeout: 5))
@@ -39,6 +39,7 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertTrue(ageButton.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["life.age"].waitForExistence(timeout: 2))
         XCTAssertEqual(app.staticTexts["life.age"].label, "Age 18")
+        XCTAssertEqual(ageButton.label, "Age up to 19")
         ageButton.tap()
 
         // The new event shows as a row on the feed. Tapping it opens the event full screen.

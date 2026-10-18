@@ -45,7 +45,7 @@ class DataHub(Protocol):
         ...
 
     async def finance_snapshot(self, subject: str) -> FinanceSnapshot | None:
-        """Money tab data for one user (ADR 0016). None in live mode without user data (ADR 0027). Never raises."""
+        """Money tab data for one user (ADR 0016). None without own data, in every mode (ADR 0071). Never raises."""
         ...
 
     async def fx_rate(self, base: str, quote: str) -> tuple[float, date] | None:

@@ -102,6 +102,8 @@ struct TestItActions {
     var onClose: @MainActor () -> Void = {}
     /// "Do this": add the move to the plan.
     var onDoThis: @MainActor () -> Void = {}
+    /// "Ask Penny what this means". Nil hides the button.
+    var onAskPenny: (@MainActor () -> Void)? = nil
 
     static var noop: Self { .init() }
 }

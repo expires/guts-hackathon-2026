@@ -32,33 +32,20 @@ struct CoreViewModelTests {
         let state = model.state
         #expect(state.phase == .ready)
         #expect(state.cards.first?.kind == .playYourself)
-        #expect(state.cards.last?.kind == .godMode)
-        #expect(state.cards.last?.isLocked == true)
-        #expect(state.cards.map(\.id) == ["self", "preset.nurse-leeds", "preset.banker-london", "random", "god"])
+        #expect(!state.cards.contains { $0.kind == .godMode }, "God Mode is cut (ADR 0067)")
+        #expect(state.cards.map(\.id) == ["self", "preset.nurse-leeds", "preset.banker-london", "random"])
         #expect(state.usesSampleData)
 
-        model.select("god")
+        model.select("god") // Cut: no route.
         model.select("self")
         model.select("preset.nurse-leeds")
-        #expect(routes.count == 3)
-        #expect(routes[0] == .store)
-        #expect(routes[1] == .form(.playYourself))
-        if case let .startYear(choice) = routes[2] {
+        #expect(routes.count == 2)
+        #expect(routes[0] == .form(.playYourself))
+        if case let .startYear(choice) = routes[1] {
             #expect(choice.character.id == "nurse-leeds")
         } else {
             Issue.record("Expected startYear route")
         }
-    }
-
-    @Test func godModeOpensFormWhenOwned() {
-        let session = GameSession(client: MockClient())
-        session.ownsGodMode = true
-        let model = CharacterSelectViewModel(session: session)
-        var route: CharacterSelectViewModel.Route?
-        model.onRoute = { route = $0 }
-        model.select("god")
-        #expect(route == .form(.godMode))
-        #expect(model.state.cards.last?.isLocked == false)
     }
 
     @Test func startYearPickerStartsLife() async {
@@ -82,6 +69,7 @@ struct CoreViewModelTests {
         let sheet = EventSheetViewModel(session: session)
         let before = life.state.netWorth
         #expect(life.state.canAge)
+        #expect(life.state.nextAge == 25, "Solo life: one AGE tap is one year")
         #expect(sheet.state == nil)
 
         await session.age()

@@ -285,6 +285,9 @@ class Life(_M):
     rewind: RewindState
     room_code: str | None = None
     reached_present: bool = False
+    next_age: int | None = Field(
+        default=None, description="Age after the next AGE tap (Quick Life taps move 1 or 2 years); None when over"
+    )
 
 
 class AgeResult(_M):

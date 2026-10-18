@@ -38,7 +38,7 @@ enum RoomTransportError: Error, Equatable {
     case socketUnavailable
 
     var apiError: APIError {
-        .server(status: 501, code: "not_implemented", message: "Live rooms are not available in this build yet.", source: "rooms")
+        .server(status: 501, code: "not_implemented", message: L10n.tr("Live rooms are not available in this build yet."), source: "rooms")
     }
 }
 
@@ -68,37 +68,46 @@ enum RoomTransportFactory {
 /// BOSS's WebSocket wrapper (Networking/RoomSocket.swift) has the same shape: messages, send, close.
 extension RoomSocket: RoomConnection {}
 
-/// Room codes from deep links (`lifeline://join/K7Q2ZP`), join URLs and QR text.
+/// Room codes from deep links (`lifeline://join/1234`), join URLs and QR text.
+/// A room code is 4 digits, easy to read aloud (ADR 0064).
 enum RoomLink {
-    static let codeLength = 6
+    static let codeLength = 4
 
-    /// Upper-case letters and digits only, at most 6.
+    /// Digits only, at most 4.
     static func normalise(_ text: String) -> String {
-        String(text.uppercased().filter { ($0.isASCII && $0.isLetter) || ($0.isASCII && $0.isNumber) }.prefix(codeLength))
+        String(text.filter { $0.isASCII && $0.isNumber }.prefix(codeLength))
     }
 
     static func isValid(_ code: String) -> Bool {
-        code.count == codeLength && normalise(code) == code
+        code.count == codeLength && code.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
-    /// `lifeline://join/CODE`, `https://host/join/CODE` or a bare 6-character code.
+    /// `lifeline://join/CODE`, `https://host/join/CODE`.
     static func code(from url: URL) -> String? {
         var parts = url.pathComponents.filter { $0 != "/" }
         if url.scheme == "lifeline", let host = url.host() { parts.insert(host, at: 0) }
         guard let index = parts.firstIndex(of: "join"), index + 1 < parts.count else { return nil }
-        let code = parts[index + 1].uppercased()
+        let code = parts[index + 1]
         return isValid(code) ? code : nil
     }
 
     /// Text from a QR code: a join link or a bare code.
     static func code(fromScanned text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = URL(string: trimmed), url.scheme != nil, let code = code(from: url) { return code }
-        let upper = trimmed.uppercased()
-        return isValid(upper) ? upper : nil
+        if let url = URL(string: trimmed), url.scheme != nil { return code(from: url) }
+        return isValid(trimmed) ? trimmed : nil
     }
 
     static func joinURL(code: String) -> String { "lifeline://join/\(code)" }
+}
+
+/// Circle codes: 6 letters or digits (`JoinCircleRequest.code`).
+enum CircleCode {
+    static func normalise(_ text: String) -> String {
+        String(text.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(6))
+    }
+
+    static func isValid(_ code: String) -> Bool { code.count == 6 && normalise(code) == code }
 }
 
 extension Room {

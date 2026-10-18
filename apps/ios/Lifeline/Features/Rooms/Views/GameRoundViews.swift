@@ -25,7 +25,7 @@ struct CountdownRing: View {
             }
             .frame(width: size, height: size)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(deadline == nil ? "Time is up" : "\(Int(left.rounded(.up))) seconds left")
+            .accessibilityLabel(deadline == nil ? L10n.tr("Time is up") : L10n.tr("\(Int(left.rounded(.up))) seconds left"))
         }
     }
 }
@@ -43,12 +43,12 @@ struct RankingListView: View {
                 HStack(spacing: Theme.Spacing.m) {
                     Text("\(row.rank)").font(.llLabelBold).frame(width: 16)
                     LLIconImage(LLIcon(rawValue: row.face) ?? .faceTeen, size: 32)
-                    Text(row.isMe ? "You" : row.name)
+                    Text(row.isMe ? L10n.tr("You") : row.name)
                         .font(row.isMe ? .llBodyBold : .llBody)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let correct = row.lastCorrect {
-                        Chip(text: correct ? "Right" : "Missed", fill: correct ? Theme.Palette.money : Theme.Palette.other)
+                        Chip(text: correct ? L10n.tr("Right") : L10n.tr("Missed"), fill: correct ? Theme.Palette.money : Theme.Palette.other)
                     }
                     Text("\(row.score)")
                         .font(.llBodyBold)
@@ -58,9 +58,20 @@ struct RankingListView: View {
                 }
                 .frame(minHeight: Theme.minTarget)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(row.rank). \(row.isMe ? "You" : row.name), \(row.score) points\(row.lastCorrect.map { $0 ? ", right last round" : ", missed last round" } ?? "")")
+                .accessibilityLabel(spoken(row))
                 .accessibilityIdentifier("ranking.\(row.id)")
             }
+        }
+    }
+}
+
+extension RankingListView {
+    fileprivate func spoken(_ row: RankingRowState) -> String {
+        let name = row.isMe ? L10n.tr("You") : row.name
+        switch row.lastCorrect {
+        case true: return L10n.tr("\(row.rank). \(name), \(row.score) points, right last round")
+        case false: return L10n.tr("\(row.rank). \(name), \(row.score) points, missed last round")
+        default: return L10n.tr("\(row.rank). \(name), \(row.score) points")
         }
     }
 }
@@ -193,12 +204,12 @@ struct SourceLine: View {
     var body: some View {
         if let url, let link = URL(string: url) {
             Link(destination: link) {
-                Text("Source: \(label)").font(.llLabelBold).underline()
+                Text(L10n.tr("Source: \(label)")).font(.llLabelBold).underline()
             }
             .frame(minHeight: Theme.minTarget, alignment: .leading)
             .accessibilityIdentifier("source.link")
         } else {
-            Text("Source: \(label)").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+            Text(L10n.tr("Source: \(label)")).font(.llLabel).foregroundStyle(Theme.Palette.muted)
         }
     }
 }
@@ -237,6 +248,17 @@ struct DecisionView: View {
                         }
                     }
                 }
+                if !state.isLocked, !state.options.isEmpty, let onAskPenny = actions.onAskPenny {
+                    Button(action: onAskPenny) {
+                        HStack(spacing: Theme.Spacing.s) {
+                            PennyView(mood: .thinking, size: 28)
+                            Text("Not sure? Ask Penny")
+                        }
+                    }
+                    .buttonStyle(.text)
+                    .frame(minHeight: Theme.minTarget)
+                    .accessibilityIdentifier("decision.askPenny")
+                }
                 if let penny = state.pennyLine {
                     HStack(alignment: .top, spacing: Theme.Spacing.m) {
                         LLIconImage(.pennySmiling, size: 40)
@@ -267,9 +289,9 @@ struct DecisionView: View {
     /// After the reveal: "Game money +£300 · 25% bonus... · Ava, You".
     private func detail(_ option: DecisionViewState.Option) -> String? {
         guard let money = option.gameMoney else { return nil }
-        var parts = ["Game money \(Money.signed(money))"]
+        var parts = [L10n.tr("Game money \(Money.signed(money))")]
         if !option.note.isEmpty { parts.append(option.note) }
-        if !option.pickedBy.isEmpty { parts.append("Picked by \(option.pickedBy.joined(separator: ", "))") }
+        if !option.pickedBy.isEmpty { parts.append(L10n.tr("Picked by \(option.pickedBy.joined(separator: ", "))")) }
         return parts.joined(separator: ". ")
     }
 }
@@ -297,8 +319,8 @@ struct GameOverView: View {
                 .inkSurface(.hero, hero: true)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("gameOver.winner")
-                RankingListView(rows: state.ranking, title: "Points")
-                Button(state.isHost ? "New lobby, same friends" : "Back to Play", action: actions.onPlayAgain)
+                RankingListView(rows: state.ranking, title: L10n.tr("Points"))
+                Button(state.isHost ? L10n.tr("New lobby, same friends") : L10n.tr("Back to Play"), action: actions.onPlayAgain)
                     .buttonStyle(.main)
                     .accessibilityIdentifier("gameOver.again")
             }

@@ -9,7 +9,7 @@ struct RoomConnectionBanner: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.m) {
-            LLIconImage(state.kind == .offline ? .crash : .statusCached, size: 24)
+            LLIconImage(state.isProblem ? .crash : .statusCached, size: 24)
             Text(state.text)
                 .font(.llLabelBold)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -23,9 +23,9 @@ struct RoomConnectionBanner: View {
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.vertical, Theme.Spacing.s)
         .frame(minHeight: Theme.minTarget)
-        .inkSurface(.badge, fill: state.kind == .offline ? Theme.Palette.health : Theme.Palette.home, lineWidth: Theme.chipOutline)
+        .inkSurface(.badge, fill: state.isProblem ? Theme.Palette.health : Theme.Palette.home, lineWidth: Theme.chipOutline)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("room.connection")
+        .accessibilityIdentifier(state.kind == .error ? "room.error" : "room.connection")
     }
 }
 

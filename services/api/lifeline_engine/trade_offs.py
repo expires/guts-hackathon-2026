@@ -313,9 +313,11 @@ def emergency_fund(
     first_year: int | None,
     last_year: int | None,
     savings_rate_known: bool = True,
+    invests: bool = True,
 ) -> TradeOff:
     """Cash kept for emergencies is not invested, so its expected growth is lower. `savings_rate_known` False:
-    the rate is the UK average and the text says so (ADR 0053 bug 6)."""
+    the rate is the UK average and the text says so (ADR 0053 bug 6). `invests` False (most students, ADR 0070):
+    the trade-off is less to spend while the safety net builds, never investing words."""
     points = [
         point(
             f"{gbp(amount)} kept as cash earns about {pct(savings_rate)} a year."
@@ -324,6 +326,12 @@ def emergency_fund(
             {"amount": money_value(amount), "savings_rate": pct_value(savings_rate)},
         )
     ]
+    if not invests:
+        points += [
+            point("While you build it, nights out and treats get less of each week's money.", {}),
+            point("Keep it in a separate savings pot, so it does not get spent by mistake.", {}),
+        ]
+        return make(f"{gbp(amount)} less to spend while you build it", points)
     if stock_return is not None and first_year is not None and last_year is not None:
         points.append(
             point(
@@ -380,6 +388,28 @@ def weekly_budget(
     return make(f"{gbp(cut)} a week less to spend until {day_text}", points)
 
 
+def keep_buffer(cash: float) -> TradeOff:
+    """The nothing-urgent fallback: keep the safety net. No investing words (ADR 0070)."""
+    points = [
+        point(f"Your {gbp(cash)} of cash stays your safety net.", {"cash": money_value(cash)}),
+        point("Money kept for emergencies is not for nights out or treats.", {}),
+    ]
+    return make("Money in your safety net is not for everyday spending", points)
+
+
+def on_track(spare: float, pace: float, day_text: str, day_facts: dict[str, float]) -> TradeOff:
+    """No shortfall before the next payment (ADR 0070): the move keeps the usual pace and saves what is spare."""
+    points = [
+        point(f"You keep to about {gbp(pace)} a week until {day_text}.", {"pace": money_value(pace), **day_facts}),
+        point("A big night out or a trip has to fit inside that, or come out of the spare money.", {}),
+    ]
+    if spare > 0:
+        points.append(point(f"{gbp(spare)} moves out of your current account, so it is not there to spend on a "
+                            "whim. You can move it back the same day.", {"spare": money_value(spare)}))
+        return make(f"{gbp(spare)} less in your current account until {day_text}", points)
+    return make(f"No more than about {gbp(pace)} a week until {day_text}", points)
+
+
 def shortfall(short: float, bills: float, day_text: str, day_facts: dict[str, float]) -> TradeOff:
     """Bills alone take all the cash before the next payment: there is nothing safe to spend."""
     points = [
@@ -415,7 +445,7 @@ def lifetime_isa(contribution: float, bonus: float, loss: float, charge_pct: flo
     return make(f"A {charge_pct:g}% charge if you take it out for anything but a first home", points)
 
 
-def keep_cash(savings: float, rate: float, cpi: float, year: int) -> TradeOff:
+def keep_cash(savings: float, rate: float, cpi: float, year: int, invests: bool = True) -> TradeOff:
     real = savings * (cpi - rate) / 100
     if real > 0:
         first = point(
@@ -429,5 +459,7 @@ def keep_cash(savings: float, rate: float, cpi: float, year: int) -> TradeOff:
             f"Prices rose {pct(cpi)} in {year}, less than your {pct(rate)} rate. A rate cut can change that.",
             {"cpi": pct_value(cpi), "year": float(year), "rate": pct_value(rate)},
         )
-    points = [first, point("Over many years, cash usually grows less than money invested.", {})]
+    later = (point("Over many years, cash usually grows less than money invested.", {}) if invests
+             else point("Check your rate each term: banks often cut it without telling you.", {}))
+    points = [first, later]
     return make("Rising prices can make your cash worth less over time", points)

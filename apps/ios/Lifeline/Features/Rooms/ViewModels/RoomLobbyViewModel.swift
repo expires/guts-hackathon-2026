@@ -51,7 +51,7 @@ final class RoomLobbyViewModel {
     }
 
     func create(mode: String) async {
-        phase = .loading(.init(message: "Making a room"))
+        phase = .loading(.init(message: L10n.tr("Making a room")))
         do {
             room = try await client.createRoom(
                 .init(
@@ -70,7 +70,7 @@ final class RoomLobbyViewModel {
 
     func join() async {
         guard joinCode.count == 6 else { return }
-        phase = .loading(.init(message: "Joining room \(joinCode)"))
+        phase = .loading(.init(message: L10n.tr("Joining room \(joinCode)")))
         do {
             room = try await client.getRoom(code: joinCode)
             isHost = false
@@ -89,18 +89,17 @@ final class RoomLobbyViewModel {
             return .init(
                 id: player.id, name: player.name, isHost: player.isHost, isMe: player.id == demo.myID,
                 face: demo.faces[player.id] ?? "face-teen",
-                statusText: ready ? "Ready" : "Joining…",
+                statusText: ready ? L10n.tr("Ready") : L10n.tr("Joining…"),
                 isReady: ready
             )
         }
         let startAge = room.gameStartYear - demo.birthYear
         let endYear = room.gameStartYear + demo.years
-        state.lifeLine = "\(demo.shortName), \(startAge), \(demo.occupation), \(demo.town). "
-            + "Sep \(room.gameStartYear) to Sep \(endYear). Same events. Your own pace."
-        state.rulesLine = "\(demo.years) years · \(demo.rewindsEach) rewinds each · real rates to \(demo.realRatesUntil)"
-        state.playersTitle = "Players · \(room.players.count) of \(room.maxPlayers)"
+        state.lifeLine = L10n.tr("\(demo.shortName), \(startAge), \(demo.occupation), \(demo.town). Sep \(String(room.gameStartYear)) to Sep \(String(endYear)). Same events. Your own pace.")
+        state.rulesLine = L10n.tr("\(demo.years) years · \(demo.rewindsEach) rewinds each · real rates to \(String(demo.realRatesUntil))")
+        state.playersTitle = L10n.tr("Players · \(room.players.count) of \(room.maxPlayers)")
         let ready = room.players.filter { $0.lifeId != nil }.count
-        state.startTitle = "Start with \(ready) players"
+        state.startTitle = L10n.tr("Start with \(ready) players")
         state.canStart = ready >= 2
         state.isSampleData = true
         return state
@@ -124,7 +123,7 @@ final class RoomLobbyViewModel {
                 qrPNG: Data(base64Encoded: room.qrPngBase64),
                 players: room.players.map { .init(id: $0.id, name: $0.name, isHost: $0.isHost, isMe: $0.name == myName) },
                 maxPlayers: room.maxPlayers,
-                statusLabel: room.status == .lobby ? "Waiting for players" : room.status.rawValue.capitalized,
+                statusLabel: room.status == .lobby ? L10n.tr("Waiting for players") : room.status.rawValue.capitalized,
                 startYear: room.gameStartYear
             )
         }
@@ -205,16 +204,16 @@ final class RoomLiveViewModel {
         return RoomLiveViewState(
             name: demo.characterName,
             face: "face-priya",
-            detail: "Age \(demo.story.age) · Room \(room.code)",
+            detail: L10n.tr("Age \(demo.story.age) · Room \(room.code)"),
             bank: demo.story.bank,
             rivals: rivals,
-            rivalCaption: (["Age · INDEX."] + notes).joined(separator: " "),
-            storyTitle: "\(demo.story.year) · Age \(demo.story.age)",
+            rivalCaption: ([L10n.tr("Age · INDEX.")] + notes).joined(separator: " "),
+            storyTitle: L10n.tr("\(String(demo.story.year)) · Age \(demo.story.age)"),
             storyLines: demo.story.lines,
-            lessonTitle: "Lesson: \(demo.story.lessonTitle)",
+            lessonTitle: L10n.tr("Lesson: \(demo.story.lessonTitle)"),
             stats: [
-                .init(id: "happiness", icon: "happiness", title: "Happiness", value: demo.story.happiness),
-                .init(id: "money", icon: "savings", title: "Money", value: demo.story.money),
+                .init(id: "happiness", icon: "happiness", title: L10n.tr("Happiness"), value: demo.story.happiness),
+                .init(id: "money", icon: "savings", title: L10n.tr("Money"), value: demo.story.money),
             ],
             isSampleData: true
         )
@@ -246,17 +245,17 @@ final class RoomResultViewModel {
         }
         let winner = rows.first
         let endYear = room.gameStartYear + demo.years
-        let winnerLine = winner.map { "\($0.name) · INDEX \(Int($0.index.rounded()))" } ?? ""
+        let winnerLine = winner.map { L10n.tr("\($0.name) · INDEX \(Int($0.index.rounded()))") } ?? ""
         let me = rows.first { $0.isMe }
         let share = [
-            "Same Life room \(room.code): \(winnerLine) won.",
-            me.map { "I came \($0.rank) of \(rows.count) with INDEX \(Int($0.index.rounded()))." },
+            L10n.tr("Same Life room \(room.code): \(winnerLine) won."),
+            me.map { L10n.tr("I came \($0.rank) of \(rows.count) with INDEX \(Int($0.index.rounded())).") },
         ].compactMap { $0 }.joined(separator: " ")
         return RoomResultViewState(
             rows: rows,
             splits: [],
             winnerName: winner?.name ?? "",
-            subtitle: "\(room.code) · Sep \(room.gameStartYear) to Sep \(endYear)",
+            subtitle: L10n.tr("\(room.code) · Sep \(String(room.gameStartYear)) to Sep \(String(endYear))"),
             winnerLine: winnerLine,
             winnerNote: winner?.note ?? "",
             earned: demo.earned,

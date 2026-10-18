@@ -15,6 +15,7 @@ enum PlayFixturesW7 {
         var state = Fixtures.Play.ready
         state.rooms = RoomFlowFixtures.entryReady
         state.circles = RoomFlowFixtures.circles
+        state.learn = LearnFixtures.entry
         return state
     }
 }

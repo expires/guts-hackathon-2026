@@ -91,7 +91,7 @@ struct MoneyHomeScreen: View {
         let routes = self.routes
         model.onConnectMoney = { routes.openConnectMoney() }
         model.onAskPenny = { moveID in
-            routes.askPenny(moveID.map { PennyRoute(screen: .nextMove, nextMoveID: $0, question: "Why this move?") } ?? PennyRoute(screen: .money))
+            routes.askPenny(moveID.map { PennyRoute(screen: .nextMove, nextMoveID: $0, question: PennyQuestion.nextMove) } ?? PennyRoute(screen: .money))
         }
     }
 

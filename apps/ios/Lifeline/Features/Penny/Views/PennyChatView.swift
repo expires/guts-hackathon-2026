@@ -93,7 +93,7 @@ struct PennyChatView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             HStack(alignment: .top, spacing: 10) {
                 PennyAnimatedFace(mood: .smiling, size: 44)
-                Text("Ask me about your money, or anything about student life. When I use your numbers, I check every one.")
+                Text(state.introText)
                     .font(.llBody)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -151,7 +151,7 @@ struct PennyChatView: View {
                         }
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("You: \(question.text)")
+                    .accessibilityLabel(L10n.tr("You: \(question.text)"))
                     .accessibilityIdentifier("penny.question.\(question.id)")
             }
             // The badge sits 16 pt above the bubble: keep that room so it is never cut off (fix 1).
@@ -306,7 +306,7 @@ struct PennyChatView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityValue(expanded ? "Open" : "Closed, \(group.sourceGroups.reduce(0) { $0 + $1.rows.count }) sources")
+            .accessibilityValue(expanded ? "Open" : L10n.tr("Closed, \(group.sourceGroups.reduce(0) { $0 + $1.rows.count }) sources"))
             .accessibilityIdentifier("penny.sources.\(group.id)")
             if expanded {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {

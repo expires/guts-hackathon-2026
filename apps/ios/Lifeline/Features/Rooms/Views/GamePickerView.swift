@@ -9,7 +9,7 @@ struct GamePickerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                ScreenHeader(title: "Pick a game", leading: HeaderSquareButton(kind: .close, identifier: "picker.close", action: actions.onClose))
+                ScreenHeader(title: L10n.tr("Pick a game"), leading: HeaderSquareButton(kind: .close, identifier: "picker.close", action: actions.onClose))
                 VStack(spacing: Theme.Spacing.s) {
                     ForEach(state.games) { game in
                         gameRow(game)
@@ -56,7 +56,7 @@ struct GamePickerView: View {
         switch state.selectedGame {
         case RoomGameKind.quiz.rawValue:
             LLStepper(
-                title: "Questions",
+                title: L10n.tr("Questions"),
                 valueText: "\(state.questions)",
                 canDecrement: state.questions > 3,
                 canIncrement: state.questions < 15,
@@ -64,11 +64,11 @@ struct GamePickerView: View {
                 onDecrement: { actions.onQuestions(state.questions - 1) },
                 onIncrement: { actions.onQuestions(state.questions + 1) }
             )
-            LLChoiceChips(title: "Topic", options: state.topics.map { .init(id: $0.id, label: $0.label) }, selection: state.topic, identifier: "picker.topic", onSelect: actions.onTopic)
+            LLChoiceChips(title: L10n.tr("Topic"), options: state.topics.map { .init(id: $0.id, label: $0.label) }, selection: state.topic, identifier: "picker.topic", onSelect: actions.onTopic)
         case RoomGameKind.sameDecision.rawValue:
             yearStepper
         default:
-            LLToggleRow(title: "Quick Life", subtitle: "Ages 18 to 25 in about 2 minutes", isOn: state.quick, identifier: "picker.quick", onChange: actions.onQuick)
+            LLToggleRow(title: L10n.tr("Quick Life"), subtitle: L10n.tr("Ages 18 to 25 in about 2 minutes"), isOn: state.quick, identifier: "picker.quick", onChange: actions.onQuick)
             switch state.pathsPhase {
             case .loading:
                 HStack(spacing: Theme.Spacing.s) {
@@ -78,8 +78,15 @@ struct GamePickerView: View {
                 .accessibilityLabel("Loading paths")
             case let .failed(error):
                 ErrorStateView(state: error)
+            case .ready where !state.students.isEmpty:
+                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                    Text("Everyone plays").font(.llLabelBold)
+                    ForEach(state.students) { student in
+                        studentCard(student)
+                    }
+                }
             case .ready:
-                LLChoiceChips(title: "Start path", options: state.paths.map { .init(id: $0.id, label: $0.label) }, selection: state.pathID ?? "", identifier: "picker.path", onSelect: actions.onPath)
+                LLChoiceChips(title: L10n.tr("Start path"), options: state.paths.map { .init(id: $0.id, label: $0.label) }, selection: state.pathID ?? "", identifier: "picker.path", onSelect: actions.onPath)
                 if let path = state.paths.first(where: { $0.id == state.pathID }) {
                     Text(path.detail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                 }
@@ -88,9 +95,32 @@ struct GamePickerView: View {
         }
     }
 
+    private func studentCard(_ student: GamePickerViewState.Option) -> some View {
+        let isOn = student.id == state.studentID
+        return Button { actions.onStudent(student.id) } label: {
+            HStack(spacing: Theme.Spacing.m) {
+                LLIconImage(LLIcon(rawValue: student.icon) ?? .facePriya, size: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(student.label).font(.llBodyBold)
+                    Text(student.detail).font(.llLabel).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if isOn { LLIconImage(.check, size: 24) }
+            }
+            .foregroundStyle(Theme.Palette.ink)
+            .padding(Theme.Spacing.m)
+            .frame(minHeight: Theme.minTarget)
+            .inkSurface(.card, fill: isOn ? Theme.Palette.money : Theme.Palette.surface, lineWidth: isOn ? Theme.outline : Theme.chipOutline)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+        .accessibilityIdentifier("picker.student.\(student.id)")
+    }
+
     private var yearStepper: some View {
         LLStepper(
-            title: "Year in history",
+            title: L10n.tr("Year in history"),
             valueText: String(state.startYear),
             canDecrement: state.startYear > state.minYear,
             canIncrement: state.startYear < state.maxYear,

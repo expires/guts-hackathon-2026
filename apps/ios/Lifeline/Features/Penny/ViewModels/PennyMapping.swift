@@ -2,13 +2,13 @@ import Foundation
 
 /// Pure mapping from chat contract types to `PennyViewState` parts. Used by the ViewModel, fixtures and tests.
 enum PennyMapping {
-    static let checkedLabel = "Checked with your data"
-    static let generalLabel = "General answer"
-    static let officialLabel = "Checked against official sources"
+    static var checkedLabel: String { L10n.tr("Checked with your data") }
+    static var generalLabel: String { L10n.tr("General answer") }
+    static var officialLabel: String { L10n.tr("Checked against official sources") }
     /// ADR 0051. Replaces "Not financial advice".
-    static let disclaimer = "Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions."
+    static var disclaimer: String { L10n.tr("Penny is AI and can make mistakes. Guidance only, not regulated financial advice. Check before big decisions.") }
     /// Chat failure text (DIRECTION_V2 section 6, fix 9).
-    static let unavailable = "Penny is unavailable right now. Try again."
+    static var unavailable: String { L10n.tr("Penny is unavailable right now. Try again.") }
 
     /// Units that may be highlighted: money and rates only, never years, dates, counts or months.
     static func isHighlightable(_ unit: String) -> Bool {
@@ -128,20 +128,20 @@ enum PennyMapping {
         guard let date = parseDate(iso) else { return nil }
         let seconds = max(0, now.timeIntervalSince(date))
         switch seconds {
-        case ..<60: return "Updated just now"
-        case ..<3_600: return "Updated \(Int(seconds / 60)) min ago"
-        case ..<86_400: return "Updated \(Int(seconds / 3_600)) h ago"
+        case ..<60: return L10n.tr("Updated just now")
+        case ..<3_600: return L10n.tr("Updated \(Int(seconds / 60)) min ago")
+        case ..<86_400: return L10n.tr("Updated \(Int(seconds / 3_600)) h ago")
         default:
             let days = Int(seconds / 86_400)
-            return "Updated \(days) day\(days == 1 ? "" : "s") ago"
+            return days == 1 ? L10n.tr("Updated 1 day ago") : L10n.tr("Updated \(days) days ago")
         }
     }
 
     // MARK: Sources
 
-    static let groupOrder: [(id: String, title: String)] = [
-        ("your_data", "Your data"), ("live_sources", "Live sources"), ("general_knowledge", "General knowledge"),
-    ]
+    static var groupOrder: [(id: String, title: String)] { [
+        ("your_data", L10n.tr("Your data")), ("live_sources", L10n.tr("Live sources")), ("general_knowledge", L10n.tr("General knowledge")),
+    ] }
 
     static func sourceGroups(_ sources: [PennyAPI.Source], now: Date) -> [PennyViewState.SourceGroup] {
         groupOrder.compactMap { group in
@@ -160,7 +160,7 @@ enum PennyMapping {
 
     /// Collapsed sources card title (DIRECTION_V2 section 6, fix 5).
     static func sourcesTitle(count: Int) -> String {
-        "See sources"
+        L10n.tr("See sources")
     }
 
     /// "General answer" (no engine tool), "Checked with your data" (a source from your data), else
@@ -228,7 +228,7 @@ enum PennyMapping {
             details[id] = .init(
                 id: id,
                 bubbleID: bubble.id,
-                label: fact?.label ?? "Number",
+                label: fact?.label ?? L10n.tr("Number"),
                 valueText: fact.map { valueText(value: $0.value, unit: $0.unit.rawValue, presentation: presentation) } ?? shown,
                 sourceLabel: source?.label,
                 updatedText: updatedText(source?.updatedAt, now: now),
@@ -285,8 +285,29 @@ enum PennyMapping {
     }
 
     /// "2 messages · 17 Oct".
+    /// Past chats for the chat list. A thread with no messages never shows (no empty context chats).
+    static func pastThreads(_ response: PennyAPI.ThreadsResponse) -> [PennyViewState.ThreadSummary] {
+        response.threads.filter { $0.messageCount > 0 }.map(threadSummary)
+    }
+
+    /// `ChatRequest.context` for a Penny context. `title` goes only with the first message of a new thread
+    /// (the server titles the thread with it). A room round sends `multiplayer`, `room_code` and `round_id`.
+    static func chatContext(_ context: PennyContext, isNewThread: Bool) -> PennyAPI.Context {
+        PennyAPI.Context(
+            nextMoveId: context.nextMoveID,
+            lifeId: context.lifeID,
+            eventId: context.eventID,
+            screen: .init(rawValue: context.screen.rawValue) ?? .other,
+            title: isNewThread ? context.threadTitle : nil,
+            multiplayer: context.isMultiplayer ? true : nil,
+            roomCode: context.roomCode,
+            lessonId: context.lessonID,
+            roundId: context.roundID
+        )
+    }
+
     static func threadSummary(_ thread: Components.Schemas.ChatThreadSummary) -> PennyViewState.ThreadSummary {
-        let count = thread.messageCount == 1 ? "1 message" : "\(thread.messageCount) messages"
+        let count = thread.messageCount == 1 ? L10n.tr("1 message") : L10n.tr("\(thread.messageCount) messages")
         var detail = count
         if let date = parseDate(thread.updatedAt) {
             let out = DateFormatter()
@@ -299,6 +320,6 @@ enum PennyMapping {
 
     /// "1 Reply", "3 Replies".
     static func repliesText(_ count: Int) -> String {
-        count == 1 ? "1 Reply" : "\(count) Replies"
+        count == 1 ? L10n.tr("1 Reply") : L10n.tr("\(count) Replies")
     }
 }

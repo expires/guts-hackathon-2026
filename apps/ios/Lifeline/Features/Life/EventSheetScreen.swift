@@ -5,7 +5,8 @@ struct EventSheetScreen: View {
     @State private var model: EventSheetViewModel
     private let onClose: @MainActor () -> Void
     private let session: GameSession
-    @Environment(\.appRoutes) private var routes
+    /// "Not sure? Ask Penny": a Penny sheet over this event (a new chat with the event as context).
+    @State private var penny: PennyContext?
 
     init(session: GameSession, onClose: @escaping @MainActor () -> Void = {}) {
         _model = State(initialValue: EventSheetViewModel(session: session))
@@ -13,19 +14,19 @@ struct EventSheetScreen: View {
         self.onClose = onClose
     }
 
-    /// The model's actions plus "Not sure? Ask Penny": close the event first, then open Penny from the root.
+    /// The model's actions plus "Not sure? Ask Penny": opens Penny as a sheet over the event.
+    /// Closing the sheet returns to the same event.
     private var actions: EventSheetActions {
         var actions = model.actions
-        let routes = self.routes
-        let close = onClose
-        let lifeID = session.life?.id
-        let eventID = session.activeEvent?.id
+        let session = self.session
+        let title = model.state?.title ?? ""
+        let age = model.state?.age
+        let penny = $penny
         actions.onAskPenny = {
-            close()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(450))
-                routes.askPenny(PennyRoute(screen: .lifeEvent, lifeID: lifeID, eventID: eventID))
-            }
+            penny.wrappedValue = .lifeEvent(
+                lifeID: session.life?.id, eventID: session.activeEvent?.id,
+                eventTitle: title, age: age, roomCode: session.life?.roomCode
+            )
         }
         return actions
     }
@@ -34,6 +35,7 @@ struct EventSheetScreen: View {
         if let state = model.state {
             EventSheetView(state: state, actions: actions)
                 .onAppear { model.onClose = onClose }
+                .pennySheet($penny, client: session.client)
         }
     }
 }

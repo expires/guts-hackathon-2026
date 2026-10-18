@@ -56,7 +56,7 @@ final class EventSheetViewModel {
             isSubmitting: isSubmitting,
             area: LifeViewModel.area(event.area.rawValue),
             areaLabel: LifeViewModel.area(event.area.rawValue).capitalized,
-            dateText: "\(event.year) · Age \(event.age)"
+            dateText: L10n.tr("\(event.year) · Age \(event.age)")
         )
     }
 

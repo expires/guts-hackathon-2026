@@ -110,8 +110,7 @@ async def test_demo_mode_still_fills_with_mock(settings, client, clock, no_sleep
 
 async def test_finance_snapshot_none_in_live_mode(live_settings, settings):
     assert await DataHub(live_settings, env={}).finance_snapshot(DEMO_SUBJECT) is None
-    demo = await DataHub(settings, env={}).finance_snapshot(DEMO_SUBJECT)
-    assert demo is not None and demo.status == "mock"
+    assert await DataHub(settings, env={}).finance_snapshot(DEMO_SUBJECT) is None  # demo mode: no persona
 
 
 async def test_postcode_lookup_live_mode_no_mock(live_settings, client, clock, no_sleep):

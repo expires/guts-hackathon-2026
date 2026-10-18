@@ -7,7 +7,7 @@ import Observation
 final class SourcesViewModel {
     private let client: any LifelineClient
     private(set) var sources: [SourceStatus] = []
-    private(set) var phase: LoadPhase = .loading(.init(message: "Checking data sources"))
+    private(set) var phase: LoadPhase = .loading(.init(message: L10n.tr("Checking data sources")))
     @ObservationIgnored var onClose: @MainActor () -> Void = {}
 
     init(client: any LifelineClient) {
@@ -26,7 +26,7 @@ final class SourcesViewModel {
     }
 
     func load() async {
-        phase = .loading(.init(message: "Checking data sources"))
+        phase = .loading(.init(message: L10n.tr("Checking data sources")))
         do {
             sources = try await client.listSources()
             phase = .ready
@@ -43,7 +43,9 @@ final class SourcesViewModel {
                     id: $0.id,
                     name: $0.name,
                     status: StateMapping.status($0.status.rawValue),
-                    updatedText: $0.fetchedAt.map { "Updated " + $0.formatted(.dateTime.day().month().year().hour().minute().locale(Money.locale)) },
+                    updatedText: $0.fetchedAt.map { date in
+                        L10n.tr("Updated \(date.formatted(.dateTime.day().month().year().hour().minute().locale(FinanceMapping.dateLocale)))")
+                    },
                     coverage: $0.coverage,
                     attribution: $0.attribution,
                     licence: $0.licence,

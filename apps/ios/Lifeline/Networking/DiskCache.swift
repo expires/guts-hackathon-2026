@@ -31,7 +31,10 @@ enum CachedOps {
     static let financeHome = CachedOp<FinanceHome>(key: "getFinanceHome", scope: .user) { try await $0.financeHome() }
     static let financeOverview = CachedOp<FinanceOverview>(key: "getFinanceOverview", scope: .user) { try await $0.financeOverview() }
     static let financeProfile = CachedOp<FinanceProfile>(key: "getFinanceProfile", scope: .user) { try await $0.financeProfile() }
-    static let nextMove = CachedOp<NextMoveResponse>(key: "getNextMove", scope: .user) { try await $0.nextMove() }
+    /// One cache entry per language (ADR 0069), so a cached English move never shows after a language switch.
+    static var nextMove: CachedOp<NextMoveResponse> {
+        CachedOp(key: "getNextMove." + AppLanguage.current.rawValue, scope: .user) { try await $0.nextMove() }
+    }
     static let plan = CachedOp<PlanResponse>(key: "getPlan", scope: .user) { try await $0.plan() }
     static let bills = CachedOp<BillsResponse>(key: "listBills", scope: .user) { try await $0.bills() }
     static let subscriptions = CachedOp<SubscriptionsResponse>(key: "listSubscriptions", scope: .user) { try await $0.subscriptions() }
@@ -46,7 +49,8 @@ enum CachedOps {
 
     // Fixed content
     static let characters = CachedOp<CharactersResponse>(key: "listCharacters", scope: .shared) { try await $0.listCharacters(seed: nil) }
-    static let paths = CachedOp<[StudentPath]>(key: "listPaths", scope: .shared) { try await $0.listPaths() }
+    /// Paths and Quick Life students (ADR 0064). Key changed with the type (was `listPaths`, [StudentPath]).
+    static let paths = CachedOp<PathsResponse>(key: "listPathsResponse", scope: .shared) { try await $0.listPaths() }
     static let concepts = CachedOp<[Concept]>(key: "listConcepts", scope: .shared) { try await $0.listConcepts() }
     static let challenges = CachedOp<[Challenge]>(key: "listChallenges", scope: .shared) { try await $0.listChallenges() }
     static let samples = CachedOp<[SampleStatement]>(key: "listSamples", scope: .shared) { try await $0.listSamples() }

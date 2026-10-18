@@ -330,7 +330,7 @@ struct SourceChip: View {
         .frame(minHeight: 32)
         .inkSurface(HandCut((11, 8, 10, 7)), lineWidth: Theme.chipOutline)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Source \(source.name), \(source.status.label) data")
+        .accessibilityLabel(Text("Source \(source.name), \(source.status.label) data"))
         .accessibilityIdentifier("sourceChip.\(source.id.split(separator: ".").first.map(String.init) ?? source.id)")
     }
 }

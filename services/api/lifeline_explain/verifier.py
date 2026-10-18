@@ -100,6 +100,8 @@ def _kind(text: str, start: int, end: int, is_percent: bool) -> str | None:
     before = text[:start].rstrip(" -\u2212")
     if before.endswith("\u00a3") or before[-3:].lower() == "gbp":  # V6 V2-F4: "GBP 138" is money
         return "gbp"
+    if text[end:].lstrip(" \u00a0\u202f").startswith("\u00a3"):
+        return "gbp"  # "1,749 £"
     m = _AFTER_RE.match(text[end:])
     if not m:
         return None
@@ -120,10 +122,28 @@ def _token_value(tok: str) -> tuple[float, int]:
     return float(clean), decimals
 
 
+# European money formats next to £ (ADR 0063, V6 F-3): "1 749 £", "1.749 £", "1.749,00 £", "£1.749", "50,00 £".
+_GROUPED = r"\d{1,3}(?:[.\u00a0\u202f ]\d{3})+(?:,\d{1,2})?"
+_LOCAL_MONEY = re.compile(
+    rf"\u00a3\s?(?P<a>{_GROUPED})(?![\d.,]\d)|(?<![\d.,])(?P<b>{_GROUPED}|\d+,\d{{1,2}})\s?\u00a3"
+)
+
+
+def _local_value(raw: str) -> tuple[float, int]:
+    whole, _, frac = re.sub(r"[.\u00a0\u202f ]", "", raw).partition(",")
+    return float(f"{whole}.{frac}" if frac else whole), len(frac)
+
+
 def extract_numbers(text: str) -> list[Found]:
     """Return every number in `text`. Ratios ('7 in 10') are one item with value a/b."""
     found: list[Found] = []
     spans: list[tuple[int, int]] = []
+
+    for m in _LOCAL_MONEY.finditer(text):
+        group = "a" if m.group("a") else "b"
+        value, decimals = _local_value(m.group(group))
+        found.append(Found(m.group(group), value, decimals, start=m.start(group), end=m.end(group), kind="gbp"))
+        spans.append(m.span(group))
 
     for m in _RATIO_RE.finditer(text):
         a, _ = _token_value(m.group("a"))

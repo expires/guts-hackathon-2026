@@ -43,6 +43,11 @@ assert CONTRACT_TOOL_NAMES <= TOOL_NAMES
 # web_search is Anthropic's server tool (ADR 0051): it runs inside the model call, never through a ToolSet.
 SERVER_TOOL_NAMES: frozenset[str] = frozenset({"web_search"})
 CLIENT_TOOL_NAMES: frozenset[str] = TOOL_NAMES - SERVER_TOOL_NAMES
+# Tools that read the user's own money. Not offered without user data or on the onboarding chat (ADR 0063).
+PERSONAL_TOOL_NAMES: frozenset[str] = frozenset({
+    "next_move", "test_move", "finance_summary", "spend_prediction", "cash_flow_projection", "life_replay",
+    "user_balance", "habit_score",
+})  # fmt: skip
 
 
 def source_key(ref: SourceRef) -> str:
@@ -118,6 +123,23 @@ class ChatTurn:
     tools_used: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class GameScene:
+    """What a game screen shows, loaded server-side by W4 (Life event, room round). Sent to the model as GAME DATA
+    and registered like a preloaded tool result, so its facts (game numbers) are the only numbers Penny may quote.
+
+    `tool`: the name its facts are registered under ("event_choices" or "room_round").
+    `options`: the option labels the user picks from (the no-pick and quiz checks look for them).
+    `quiz_open`: a Money Quiz question still open; Penny never states or hints at its answer.
+    `revealed`: a room round after its reveal (outcomes and game money are in `output`)."""
+
+    tool: str
+    output: ToolOutput
+    options: tuple[str, ...] = ()
+    quiz_open: bool = False
+    revealed: bool = False
+
+
 @dataclass
 class ChatToolContext:
     """Everything `answer` needs besides the request. W4 builds it per request.
@@ -138,6 +160,8 @@ class ChatToolContext:
     # The user's own numbers (ADR 0051). A general answer that states one is blocked. None: ask the ToolSet
     # (`personal_facts()`, e.g. EngineToolSet); a ToolSet without it means no personal numbers are known.
     personal_facts: Sequence[ChatFact] | None = None
+    # Game screens (life_event, room_round): the event or round the user looks at, loaded server-side.
+    scene: GameScene | None = None
 
 
 # ---------- adapter ----------

@@ -38,18 +38,18 @@ final class MoneyTabViewModel {
             .init(id: "investments", label: "Investments", value: finances.investments),
             .init(id: "crypto", label: "Crypto", value: finances.crypto),
             .init(id: "pension", label: "Pension", value: finances.pension),
-            .init(id: "home", label: "Home value", value: finances.propertyValue),
+            .init(id: "home", label: L10n.tr("Home value"), value: finances.propertyValue),
         ].filter { $0.value != 0 || $0.id == "cash" }
         let owe: [MoneyTabViewState.Row] = [
             .init(id: "mortgage", label: "Mortgage", value: finances.mortgageBalance),
-            .init(id: "debt", label: "Loans and cards", value: finances.otherDebt),
-            .init(id: "studentLoan", label: "Student loan", value: finances.studentLoan),
+            .init(id: "debt", label: L10n.tr("Loans and cards"), value: finances.otherDebt),
+            .init(id: "studentLoan", label: L10n.tr("Student loan"), value: finances.studentLoan),
         ].filter { $0.value != 0 }
         var mortgageNote: String?
         if let rate = finances.mortgageRate, finances.mortgageBalance > 0 {
             let percent = rate.formatted(.number.precision(.fractionLength(0...2)))
-            mortgageNote = finances.mortgageFixedUntil.map { "Mortgage rate \(percent)%, fixed until \(String($0))" }
-                ?? "Mortgage rate \(percent)%"
+            mortgageNote = finances.mortgageFixedUntil.map { L10n.tr("Mortgage rate \(percent)%, fixed until \(String($0))") }
+                ?? L10n.tr("Mortgage rate \(percent)%")
         }
         return MoneyTabViewState(
             netWorth: finances.netWorth,

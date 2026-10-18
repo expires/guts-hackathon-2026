@@ -67,7 +67,7 @@ class CreateLifeRequest(_M):
     preset_id: ShortId | None = Field(default=None, description="Required when mode=preset")
     character: CharacterSpec | None = Field(default=None, description="Required when mode=self or god")
     seed: int | None = Field(default=None, ge=0, le=2**31 - 1, description="Omit for a random seed")
-    room_code: str | None = Field(default=None, pattern=r"^[A-Z0-9]{6}$")
+    room_code: str | None = Field(default=None, pattern=r"^[0-9]{4}$")
     path_id: ShortId | None = Field(default=None, description="Student start path (ADR 0052)")
     quick: bool = Field(default=False, description="Quick Life: ages 18 to 25, 2 or 3 events with choices")
 
@@ -136,7 +136,7 @@ class Player(_M):
 
 
 class Room(_M):
-    code: str = Field(pattern=r"^[A-Z0-9]{6}$")
+    code: str = Field(pattern=r"^[0-9]{4}$", description="4-digit room code, easy to read aloud (ADR 0064)")
     mode: RoomMode
     seed: int
     preset_id: str | None = None
@@ -235,3 +235,8 @@ class WsServerMessage(_M):
     decision: DecisionPrompt | None = None
     decision_reveal: DecisionReveal | None = None
     ranking: list[PlayerScore] | None = None
+    winner_line: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Penny announces the winner in one line, sent with 'finished' (ADR 0064)",
+    )

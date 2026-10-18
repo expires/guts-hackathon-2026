@@ -63,7 +63,7 @@ final class LessonViewModel {
         let last = chart.points.last
         let hasRange = chart.points.count >= 2
         var concept = [isNewConcept ? "New concept" : "Concept", lesson.title]
-        if let context { concept.append("\(context.conceptsLearned) learned") }
+        if let context { concept.append(L10n.tr("\(context.conceptsLearned) learned")) }
         return LessonViewState(
             conceptID: lesson.conceptId,
             title: lesson.title,
@@ -77,8 +77,8 @@ final class LessonViewModel {
             ),
             isNewConcept: isNewConcept,
             personal: lesson.personal,
-            eyebrow: context.map { "\($0.year) · Age \($0.age)" },
-            heroLine: hasRange ? "\(format(first!.y, unit: chart.yLabel)) → \(format(last!.y, unit: chart.yLabel))" : nil,
+            eyebrow: context.map { L10n.tr("\(String($0.year)) · Age \($0.age)") },
+            heroLine: hasRange ? L10n.tr("\(format(first!.y, unit: chart.yLabel)) → \(format(last!.y, unit: chart.yLabel))") : nil,
             heroCaption: chart.title,
             changeSentence: hasRange ? changeSentence(chart: chart) : nil,
             conceptLine: concept.joined(separator: " · "),
@@ -122,7 +122,7 @@ final class LessonViewModel {
             let number = abs(delta).formatted(.number.locale(Money.locale).precision(.fractionLength(0...1)))
             size = chart.yLabel.trimmingCharacters(in: .whitespaces) == "%" ? "\(number) points" : number
         }
-        if abs(delta) < 0.05 { return "No change from \(from) to \(to)." }
+        if abs(delta) < 0.05 { return L10n.tr("No change from \(from) to \(to).") }
         return "\(delta > 0 ? "Up" : "Down") \(size) from \(from) to \(to)."
     }
 

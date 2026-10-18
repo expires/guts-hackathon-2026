@@ -70,3 +70,38 @@ def with_sample(label: str, sample: int | None, unit: str = "") -> str:
     if sample is None:
         return label
     return f"{label} (sample: {sample} {unit})" if unit else f"{label} (sample {sample})"
+
+
+# ADR 0069: plain-English confidence for every screen, e.g. "Medium confidence: based on your last 4 weeks of
+# spending". Never "Medium · sample 4". Built from the level and what the level rests on.
+LEVEL_WORDS: dict[Level, str] = {"low": "Low confidence", "medium": "Medium confidence", "high": "High confidence"}
+# sample unit -> (singular, plural, the user's own data?)
+_BASIS: dict[str, tuple[str, str, bool]] = {
+    "weeks of your spending": ("week of spending", "weeks of spending", True),
+    "months": ("month of spending", "months of spending", True),
+    "past years": ("similar past year in UK data", "similar past years in UK data", False),
+    "past periods": ("similar past period in UK data", "similar past periods in UK data", False),
+    "years": ("year of UK price data", "years of UK price data", False),
+}
+
+
+def confidence_sentence(level: Level | None, sample: int | None, unit: str = "", basis: str | None = None) -> str:
+    """'High confidence: based on 9 similar past years in UK data', 'Low confidence: only 2 weeks of spending so
+    far'. `basis` replaces the sample part (a deterministic gain, e.g. 'a fixed price on your statement').
+    `level` None: the move makes no claim, so the text says what it rests on only."""
+    if level is None:
+        return basis or "No rating: nothing in your data needs action now"
+    head = LEVEL_WORDS[level]
+    if basis is not None:
+        return f"{head}: {basis}"
+    if sample is None or unit not in _BASIS:
+        return f"{head}: little data to compare yet"
+    one, many, own = _BASIS[unit]
+    what = f"{sample} {one if sample == 1 else many}"
+    if level == "low" and sample < MEDIUM_MIN_SAMPLE:
+        return f"{head}: only {what} so far" if own else f"{head}: only {what} to compare"
+    if level == "low":
+        return f"{head}: mixed results in {what}"
+    if own:
+        return f"{head}: based on your last {what}"
+    return f"{head}: based on {what}"

@@ -14,24 +14,24 @@ struct MoneyTabView: View {
                 }
                 Spacer()
             }
-            RowGroup(title: "Money I keep") {
+            RowGroup(title: L10n.tr("Money I keep")) {
                 ForEach(state.have) { row in
                     ListRow(icon: icon(for: row.id), title: row.label, trailing: Money.format(row.value), showsChevron: false)
                 }
             }
             if !state.owe.isEmpty {
-                RowGroup(title: "Money I owe", shape: .cardAlt) {
+                RowGroup(title: L10n.tr("Money I owe"), shape: .cardAlt) {
                     ForEach(state.owe) { row in
                         ListRow(icon: icon(for: row.id), title: row.label, subtitle: row.id == "mortgage" ? state.mortgageNote : nil, trailing: Money.format(row.value), showsChevron: false)
                     }
                 }
             }
-            RowGroup(title: "Every year") {
-                ListRow(icon: .payRise, title: "Pay per year", trailing: Money.format(state.annualIncome), showsChevron: false)
-                ListRow(icon: .bills, title: "Costs per month", trailing: Money.format(state.monthlyCosts), showsChevron: false)
+            RowGroup(title: L10n.tr("Every year")) {
+                ListRow(icon: .payRise, title: L10n.tr("Pay per year"), trailing: Money.format(state.annualIncome), showsChevron: false)
+                ListRow(icon: .bills, title: L10n.tr("Costs per month"), trailing: Money.format(state.monthlyCosts), showsChevron: false)
             }
-            RowGroupTitle(text: "What you can do")
-            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
+            RowGroupTitle(text: L10n.tr("What you can do"))
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: L10n.tr("Nothing to do here this year."))
         }
     }
 

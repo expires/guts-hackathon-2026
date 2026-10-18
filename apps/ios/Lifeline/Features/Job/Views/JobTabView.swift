@@ -8,19 +8,19 @@ struct JobTabView: View {
     var body: some View {
         SheetContainer(title: "Job", closeIdentifier: "menu.close", onClose: actions.onClose) {
             if let job = state.job {
-                RowGroup(title: "My job") {
-                    ListRow(icon: .job, title: job.title, subtitle: [job.employer, job.yearsInRole == 1 ? "1 year in this job" : "\(job.yearsInRole) years in this job"].compactMap { $0 }.joined(separator: " · "), trailing: Money.format(job.annualIncome), showsChevron: false)
+                RowGroup(title: L10n.tr("My job")) {
+                    ListRow(icon: .job, title: job.title, subtitle: [job.employer, job.yearsInRole == 1 ? "1 year in this job" : L10n.tr("\(job.yearsInRole) years in this job")].compactMap { $0 }.joined(separator: " · "), trailing: Money.format(job.annualIncome), showsChevron: false)
                     if let status = job.employerStatus {
                         ListRow(icon: .jobLoss, title: status, showsChevron: false)
                     }
                 }
             } else {
-                RowGroup(title: "My job") {
-                    ListRow(icon: .job, title: "No job right now", showsChevron: false)
+                RowGroup(title: L10n.tr("My job")) {
+                    ListRow(icon: .job, title: L10n.tr("No job right now"), showsChevron: false)
                 }
             }
-            RowGroupTitle(text: "What you can do")
-            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
+            RowGroupTitle(text: L10n.tr("What you can do"))
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: L10n.tr("Nothing to do here this year."))
         }
     }
 }

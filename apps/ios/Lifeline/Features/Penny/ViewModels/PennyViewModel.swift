@@ -7,13 +7,22 @@ import Observation
 @MainActor
 @Observable
 final class PennyViewModel {
-    static let verifyingLabel = "Checking the numbers…"
-    static let chips = [
-        "What if I lose my job?",
-        "Can I afford a holiday in June?",
-        "Why this move?",
-        "What's happening with interest rates?",
-    ]
+    static var verifyingLabel: String { L10n.tr("Checking the numbers…") }
+    nonisolated static var introText: String { L10n.tr("Ask me about your money, or anything about student life. When I use your numbers, I check every one.") }
+    nonisolated static var onboardingIntroText: String { L10n.tr("Hi, I'm Penny. Ask me anything about student money. I can't see your numbers yet.") }
+    /// Starter chips in onboarding: student money in general, no personal data needed.
+    nonisolated static var onboardingChips: [String] { [
+        L10n.tr("How does the maintenance loan work?"),
+        L10n.tr("How do I make a weekly budget?"),
+        L10n.tr("Is an overdraft a good idea?"),
+    ] }
+    /// Starter chips for students (Ask Penny context fix).
+    nonisolated static var chips: [String] { [
+        L10n.tr("Can I afford a night out this week?"),
+        L10n.tr("How long will my money last?"),
+        L10n.tr("Is a Lifetime ISA worth it for me?"),
+        L10n.tr("How do I make a weekly budget?"),
+    ] }
     /// No event (keepalive included) for this long ends the stream and starts the fallback.
     static let defaultStreamIdleTimeout: Duration = .seconds(20)
 
@@ -80,6 +89,9 @@ final class PennyViewModel {
         self.streamIdleTimeout = streamIdleTimeout
     }
 
+    /// Onboarding chat (ADR 0063): no data, no Next Move links, no past chats.
+    var isOnboarding: Bool { context.screen == .onboarding }
+
     var isWorking: Bool {
         exchanges.contains { if case .working = $0.status { true } else { false } }
     }
@@ -100,10 +112,10 @@ final class PennyViewModel {
             return group.id
         }()
         var state = PennyViewState(
-            title: openThreadQuestionID == nil ? (isTab ? "Penny" : "Ask Penny") : "Thread",
+            title: openThreadQuestionID == nil ? (isTab ? "Penny" : L10n.tr("Ask Penny")) : L10n.tr("Thread"),
             openThreadQuestionID: openThreadQuestionID,
             rows: rows,
-            chips: exchanges.isEmpty && openThreadQuestionID == nil ? Self.chips : [],
+            chips: exchanges.isEmpty && openThreadQuestionID == nil ? (isOnboarding ? Self.onboardingChips : Self.chips) : [],
             pastThreads: exchanges.isEmpty ? pastThreads : [],
             isWorking: isWorking,
             canSend: !isWorking && canReply,
@@ -111,9 +123,19 @@ final class PennyViewModel {
             openHighlightID: openHighlightID,
             expandedSourceGroups: expandedSources,
             isPresentation: presentation,
-            inputPlaceholder: openThreadQuestionID == nil ? "Ask Penny anything" : "Reply in this thread"
+            inputPlaceholder: openThreadQuestionID == nil ? L10n.tr("Ask Penny anything") : L10n.tr("Reply in this thread")
         )
         state.showsClose = !isTab
+        if isOnboarding {
+            state.introText = Self.onboardingIntroText
+            state.pastThreads = []
+            // No Next Move or plan links: there is no data to link to yet.
+            state.rows = state.rows.map { row in
+                guard case var .answer(group) = row else { return row }
+                group.links = []
+                return .answer(group)
+            }
+        }
         state.pennyFaceRowID = faceRow?.id
         state.suggestionsGroupID = suggestionsGroup
         return state
@@ -210,8 +232,9 @@ final class PennyViewModel {
             send(question)
             return
         }
+        guard !isOnboarding else { return }
         try? await service.loadThreads { [weak self] threads in
-            self?.pastThreads = threads.threads.map(PennyMapping.threadSummary)
+            self?.pastThreads = PennyMapping.pastThreads(threads)
         }
     }
 
@@ -306,18 +329,29 @@ final class PennyViewModel {
         }
     }
 
-    /// "Ask Penny" from another screen (Penny tab): the new context goes with the next request and its
-    /// question is sent into the same chat. Busy: the question waits for the running turn.
+    /// "Ask Penny" from another screen (Penny tab). With a question: starts a NEW chat with this context
+    /// (the running turn stops) and sends the question at once, so Penny starts answering.
+    /// Without a question (the Penny icon): keeps the chat and only updates the context.
     func ask(_ newContext: PennyContext) {
         didStart = true
         context = newContext
         closeThread()
         guard let question = newContext.question?.trimmingCharacters(in: .whitespacesAndNewlines), !question.isEmpty else { return }
-        if isWorking {
-            pendingQuestion = question
-        } else {
-            send(question)
-        }
+        startNewChat()
+        send(question)
+    }
+
+    /// Clears the chat on screen. The next request has no `thread_id`, so the server opens a new thread
+    /// titled from `context.threadTitle`.
+    func startNewChat() {
+        turn?.cancel()
+        turn = nil
+        pendingQuestion = nil
+        exchanges = []
+        threadID = nil
+        openHighlightID = nil
+        expandedSources = []
+        openThreadQuestionID = nil
     }
 
     private func sendPendingQuestion() {
@@ -326,18 +360,13 @@ final class PennyViewModel {
         send(question)
     }
 
-    private func request(for exchange: Exchange) -> PennyAPI.Request {
+    func request(for exchange: Exchange) -> PennyAPI.Request {
         let replyTo = exchange.rootID.flatMap { $0.hasPrefix("local-") ? nil : $0 }
         return PennyAPI.Request(
             message: exchange.text,
             threadId: threadID,
             replyTo: replyTo,
-            context: PennyAPI.Context(
-                nextMoveId: context.nextMoveID,
-                lifeId: context.lifeID,
-                eventId: context.eventID,
-                screen: .init(rawValue: context.screen.rawValue)
-            )
+            context: PennyMapping.chatContext(context, isNewThread: threadID == nil)
         )
     }
 
@@ -420,6 +449,7 @@ final class PennyViewModel {
             let highlights = (response.highlights ?? []).filter { $0.bubbleId == bubble.id }
             appendStreamed(.init(bubble: bubble, highlights: highlights), streamID: streamID, to: exchangeID)
         }
+        try Task.checkCancellation()
         threadID = response.threadId
         let newID = response.replyTo.isEmpty ? exchangeID : response.replyTo
         update(exchangeID) { exchange in
@@ -447,7 +477,7 @@ final class PennyViewModel {
     }
 
     /// One calm message for every chat failure (DIRECTION_V2 section 6, fix 9).
-    static let unavailableError = ErrorViewState(title: PennyMapping.unavailable, message: "", canRetry: true)
+    static var unavailableError: ErrorViewState { ErrorViewState(title: PennyMapping.unavailable, message: "", canRetry: true) }
 
     struct StreamIdleTimeout: Error {}
 

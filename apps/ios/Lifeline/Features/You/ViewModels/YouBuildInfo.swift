@@ -26,8 +26,8 @@ struct YouBuildInfo: Equatable, Sendable {
     /// Only the lines that have a value: "Checkpoint 3", "Built 17 Oct 2026, 18:04", "Features: Penny, Accounts".
     var detailLines: [String] {
         var lines: [String] = []
-        if let checkpoint { lines.append("Checkpoint \(checkpoint)") }
-        if let builtText { lines.append("Built \(builtText)") }
+        if let checkpoint { lines.append(L10n.tr("Checkpoint \(checkpoint)")) }
+        if let builtText { lines.append(L10n.tr("Built \(builtText)")) }
         if !features.isEmpty { lines.append("Features: " + features.joined(separator: ", ")) }
         return lines
     }

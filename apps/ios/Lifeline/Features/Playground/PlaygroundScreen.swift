@@ -42,12 +42,10 @@ struct PlaygroundScreen: View {
                 AccountView(state: entry.state)
             }
         case "select.ready": CharacterSelectView(state: Fixtures.CharacterSelect.ready)
-        case "select.godOwned": CharacterSelectView(state: Fixtures.CharacterSelect.godModeOwned)
         case "select.loading": CharacterSelectView(state: Fixtures.CharacterSelect.loading)
         case "select.offline": CharacterSelectView(state: Fixtures.CharacterSelect.offline)
         case "form.self": CharacterFormView(state: Fixtures.CharacterForm.playYourself)
         case "form.bank": CharacterFormView(state: Fixtures.CharacterForm.bankFilled)
-        case "form.god": CharacterFormView(state: Fixtures.CharacterForm.godMode)
         case "year.preset": StartYearPickerView(state: Fixtures.StartYear.preset)
         case "year.starting": StartYearPickerView(state: Fixtures.StartYear.starting)
         case "life.new": LifeView(state: Fixtures.LifeScreen.newLife)
@@ -88,9 +86,6 @@ struct PlaygroundScreen: View {
         case "decision.ready": RealLifeDecisionView(state: Fixtures.Decision.ready)
         case "decision.loading": RealLifeDecisionView(state: Fixtures.Decision.loading)
         case "decision.error": RealLifeDecisionView(state: Fixtures.Decision.error)
-        case "store.fresh": StoreView(state: Fixtures.Store.fresh)
-        case "store.purchasing": StoreView(state: Fixtures.Store.purchasing)
-        case "store.owned": StoreView(state: Fixtures.Store.owned)
         case "bank.intro": BankConnectView(state: Fixtures.Bank.intro)
         case "bank.connecting": BankConnectView(state: Fixtures.Bank.connecting)
         case "bank.connected": BankConnectView(state: Fixtures.Bank.connected)
@@ -160,7 +155,6 @@ struct PlaygroundScreen: View {
         case "w7rooms.result": RoomResultView(state: RoomsFixtures.result)
         case "w7play.withRoom": PlayView(state: PlayFixturesW7.withRoom).previewInNavigation()
         case "w7you.full": YouView(state: YouFixturesW7.full).previewInNavigation()
-        case "w7store.godMode": StoreView(state: StoreFixtures.godModeSelected)
         case let testIt where testIt.hasPrefix("testit."):
             if let entry = TestItFixtures.all.first(where: { $0.id == testIt }) {
                 TestItView(state: entry.state)

@@ -38,7 +38,7 @@ final class MoneyWidgetsViewModel {
 
     private var hasLoaded = false
 
-    /// Detail screens load on first open. Money home itself uses `GET /v1/finance/home` only.
+    /// First call loads every widget. Money home calls it after `GET /v1/finance/home` (ADR 0070).
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
         hasLoaded = true
@@ -53,11 +53,9 @@ final class MoneyWidgetsViewModel {
         async let spending: Void = cachedLoad(CachedOps.spending()) { [weak self] in self?.spending = $0 }
         async let subscriptions: Void = cachedLoad(CachedOps.subscriptions) { [weak self] in self?.subscriptions = $0 }
         async let bills: Void = cachedLoad(CachedOps.bills) { [weak self] in self?.bills = $0 }
-        async let budgets = Self.result { try await client.budgets(month: nil) }
-        async let goals = Self.result { try await client.goals() }
-        _ = await (overview, spending, subscriptions, bills)
-        self.budgets = await budgets
-        self.goals = await goals
+        async let budgets: Void = cachedLoad(CachedOps.budgets) { [weak self] in self?.budgets = $0 }
+        async let goals: Void = cachedLoad(CachedOps.goals) { [weak self] in self?.goals = $0 }
+        _ = await (overview, spending, subscriptions, bills, budgets, goals)
     }
 
     /// `client.load` into a `Result` slot: success with each value; failure only when nothing could be shown.
@@ -70,10 +68,6 @@ final class MoneyWidgetsViewModel {
         } catch {
             set(.failure(APIError.map(error)))
         }
-    }
-
-    private nonisolated static func result<T: Sendable>(_ body: @Sendable () async throws -> T) async -> Result<T, APIError> {
-        do { return .success(try await body()) } catch { return .failure(APIError.map(error)) }
     }
 
     // MARK: Move links (ADR 0018)
@@ -97,7 +91,7 @@ final class MoneyWidgetsViewModel {
 
     /// The engine's top move (first in `moves`): "Your next move: Take a tracker". Never a stored text.
     static func topMoveLink(moves: [Move]) -> MoveLinkState? {
-        moves.first.map { .init(moveID: $0.id, text: "Your next move: \($0.action)") }
+        moves.first.map { .init(moveID: $0.id, text: L10n.tr("Your next move: \($0.action)")) }
     }
 
     static func moveLink(for widget: Widget, moves: [Move]) -> MoveLinkState? {
@@ -105,8 +99,11 @@ final class MoneyWidgetsViewModel {
             if let move = moves.first(where: { $0.kind.rawValue == kind }) {
                 let impact = move.impactPerYear.rounded()
                 // Weekly budget and cover moves have no £ a year gain (F-R-1).
-                let suffix = impact > 0 && NextMoveViewModel.isYearly(move) ? " (\(Money.format(impact)) a year)" : ""
-                return MoveLinkState(moveID: move.id, text: "Your next move: \(move.action)\(suffix)")
+                let action = move.action
+                let text = impact > 0 && NextMoveViewModel.isYearly(move)
+                    ? L10n.tr("Your next move: \(action) (\(Money.format(impact)) a year)")
+                    : L10n.tr("Your next move: \(action)")
+                return MoveLinkState(moveID: move.id, text: text)
             }
         }
         return nil
@@ -182,7 +179,7 @@ final class MoneyWidgetsViewModel {
             netWorthSeries: response.netWorthHistory.map(\.value),
             netWorthChangeText: netWorthChange(response.netWorthHistory),
             monthLabels: response.netWorthHistory.map { FinanceMapping.shortMonthText($0.date) },
-            asOfText: "As of " + FinanceMapping.dayText(response.meta.asOf)
+            asOfText: L10n.tr("As of \(FinanceMapping.dayText(response.meta.asOf))")
         )
         overview.balanceParts = (response.balanceParts ?? []).enumerated().map { .init(id: $0, label: $1.label, amount: $1.amount) }
         overview.netWorthParts = (response.netWorthParts ?? []).enumerated().map { .init(id: $0, label: $1.label, amount: $1.amount) }
@@ -194,8 +191,9 @@ final class MoneyWidgetsViewModel {
         guard let first = points.first, let last = points.last, points.count >= 2 else { return nil }
         let change = (last.value - first.value).rounded()
         let since = FinanceMapping.shortMonthText(first.date)
-        if change == 0 { return "No change since \(since)" }
-        return "\(change > 0 ? "Up" : "Down") \(Money.format(abs(change))) since \(since)"
+        if change == 0 { return L10n.tr("No change since \(since)") }
+        let amount = Money.format(abs(change))
+        return change > 0 ? L10n.tr("Up \(amount) since \(since)") : L10n.tr("Down \(amount) since \(since)")
     }
 
     /// Spending category to a life area colour.
@@ -235,7 +233,8 @@ final class MoneyWidgetsViewModel {
         .init(
             monthText: FinanceMapping.monthText(response.month),
             total: response.total,
-            categories: response.categories.map { category in
+            // A category at £0 (rounded) is hidden: no empty legend rows or zero-width bar parts (ADR 0070).
+            categories: response.categories.filter(isShown).map { category in
                 .init(
                     id: category.category.rawValue,
                     emoji: category.emoji,
@@ -251,12 +250,17 @@ final class MoneyWidgetsViewModel {
         )
     }
 
+    /// True when the category shows more than £0 (whole pounds, as `Money.format` shows it).
+    static func isShown(_ category: Components.Schemas.CategorySpend) -> Bool {
+        category.amount.rounded() > 0
+    }
+
     /// "Up 6% on last month", "Down 13% on last month", "Same as last month".
     static func changeText(_ percent: Double) -> String? {
         let rounded = percent.rounded()
-        if rounded > 0 { return "Up \(Int(rounded))% on last month" }
-        if rounded < 0 { return "Down \(Int(-rounded))% on last month" }
-        return "Same as last month"
+        if rounded > 0 { return L10n.tr("Up \(Int(rounded))% on last month") }
+        if rounded < 0 { return L10n.tr("Down \(Int(-rounded))% on last month") }
+        return L10n.tr("Same as last month")
     }
 
     static func subscriptions(_ response: SubscriptionsResponse) -> MoneyWidgetsViewState.Subscriptions {
@@ -273,9 +277,9 @@ final class MoneyWidgetsViewModel {
                 merchant: item.merchant,
                 monthlyCost: item.monthlyCost,
                 amountText: "\(FinanceMapping.pounds(item.amount)) \(cadence)",
-                nextPaymentText: item.nextPayment.map { "Next payment " + FinanceMapping.dayText($0) },
+                nextPaymentText: item.nextPayment.map { date in L10n.tr("Next payment \(FinanceMapping.dayText(date))") },
                 priceRiseText: item.priceRise.map {
-                    "Price went up from \(FinanceMapping.pounds($0.fromAmount)) to \(FinanceMapping.pounds($0.toAmount)) on \(FinanceMapping.dayText($0.since))"
+                    L10n.tr("Price went up from \(FinanceMapping.pounds($0.fromAmount)) to \(FinanceMapping.pounds($0.toAmount)) on \(FinanceMapping.dayText($0.since))")
                 },
                 priceRiseChip: priceRiseChip(item.priceRise),
                 monthlyCostText: FinanceMapping.pounds(item.monthlyCost)
@@ -283,7 +287,7 @@ final class MoneyWidgetsViewModel {
         }
         return .init(
             monthlyTotal: response.monthlyTotal,
-            countText: response.count == 1 ? "1 subscription" : "\(response.count) subscriptions",
+            countText: response.count == 1 ? L10n.tr("1 subscription") : L10n.tr("\(response.count) subscriptions"),
             items: items,
             priceRiseCount: items.filter { $0.priceRiseText != nil }.count
         )
@@ -308,7 +312,7 @@ final class MoneyWidgetsViewModel {
         }
         return .init(
             id: bill.id, emoji: bill.emoji, name: bill.name, amount: bill.amount,
-            dueText: "Due " + FinanceMapping.dayText(bill.dueDate), status: status, statusText: statusText,
+            dueText: L10n.tr("Due \(FinanceMapping.dayText(bill.dueDate))"), status: status, statusText: statusText,
             shortDateText: FinanceMapping.shortDateText(bill.dueDate), priceRiseChip: nil
         )
     }
@@ -331,8 +335,8 @@ final class MoneyWidgetsViewModel {
                     spent: budget.spent,
                     progress: budget.progress,
                     status: status,
-                    detailText: "\(Money.format(budget.spent)) of \(Money.format(budget.limit))",
-                    statusText: gap < 0 ? "\(Money.format(-gap)) over" : "\(Money.format(gap)) left",
+                    detailText: L10n.tr("\(Money.format(budget.spent)) of \(Money.format(budget.limit))"),
+                    statusText: gap < 0 ? L10n.tr("\(Money.format(-gap)) over") : L10n.tr("\(Money.format(gap)) left"),
                     area: area(budget.category.rawValue)
                 )
             }
@@ -343,17 +347,24 @@ final class MoneyWidgetsViewModel {
         var planText: String?
         switch (goal.monthlyNeeded, goal.targetDate) {
         case let (monthly?, date?):
-            planText = "Save \(Money.format(monthly)) a month to reach it by \(FinanceMapping.dayText(date))"
+            planText = L10n.tr("Save \(Money.format(monthly)) a month to reach it by \(FinanceMapping.dayText(date))")
         case let (nil, date?):
-            planText = "Target date \(FinanceMapping.dayText(date))"
+            planText = L10n.tr("Target date \(FinanceMapping.dayText(date))")
         default:
             planText = nil
         }
         return .init(
             id: goal.id, emoji: goal.emoji, name: goal.name, target: goal.target, saved: goal.saved,
             progress: min(1, goal.progress),
-            detailText: "\(Money.format(goal.saved)) of \(Money.format(goal.target))",
+            detailText: L10n.tr("\(Money.format(goal.saved)) of \(Money.format(goal.target))"),
             planText: planText
         )
     }
+}
+
+/// Budgets and savings goals on Money home show from disk at once, like the other widgets (ADR 0060, 0070).
+/// Defined here (feature-local) so the shared `CachedOps` list stays unchanged.
+extension CachedOps {
+    static let budgets = CachedOp<BudgetsResponse>(key: "getBudgets.now", scope: .user) { try await $0.budgets(month: nil) }
+    static let goals = CachedOp<GoalsResponse>(key: "listGoals", scope: .user) { try await $0.goals() }
 }

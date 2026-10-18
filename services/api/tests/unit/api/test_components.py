@@ -236,7 +236,7 @@ def test_tokens_are_redacted_from_logs() -> None:
 
     from lifeline_api.logsafe import RedactTokens
 
-    args = ("1.2.3.4", "/v1/rooms/ABC123?token=eyJ.abc.def")
+    args = ("1.2.3.4", "/v1/rooms/4321?token=eyJ.abc.def")
     record = logging.LogRecord("uvicorn.error", logging.INFO, __file__, 1, '%s - "WebSocket %s" [accepted]', args, None)
     assert RedactTokens().filter(record)
     assert "eyJ" not in record.getMessage() and "token=[redacted]" in record.getMessage()

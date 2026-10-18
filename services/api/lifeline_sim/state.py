@@ -106,6 +106,7 @@ class SimState:
     # Game ledger for the habit score (path lives): (year, take-home money, spending, wants spending,
     # missed payments in months).
     ledger: list[tuple[int, float, float, float, int]] = field(default_factory=list)
+    bursary_2024: float = 0.0  # premade Quick Life student's bursary a study year, 2024 pounds
     want_adj: float = 0.0  # change to weekly wants spending from choices, 2024 pounds (path lives)
     living_adj: float = 0.0  # monthly living change from choices (path lives rebuild living each year)
     want_spend: float = 0.0  # one-off spending on wants (choices of templates tagged "want") not yet in the ledger
@@ -229,7 +230,7 @@ def initial_state(
     s.focus_tags = setup.focus
     s.focus_until = setup.focus_until
     if setup.path is not None:
-        start_path(s, setup.path, mv)
+        start_path(s, setup.path, mv, setup.student)
         if setup.quick:
             qp = quick_plan(seed, start_year)
             s.quick = True

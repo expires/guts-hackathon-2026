@@ -17,10 +17,13 @@ final class RoomFlowViewModel {
     let play: any PlayService
 
     private(set) var paths: [PlayWire.Path] = []
-    private(set) var pathsPhase: LoadPhase = .loading(.init(message: "Loading paths"))
+    private(set) var students: [PlayWire.Student] = []
+    private(set) var pathsPhase: LoadPhase = .loading(.init(message: L10n.tr("Loading paths")))
     private(set) var joinCode = ""
     private(set) var busyText: String?
     private(set) var errorText: String?
+    /// Same Life: your room life did not start. Shown on the live screen with "Try again".
+    private(set) var startLifeError: String?
     /// Your account name (`GET /v1/me`). The server uses it; there is no name field (ADR 0059).
     private(set) var myName: String?
     private(set) var myLifeID: String?
@@ -38,6 +41,8 @@ final class RoomFlowViewModel {
     /// "Type a code instead" screen.
     var showsCodeEntry = false
     private(set) var scannerHint: String?
+    /// "Not sure? Ask Penny" in a round: a Penny sheet over the room. The room keeps running behind it.
+    var penny: PennyContext?
 
     @ObservationIgnored var onOpenLife: @MainActor () -> Void = {}
     @ObservationIgnored private var lastSent: RoomProgress?
@@ -120,8 +125,8 @@ final class RoomFlowViewModel {
             RoomEntryViewState.ActiveRoom(
                 code: room.code,
                 detail: room.status == .lobby
-                    ? "Lobby · \(room.players.count) of \(room.maxPlayers) players"
-                    : "Playing · \(gameKind?.title ?? "Same Life")"
+                    ? L10n.tr("Lobby · \(room.players.count) of \(room.maxPlayers) players")
+                    : L10n.tr("Playing · \(gameKind?.title ?? RoomGameKind.sameLife.title)")
             )
         }
         return RoomEntryViewState(
@@ -137,29 +142,35 @@ final class RoomFlowViewModel {
 
     var lobbyState: RoomLobbyViewState? {
         guard let room = session.room else { return nil }
-        return RoomMapping.lobby(room: room, myID: session.myPlayerID, link: session.link, paths: paths, qrPNG: qr(for: room), isSampleData: isSampleData)
+        var state = RoomMapping.lobby(room: room, myID: session.myPlayerID, link: session.link, paths: paths, students: students, qrPNG: qr(for: room), isSampleData: isSampleData)
+        state.connection = withServerError(state.connection)
+        return state
     }
 
     var pickerState: GamePickerViewState {
-        GameMapping.picker(draft: draft, paths: paths, pathsPhase: pathsPhase)
+        GameMapping.picker(draft: draft, paths: paths, students: students, pathsPhase: pathsPhase)
     }
 
     var quizState: QuizViewState? {
         guard let room = session.room else { return nil }
-        return GameMapping.quiz(
+        var state = GameMapping.quiz(
             question: session.question, reveal: session.quizReveal, myAnswer: session.myAnswer,
             startedAt: session.roundStartedAt, ranking: session.ranking, room: room, myID: session.myPlayerID,
             link: session.link, isSampleData: isSampleData
         )
+        state.connection = withServerError(state.connection)
+        return state
     }
 
     var decisionState: DecisionViewState? {
         guard let room = session.room else { return nil }
-        return GameMapping.decision(
+        var state = GameMapping.decision(
             prompt: session.prompt, reveal: session.decisionReveal, myAnswer: session.myAnswer,
             startedAt: session.roundStartedAt, ranking: session.ranking, room: room, myID: session.myPlayerID,
             link: session.link, isSampleData: isSampleData
         )
+        state.connection = withServerError(state.connection)
+        return state
     }
 
     var gameOverState: GameOverViewState? {
@@ -169,12 +180,19 @@ final class RoomFlowViewModel {
 
     var liveState: RoomLiveViewState? {
         guard let room = session.room else { return nil }
-        return RoomMapping.live(room: room, myID: session.myPlayerID, life: myLife, link: session.link, isBusy: game.isBusy, isSampleData: isSampleData)
+        var state = RoomMapping.live(room: room, myID: session.myPlayerID, life: myLife, link: session.link, isBusy: game.isBusy, isSampleData: isSampleData)
+        state.connection = withServerError(state.connection)
+        state.startError = myLife == nil ? startLifeError : nil
+        return state
     }
 
     var resultState: RoomResultViewState? {
         guard let room = session.room else { return nil }
-        var state = RoomMapping.result(room: room, myID: session.myPlayerID, myLife: myLife, rivalLives: rivalLives, link: session.link, isSampleData: isSampleData)
+        var state = RoomMapping.result(
+            room: room, myID: session.myPlayerID, myLife: myLife, rivalLives: rivalLives, link: session.link,
+            isSampleData: isSampleData, serverRanking: room.status == .finished ? session.ranking : [],
+            serverWinnerLine: session.winnerLine
+        )
         if let life = myLife, room.options?.quick ?? false {
             let title = paths.first { $0.id == room.options?.pathId }?.title
             state.quickLife = GameMapping.quickLife(life: life, summary: mySummary, pathTitle: title)
@@ -185,6 +203,11 @@ final class RoomFlowViewModel {
     var scannerHintText: String? { scannerHint }
 
     private var myLife: Life? { game.life.flatMap { $0.id == myLifeID ? $0 : nil } }
+
+    /// The last server `error` (`RoomSession.lastError`) as a banner. A link problem shows first.
+    private func withServerError(_ connection: RoomConnectionState?) -> RoomConnectionState? {
+        connection ?? session.lastError.map { RoomConnectionState(kind: .error, text: $0, canRetry: false) }
+    }
 
     private func qr(for room: Room) -> Data? {
         let key = room.code + room.qrPngBase64.prefix(64)
@@ -222,6 +245,7 @@ final class RoomFlowViewModel {
             onQuestions: { [weak self] in self?.draft.questions = min(15, max(3, $0)) },
             onTopic: { [weak self] in self?.draft.topic = $0 },
             onPath: { [weak self] in self?.draft.pathID = $0 },
+            onStudent: { [weak self] in self?.selectStudent($0) },
             onQuick: { [weak self] in self?.setQuick($0) },
             onYear: { [weak self] in self?.draft.startYear = min(2026, max(1990, $0)) },
             onConfirm: { [weak self] in Task { await self?.confirmGame() } },
@@ -231,11 +255,28 @@ final class RoomFlowViewModel {
 
     /// Money Quiz and Same Decision rounds.
     var roundActions: RoundActions {
-        RoundActions(
+        var actions = RoundActions(
             onAnswer: { [weak self] choice in Task { await self?.session.answer(choiceID: choice) } },
             onLeave: { [weak self] in Task { await self?.leave() } },
             onReconnect: { [weak self] in Task { await self?.session.reconnect() } }
         )
+        // Same Decision only: Penny never helps during a Money Quiz question.
+        if stage == .decision {
+            actions.onAskPenny = { [weak self] in self?.askPennyAboutRound() }
+        }
+        return actions
+    }
+
+    /// Same Decision: a new Penny chat about this round. She explains the options and never picks.
+    func askPennyAboutRound() {
+        guard let code = session.room?.code else { return }
+        penny = .roomRound(roomCode: code, roundID: session.prompt?.id, year: session.prompt?.year)
+    }
+
+    /// Same Life: a new Penny chat about the open event of your room life. She explains and never picks.
+    func askPennyAboutEvent() {
+        guard let room = session.room, let event = liveState?.event else { return }
+        penny = .lifeEvent(lifeID: myLife?.id, eventID: event.id, eventTitle: event.title, age: myLife?.age, roomCode: room.code)
     }
 
     var gameOverActions: GameOverActions {
@@ -252,14 +293,17 @@ final class RoomFlowViewModel {
             onAge: { [weak self] in Task { await self?.age() } },
             onChoose: { [weak self] event, choice in Task { await self?.choose(eventID: event, choiceID: choice) } },
             onOpenLife: { [weak self] in self?.openLife() },
-            onReconnect: { [weak self] in Task { await self?.session.reconnect() } }
+            onReconnect: { [weak self] in Task { await self?.session.reconnect() } },
+            onRetryStart: { [weak self] in Task { await self?.retryStartMyLife() } },
+            onAskPenny: { [weak self] in self?.askPennyAboutEvent() }
         )
     }
 
     var resultActions: RoomResultActions {
         RoomResultActions(
             onPlayAgain: { [weak self] in Task { await self?.rematch() } },
-            onClose: { [weak self] in Task { await self?.leave() } }
+            onClose: { [weak self] in Task { await self?.leave() } },
+            onReconnect: { [weak self] in Task { await self?.session.reconnect() } }
         )
     }
 
@@ -284,17 +328,24 @@ final class RoomFlowViewModel {
     /// Student paths for Same Life and Quick Life.
     func loadPaths() async {
         guard paths.isEmpty else { return }
-        pathsPhase = .loading(.init(message: "Loading paths"))
+        pathsPhase = .loading(.init(message: L10n.tr("Loading paths")))
         do {
-            try await play.loadPaths { [weak self] paths in
+            try await play.loadPaths { [weak self] loaded in
                 guard let self else { return }
-                self.paths = paths
+                paths = loaded.paths
+                students = loaded.students
                 if draft.pathID == nil { draft.pathID = paths.first { $0.quick }?.id ?? paths.first?.id }
+                if draft.quickStudentID == nil, let first = students.first { selectStudent(first.id) }
                 pathsPhase = .ready
             }
         } catch {
             pathsPhase = .failed(.from(APIError.map(error)))
         }
+    }
+
+    private func selectStudent(_ id: String) {
+        draft.quickStudentID = id
+        draft.studentPathID = students.first { $0.id == id }?.pathId
     }
 
     /// "Play with friends": opens your lobby at once (`POST /v1/rooms` with an empty body).
@@ -304,7 +355,7 @@ final class RoomFlowViewModel {
             return
         }
         guard busyText == nil else { return }
-        busyText = "Opening your lobby"
+        busyText = L10n.tr("Opening your lobby")
         errorText = nil
         isPresented = true
         defer { busyText = nil }
@@ -326,7 +377,7 @@ final class RoomFlowViewModel {
             return
         }
         if session.room != nil { await session.leave() }
-        busyText = "Joining room \(joinCode)"
+        busyText = L10n.tr("Joining room \(joinCode)")
         errorText = nil
         defer { busyText = nil }
         do {
@@ -356,6 +407,7 @@ final class RoomFlowViewModel {
 
     private func resetRun() {
         myLifeID = nil
+        startLifeError = nil
         lastSent = nil
         rivalLives = [:]
         requestedLives = []
@@ -371,6 +423,7 @@ final class RoomFlowViewModel {
             draft.questions = room.options?.questions ?? draft.questions
             draft.topic = room.options?.topic?.rawValue ?? draft.topic
             draft.pathID = room.options?.pathId ?? draft.pathID
+            if let student = room.options?.quickStudentId { selectStudent(student) }
             draft.quick = room.options?.quick ?? draft.quick
             draft.startYear = room.options?.startYear ?? draft.startYear
         }
@@ -411,7 +464,7 @@ final class RoomFlowViewModel {
 
     func scanned(_ text: String) {
         guard let code = RoomLink.code(fromScanned: text) else {
-            scannerHint = "That QR code is not a \(Brand.productName) room."
+            scannerHint = L10n.tr("That QR code is not a \(Brand.productName) room.")
             return
         }
         showsScanner = false
@@ -431,13 +484,23 @@ final class RoomFlowViewModel {
                 mode: .random, startYear: room.gameStartYear, presetId: room.presetId, seed: room.seed,
                 roomCode: room.code, pathId: room.options?.pathId, quick: room.options?.quick
             )
+            startLifeError = nil
             guard await game.startLife(request), let life = game.life else {
-                errorText = game.errorMessage ?? "Your life did not start."
+                // The live screen shows it with "Try again". Clear the session error so no alert also shows.
+                startLifeError = game.errorMessage ?? L10n.tr("Your life did not start.")
+                game.errorMessage = nil
                 return
             }
             myLifeID = life.id
         }
+        startLifeError = nil
         await lifeChanged()
+    }
+
+    /// "Try again" on the live screen's start error banner.
+    func retryStartMyLife() async {
+        guard let room = session.room, room.status == .playing else { return }
+        await startMyLife(in: room)
     }
 
     /// Sends `progress` after each AGE or choice, and `finish` when the life ends.

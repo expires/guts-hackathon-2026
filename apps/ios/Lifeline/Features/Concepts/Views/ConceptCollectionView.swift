@@ -15,7 +15,18 @@ struct ConceptCollectionView: View {
             case let .failed(error):
                 ErrorStateView(state: error, onRetry: actions.onRetry)
             case .ready:
-                Text("\(state.unlockedCount) of \(state.totalCount) unlocked")
+                if let openLearn = actions.onOpenLearn {
+                    Button(action: openLearn) {
+                        HStack(spacing: 10) {
+                            LLIconImage(.lesson, size: 24)
+                            Text(L10n.tr("Learn them in order")).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                    }
+                    .buttonStyle(.main)
+                    .accessibilityHint(L10n.tr("Opens the Learn course. Pass a lesson to open the next one."))
+                    .accessibilityIdentifier("concepts.learn")
+                }
+                Text(L10n.tr("\(state.unlockedCount) of \(state.totalCount) unlocked"))
                     .font(.llBodyBold)
                     .accessibilityIdentifier("concepts.count")
                 VStack(spacing: Theme.Spacing.m) {
@@ -43,7 +54,9 @@ struct ConceptCollectionView: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.Palette.ink)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(item.title). \(item.summary). \(item.isUnlocked ? "Unlocked" : "Not unlocked yet")")
+                        .accessibilityLabel(item.isUnlocked
+                            ? L10n.tr("\(item.title). \(item.summary). Unlocked")
+                            : L10n.tr("\(item.title). \(item.summary). Not unlocked yet"))
                         .accessibilityAddTraits(.isButton)
                         .accessibilityIdentifier("concept.\(item.id)")
                     }

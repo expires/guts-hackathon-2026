@@ -28,17 +28,20 @@ struct PlayView: View {
                     activeRoom(active)
                 }
                 PlayChoiceCard(
-                    icon: .tabLife, title: "Play solo",
-                    detail: "Live a life from 18. Make the money choices. See where they lead.",
+                    icon: .tabLife, title: L10n.tr("Play solo"),
+                    detail: L10n.tr("Live a life from 18. Make the money choices. See where they lead."),
                     fill: Theme.Palette.money, shape: .hero, hero: true, identifier: "play.solo",
                     action: actions.onPlaySolo
                 )
                 PlayChoiceCard(
-                    icon: .family, title: "Play with friends",
-                    detail: "Open a lobby. Friends join with a QR code or a short code.",
+                    icon: .family, title: L10n.tr("Play with friends"),
+                    detail: L10n.tr("Open a lobby. Friends join with a QR code or a short code."),
                     fill: Theme.Palette.family, shape: .cardAlt, identifier: "play.friends",
                     action: actions.onPlayWithFriends
                 )
+                if let learn = state.learn {
+                    learnCard(learn)
+                }
                 Button(action: actions.onJoin) {
                     HStack(spacing: 10) {
                         LLIconImage(.scan, size: 24)
@@ -70,6 +73,19 @@ struct PlayView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
+    /// "Learn" (ADR 0068): course progress and the next lesson.
+    private func learnCard(_ learn: LearnEntryState) -> some View {
+        let detail = learn.isLoading
+            ? L10n.tr("Short money lessons. Pass one to open the next.")
+            : [learn.progressText, learn.nextText].compactMap { $0 }.joined(separator: "\n")
+        return PlayChoiceCard(
+            icon: .lesson, title: L10n.tr("Learn"), detail: detail,
+            fill: Theme.Palette.work, shape: .card, identifier: "play.learn",
+            progress: learn.isLoading ? nil : learn.progress,
+            action: actions.onOpenLearn
+        )
+    }
+
     private func activeRoom(_ active: RoomEntryViewState.ActiveRoom) -> some View {
         Button(action: actions.rooms.onOpenActiveRoom) {
             HStack(spacing: Theme.Spacing.m) {
@@ -86,7 +102,7 @@ struct PlayView: View {
             .foregroundStyle(Theme.Palette.ink)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Back to room \(active.code). \(active.detail)")
+        .accessibilityLabel(L10n.tr("Back to room \(active.code). \(active.detail)"))
         .accessibilityIdentifier("play.activeRoom")
     }
 
@@ -123,6 +139,10 @@ struct PlayView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(challenge.title).font(.llBodyBold)
                                     Text(challenge.description).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                                    if let status = challenge.status {
+                                        Chip(text: status.text, fill: status == .won ? Theme.Palette.money : Theme.Palette.surface)
+                                            .padding(.top, 2)
+                                    }
                                     Text(challenge.detail).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,6 +156,7 @@ struct PlayView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(state.isBusy)
+                        .accessibilityHint(challenge.isYou ? L10n.tr("Shows the Money tab.") : L10n.tr("Starts a life for this challenge."))
                         .accessibilityIdentifier("play.challenge.\(challenge.id)")
                     }
                 }
@@ -147,16 +168,20 @@ struct PlayView: View {
     private var collection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             HStack(spacing: Theme.Spacing.m) {
-                tile(icon: .ribbon, value: "\(state.ribbonsTotal)", label: "Ribbons")
+                tile(icon: .ribbon, value: "\(state.ribbonsTotal)", label: L10n.tr("Ribbons"))
                 Button(action: actions.onOpenConcepts) {
-                    tile(icon: .lesson, value: "\(state.conceptsUnlocked)/\(state.conceptsTotal)", label: "Concepts")
+                    if let learn = state.learn, !learn.isLoading {
+                        tile(icon: .lesson, value: "\(learn.done)/\(learn.total)", label: L10n.tr("Lessons"))
+                    } else {
+                        tile(icon: .lesson, value: "\(state.conceptsUnlocked)/\(state.conceptsTotal)", label: L10n.tr("Concepts"))
+                    }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(state.conceptsText)
+                .accessibilityLabel(state.learn.map { $0.isLoading ? state.conceptsText : $0.progressText } ?? state.conceptsText)
                 .accessibilityIdentifier("play.concepts")
             }
             Text(state.ribbonsText).font(.llLabel).foregroundStyle(Theme.Palette.muted)
-            BlockTitle(text: "Your lives")
+            BlockTitle(text: L10n.tr("Your lives"))
             if state.lives.isEmpty {
                 Text("No lives yet. Start one in Challenges.").font(.llBody).foregroundStyle(Theme.Palette.muted)
             } else {
@@ -184,7 +209,7 @@ struct PlayView: View {
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(life.name), \(life.detail), INDEX \(Int(life.index.rounded())), \(RoomAmount.spoken(life.netWorth, presentation: presentation))")
+                        .accessibilityLabel(L10n.tr("\(life.name), \(life.detail), INDEX \(Int(life.index.rounded())), \(RoomAmount.spoken(life.netWorth, presentation: presentation))"))
                         .accessibilityIdentifier("play.life.\(life.id)")
                     }
                 }
@@ -245,6 +270,8 @@ struct PlayChoiceCard: View {
     var shape: HandCut = .card
     var hero = false
     var identifier = ""
+    /// 0 to 1: a thin bar under the detail (the Learn card). Nil hides it.
+    var progress: Double? = nil
     let action: () -> Void
 
     var body: some View {
@@ -256,6 +283,11 @@ struct PlayChoiceCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.llTitle).lineLimit(1).minimumScaleFactor(0.8)
                     Text(detail).font(.llLabel).foregroundStyle(Theme.Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    if let progress {
+                        InkProgressBar(value: progress, height: 10)
+                            .padding(.top, Theme.Spacing.xs)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Chevron()

@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from lifeline_contracts.domain import Life
+from lifeline_contracts.domain import CharacterSpec, Life
 from lifeline_contracts.macro import MacroKey, MacroTable, MacroValue
 from lifeline_engine import rules
 from lifeline_sim import api
@@ -430,3 +430,111 @@ def test_big_spender_over_the_limit_gets_missed_payments(macro: MacroTable) -> N
     assert big.index.missed_payments > 0
     h = api.habit_score(big, macro)
     assert h is not None and h.components.debt_pressure is not None and h.components.debt_pressure < 50
+
+
+# ---------- ADR 0064: premade Quick Life students; user rule: offered presets are students ----------
+
+
+def test_quick_students_contract_and_variety() -> None:
+    from lifeline_sim.paths import QUICK_STUDENTS
+
+    students = api.quick_students()
+    assert len(students) == 5
+    assert len({s.id for s in students}) == 5
+    assert {s.path_id for s in students} == set(QUICK_PATHS)
+    assert len({q.region for q in QUICK_STUDENTS}) == 5
+    assert len({(q.path_id, q.bursary_2024) for q in QUICK_STUDENTS}) == 5  # different funding
+    paths = {p.id: p for p in api.paths()}
+    assert all(paths[s.path_id].quick for s in students)
+
+
+@pytest.mark.parametrize("student_id", ["qs-priya", "qs-amara", "qs-jordan", "qs-kai", "qs-maya"])
+def test_quick_student_same_seed_same_events(student_id: str, macro: MacroTable) -> None:
+    a, ta, ea = _play_quick(api.quick_life("a", quick_student_id=student_id, seed=4242, macro=macro), macro)
+    b, tb, eb = _play_quick(api.quick_life("b", quick_student_id=student_id, seed=4242, macro=macro), macro, "other")
+    assert (ta, ea) == (tb, eb)
+    assert a.character.id == student_id and a.age == 25
+    s = api.summary(a, macro)
+    assert s.habit_score is not None and s.habit_score.overall is not None
+
+
+def test_quick_student_funding_and_place(macro: MacroTable) -> None:
+    priya = api.quick_life("p", quick_student_id="qs-priya", seed=1, macro=macro)
+    amara = api.quick_life("a", quick_student_id="qs-amara", seed=1, macro=macro)
+    assert (priya.character.town, amara.character.town) == ("Birmingham", "London")
+    p2, a2 = api.age(priya, macro).life, api.age(amara, macro).life
+    assert "bursary" in api.quick_students()[1].description
+    # Amara's bursary is paid in as money, not added to the student loan.
+    assert a2.history[-1].text != p2.history[-1].text
+    with pytest.raises(SimError):
+        api.quick_life("x", quick_student_id="nobody", seed=1, macro=macro)
+    with pytest.raises(SimError):
+        api.new_path_life("x", "apprentice", 2018, 1, macro, quick=True, quick_student_id="qs-priya")
+
+
+def test_offered_presets_are_students_or_recent_graduates(macro: MacroTable) -> None:
+    allowed = {"student", "apprentice", "graduate", "school leaver"}
+    year = 2018
+    for c in api.offered_presets(macro, year):
+        start_age = (year if c.id != "student" else 2024) - c.birth_year
+        assert start_age <= 25, c.id
+        assert c.occupation in allowed, (c.id, c.occupation)
+    offered = {c.id for c in api.offered_presets(macro)}
+    assert "teacher-glasgow" not in offered
+    assert "teacher-glasgow" in {c.id for c in api.presets()}
+
+
+# ---------- ADR 0065: Test it for student moves ----------
+
+STUDENT_MOVES = {
+    # move kind: (start_year, end_year, policy key, (recommended, other), extra policy)
+    "weekly_budget": (2025, 2026, "study.term_budget", ("weekly", "freestyle"), {"__focus": "weekly_budget"}),
+    "lifetime_isa": (2021, 2024, "money.lifetime_isa", ("open", "not_now"), {"__focus": "lifetime_isa"}),
+    "build_emergency_fund": (2021, 2023, "emergency_fund", ("save", "keep"), {}),
+    "pay_off_debt": (2022, 2023, "card_debt", ("pay_off", "keep"), {}),
+    "cut_budget": (2021, 2023, "budget_overspend", ("cut", "keep"), {}),
+}
+
+
+def _student_profile(start_year: int) -> CharacterSpec:
+    """A student profile like W4's engine_profile output: age 20 at the start, part-time pay, a small card debt."""
+    return CharacterSpec(
+        name="You", occupation="student", region="london", town="London", birth_year=start_year - 20,
+        annual_income=6000.0, savings=1500.0, debt=800.0, housing="rent",
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("kind", list(STUDENT_MOVES))
+def test_student_move_scenarios(kind: str, macro: MacroTable) -> None:
+    start, end, key, (rec, other), extra = STUDENT_MOVES[kind]
+    lives = {}
+    for option in (rec, other):
+        policy = {key: option, **extra}
+        life = api.play_scenario(f"t-{option}", _student_profile(start), start, end, policy, 77, macro)
+        again = api.play_scenario(f"t-{option}", _student_profile(start), start, end, policy, 77, macro)
+        assert life.model_dump() == again.model_dump()
+        assert any(h.choice_id == option for h in life.history), (kind, option)
+        lives[option] = life
+    a, b = lives[rec], lives[other]
+    # Same seed and period: the same events, only the tested choice differs.
+    assert [h.event_id for h in a.history] == [h.event_id for h in b.history]
+    cost_a, cost_b = api.scenario_cost(a, macro), api.scenario_cost(b, macro)
+    assert (a.finances.net_worth, cost_a) != (b.finances.net_worth, cost_b)
+    if kind in ("weekly_budget", "lifetime_isa", "pay_off_debt", "cut_budget"):
+        assert a.finances.net_worth > b.finances.net_worth, kind
+
+
+def test_next_age_follows_the_quick_life_plan(macro: MacroTable) -> None:
+    """`Life.next_age` is the age after the next AGE tap, so the app can label "Age up -> N" (ADR 0068 era)."""
+    life = api.new_path_life("x", "apprentice", 2018, 7, macro, quick=True)
+    stops = api.quick_life_plan(life).stops  # type: ignore[union-attr]
+    while life.alive and life.next_age is not None:
+        expected = life.age + (next(y for y in stops if y > life.year) - life.year)
+        assert life.next_age == expected
+        life = api.age(life, macro).life
+        assert life.age == expected
+        for ev in list(life.pending_events):
+            life = api.choose(life, ev.id, ev.choices[0].id, macro).life
+    assert life.next_age is None
+    solo = api.new_path_life("y", "apprentice", 2018, 7, macro)
+    assert solo.next_age == solo.age + 1

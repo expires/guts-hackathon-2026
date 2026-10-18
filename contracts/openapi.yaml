@@ -616,7 +616,7 @@ paths:
         required: true
         schema:
           type: string
-          pattern: ^[A-Z0-9]{6}$
+          pattern: ^[0-9]{4}$
       x-websocket:
         url: /v1/rooms/{code}?token={jwt}
         client_messages:
@@ -1159,6 +1159,23 @@ paths:
           $ref: '#/components/responses/StoreUnavailable'
         '409':
           $ref: '#/components/responses/Conflict'
+      parameters:
+      - name: language
+        in: query
+        required: false
+        description: Language of the move text (ADR 0069); numbers stay the same
+        schema:
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          default: en
   /v1/next-move/test:
     post:
       operationId: testNextMove
@@ -1362,6 +1379,159 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '501':
           $ref: '#/components/responses/NotImplemented'
+  /v1/learn:
+    get:
+      operationId: getLearnPath
+      summary: 'Learn: the course path, units and lesson status (ADR 0068)'
+      tags:
+      - learn
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearnPath'
+              examples:
+                LearnPath:
+                  $ref: '#/components/examples/LearnPath'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          default: en
+  /v1/learn/lessons/{lesson_id}:
+    get:
+      operationId: getLearnLesson
+      summary: 'One lesson: cards, a real UK number with its source, and a 3-question quiz. 409 when locked'
+      tags:
+      - learn
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearnLesson'
+              examples:
+                LearnLesson:
+                  $ref: '#/components/examples/LearnLesson'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: lesson_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          default: en
+  /v1/learn/lessons/{lesson_id}/attempts:
+    post:
+      operationId: attemptLearnLesson
+      summary: Grade a quiz attempt. Pass = 2 of 3; a pass opens the next lesson
+      tags:
+      - learn
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonAttemptResult'
+              examples:
+                LessonAttemptResult:
+                  $ref: '#/components/examples/LessonAttemptResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+      parameters:
+      - name: lesson_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          default: en
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LessonAttemptRequest'
+            examples:
+              LessonAttempt:
+                $ref: '#/components/examples/LessonAttempt'
   /v1/circles:
     get:
       operationId: listCircles
@@ -2809,7 +2979,33 @@ components:
           - why
           - life_event
           - life
+          - onboarding
+          - room_round
+          - test_it
+          - learn_lesson
           - other
+          type: string
+        title:
+          description: Thread title for a NEW thread, e.g. 'Safety fund, age 19'. Used instead of the first message.
+          maxLength: 80
+          type: string
+        multiplayer:
+          default: false
+          description: 'Room round: Penny explains trade-offs and never picks an option.'
+          type: boolean
+        room_code:
+          description: Room of the round (screen room_round)
+          maxLength: 8
+          type: string
+        lesson_id:
+          description: Learn lesson (screen learn_lesson, ADR 0068)
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        round_id:
+          description: Same Decision prompt id; the server loads its options and game money
+          maxLength: 40
           type: string
       type: object
     ChatFact:
@@ -2893,6 +3089,19 @@ components:
           type: string
         context:
           $ref: '#/components/schemas/ChatContext'
+        language:
+          default: en
+          description: Answer language (ADR 0063); numbers stay in Western digits with £
+          enum:
+          - en
+          - fr
+          - es
+          - pt
+          - it
+          - zh-Hans
+          - hi
+          - ne
+          type: string
       required:
       - message
       type: object
@@ -3331,7 +3540,7 @@ components:
           minimum: 0
           type: integer
         room_code:
-          pattern: ^[A-Z0-9]{6}$
+          pattern: ^[0-9]{4}$
           type: string
         path_id:
           description: Student start path (ADR 0052)
@@ -3921,6 +4130,26 @@ components:
         is_student:
           description: As entered at onboarding (ADR 0049)
           type: boolean
+        income_sources:
+          description: 'Each payment: kind, amount, schedule, dates, next_date'
+          items:
+            $ref: '#/components/schemas/IncomeSource'
+          maxItems: 20
+          type: array
+        debts:
+          description: 'Overdraft, card, BNPL, loan: balance, rate, due date'
+          items:
+            $ref: '#/components/schemas/DebtItem'
+          maxItems: 20
+          type: array
+        months_of_cover:
+          description: Cash and savings / usual monthly spending. None when spending is unknown
+          minimum: 0
+          type: number
+        monthly_rent:
+          description: Rent found in the statement or entered
+          minimum: 0
+          type: number
       required:
       - meta
       - profile
@@ -3988,6 +4217,12 @@ components:
           default: true
           description: Same Life as a Quick Life round
           type: boolean
+        quick_student_id:
+          description: Premade Quick Life student (ADR 0064)
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
         start_year:
           description: Same Life / Same Decision history year
           maximum: 2026
@@ -4436,6 +4671,67 @@ components:
       - emoji
       - text
       type: object
+    LearnLesson:
+      additionalProperties: false
+      description: A full lesson. A locked lesson returns 409 `lesson_locked` instead.
+      properties:
+        summary:
+          $ref: '#/components/schemas/LessonSummary'
+        cards:
+          items:
+            $ref: '#/components/schemas/LessonCard'
+          maxItems: 3
+          minItems: 2
+          type: array
+        facts:
+          items:
+            $ref: '#/components/schemas/LessonFact'
+          maxItems: 3
+          minItems: 1
+          type: array
+        quiz:
+          items:
+            $ref: '#/components/schemas/LessonQuestion'
+          maxItems: 3
+          minItems: 3
+          type: array
+        pass_mark:
+          default: 2
+          maximum: 3
+          minimum: 1
+          type: integer
+      required:
+      - summary
+      - cards
+      - facts
+      - quiz
+      type: object
+    LearnPath:
+      additionalProperties: false
+      properties:
+        units:
+          items:
+            $ref: '#/components/schemas/Unit'
+          maxItems: 8
+          minItems: 1
+          type: array
+        next_lesson_id:
+          description: First open lesson; None when all are passed
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        done:
+          minimum: 0
+          type: integer
+        total:
+          minimum: 1
+          type: integer
+      required:
+      - units
+      - done
+      - total
+      type: object
     Lesson:
       additionalProperties: false
       properties:
@@ -4463,6 +4759,199 @@ components:
       - chart
       - sentences
       - quiz
+      type: object
+    LessonAnswerResult:
+      additionalProperties: false
+      properties:
+        question_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        correct:
+          type: boolean
+        correct_choice_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        explanation:
+          maxLength: 200
+          type: string
+      required:
+      - question_id
+      - correct
+      - correct_choice_id
+      - explanation
+      type: object
+    LessonAttemptRequest:
+      additionalProperties: false
+      properties:
+        answers:
+          additionalProperties:
+            type: string
+          description: question id -> choice id
+          maxProperties: 3
+          type: object
+      required:
+      - answers
+      type: object
+    LessonAttemptResult:
+      additionalProperties: false
+      properties:
+        passed:
+          type: boolean
+        correct:
+          maximum: 3
+          minimum: 0
+          type: integer
+        pass_mark:
+          maximum: 3
+          minimum: 1
+          type: integer
+        results:
+          items:
+            $ref: '#/components/schemas/LessonAnswerResult'
+          type: array
+        unlocked_lesson_id:
+          description: The next lesson, opened by this pass
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        path:
+          $ref: '#/components/schemas/LearnPath'
+      required:
+      - passed
+      - correct
+      - pass_mark
+      - results
+      - path
+      type: object
+    LessonCard:
+      additionalProperties: false
+      description: One idea per card.
+      properties:
+        title:
+          maxLength: 60
+          type: string
+        text:
+          maxLength: 280
+          type: string
+      required:
+      - title
+      - text
+      type: object
+    LessonChoice:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        text:
+          maxLength: 120
+          type: string
+      required:
+      - id
+      - text
+      type: object
+    LessonFact:
+      additionalProperties: false
+      description: A real UK number from the facts table (lifeline_engine/rules.py), with its official source.
+      properties:
+        text:
+          description: e.g. 'You repay 9% of what you earn above £25,000 a year.'
+          maxLength: 200
+          type: string
+        source_label:
+          description: e.g. 'gov.uk · Repaying your student loan'
+          maxLength: 120
+          type: string
+        source_url:
+          maxLength: 500
+          type: string
+        checked:
+          description: ISO date the fact was checked against the source
+          type: string
+      required:
+      - text
+      - source_label
+      - source_url
+      - checked
+      type: object
+    LessonQuestion:
+      additionalProperties: false
+      description: 'No answer here: the server grades it (POST /v1/learn/lessons/{id}/attempts).'
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        text:
+          maxLength: 240
+          type: string
+        choices:
+          items:
+            $ref: '#/components/schemas/LessonChoice'
+          maxItems: 4
+          minItems: 2
+          type: array
+      required:
+      - id
+      - text
+      - choices
+      type: object
+    LessonSummary:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        unit_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        index:
+          description: Position in the unit, from 0
+          minimum: 0
+          type: integer
+        title:
+          maxLength: 60
+          type: string
+        icon:
+          description: SF Symbol name that matches the concept
+          maxLength: 60
+          type: string
+        status:
+          enum:
+          - locked
+          - open
+          - passed
+          type: string
+        locked_reason:
+          description: '''Finish <previous lesson> first'''
+          maxLength: 120
+          type: string
+        life_bonus:
+          default: false
+          description: Also earned as a bonus in a Life game
+          type: boolean
+        concept_id:
+          description: Life game concept this lesson teaches, if any
+          type: string
+      required:
+      - id
+      - unit_id
+      - index
+      - title
+      - icon
+      - status
       type: object
     Life:
       additionalProperties: false
@@ -4534,6 +5023,9 @@ components:
         reached_present:
           default: false
           type: boolean
+        next_age:
+          description: Age after the next AGE tap (Quick Life taps move 1 or 2 years); None when over
+          type: integer
       required:
       - id
       - seed
@@ -4927,6 +5419,15 @@ components:
         confidence_label:
           description: e.g. '7 in 10 twins in similar past periods did better'
           type: string
+        confidence_text:
+          description: 'Plain English for every screen, e.g. ''Medium confidence: based on your last 4 weeks of spending''.
+            Never ''Medium · sample 4'' (ADR 0069)'
+          maxLength: 140
+          type: string
+        reason:
+          description: 'One plain line: why this move helps'
+          maxLength: 140
+          type: string
         evidence:
           items:
             $ref: '#/components/schemas/EvidencePoint'
@@ -5104,6 +5605,11 @@ components:
             $ref: '#/components/schemas/Move'
           maxItems: 2
           type: array
+        options_compared:
+          default: 0
+          description: '''Penny compared N options'' (ADR 0069)'
+          minimum: 0
+          type: integer
         backtest:
           $ref: '#/components/schemas/NextMoveBacktest'
         decision_sources:
@@ -5250,6 +5756,11 @@ components:
         paths:
           items:
             $ref: '#/components/schemas/StudentPath'
+          type: array
+        quick_students:
+          items:
+            $ref: '#/components/schemas/QuickStudent'
+          maxItems: 10
           type: array
       required:
       - paths
@@ -5505,6 +6016,32 @@ components:
       - active
       - demo
       - label
+      type: object
+    QuickStudent:
+      additionalProperties: false
+      description: A premade Quick Life student the host can pick (ADR 0064).
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        name:
+          maxLength: 24
+          type: string
+        path_id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        description:
+          maxLength: 120
+          type: string
+      required:
+      - id
+      - name
+      - path_id
+      - description
       type: object
     Quiz:
       additionalProperties: false
@@ -5812,7 +6349,8 @@ components:
       additionalProperties: false
       properties:
         code:
-          pattern: ^[A-Z0-9]{6}$
+          description: 4-digit room code, easy to read aloud (ADR 0064)
+          pattern: ^[0-9]{4}$
           type: string
         mode:
           enum:
@@ -5863,6 +6401,33 @@ components:
       - qr_png_base64
       - status
       type: object
+    SampleMoneyIn:
+      additionalProperties: false
+      description: 'One income line on the student card: amount per month or per term, with dates.'
+      properties:
+        label:
+          description: e.g. 'SAAS loan', 'Bar job', 'Parents'
+          maxLength: 40
+          type: string
+        amount:
+          minimum: 0
+          type: number
+        period:
+          enum:
+          - week
+          - month
+          - term
+          - year
+          type: string
+        dates:
+          description: e.g. 'Sep, Jan, Apr' or '25th each month'
+          maxLength: 60
+          type: string
+      required:
+      - label
+      - amount
+      - period
+      type: object
     SampleStatement:
       additionalProperties: false
       description: A built-in synthetic student statement. Imported data is always labelled "Sample data".
@@ -5901,6 +6466,41 @@ components:
           default: false
           description: Team phone profile, hidden from the judge picker
           type: boolean
+        name:
+          description: Student's full name, e.g. 'Eilidh Fraser'
+          maxLength: 24
+          type: string
+        age:
+          maximum: 70
+          minimum: 16
+          type: integer
+        avatar:
+          description: Avatar id the app maps to its art
+          maxLength: 40
+          type: string
+        uni:
+          maxLength: 60
+          type: string
+        city:
+          maxLength: 40
+          type: string
+        funding_label:
+          description: Funding body or type, e.g. 'SAAS', 'Student Finance England'
+          maxLength: 60
+          type: string
+        money_in:
+          items:
+            $ref: '#/components/schemas/SampleMoneyIn'
+          maxItems: 4
+          type: array
+        housing:
+          description: e.g. 'Halls, £165 a week'
+          maxLength: 60
+          type: string
+        habit_line:
+          description: One line on their money habits
+          maxLength: 100
+          type: string
       required:
       - id
       - title
@@ -6412,6 +7012,42 @@ components:
       - amount
       - description
       type: object
+    Unit:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_.:-]+$
+          type: string
+        index:
+          minimum: 0
+          type: integer
+        title:
+          maxLength: 40
+          type: string
+        description:
+          maxLength: 160
+          type: string
+        lessons:
+          items:
+            $ref: '#/components/schemas/LessonSummary'
+          type: array
+        done:
+          minimum: 0
+          type: integer
+        total:
+          minimum: 1
+          type: integer
+      required:
+      - id
+      - index
+      - title
+      - description
+      - lessons
+      - done
+      - total
+      type: object
     UpdateBudgetsRequest:
       additionalProperties: false
       properties:
@@ -6539,6 +7175,10 @@ components:
           items:
             $ref: '#/components/schemas/PlayerScore'
           type: array
+        winner_line:
+          description: Penny announces the winner in one line, sent with 'finished' (ADR 0064)
+          maxLength: 200
+          type: string
       required:
       - type
       type: object
@@ -7798,7 +8438,7 @@ components:
       value: {}
     Room:
       value:
-        code: K7Q2ZP
+        code: '4821'
         mode: duel
         seed: 777001
         preset_id: nurse-leeds
@@ -7811,7 +8451,7 @@ components:
           ready: false
           connected: true
           finished: false
-        join_url: lifeline://join/K7Q2ZP
+        join_url: lifeline://join/4821
         qr_png_base64: iVBORw0KGgo=
         status: lobby
     BankAuthLink:
@@ -8083,6 +8723,8 @@ components:
           facts:
             monthly_total: 47.0
             count: 6.0
+        income_sources: []
+        debts: []
     SpendPrediction:
       value:
         meta:
@@ -8295,6 +8937,7 @@ components:
             - text: Restarting later costs £22 a month again.
               facts:
                 monthly: 22.0
+        options_compared: 0
         backtest:
           method: Walk-forward over past deal-end dates, 1995-2023
           n: 58
@@ -8416,6 +9059,7 @@ components:
           - bursary
           months: 3
           team: false
+          money_in: []
         - id: working
           title: Working student
           description: Maintenance loan and part-time pay, uses an overdraft
@@ -8424,6 +9068,7 @@ components:
           - part_time_job
           months: 3
           team: false
+          money_in: []
     HabitScore:
       value:
         components:
@@ -8547,6 +9192,8 @@ components:
         context:
           next_move_id: mv_fix_mortgage
           screen: money
+          multiplayer: false
+        language: en
     ChatAnswer:
       value:
         thread_id: th_1
@@ -8686,6 +9333,136 @@ components:
           description: Earn while you learn
           start_age: 18
           quick: true
+        quick_students: []
+    LearnPath:
+      value:
+        units:
+        - id: money-basics
+          index: 0
+          title: Money basics
+          description: Needs, wants and where your money goes
+          lessons:
+          - id: what-is-money
+            unit_id: money-basics
+            index: 0
+            title: What money is for
+            icon: sterlingsign.circle
+            status: passed
+            life_bonus: false
+          - id: needs-vs-wants
+            unit_id: money-basics
+            index: 1
+            title: Needs and wants
+            icon: cart
+            status: open
+            life_bonus: false
+          - id: budgeting
+            unit_id: money-basics
+            index: 2
+            title: Make a budget
+            icon: list.bullet.clipboard
+            status: locked
+            locked_reason: Finish Needs and wants first
+            life_bonus: false
+          done: 1
+          total: 3
+        next_lesson_id: needs-vs-wants
+        done: 1
+        total: 3
+    LearnLesson:
+      value:
+        summary:
+          id: needs-vs-wants
+          unit_id: money-basics
+          index: 1
+          title: Needs and wants
+          icon: cart
+          status: open
+          life_bonus: false
+        cards:
+        - title: Needs come first
+          text: Needs are rent, food, bills and travel to uni.
+        - title: Wants can wait
+          text: Wants are nice to have. Pay for them from what is left.
+        facts:
+        - text: You repay 9% of what you earn above £25,000 a year (Plan 5).
+          source_label: gov.uk · Repaying your student loan
+          source_url: https://www.gov.uk/repaying-your-student-loan/what-you-pay
+          checked: '2026-10-17'
+        quiz:
+        - id: q0
+          text: Which of these is a need?
+          choices:
+          - id: a
+            text: Rent
+          - id: b
+            text: A concert ticket
+        - id: q1
+          text: Which of these is a need?
+          choices:
+          - id: a
+            text: Rent
+          - id: b
+            text: A concert ticket
+        - id: q2
+          text: Which of these is a need?
+          choices:
+          - id: a
+            text: Rent
+          - id: b
+            text: A concert ticket
+        pass_mark: 2
+    LessonAttempt:
+      value:
+        answers:
+          q0: a
+          q1: a
+          q2: b
+    LessonAttemptResult:
+      value:
+        passed: true
+        correct: 2
+        pass_mark: 2
+        results:
+        - question_id: q0
+          correct: true
+          correct_choice_id: a
+          explanation: Rent is a need.
+        unlocked_lesson_id: budgeting
+        path:
+          units:
+          - id: money-basics
+            index: 0
+            title: Money basics
+            description: Needs, wants and where your money goes
+            lessons:
+            - id: what-is-money
+              unit_id: money-basics
+              index: 0
+              title: What money is for
+              icon: sterlingsign.circle
+              status: passed
+              life_bonus: false
+            - id: needs-vs-wants
+              unit_id: money-basics
+              index: 1
+              title: Needs and wants
+              icon: cart
+              status: open
+              life_bonus: false
+            - id: budgeting
+              unit_id: money-basics
+              index: 2
+              title: Make a budget
+              icon: list.bullet.clipboard
+              status: locked
+              locked_reason: Finish Needs and wants first
+              life_bonus: false
+            done: 1
+            total: 3
+          next_lesson_id: needs-vs-wants
+          done: 1
+          total: 3
     Circles:
       value:
         circles:

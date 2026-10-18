@@ -32,6 +32,11 @@ Direction: `DIRECTION_V2.md` (ADRs 0046-0061). Feature freeze 09:30, coding clos
 - Known open: "Play yourself" form test fails (W6). V4 has not run on this build.
 - An old app "Lifeline" (`com.lifeline.app`, not ours) is also on the phone.
 
+## Phone install (checkpoint 3)
+
+- "Penny" (`com.akshat.lifeline`), Demo config, Railway backend deployed ~00:50. Build from a snapshot that passed 245 iOS tests; V4 passed steps 1-3. Includes: four tabs, Penny tab, new onboarding with language choice, 10 sample students, judge mode, Play with friends (4-digit lobby, Quiz, Same Decision, Quick Life), Circles, habit score on You, instant screens.
+- Not in this build yet: most translated strings (wrapping in progress), the Store removal.
+
 ## Needs Akshat (do these when back; nothing waits on them)
 
 - [ ] README Team table: 3 rows still say "TBC".

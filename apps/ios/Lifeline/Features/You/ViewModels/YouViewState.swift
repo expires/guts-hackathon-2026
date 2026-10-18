@@ -50,6 +50,8 @@ struct YouViewState: Equatable, Sendable {
     var dataBadgeText: String? = nil
     /// "How good is the advice?" shows only when the backtest has at least one case (n > 0).
     var showsEvaluation = false
+    /// Habit score card (ADR 0066): ratios only, never amounts. Nil until loaded or without data.
+    var habits: HabitCard? = nil
     /// "Version" row: checkpoint, build time and features from Info.plist.
     var buildInfo = YouBuildInfo(appName: Brand.productName, version: "1.0", checkpoint: nil, builtText: nil, features: [])
 
@@ -81,6 +83,20 @@ struct CreditsFile: Decodable, Equatable, Sendable {
     }
 }
 
+/// Habit score (ADR 0066): an overall score and six ratios, each 0 to 100. No amounts.
+struct HabitCard: Equatable, Sendable {
+    struct Row: Equatable, Sendable, Identifiable {
+        /// "savings_rate".
+        var id: String
+        /// "Savings rate".
+        var name: String
+        var value: Int
+    }
+
+    var overall: Int?
+    var rows: [Row]
+}
+
 struct YouActions {
     /// "Connect your money" (router `openConnectMoney()`).
     var onConnectMoney: @MainActor () -> Void = {}
@@ -106,7 +122,8 @@ struct YouActions {
     var onOpenEvaluation: @MainActor () -> Void = {}
     /// Spend model accuracy (`/v1/finance/prediction/evaluation`).
     var onOpenSpendAccuracy: @MainActor () -> Void = {}
-    var onOpenStore: @MainActor () -> Void = {}
+    /// "Change language" (ADR 0063).
+    var onChangeLanguage: @MainActor () -> Void = {}
     var onOpenDebug: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
 

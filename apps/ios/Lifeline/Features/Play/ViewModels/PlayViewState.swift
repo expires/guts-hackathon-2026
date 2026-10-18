@@ -21,8 +21,24 @@ struct PlayViewState: Equatable, Sendable {
         var emoji: String
         var title: String
         var description: String
-        /// "Starts in 2006".
+        enum Status: Equatable, Sendable {
+            case inProgress, won, lost
+
+            var text: String {
+                switch self {
+                case .inProgress: L10n.tr("In progress")
+                case .won: L10n.tr("Done")
+                case .lost: L10n.tr("Missed")
+                }
+            }
+        }
+
+        /// "Starts in 2006" for a life challenge. For a "you" challenge: the progress detail from the API.
         var detail: String
+        /// True for a challenge scored on your own money (scope "you"). Tapping it shows the Money tab.
+        var isYou = false
+        /// Progress on a "you" challenge. Nil when there is no progress yet (signed out or no money data).
+        var status: Status? = nil
     }
 
     var phase: LoadPhase
@@ -44,6 +60,8 @@ struct PlayViewState: Equatable, Sendable {
     var rooms: RoomEntryViewState? = nil
     /// Circles segment (W9). Nil hides it.
     var circles: CirclesViewState? = nil
+    /// The Learn course card (ADR 0068). Nil hides it.
+    var learn: LearnEntryState? = nil
 }
 
 struct PlayActions {
@@ -60,6 +78,8 @@ struct PlayActions {
     /// Same Life rooms: reopens the room cover.
     var onOpenRooms: @MainActor () -> Void = {}
     var onOpenConcepts: @MainActor () -> Void = {}
+    /// "Learn": opens the course path (ADR 0068).
+    var onOpenLearn: @MainActor () -> Void = {}
     var onRetry: @MainActor () -> Void = {}
     /// Create and join buttons for the "Rooms" segment.
     var rooms: RoomEntryActions = .noop

@@ -47,7 +47,7 @@ final class RoomSession {
     /// Your player id from `welcome`. Sent as `player_id` on every re-join.
     private(set) var myPlayerID: String?
     private(set) var link: Link = .idle
-    /// Message of the last `error` from the server.
+    /// Message of the last `error` from the server. Cleared by the next other message, or after `errorLifetime`.
     private(set) var lastError: String?
     private(set) var hasLeft = false
     /// Number of connections opened. Tests read it.
@@ -63,6 +63,9 @@ final class RoomSession {
     private(set) var ranking: [PlayWire.Score] = []
     /// Your choice in the current round.
     private(set) var myAnswer: String?
+    /// Penny's one-line winner announcement from the final `finished` message (ADR 0064).
+    /// Nil until the server sends it; the results then use a template from the result numbers.
+    private(set) var winnerLine: String?
     @ObservationIgnored var now: @MainActor () -> Date = { Date.now }
 
     @ObservationIgnored let transport: any RoomTransport
@@ -82,14 +85,23 @@ final class RoomSession {
     @ObservationIgnored private var didAnnounceFinish = false
     @ObservationIgnored private let retryDelays: [Duration]
     @ObservationIgnored private let pingInterval: Duration?
+    @ObservationIgnored private let errorLifetime: Duration?
+    @ObservationIgnored private var errorClear: Task<Void, Never>?
 
     /// - Parameters:
     ///   - retryDelays: wait before each reconnect attempt. After the last one the link is `.offline`.
     ///   - pingInterval: keep-alive `ping` while live. Nil turns it off (tests).
-    init(transport: any RoomTransport, retryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(4), .seconds(8)], pingInterval: Duration? = .seconds(20)) {
+    ///   - errorLifetime: how long `lastError` shows when no other message arrives. Nil keeps it (tests).
+    init(
+        transport: any RoomTransport,
+        retryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(4), .seconds(8)],
+        pingInterval: Duration? = .seconds(20),
+        errorLifetime: Duration? = .seconds(5)
+    ) {
         self.transport = transport
         self.retryDelays = retryDelays
         self.pingInterval = pingInterval
+        self.errorLifetime = errorLifetime
     }
 
     var me: RoomWire.Player? { room?.players.first { $0.id == myPlayerID } }
@@ -187,6 +199,8 @@ final class RoomSession {
         ranking = []
         myAnswer = nil
         roundStartedAt = nil
+        winnerLine = nil
+        clearError()
     }
 
     // MARK: Sending
@@ -269,6 +283,10 @@ final class RoomSession {
             if let room = message.room { self.room = room }
             if let you = message.you { upsert(you) }
             becameLive()
+            // The UI shows the host as ready (`RoomMapping.isReady`). Send `ready` so the server roster matches.
+            if isHost, room?.status == .lobby, me?.ready != true {
+                Task { await ready() }
+            }
         case .roster:
             if let room = message.room { self.room = room }
             if link != .live, myPlayerID != nil { becameLive() }
@@ -285,7 +303,7 @@ final class RoomSession {
             if let player = message.player { upsert(player) }
             if let room = message.room { self.room = room }
         case .error:
-            lastError = message.error?.message ?? "The room sent an error."
+            showError(message.error?.message ?? L10n.tr("The room sent an error."))
         case .pong:
             break
         case .gamePicked:
@@ -315,8 +333,27 @@ final class RoomSession {
         case .ranking:
             if let ranking = message.ranking { self.ranking = ranking }
         }
+        if message._type != .error, message._type != .pong, lastError != nil { clearError() }
         if message._type == .finished, let ranking = message.ranking { self.ranking = ranking }
+        if message._type == .finished, let line = message.winnerLine, !line.isEmpty { winnerLine = line }
         announce()
+    }
+
+    private func showError(_ text: String) {
+        lastError = text
+        errorClear?.cancel()
+        guard let lifetime = errorLifetime else { return }
+        errorClear = Task { [weak self] in
+            try? await Task.sleep(for: lifetime)
+            guard !Task.isCancelled else { return }
+            self?.clearError()
+        }
+    }
+
+    private func clearError() {
+        errorClear?.cancel()
+        errorClear = nil
+        lastError = nil
     }
 
     /// Current connection generation. Tests use it with `receive`.
@@ -374,7 +411,7 @@ final class RoomSession {
     private func scheduleReconnect() {
         guard !hasLeft else { return }
         guard attempts < retryDelays.count else {
-            link = .offline("Connection lost.")
+            link = .offline(L10n.tr("Connection lost."))
             return
         }
         let delay = retryDelays[attempts]

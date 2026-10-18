@@ -4,26 +4,120 @@ import Foundation
 struct PennyContext: Hashable, Sendable, Identifiable {
     enum Screen: String, Hashable, Sendable {
         case money, nextMove = "next_move", why, lifeEvent = "life_event", life, other
+        /// Onboarding (ADR 0063): no finance data yet. General answers, student starter chips, no Next Move links.
+        case onboarding
+        /// "What does this result mean?" on Test it.
+        case testIt = "test_it"
+        /// A multiplayer room round (Same Decision, or an event in a Same Life room).
+        case roomRound = "room_round"
+        /// A Learn lesson (ADR 0068). The server loads the lesson's cards and facts.
+        case learnLesson = "learn_lesson"
     }
 
     var screen: Screen = .other
     var nextMoveID: String?
     var lifeID: String?
     var eventID: String?
-    /// Sent once when the chat opens, for example "Why this move?". Nil opens an empty chat.
+    /// Sent once when the chat opens, for example "Why this move?". A question starts a NEW chat.
+    /// Nil opens the chat without sending anything.
     var question: String?
+    /// Thread title from the context, for example "Safety fund, age 19". Nil uses `threadTitle`'s default.
+    var title: String?
+    /// A multiplayer round: Penny explains the trade-offs and does not pick for the player.
+    var isMultiplayer = false
+    /// Room code and Same Decision prompt id (screen `roomRound`). The server loads the round's options.
+    var roomCode: String?
+    var roundID: String?
+    /// Learn lesson id (screen `learnLesson`).
+    var lessonID: String?
 
     var id: String {
-        [screen.rawValue, nextMoveID, lifeID, eventID, question].map { $0 ?? "-" }.joined(separator: "|")
+        [screen.rawValue, nextMoveID, lifeID, eventID, question, title, roomCode, roundID, lessonID].map { $0 ?? "-" }.joined(separator: "|")
     }
 
-    init(screen: Screen = .other, nextMoveID: String? = nil, lifeID: String? = nil, eventID: String? = nil, question: String? = nil) {
+    init(
+        screen: Screen = .other,
+        nextMoveID: String? = nil,
+        lifeID: String? = nil,
+        eventID: String? = nil,
+        question: String? = nil,
+        title: String? = nil,
+        isMultiplayer: Bool = false,
+        roomCode: String? = nil,
+        roundID: String? = nil,
+        lessonID: String? = nil
+    ) {
         self.screen = screen
         self.nextMoveID = nextMoveID
         self.lifeID = lifeID
         self.eventID = eventID
         self.question = question
+        self.title = title
+        self.isMultiplayer = isMultiplayer
+        self.roomCode = roomCode
+        self.roundID = roundID
+        self.lessonID = lessonID
     }
+
+    /// `ChatContext.title`: the server titles the NEW thread with it. Nil for a chat with no context
+    /// (the server titles it from the first message).
+    var threadTitle: String? {
+        if let title = title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            return String(title.prefix(80))
+        }
+        return switch screen {
+        case .nextMove: L10n.tr("Your Next Move")
+        case .why: L10n.tr("Next Move, explained")
+        case .testIt: L10n.tr("Test it result")
+        case .lifeEvent: L10n.tr("Life event")
+        case .roomRound: L10n.tr("Room round")
+        case .money, .life, .other, .onboarding, .learnLesson: nil
+        }
+    }
+
+    /// "Safety fund, age 19". The thread title for a life event or a room round.
+    static func eventTitle(_ eventTitle: String, age: Int?) -> String {
+        let name = eventTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let age else { return name }
+        return L10n.tr("\(name), age \(age)")
+    }
+}
+
+extension PennyContext {
+    /// "Not sure? Ask Penny" on a life event. The server plays each option forward with the engine
+    /// (`event_choices`), so every number is a game number. In a Same Life room (`roomCode` set)
+    /// Penny explains only and does not pick.
+    static func lifeEvent(lifeID: String?, eventID: String?, eventTitle: String, age: Int?, roomCode: String? = nil) -> PennyContext {
+        let multiplayer = roomCode != nil
+        return PennyContext(
+            screen: .lifeEvent, lifeID: lifeID, eventID: eventID,
+            question: multiplayer ? PennyQuestion.roomRound : PennyQuestion.lifeEvent,
+            title: eventTitle.isEmpty ? nil : PennyContext.eventTitle(eventTitle, age: age),
+            isMultiplayer: multiplayer, roomCode: roomCode
+        )
+    }
+
+    /// "Not sure? Ask Penny" in a Same Decision round. The server loads the round's options;
+    /// game money outcomes stay hidden until the reveal.
+    static func roomRound(roomCode: String, roundID: String?, year: Int?) -> PennyContext {
+        PennyContext(
+            screen: .roomRound,
+            question: PennyQuestion.roomRound,
+            title: year.map { L10n.tr("Same Decision, \(String($0))") } ?? L10n.tr("Same Decision"),
+            isMultiplayer: true, roomCode: roomCode, roundID: roundID
+        )
+    }
+}
+
+/// The questions each "Ask Penny" entry point sends at once (DIRECTION_V2, Ask Penny context fix).
+enum PennyQuestion {
+    /// Life event (solo): Penny explains the trade-offs with game numbers.
+    static var lifeEvent: String { L10n.tr("Which option should I pick?") }
+    /// Multiplayer round: Penny explains only, so the question does not ask her to pick.
+    static var roomRound: String { L10n.tr("What are the trade-offs here?") }
+    static var nextMove: String { L10n.tr("Why this move?") }
+    static var why: String { L10n.tr("Explain this simply") }
+    static var testIt: String { L10n.tr("What does this result mean?") }
 }
 
 /// In-app destinations from `ChatResponse.links`. The caller decides how to open them.
@@ -33,10 +127,10 @@ enum PennyLink: String, Equatable, Sendable, CaseIterable {
     /// Button text.
     var title: String {
         switch self {
-        case .nextMove: "See the Next Move"
-        case .testIt: "Test it"
-        case .why: "Why this move?"
-        case .plan: "Open your plan"
+        case .nextMove: L10n.tr("See the Next Move")
+        case .testIt: L10n.tr("Test it")
+        case .why: L10n.tr("Why this move?")
+        case .plan: L10n.tr("Open your plan")
         }
     }
 }
@@ -48,12 +142,12 @@ enum PennyReaction: String, Equatable, Sendable, CaseIterable {
     /// VoiceOver text.
     var label: String {
         switch self {
-        case .eyes: "Penny is looking at your data"
-        case .brain: "Penny is working it out"
-        case .thumbs: "Penny agrees"
-        case .tick: "Done"
-        case .question: "Penny is not sure"
-        case .shrug: "Penny cannot help with this"
+        case .eyes: L10n.tr("Penny is looking at your data")
+        case .brain: L10n.tr("Penny is working it out")
+        case .thumbs: L10n.tr("Penny agrees")
+        case .tick: L10n.tr("Done")
+        case .question: L10n.tr("Penny is not sure")
+        case .shrug: L10n.tr("Penny cannot help with this")
         }
     }
 }
@@ -195,6 +289,8 @@ struct PennyViewState: Equatable, Sendable {
     /// Presentation mode: money amounts are rounded in every bubble and card (DesignSystem `LLAmountFormat`).
     var isPresentation: Bool
     var inputPlaceholder: String
+    /// Intro bubble on an empty chat.
+    var introText: String = PennyViewModel.introText
 
     var isEmpty: Bool { rows.isEmpty }
 }

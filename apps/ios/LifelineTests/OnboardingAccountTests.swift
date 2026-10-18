@@ -34,23 +34,49 @@ struct OnboardingAccountTests {
             setManualFinance: { _ in try await mock.financeProfile() },
             reversePostcode: { _, _ in OnboardingExamples.reversePostcode },
             nextMove: { try await mock.nextMove() },
-            financeProfile: { try await mock.financeProfile() }
+            financeProfile: { try await mock.financeProfile() },
+            spending: { month in try await mock.financeSpending(month: month) },
+            bills: { try await mock.bills() },
+            subscriptions: { try await mock.subscriptions() },
+            overview: { try await mock.financeOverview() },
+            sources: { try await mock.listSources() },
+            habits: { try await mock.habits() }
         )
     }
 
     private func model(_ api: OnboardingAPI, apple: Bool = false) -> OnboardingViewModel {
-        OnboardingViewModel(api: api, appleAvailable: apple, isSampleData: true, stageDelay: .zero)
+        OnboardingViewModel(api: api, appleAvailable: apple, isSampleData: true, stageMinimum: .zero)
     }
 
-    @Test func welcomePagesThenSignIn() {
+    @Test func languageConfirmSwitchesLanguage() {
         let model = model(api())
-        model.next()
-        model.next()
-        #expect(model.state.step == .welcome(page: 2))
-        model.next()
-        #expect(model.state.step == .signIn)
-        model.back()
-        #expect(model.state.step == .welcome(page: 2))
+        var chosen: AppLanguage?
+        model.onLanguage = { chosen = $0 }
+        model.go(.language)
+        model.pickLanguage(.fr)
+        #expect(model.state.language == .fr)
+        #expect(LanguageScreenTexts.texts(for: model.state.language).confirm == "Confirmer")
+        model.confirmLanguage()
+        #expect(chosen == .fr)
+        #expect(model.state.step == .features)
+    }
+
+    @Test func languageScreenFactAndEightLanguages() {
+        #expect(AppLanguage.allCases.map(\.nativeName) == ["English", "Français", "Español", "Português", "Italiano", "简体中文", "हिन्दी", "नेपाली"])
+        #expect(LanguageScreenTexts.texts(for: .en).studentsFact == "About 1 in 4 students at UK universities come from outside the UK (HESA 2024/25).")
+        #expect(LanguageScreenTexts.sourceLine == "HESA, Higher Education Student Statistics 2024/25")
+        // Every language has its own title (the screen redraws on tap).
+        #expect(Set(AppLanguage.allCases.map { LanguageScreenTexts.texts(for: $0).title }).count == AppLanguage.allCases.count)
+        #expect(AppLanguage.comingSoon.contains { $0.code == "ar" } && AppLanguage.comingSoon.contains { $0.code == "ur" })
+    }
+
+    @Test func samplesKeepTheServerOrder() {
+        let samples: [SampleStatement] = ContractExamples.decode("""
+        [{"id": "b", "title": "B", "description": "d", "funding": ["grant"], "months": 3},
+         {"id": "a", "title": "A", "description": "d", "funding": ["salary"], "months": 3},
+         {"id": "c", "title": "C", "description": "d", "funding": ["family"], "months": 3}]
+        """)
+        #expect(OnboardingViewModel.sampleCards(samples).map(\.id) == ["b", "a", "c"])
     }
 
     @Test func appleUnavailableFallsBackToDemo() async {
@@ -61,17 +87,17 @@ struct OnboardingAccountTests {
         #expect(model.state.signIn.note?.contains("demo account") == true)
     }
 
-    @Test func statementImportAnimatesStagesThenReveals() async throws {
+    @Test func statementImportBuildsTheProfileThenTheMove() async throws {
         let model = model(api())
         await model.importStatement(data: Data("date,amount".utf8), fileName: "monzo.csv")
-        #expect(model.state.step == .reveal)
-        #expect(model.state.importing.shownCount == 5)
-        #expect(model.state.importing.summary?.hasPrefix("412 payments") == true)
+        #expect(model.state.step == .building)
+        #expect(model.state.building.isFinished)
+        #expect(model.state.building.stages.first?.detail?.hasPrefix("412 payments") == true)
         let recorded = MockData.recorded.nextMove.top
-        #expect(model.state.reveal?.action == recorded.action)
-        #expect(model.state.tips.count == min(3, MockData.recorded.financeProfile.personalFacts.count))
+        #expect(model.state.nextMove?.action == recorded.action)
+        #expect(model.state.profile?.noticed.count == min(3, MockData.recorded.financeProfile.personalFacts.count))
         model.next()
-        #expect(model.state.step == (model.state.tips.isEmpty ? .reveal : .tips))
+        #expect(model.state.step == .profile)
     }
 
     @Test func failedImportReturnsToConnectWithWarnings() async {
@@ -92,24 +118,24 @@ struct OnboardingAccountTests {
 
     @Test func connectOffersSampleStatementAndManualOnly() {
         let model = model(api())
-        #expect(model.state.options.map(\.kind) == [.sample, .statement, .manual])
+        #expect(model.state.options.map(\.kind) == [.statement, .manual])
     }
 
-    @Test func sampleStudentsHideTeamProfilesAndImport() async {
+    @Test func sampleStudentsShowAndImport() async {
         var api = api()
         let samples: [SampleStatement] = ContractExamples.decode("""
-        [{"id": "scholarship", "title": "Scholarship student", "description": "Scholarship and bursary", "funding": ["scholarship", "bursary"], "months": 3, "team": false},
-         {"id": "team-ash", "title": "Ash", "description": "Team phone", "funding": ["salary"], "months": 3, "team": true}]
+        [{"id": "scholarship", "title": "Scholarship student", "description": "Scholarship and bursary", "funding": ["scholarship", "bursary"], "months": 3}]
         """)
         api.listSamples = { onUpdate in await onUpdate(samples) }
         api.importSample = { _ in OnboardingExamples.importResult }
         let model = model(api)
         await model.connect(.sample)
-        #expect(model.state.step == .samples)
+        #expect(model.state.step == .connect)
         #expect(model.state.samples.map(\.id) == ["scholarship"])
         #expect(model.state.samples.first?.fundingText == "Scholarship · Bursary")
         await model.importSample("scholarship")
-        #expect(model.state.step == .reveal)
+        #expect(model.state.step == .building)
+        #expect(model.state.building.isFinished)
     }
 
     @Test func studentFormSendsIncomeSourcesAndMonthlyTotal() {
@@ -138,7 +164,8 @@ struct OnboardingAccountTests {
     @Test func bankCallbackOkReveals() async {
         let model = model(api())
         await model.bankCallback(URL(string: "lifeline://connected?status=ok&session=s1")!)
-        #expect(model.state.step == .reveal)
+        #expect(model.state.step == .building)
+        #expect(model.state.building.isFinished)
         await model.bankCallback(URL(string: "lifeline://connected?status=error")!)
         #expect(model.state.errorMessage != nil)
     }
@@ -159,7 +186,9 @@ struct OnboardingAccountTests {
         #expect(input?.dealEnd == "2027-03-01")
         #expect(input?.monthlyRent == nil)
         await model.saveManual()
-        #expect(model.state.step == .reveal)
+        #expect(model.state.step == .building)
+        #expect(model.state.building.stages.first?.label == "Saving your numbers")
+        #expect(model.state.building.isFinished)
     }
 
     @Test func dealEndStepperStaysInRange() {

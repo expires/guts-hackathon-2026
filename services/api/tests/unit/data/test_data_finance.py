@@ -105,10 +105,12 @@ def test_spend_responds_to_weekday():
     assert by_wd[5] > by_wd[0]  # Saturday above Monday
 
 
-async def test_hub_finance_snapshot_offline(settings):
+async def test_hub_never_serves_a_persona(settings):
+    """Personas are for tests only: the hub returns None for a subject without its own data, even the
+    presenter device and a raw persona id."""
     hub = DataHub(settings, env={})
-    snap = await hub.finance_snapshot(DEMO_SUBJECT)
-    assert snap.persona == "homeowner-leeds" and snap.mortgage is not None
+    for subject in (DEMO_SUBJECT, "user_abc", "persona:homeowner-leeds", "homeowner-leeds"):
+        assert await hub.finance_snapshot(subject) is None
     await hub.aclose()
 
 

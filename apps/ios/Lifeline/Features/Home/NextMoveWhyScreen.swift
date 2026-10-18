@@ -32,12 +32,13 @@ struct NextMoveWhyScreen: View {
         var actions = model.actions
         let routes = self.routes
         let moveID = model.move.id
+        let headline = model.move.headline
         let close = onClose
         actions.onAskPenny = {
             close()
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(450))
-                routes.askPenny(PennyRoute(screen: .why, nextMoveID: moveID))
+                routes.askPenny(PennyRoute(screen: .why, nextMoveID: moveID, question: PennyQuestion.why, title: String(headline.prefix(80))))
             }
         }
         return actions

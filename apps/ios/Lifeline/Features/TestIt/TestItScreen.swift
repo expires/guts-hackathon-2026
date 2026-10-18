@@ -40,8 +40,28 @@ struct TestItScreen: View {
         self.onDoThis = onDoThis
     }
 
+    @Environment(\.appRoutes) private var routes
+
+    /// The model's actions plus "Ask Penny what this means": close Test it, then switch to the Penny tab
+    /// with a new chat about this result.
+    private var actions: TestItActions {
+        var actions = model.actions
+        let routes = self.routes
+        let close = onClose
+        let moveID = model.moveID
+        let title = model.state.title
+        actions.onAskPenny = {
+            close()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(450))
+                routes.askPenny(PennyRoute(screen: .testIt, nextMoveID: moveID, question: PennyQuestion.testIt, title: String(title.prefix(80))))
+            }
+        }
+        return actions
+    }
+
     var body: some View {
-        TestItView(state: model.state, actions: model.actions)
+        TestItView(state: model.state, actions: actions)
             .onAppear {
                 model.onOpenLife = onOpenLife
                 model.onClose = onClose

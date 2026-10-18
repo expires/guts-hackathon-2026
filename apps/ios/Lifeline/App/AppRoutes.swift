@@ -13,7 +13,7 @@ enum OnboardingStart: String, Hashable, Identifiable, Sendable {
 /// What the user asks Penny about (ADR 0031). The root turns it into W7's `PennyContext`.
 struct PennyRoute: Identifiable, Hashable, Sendable {
     enum Screen: String, Hashable, Sendable {
-        case money, nextMove, why, lifeEvent, life, other
+        case money, nextMove, why, lifeEvent, life, testIt, other
     }
 
     var id = UUID()
@@ -23,19 +23,23 @@ struct PennyRoute: Identifiable, Hashable, Sendable {
     var eventID: String?
     /// Optional first question, sent at once when the chat opens.
     var question: String?
+    /// Thread title for the new chat, from the context (e.g. "Safety fund, age 19").
+    var title: String?
 
     init(
         screen: Screen = .other,
         nextMoveID: String? = nil,
         lifeID: String? = nil,
         eventID: String? = nil,
-        question: String? = nil
+        question: String? = nil,
+        title: String? = nil
     ) {
         self.screen = screen
         self.nextMoveID = nextMoveID
         self.lifeID = lifeID
         self.eventID = eventID
         self.question = question
+        self.title = title
     }
 
     /// The contract `ChatContext` for `ChatRequest.context`.
@@ -46,9 +50,10 @@ struct PennyRoute: Identifiable, Hashable, Sendable {
         case .why: .why
         case .lifeEvent: .lifeEvent
         case .life: .life
+        case .testIt: .testIt
         case .other: .other
         }
-        return ChatContext(nextMoveId: nextMoveID, lifeId: lifeID, eventId: eventID, screen: screen)
+        return ChatContext(nextMoveId: nextMoveID, lifeId: lifeID, eventId: eventID, screen: screen, title: title)
     }
 }
 
@@ -73,6 +78,8 @@ struct AppRoutes: Sendable {
     var joinRoom: @MainActor @Sendable (String) -> Void
     /// Switches the tab (closes the Penny sheet first if it is open).
     var selectTab: @MainActor @Sendable (AppTab) -> Void
+    /// Opens the language screen (ADR 0063), for example from You > Change language.
+    var changeLanguage: @MainActor @Sendable () -> Void
     /// Judge mode (ADR 0049): a fresh demo account on a new device id, then onboarding.
     var newPlayer: @MainActor @Sendable () -> Void
     /// Judge mode (ADR 0049): `POST /v1/me/reset` for this account, then onboarding.
@@ -85,6 +92,7 @@ struct AppRoutes: Sendable {
         openAccount: {},
         joinRoom: { _ in },
         selectTab: { _ in },
+        changeLanguage: {},
         newPlayer: {},
         resetDemo: {}
     )
@@ -137,6 +145,8 @@ final class AppRouter {
     var penny: PennyRoute?
     var onboarding: OnboardingStart?
     var showsAccount = false
+    /// The language screen (`routes.changeLanguage()`).
+    var showsLanguage = false
     var join: RoomJoinRoute?
     /// See `EnvironmentValues.appDataVersion`.
     var dataVersion = 0
@@ -155,6 +165,10 @@ final class AppRouter {
             selectTab: { [weak self] tab in
                 self?.penny = nil
                 self?.selection = tab
+            },
+            changeLanguage: { [weak self] in
+                self?.penny = nil
+                self?.showsLanguage = true
             },
             newPlayer: { [weak self] in
                 guard let self else { return }
@@ -241,6 +255,12 @@ final class AppRouter {
                 group.addTask { await client.refresh(CachedOps.concepts) }
                 group.addTask { await client.refresh(CachedOps.paths) }
                 group.addTask { await client.refresh(CachedOps.challenges) }
+                // Money home blocks (ADR 0070), so each shows from disk on the first open.
+                group.addTask { await client.refresh(CachedOps.spending()) }
+                group.addTask { await client.refresh(CachedOps.bills) }
+                group.addTask { await client.refresh(CachedOps.subscriptions) }
+                group.addTask { await client.refresh(CachedOps.budgets) }
+                group.addTask { await client.refresh(CachedOps.goals) }
             }
         }
     }

@@ -22,7 +22,7 @@ struct BankConnectView: View {
 
                 switch state.step {
                 case .intro:
-                    PrimaryButton(title: "Connect \(state.providerName)", icon: .bank, action: actions.onConnect)
+                    PrimaryButton(title: L10n.tr("Connect \(state.providerName)"), icon: .bank, action: actions.onConnect)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .accessibilityIdentifier("bank.connect")

@@ -17,7 +17,7 @@ struct NextMoveWhyView: View {
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                    ScreenHeader(title: "Why \(state.action.prefix(1).lowercased() + state.action.dropFirst())?") {
+                    ScreenHeader(title: L10n.tr("Why \(state.action.prefix(1).lowercased() + state.action.dropFirst())?")) {
                         HeaderSquareButton(kind: .close, identifier: "why.close", action: actions.onClose)
                     }
                     if state.isSampleData { DataBadge() }
@@ -57,8 +57,11 @@ struct NextMoveWhyView: View {
                             .id("why.sourcesAnchor")
                     }
                     HStack(alignment: .top, spacing: 10) {
-                        if !state.confidenceChip.isEmpty { Chip(text: state.confidenceChip) }
                         VStack(alignment: .leading, spacing: 2) {
+                            if !state.confidenceText.isEmpty {
+                                Text(state.confidenceText).font(.llLabelBold).fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("why.confidence")
+                            }
                             Text(state.confidenceLabel).font(.llLabel)
                             if !state.worstCaseText.isEmpty {
                                 Text(state.worstCaseText).font(.llLabel).foregroundStyle(Theme.Palette.muted)

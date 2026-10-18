@@ -72,7 +72,7 @@ struct TestItView: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Period: \(state.periodLabel). \(state.periodSentence)")
+        .accessibilityLabel(L10n.tr("Period: \(state.periodLabel). \(state.periodSentence)"))
     }
 
     @ViewBuilder
@@ -149,8 +149,19 @@ struct TestItView: View {
                 .buttonStyle(.second)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .accessibilityLabel("Open the \(open.label) life in the Life tab")
+                .accessibilityLabel(L10n.tr("Open the \(open.label) life in the Life tab"))
                 .accessibilityIdentifier("testit.open.\(open.id)")
+            }
+            if let onAskPenny = actions.onAskPenny {
+                Button(action: onAskPenny) {
+                    HStack(spacing: Theme.Spacing.s) {
+                        PennyView(mood: .thinking, size: 28)
+                        Text("Ask Penny what this means")
+                    }
+                }
+                .buttonStyle(.text)
+                .frame(minHeight: Theme.minTarget)
+                .accessibilityIdentifier("testit.askPenny")
             }
         }
     }

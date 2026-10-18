@@ -24,6 +24,7 @@ from lifeline_contracts import api_models as A  # noqa: E402
 from lifeline_contracts import chat as CH  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
 from lifeline_contracts import finance as F  # noqa: E402
+from lifeline_contracts import learn as LN  # noqa: E402
 from lifeline_contracts import next_move as N  # noqa: E402
 from lifeline_contracts import play as PL  # noqa: E402
 from lifeline_contracts.observation import Observation, SourceStatus  # noqa: E402
@@ -88,6 +89,10 @@ MODELS: list[type[BaseModel]] = [
     AC.ImportResult,
     AC.SamplesResponse,
     PL.PathsResponse,
+    LN.LearnPath,
+    LN.LearnLesson,
+    LN.LessonAttemptRequest,
+    LN.LessonAttemptResult,
     PL.Circle,
     PL.CirclesResponse,
     PL.CreateCircleRequest,
@@ -291,14 +296,14 @@ def examples() -> dict[str, Any]:
 
     fetched = datetime(2026, 10, 17, 11, 0, 0, tzinfo=UTC)
     room = A.Room(
-        code="K7Q2ZP",
+        code="4821",
         mode="duel",
         seed=777001,
         preset_id="nurse-leeds",
         start_year=2021,
         max_players=2,
         players=[A.Player(id="p1", name="Ash", is_host=True)],
-        join_url="lifeline://join/K7Q2ZP",
+        join_url="lifeline://join/4821",
         qr_png_base64="iVBORw0KGgo=",
         status="lobby",
     )
@@ -622,6 +627,48 @@ def play_examples() -> dict[str, Any]:
         ),
         overall=74,
     )
+    learn_path = LN.LearnPath(
+        units=[
+            LN.Unit(
+                id="money-basics",
+                index=0,
+                title="Money basics",
+                description="Needs, wants and where your money goes",
+                lessons=[
+                    LN.LessonSummary(
+                        id="what-is-money",
+                        unit_id="money-basics",
+                        index=0,
+                        title="What money is for",
+                        icon="sterlingsign.circle",
+                        status="passed",
+                    ),
+                    LN.LessonSummary(
+                        id="needs-vs-wants",
+                        unit_id="money-basics",
+                        index=1,
+                        title="Needs and wants",
+                        icon="cart",
+                        status="open",
+                    ),
+                    LN.LessonSummary(
+                        id="budgeting",
+                        unit_id="money-basics",
+                        index=2,
+                        title="Make a budget",
+                        icon="list.bullet.clipboard",
+                        status="locked",
+                        locked_reason="Finish Needs and wants first",
+                    ),
+                ],
+                done=1,
+                total=3,
+            )
+        ],
+        next_lesson_id="needs-vs-wants",
+        done=1,
+        total=3,
+    )
     return {
         "Paths": PL.PathsResponse(
             paths=[
@@ -640,6 +687,43 @@ def play_examples() -> dict[str, Any]:
                     quick=True,
                 ),
             ]
+        ),
+        "LearnPath": learn_path,
+        "LearnLesson": LN.LearnLesson(
+            summary=learn_path.units[0].lessons[1],
+            cards=[
+                LN.LessonCard(title="Needs come first", text="Needs are rent, food, bills and travel to uni."),
+                LN.LessonCard(title="Wants can wait", text="Wants are nice to have. Pay for them from what is left."),
+            ],
+            facts=[
+                LN.LessonFact(
+                    text="You repay 9% of what you earn above £25,000 a year (Plan 5).",
+                    source_label="gov.uk · Repaying your student loan",
+                    source_url="https://www.gov.uk/repaying-your-student-loan/what-you-pay",
+                    checked="2026-10-17",
+                )
+            ],
+            quiz=[
+                LN.LessonQuestion(
+                    id=f"q{i}",
+                    text="Which of these is a need?",
+                    choices=[LN.LessonChoice(id="a", text="Rent"), LN.LessonChoice(id="b", text="A concert ticket")],
+                )
+                for i in range(3)
+            ],
+        ),
+        "LessonAttempt": LN.LessonAttemptRequest(answers={"q0": "a", "q1": "a", "q2": "b"}),
+        "LessonAttemptResult": LN.LessonAttemptResult(
+            passed=True,
+            correct=2,
+            pass_mark=2,
+            results=[
+                LN.LessonAnswerResult(
+                    question_id="q0", correct=True, correct_choice_id="a", explanation="Rent is a need."
+                ),
+            ],
+            unlocked_lesson_id="budgeting",
+            path=learn_path,
         ),
         "Circles": PL.CirclesResponse(
             circles=[
@@ -1263,6 +1347,9 @@ def errs(*codes: str) -> dict[str, Any]:
 # True while some Tier 2 endpoints may still answer 501 not_implemented. Set False when Tier 2 is built.
 STUBS_DECLARED = True
 TIER2_OPS = {
+    "getLearnPath",
+    "getLearnLesson",
+    "attemptLearnLesson",
     "listChallenges",
     "createRoom",
     "getRoom",
@@ -1506,7 +1593,7 @@ def paths() -> dict[str, Any]:
                         "name": "code",
                         "in": "path",
                         "required": True,
-                        "schema": {"type": "string", "pattern": "^[A-Z0-9]{6}$"},
+                        "schema": {"type": "string", "pattern": "^[0-9]{4}$"},
                     }
                 ],
                 **{
@@ -1721,6 +1808,79 @@ def account_paths() -> dict[str, Any]:
                 {**ok("PathsResponse", "Paths"), **errs("401", "429")},
             )
         },
+        "/v1/learn": {
+            "get": op(
+                "getLearnPath",
+                "Learn: the course path, units and lesson status (ADR 0068)",
+                "learn",
+                {**ok("LearnPath", "LearnPath"), **errs("401", "429", "503")},
+                parameters=[
+                    {
+                        "name": "language",
+                        "in": "query",
+                        "required": False,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"],
+                            "default": "en",
+                        },
+                    }
+                ],
+            )
+        },
+        "/v1/learn/lessons/{lesson_id}": {
+            "get": op(
+                "getLearnLesson",
+                "One lesson: cards, a real UK number with its source, and a 3-question quiz. 409 when locked",
+                "learn",
+                {**ok("LearnLesson", "LearnLesson"), **errs("401", "404", "409", "429", "503")},
+                parameters=[
+                    {
+                        "name": "lesson_id",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "maxLength": 64},
+                    },
+                    {
+                        "name": "language",
+                        "in": "query",
+                        "required": False,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"],
+                            "default": "en",
+                        },
+                    },
+                ],
+            )
+        },
+        "/v1/learn/lessons/{lesson_id}/attempts": {
+            "post": op(
+                "attemptLearnLesson",
+                "Grade a quiz attempt. Pass = 2 of 3; a pass opens the next lesson",
+                "learn",
+                {**ok("LessonAttemptResult", "LessonAttemptResult"), **errs("401", "404", "409", "422", "429", "503")},
+                parameters=[
+                    {
+                        "name": "lesson_id",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "maxLength": 64},
+                    },
+                    {
+                        "name": "language",
+                        "in": "query",
+                        "required": False,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"],
+                            "default": "en",
+                        },
+                    },
+                ],
+                requestBody=body("LessonAttemptRequest", "LessonAttempt"),
+            )
+        },
         "/v1/circles": {
             "get": op(
                 "listCircles",
@@ -1853,6 +2013,19 @@ def next_move_paths() -> dict[str, Any]:
                 "Where should my money go this month? One top move, up to 2 runners-up, with evidence",
                 "next-move",
                 {**ok("NextMoveResponse", "NextMove"), **errs("401", "429", "503")},
+                parameters=[
+                    {
+                        "name": "language",
+                        "in": "query",
+                        "required": False,
+                        "description": "Language of the move text (ADR 0069); numbers stay the same",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"],
+                            "default": "en",
+                        },
+                    }
+                ],
             )
         },
         "/v1/next-move/test": {

@@ -48,7 +48,7 @@ struct CirclesContent: View {
                             LLIconImage(.family, size: 32)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(circle.name).font(.llBodyBold)
-                                Text("\(circle.detail) · code \(circle.code)").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                                Text(L10n.tr("\(circle.detail) · code \(circle.code)")).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Chevron()
@@ -69,7 +69,7 @@ struct CirclesContent: View {
 
     private var forms: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            BlockTitle(text: "Make a circle")
+            BlockTitle(text: L10n.tr("Make a circle"))
             HStack(spacing: Theme.Spacing.s) {
                 TextField("Circle name", text: Binding(get: { state.newName }, set: actions.onNameChange))
                     .font(.llBody)
@@ -83,7 +83,7 @@ struct CirclesContent: View {
                     .disabled(!state.canCreate)
                     .accessibilityIdentifier("circles.create")
             }
-            BlockTitle(text: "Join a circle")
+            BlockTitle(text: L10n.tr("Join a circle"))
             HStack(spacing: Theme.Spacing.s) {
                 TextField("Circle code", text: Binding(get: { state.joinCode }, set: actions.onJoinCodeChange))
                     .textInputAutocapitalization(.characters)
@@ -108,7 +108,7 @@ struct CirclesContent: View {
                 HeaderSquareButton(kind: .back, identifier: "circles.back") { actions.onSelect(nil) }
                 VStack(alignment: .leading, spacing: 0) {
                     Text(circle.name).font(.llTitle)
-                    Text("\(circle.detail) · code \(circle.code)").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    Text(L10n.tr("\(circle.detail) · code \(circle.code)")).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -116,7 +116,7 @@ struct CirclesContent: View {
                 HStack(alignment: .top, spacing: Theme.Spacing.m) {
                     LLIconImage(.pennySmiling, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(circle.recapWeek.map { "Penny's recap · \($0)" } ?? "Penny's recap").font(.llLabelBold)
+                        Text(circle.recapWeek.map { L10n.tr("Penny's recap · \($0)") } ?? L10n.tr("Penny's recap")).font(.llLabelBold)
                         Text(recap).font(.llBody).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -125,7 +125,7 @@ struct CirclesContent: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("circles.recap")
             }
-            BlockTitle(text: "Most improved")
+            BlockTitle(text: L10n.tr("Most improved"))
             VStack(spacing: Theme.Spacing.m) {
                 ForEach(circle.members) { member in
                     memberCard(member)
@@ -144,7 +144,7 @@ struct CirclesContent: View {
                 LLIconImage(LLIcon(rawValue: member.face) ?? .faceTeen, size: 32)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(member.name).font(member.isYou ? .llBodyBold : .llBody)
-                    Text(member.overall.map { "Habit score \($0) of 100" } ?? "No habit score yet").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                    Text(member.overall.map { L10n.tr("Habit score \($0) of 100") } ?? L10n.tr("No habit score yet")).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if !member.improvementText.isEmpty {
@@ -158,7 +158,7 @@ struct CirclesContent: View {
                     Text("\(habit.value)").font(.llLabelBold).frame(width: 32, alignment: .trailing)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(habit.label) \(habit.value) out of 100")
+                .accessibilityLabel(L10n.tr("\(habit.label) \(habit.value) out of 100"))
             }
         }
         .padding(Theme.Spacing.m)

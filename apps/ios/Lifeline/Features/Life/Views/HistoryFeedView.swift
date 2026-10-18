@@ -45,7 +45,7 @@ struct HistoryRow: View {
         }
         .padding(.vertical, Theme.Spacing.s)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(String(entry.year)), age \(entry.age). \(entry.text) Net worth \(Money.spoken(entry.netWorth)).")
+        .accessibilityLabel(L10n.tr("\(String(entry.year)), age \(entry.age). \(entry.text) Net worth \(Money.spoken(entry.netWorth))."))
     }
 }
 

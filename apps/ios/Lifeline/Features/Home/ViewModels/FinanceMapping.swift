@@ -10,7 +10,7 @@ enum FinanceMapping {
     /// "Sample data" for a sample statement (`meta.source == "sample"` or the label says so),
     /// "Mock data" for canned data, nil for the user's real data.
     static func badgeText(_ meta: FinanceMeta) -> String? {
-        if meta.source == "sample" || meta.label == "Sample data" { return "Sample data" }
+        if meta.source == "sample" || meta.label == "Sample data" { return L10n.tr("Sample data") }
         return meta.dataStatus == .mock ? "Mock data" : nil
     }
 
@@ -53,10 +53,15 @@ enum FinanceMapping {
         return format(date, template: "MMMMyyyy")
     }
 
-    /// Formats a UTC date with an en_GB template, so text does not change with the device region.
+    /// Locale for dates: en_GB in English (day before month), otherwise the app language (ADR 0063).
+    static var dateLocale: Locale {
+        AppLanguage.current == .en ? Money.locale : AppLanguage.current.locale
+    }
+
+    /// Formats a UTC date with a template in `dateLocale`, so text does not change with the device region.
     static func format(_ date: Date, template: String) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Money.locale
+        formatter.locale = dateLocale
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.setLocalizedDateFormatFromTemplate(template)
         return formatter.string(from: date)

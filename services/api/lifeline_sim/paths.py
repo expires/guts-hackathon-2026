@@ -311,27 +311,77 @@ def study_loans(year: int, mv: MacroView) -> tuple[float, float]:
     return tuition_fee_cap(year), p.MAINTENANCE_LOAN_2024 * mv.price_level(year)
 
 
-def path_character(path_id: str, start_year: int, mv: MacroView | None = None) -> CharacterSpec:
-    """The character for a path, `start_age` in `start_year`. With `mv`, the starting pay is the stage pay."""
+# Offered characters are students or recent graduates only (user rule). Occupation by path: a gap year
+# student holds a university place; job at 18 is a school leaver.
+PATH_OCCUPATION: dict[str, str] = {
+    "uni": "student",
+    "apprentice": "apprentice",
+    "job18": "school leaver",
+    "gap_year": "student",
+    "masters": "student",
+}
+
+
+@dataclass(frozen=True)
+class QuickStudentDef:
+    """A premade Quick Life student (ADR 0064): a path, a place and a way of paying for it."""
+
+    id: str
+    name: str
+    path_id: str
+    description: str
+    emoji: str
+    sex: Literal["female", "male"]
+    region: str
+    town: str
+    bursary_2024: float = 0.0  # university bursary a study year, 2024 pounds (game amount, not a loan)
+
+
+QUICK_STUDENTS: tuple[QuickStudentDef, ...] = (
+    QuickStudentDef("qs-priya", "Priya", "uni", "University in Birmingham, paid with the full student loan.",
+                    "🧑🏽‍🎓", "female", "west-midlands", "Birmingham"),
+    QuickStudentDef("qs-amara", "Amara", "uni", "University in London with a £2,000 a year bursary.",
+                    "👩🏿‍🎓", "female", "london", "London", bursary_2024=2000.0),
+    QuickStudentDef("qs-jordan", "Jordan", "apprentice", "Electrician apprentice in Manchester. Paid to train.",
+                    "👷🏾", "male", "north-west", "Manchester"),
+    QuickStudentDef("qs-kai", "Kai", "job18", "Starts work at 18 in Leeds and lives at home.",
+                    "🧑🏻‍💼", "male", "yorkshire-and-the-humber", "Leeds"),
+    QuickStudentDef("qs-maya", "Maya", "gap_year", "Works a gap year in Bristol, then goes to university.",
+                    "🎒", "female", "south-west", "Bristol"),
+)  # fmt: skip
+_QUICK_BY_ID: dict[str, QuickStudentDef] = {q.id: q for q in QUICK_STUDENTS}
+
+
+def quick_student_def(student_id: str) -> QuickStudentDef | None:
+    return _QUICK_BY_ID.get(student_id)
+
+
+def path_character(
+    path_id: str, start_year: int, mv: MacroView | None = None, student_id: str | None = None
+) -> CharacterSpec:
+    """The character for a path (or a premade Quick Life student), `start_age` in `start_year`.
+    With `mv`, the starting pay is the stage pay."""
     d = _BY_ID[path_id]
+    qs = _QUICK_BY_ID.get(student_id) if student_id is not None else None
     first = d.stages[0]
+    region = qs.region if qs is not None else d.region
     income = 0.0
     if mv is not None:
-        income = stage_pay(first, start_year, d.region, mv) or 0.0
+        income = stage_pay(first, start_year, region, mv) or 0.0
     return CharacterSpec(
-        id=f"{PATH_CHARACTER_PREFIX}{d.id}",
-        name=d.name,
-        emoji=d.emoji,
-        sex=d.sex,
-        occupation="student" if first.kind in ("study", "study_pg") else first.job_title.lower(),
-        region=d.region,
-        town=d.town,
+        id=qs.id if qs is not None else f"{PATH_CHARACTER_PREFIX}{d.id}",
+        name=qs.name if qs is not None else d.name,
+        emoji=qs.emoji if qs is not None else d.emoji,
+        sex=qs.sex if qs is not None else d.sex,
+        occupation=PATH_OCCUPATION[d.id],
+        region=region,
+        town=qs.town if qs is not None else d.town,
         birth_year=start_year - d.start_age,
         annual_income=income,
         savings=0.0,
         debt=0.0,
         housing=d.housing,
-        blurb=f"{d.title}: {d.description}"[:200],
+        blurb=(qs.description if qs is not None else f"{d.title}: {d.description}")[:200],
     )
 
 
@@ -421,13 +471,15 @@ def add_study_year_loans(s: SimState, mv: MacroView) -> float:
         return max(0.0, loan - MASTERS_FEE_2024 * mv.price_level(s.year))
     tuition, maintenance = study_loans(s.year, mv)
     s.student_loan += tuition + maintenance
-    return maintenance
+    return maintenance + s.bursary_2024 * mv.price_level(s.year)
 
 
-def start_path(s: SimState, path_id: str, mv: MacroView) -> None:
+def start_path(s: SimState, path_id: str, mv: MacroView, student_id: str | None = None) -> None:
     """Set the start state for a path life. Called from `initial_state` before costs are set."""
     d = _BY_ID[path_id]
     s.path_id = path_id
+    qs = _QUICK_BY_ID.get(student_id) if student_id is not None else None
+    s.bursary_2024 = qs.bursary_2024 if qs is not None else 0.0
     if d.prior_study_years:
         # A degree before the master's: loans for each earlier year, Plan by the first year.
         first = s.year - d.prior_study_years

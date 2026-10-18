@@ -45,14 +45,14 @@ struct RewindResultView: View {
     }
 
     private var right: some View {
-        column(title: "Back to \(String(state.year)) · Age \(state.age)", index: state.newIndex, netWorth: state.newNetWorth, isNew: true)
+        column(title: L10n.tr("Back to \(String(state.year)) · Age \(state.age)"), index: state.newIndex, netWorth: state.newNetWorth, isNew: true)
             .accessibilityIdentifier("rewind.new")
     }
 
     private func column(title: String, index: Double, netWorth: Double, isNew: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text(title).font(.llLabelBold).foregroundStyle(isNew ? Theme.Palette.ink : Theme.Palette.muted)
-            Text("INDEX \(Int(index.rounded()))").font(.llTitle)
+            Text(L10n.tr("INDEX \(Int(index.rounded()))")).font(.llTitle)
                 .contentTransition(.numericText(value: index))
             LLAmount(netWorth).font(.llBodyBold)
                 .contentTransition(.numericText(value: netWorth))

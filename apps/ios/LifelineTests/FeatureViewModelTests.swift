@@ -87,17 +87,6 @@ struct FeatureViewModelTests {
         #expect(model.state.usesSampleData)
     }
 
-    @Test func storePurchaseSetsEntitlement() async {
-        let session = GameSession(client: MockClient())
-        let model = StoreViewModel(session: session)
-        #expect(model.state.demoLabel == "Demo payment")
-        await model.buy("lifeline.godmode")
-        #expect(session.ownsGodMode)
-        #expect(model.state.products.first { $0.id == "lifeline.godmode" }?.isOwned == true)
-        await model.buy("lifeline.rewindpass")
-        #expect(session.hasRewindPass)
-    }
-
     @Test func bankConnectsWithMockProvider() async {
         let model = BankConnectViewModel(client: MockClient())
         var profile: DecisionProfile?
@@ -133,7 +122,7 @@ struct FeatureViewModelTests {
     }
 
     @Test func fixturesBuild() {
-        #expect(Fixtures.CharacterSelect.ready.cards.count == 5)
+        #expect(Fixtures.CharacterSelect.ready.cards.count == 4) // God Mode is cut (ADR 0067)
         #expect(Fixtures.LifeScreen.midLife.header.age == 45)
         #expect(Fixtures.LifeScreen.dead.showsSummary)
         #expect(Fixtures.Event.crisis.isAIText)

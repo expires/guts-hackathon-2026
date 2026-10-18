@@ -113,11 +113,11 @@ struct NextMoveCardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("nextMove.impact")
-            if !move.confidenceWord.isEmpty {
+            if !move.confidenceText.isEmpty {
                 Rectangle().fill(Theme.Palette.ink).frame(width: Theme.outline).clipShape(.capsule)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(move.confidenceWord).font(.llBodyBold)
-                    ConfidenceMeter(filled: move.confidenceFilled)
+                    if move.confidenceFilled > 0 { ConfidenceMeter(filled: move.confidenceFilled) }
+                    Text(move.confidenceText).font(.llLabelBold).fixedSize(horizontal: false, vertical: true)
                     Text(move.confidenceLabel).font(.llLabel).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,9 +138,14 @@ struct NextMoveCardView: View {
         }
     }
 
+    /// "Test it" shows for every testable move: top move, focused runner-up, in plan or not (ADR 0070).
+    static func showsTestIt(_ move: NextMoveCardState.Move) -> Bool {
+        move.isTestable
+    }
+
     @ViewBuilder
     private func buttonRow(_ move: NextMoveCardState.Move) -> some View {
-        if move.isTestable {
+        if Self.showsTestIt(move) {
             Button { actions.onTestIt(move.id) } label: {
                 HStack(spacing: Theme.Spacing.s) {
                     LLIconImage(.test, size: 24)

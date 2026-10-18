@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from lifeline_api import money, prediction
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError
 from lifeline_api.routes.next_move import _latest as latest_next_move
+from lifeline_api.routes.next_move import valid_items
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
 from lifeline_api.store import StoreUnavailable
@@ -114,7 +116,7 @@ async def list_bills(request: Request, sub: Subject) -> BillsResponse:
 
 async def _limits(state: AppState, sub: str) -> dict[Category, float]:
     doc = await state.store.get_doc(sub, DOC_BUDGETS)
-    return {BudgetLimit.model_validate(x).category: BudgetLimit.model_validate(x).limit for x in (doc or [])}
+    return {b.category: b.limit for b in valid_items(BudgetLimit, doc)}
 
 
 @router.get("/v1/finance/budgets", response_model=BudgetsResponse, response_model_exclude_none=True)
@@ -137,7 +139,7 @@ async def update_budgets(body: UpdateBudgetsRequest, request: Request, sub: Subj
 
 async def _goals(state: AppState, sub: str) -> list[SavingsGoal]:
     doc = await state.store.get_doc(sub, DOC_GOALS)
-    return [SavingsGoal.model_validate(x) for x in (doc or [])]
+    return valid_items(SavingsGoal, doc)
 
 
 @router.get("/v1/finance/goals", response_model=GoalsResponse, response_model_exclude_none=True)
@@ -162,7 +164,7 @@ async def create_goal(body: CreateGoalRequest, request: Request, sub: Subject) -
 @router.get("/v1/finance/profile", response_model=FinanceProfile, response_model_exclude_none=True)
 async def get_finance_profile(request: Request, sub: Subject) -> FinanceProfile:
     state, snap = await _snap(request, sub)
-    prof = await call_pure(money_engine.finance_profile, snap, money.today(snap), money.hints(state, sub, snap))
+    prof = await call_pure(money_engine.finance_profile, snap, money.today(snap), None)
     return await money.with_onboarding(state, sub, prof, snap)
 
 
@@ -278,6 +280,7 @@ async def make_guess(body: GuessRequest, request: Request, sub: Subject) -> Spen
 
 # ---------- Money home: one request (UX) ----------
 
+HOME_PART_SECONDS = 3.0
 CONNECT_PROMPT = "Connect your money to see your next move"
 HOME_BILLS = 3
 
@@ -297,26 +300,36 @@ async def get_finance_home(request: Request, sub: Subject) -> Any:
     overview = await call_pure(money.overview, snap)
     bills = await _bills(snap)
 
-    next_move = None
-    try:
-        next_move, _ = await latest_next_move(state, sub)
-    except ApiError as exc:
-        log.info("home: next move unavailable (%s)", exc.code)
-    except StoreUnavailable:
-        log.info("home: next move unavailable (store)")
+    # Next move and prediction run in parallel with one shared budget: home never hangs on slow live sources
+    # (V3 F4). A part not ready in time is left out; the client shows it as loading and the next call fills it.
+    async def move() -> Any:
+        resp, _ = await latest_next_move(state, sub)
+        return resp
 
-    pred = None
-    try:
+    async def today_prediction() -> SpendPrediction | None:
         inp = await prediction.inputs(state, sub)
         day = money.today(inp.snap)
-        if prediction.earliest_day(inp) <= day:
-            try:
-                guesses = await _guess_docs(state, sub)
-            except StoreUnavailable:
-                guesses = {}
-            pred = await _prediction(state, sub, inp, day, guesses.get(day.isoformat()))
-    except ApiError as exc:
-        log.info("home: prediction unavailable (%s)", exc.code)
+        if prediction.earliest_day(inp) > day:
+            return None
+        try:
+            guesses = await _guess_docs(state, sub)
+        except StoreUnavailable:
+            guesses = {}
+        return await _prediction(state, sub, inp, day, guesses.get(day.isoformat()))
+
+    tasks = [asyncio.ensure_future(move()), asyncio.ensure_future(today_prediction())]
+    done, pending = await asyncio.wait(tasks, timeout=HOME_PART_SECONDS)
+    for t in pending:
+        t.cancel()  # the next move keeps finishing in its own background task when it needs to
+    results: list[Any] = []
+    for t in tasks:
+        if t in done and not t.cancelled() and t.exception() is None:
+            results.append(t.result())
+        else:
+            if t in done and t.exception() is not None:
+                log.info("home: part unavailable (%s)", type(t.exception()).__name__)
+            results.append(None)
+    next_move, pred = results[0], results[1]
 
     return FinanceHome(
         has_data=True,

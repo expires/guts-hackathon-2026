@@ -60,6 +60,7 @@ from lifeline_engine.money.profile import (
     debt_total,
     full_data_months,
     full_months_before,
+    is_cash_savings,
     known_monthly_costs,
     liquid,
     monthly_spend,
@@ -72,7 +73,7 @@ from lifeline_engine.money.spending import by_category
 from lifeline_engine.money.text import clean_name, gbp, money_value, pct, pct_value, unsupported_numbers
 from lifeline_engine.periods import similar_years
 from lifeline_engine.population import Person
-from lifeline_engine.wording import best_choice_label, confidence_label, with_sample
+from lifeline_engine.wording import best_choice_label, confidence_label, confidence_sentence, with_sample
 from lifeline_engine.wording import confidence_level as level_of
 
 FloatArray = NDArray[np.float64]
@@ -118,8 +119,13 @@ class StressPeriod:
     name: str
 
     @property
+    def span(self) -> str:
+        """'2021-2023', or '2023' for a one-year period."""
+        return f"{self.start}" if self.start == self.end else f"{self.start}-{self.end}"
+
+    @property
     def test_period(self) -> TestPeriod:
-        return TestPeriod(start=self.start, end=self.end, label=f"{self.start}-{self.end} {self.name} (stress test)")
+        return TestPeriod(start=self.start, end=self.end, label=f"{self.span} {self.name} (stress test)")
 
     def facts(self) -> dict[str, float]:
         return {"stress_start": float(self.start), "stress_end": float(self.end)}
@@ -130,7 +136,7 @@ class StressPeriod:
 
     @property
     def text(self) -> str:
-        return f"the {self.start}-{self.end} {self.name}"
+        return f"the {self.span} {self.name}"
 
 
 # Standard stress period per move kind (ADR 0020).
@@ -139,8 +145,9 @@ STRESS: dict[MoveKind, StressPeriod] = {
     "remortgage": StressPeriod(2021, 2023, "rate shock"),
     "move_savings": StressPeriod(2009, 2011, "low-rate years"),
     "switch_energy": StressPeriod(2021, 2023, "energy price shock"),
-    "pay_off_debt": StressPeriod(2008, 2010, "recession"),
-    "build_emergency_fund": StressPeriod(2008, 2010, "recession"),
+    # ADR 0065: student periods, as in the user's example.
+    "pay_off_debt": StressPeriod(2023, 2023, "rate rises"),
+    "build_emergency_fund": StressPeriod(2022, 2023, "cost-of-living spike"),
 }
 
 KIND_ORDER: tuple[MoveKind, ...] = (
@@ -169,7 +176,13 @@ MOVE_TAG: dict[MoveKind, str] = {
     "switch_subscription": "subscription",
     "cut_budget": "budget_overspend",
     "build_emergency_fund": "emergency_fund",
+    # ADR 0065: student moves. The key is the template id (lifeline_sim policy_choice checks it first).
+    "weekly_budget": "study.term_budget",
+    "lifetime_isa": "money.lifetime_isa",
 }
+# Tags the sim focuses so the move's event fires in the test period (W3 adds them to the templates).
+MOVE_FOCUS: dict[MoveKind, str] = {"weekly_budget": "weekly_budget", "lifetime_isa": "lifetime_isa"}
+POLICY_FOCUS = "__focus"
 POLICY_DEAL_END = "__deal_end_year"
 
 MORTGAGE_OPTIONS = ("fix_5y", "fix_2y", "tracker")
@@ -184,8 +197,10 @@ OPTION_LABEL: dict[str, str] = {
     "cancel": "Cancel it",
     "cut": "Cut back",
     "save": "Build a safety net",
-    "budget": "Keep to a weekly budget",
-    "open_lisa": "Open a Lifetime ISA",
+    "weekly": "Keep to a weekly budget",
+    "freestyle": "Keep spending as now",
+    "open": "Open a Lifetime ISA",
+    "not_now": "Not now",
     "hold": "Keep it as cash",
 }
 OPTION_NUMBERS: dict[str, dict[str, float]] = {"fix_5y": {"fix_years": 5.0}, "fix_2y": {"fix_years": 2.0}}
@@ -352,10 +367,13 @@ def _move(
     shortfall: float | None = None,
     level: Literal["low", "medium", "high"] | None = None,
     no_level: bool = False,
+    reason: str | None = None,
+    basis: str | None = None,
 ) -> Candidate:
     """`sample_size`: matched cases behind `confidence` (ADR 0053 bug 4). `deterministic`: the gain is arithmetic
     on the user's own data, not a sampled outcome. `weeks`: (weeks until the next money, safe weekly spend) for a
-    weekly budget, shown as weeks of cover."""
+    weekly budget, shown as weeks of cover. `reason`: one plain line on why the move helps (ADR 0069).
+    `basis`: what a deterministic confidence rests on, for `confidence_text`."""
     if not pre.met(kind, ctx.snapshot, ctx.today) and impact > 0:
         raise ValueError(f"precondition for {kind} does not hold")
     # The recommended option's label is the action, word for word (V5).
@@ -363,6 +381,7 @@ def _move(
     days_left = None
     if deadline is not None:
         days_left = max(0, (dates.parse(deadline) - ctx.today).days)
+    confidence_level = None if no_level else level or level_of(confidence, sample_size, deterministic)
     move = Move(
         id=move_id,
         kind=kind,
@@ -372,8 +391,10 @@ def _move(
         worst_case_per_year=round(worst, 2),
         confidence=round(min(1.0, max(0.0, confidence)), 4),
         sample_size=sample_size,
-        confidence_level=None if no_level else level or level_of(confidence, sample_size, deterministic),
+        confidence_level=confidence_level,
         confidence_label=with_sample(confidence_text, sample_size, sample_unit),
+        confidence_text=confidence_sentence(confidence_level, sample_size, sample_unit, basis),
+        reason=reason,
         evidence=evidence,
         sources=sources,
         options=options,
@@ -705,6 +726,9 @@ def _mortgage(ctx: Context) -> Candidate | None:
         ctx, kind, kind, action, headline, impact, worst, r.confidence, best_choice_label(r.confidence),
         [e1, e2, e3], sources, _options(best, [*MORTGAGE_OPTIONS, "keep"]), stress.test_period, "interest-rates",
         trade, deadline, sample_size=len(starts) + 1, sample_unit="past periods",
+        reason=(f"Your deal ends in {days_left} days, and this choice did best in similar past periods"
+                if kind == "fix_mortgage" else
+                "You pay more than today's deals, and this choice did best in similar past periods"),
     )
 
 
@@ -779,7 +803,7 @@ def _savings(ctx: Context) -> Candidate | None:
         [*_refs(ctx.macro, ctx.year, [MacroKey.SAVINGS_RATE, MacroKey.BANK_RATE]), _bank_ref(ctx.snapshot)],
         _options("switch", ["keep"]), stress.test_period, "compound-interest",
         trade_offs.move_savings(best_now, biggest_savings_fall(ctx.macro, ctx.year)), sample_size=len(starts),
-        sample_unit="past periods",
+        sample_unit="past periods", reason="Other easy-access accounts pay more interest than yours",
     )
 
 
@@ -854,6 +878,7 @@ def _energy(ctx: Context) -> Candidate | None:
         _options("fix", ["keep"]), stress.test_period, "inflation",
         trade_offs.switch_energy(e.monthly_cost, sum(1 for g in user if g < 0), len(user)), deadline,
         sample_size=len(user), sample_unit="past years",
+        reason="A fixed price protects your bills if energy prices go up",
     )
 
 
@@ -946,7 +971,7 @@ def _debt(ctx: Context) -> Candidate | None:
         return a * share * (card - lost) / 100
 
     user = [gain(amount, s) for s in starts]
-    stressed = gain(amount, stress.start)
+    stressed = gain(amount, stress.start - 1)  # the year into stress.start: card rates moved 2022 -> 2023
     impact, worst = float(np.mean(user)), float(min(*user, stressed))
     if impact <= 0:
         return None
@@ -1001,10 +1026,14 @@ def _debt(ctx: Context) -> Candidate | None:
         {"impact": money_value(impact), **span_facts},
         source_ref(ctx.macro, MacroKey.CARD_RATE, ctx.year),
     )
+    b0, b1 = _bank(ctx.macro, stress.start - 1), _bank(ctx.macro, stress.start)
+    c0, c1 = _card(ctx.macro, stress.start - 1), _card(ctx.macro, stress.start)
     e3 = _ev(
-        f"In {stress.text}, it {_better(stressed)}.",
-        {"stress": money_value(stressed), **stress.facts()},
-        source_ref(ctx.macro, MacroKey.CARD_RATE, stress.start),
+        f"In {stress.text}, Bank Rate went from {pct(b0)} to {pct(b1)} and card rates from {pct(c0)} to "
+        f"{pct(c1)}. Paying it off {_better(stressed)}.",
+        {"bank_from": pct_value(b0), "bank_to": pct_value(b1), "card_from": pct_value(c0), "card_to": pct_value(c1),
+         "stress": money_value(stressed), **stress.facts()},
+        source_ref(ctx.macro, MacroKey.BANK_RATE, stress.start),
     )
     return _move(
         ctx, "pay_off_debt", "pay_off_debt", action, f"{words.subject} {gbp(impact)} a year",
@@ -1013,6 +1042,8 @@ def _debt(ctx: Context) -> Candidate | None:
         _options("pay_off", ["keep"]), stress.test_period, "debt",
         _debt_trade_off(ctx, from_savings, surplus or 0.0, amount, sav, spend, sav_now, card_now, words.target),
         sample_size=len(starts), sample_unit="past years",
+        reason=(f"Your debt costs more in interest than your savings earn, so clearing it saves {gbp(impact)} a year"
+                if from_savings else f"Paying down {words.target} cuts the interest you pay"),
     )
 
 
@@ -1079,11 +1110,15 @@ def _emergency(ctx: Context) -> Candidate | None:
         {"chance_pct": float(p_now), "shock": money_value(shock), "impact": money_value(impact), **span_facts},
         source_ref(ctx.macro, MacroKey.CARD_RATE, ctx.year),
     )
-    p_stress = round(prob(stress.start) * 100)
+    cpi_years = [y for y in range(stress.start, stress.end + 1) if y in ctx.macro.years(MacroKey.CPI_INFLATION)]
+    peak_year = max(cpi_years, key=lambda y: (ctx.macro.value(MacroKey.CPI_INFLATION, y), -y), default=stress.start)
+    peak = _v(ctx.macro, MacroKey.CPI_INFLATION, peak_year, 0.0)
     e3 = _ev(
-        f"In {stress.text}, the chance rose to {p_stress}% and the expected cost to {gbp(stressed)} a year.",
-        {"stress_chance_pct": float(p_stress), "stress": money_value(stressed), **stress.facts()},
-        source_ref(ctx.macro, MacroKey.UNEMPLOYMENT, stress.start),
+        f"In {stress.text}, prices rose {pct(peak)} in {peak_year}. A surprise bill like {gbp(shock)} on a card "
+        f"then cost about {gbp(stressed)} a year.",
+        {"cpi_peak": pct_value(peak), "peak_year": float(peak_year), "shock": money_value(shock),
+         "stress": money_value(stressed), **stress.facts()},
+        source_ref(ctx.macro, MacroKey.CPI_INFLATION, peak_year),
     )
     return _move(
         ctx, "build_emergency_fund", "build_emergency_fund", f"Build a safety net of {gbp(target)}",
@@ -1093,6 +1128,7 @@ def _emergency(ctx: Context) -> Candidate | None:
         _options("save", ["keep"]), stress.test_period, "emergency-fund",
         _emergency_trade_off(ctx, gap), cover_months=float(EMERGENCY_MONTHS), sample_size=len(starts),
         sample_unit="past years",
+        reason=f"With {EMERGENCY_MONTHS} months of costs put aside, a surprise bill does not go on a card",
     )
 
 
@@ -1108,9 +1144,16 @@ def _emergency_trade_off(ctx: Context, amount: float) -> TradeOff:
     measured = savings_rate_pct(ctx.snapshot, ctx.today)
     sav_now = measured if measured is not None else _savings_avg(ctx.macro, ctx.year)
     hist = stock_history(ctx.macro, ctx.year)
+    inv = invests(ctx.snapshot)
     if hist is None:
-        return trade_offs.emergency_fund(amount, sav_now, None, None, None, measured is not None)
-    return trade_offs.emergency_fund(amount, sav_now, *hist, measured is not None)
+        return trade_offs.emergency_fund(amount, sav_now, None, None, None, measured is not None, inv)
+    return trade_offs.emergency_fund(amount, sav_now, *hist, measured is not None, inv)
+
+
+def invests(snapshot: FinanceSnapshot) -> bool:
+    """The user holds investments: a pension or a stocks and shares ISA. Most students do not (ADR 0070), so their
+    trade-offs talk about weekly spending and a savings buffer, not investing."""
+    return any(a.kind == "pension" or (a.kind == "isa" and not is_cash_savings(a)) for a in snapshot.accounts)
 
 
 # ---------- subscriptions ----------
@@ -1147,6 +1190,8 @@ def _subscription(ctx: Context) -> Candidate | None:
         f"{name} put its price up", impact, impact, 1.0, SURE_LABEL, [e1, e2, e3],
         [_bank_ref(ctx.snapshot)], _options("cancel", ["keep"]), ctx.matched_test_period(), "budgeting",
         trade_offs.cancel_subscription(name, s.amount, _PER[s.cadence], s.price_rise.to_amount), deterministic=True,
+        reason=f"{name} put its price up, and cancelling it saves {gbp(impact)} a year",
+        basis="the price is on your own statement",
     )
 
 
@@ -1212,6 +1257,7 @@ def _budget(ctx: Context) -> Candidate | None:
         f"You spent this little in {under} of the last {n} months",
         [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("cut", ["keep"]), ctx.matched_test_period(), "budgeting",
         trade_offs.cut_budget(name, excess, avg, n - under, n), sample_size=n, sample_unit="months",
+        reason=f"You spent {gbp(excess)} more than usual on {name} last month",
     )
 
 
@@ -1306,9 +1352,68 @@ def _weekly_budget(ctx: Context) -> Candidate | None:
     )
     return _move(
         ctx, "weekly_budget", "weekly_budget", action, headline, impact, 0.0, conf, label,
-        [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("budget", ["keep"]), None, "budgeting",
+        [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("weekly", ["freestyle"]),
+        TestPeriod(start=ctx.year, end=ctx.year, label=f"This term ({ctx.year})"), "budgeting",
         trade, dates.iso(wb.next_date), weeks=(wb.weeks_left, wb.safe_weekly), shortfall=wb.short_by,
-        level="medium",
+        level="medium", sample_size=wb.weeks_seen, sample_unit="weeks of your spending",
+        reason=(f"At your usual pace, your money runs out before your {what} on {when}"
+                if wb.safe_weekly >= MIN_WEEKLY else f"Your bills before your {what} on {when} take all your cash"),
+    )
+
+
+MIN_SPARE = 20.0  # GBP; below this the on-track plan only says what to keep to each week
+
+
+def _on_track(ctx: Context) -> Candidate | None:
+    """ADR 0070: the active move when nothing else applies and the money lasts until the next payment.
+    Keep the usual weekly pace and move what is spare into savings. Gain is weeks of cover, never a £ a year."""
+    wb = stu.weekly_budget(ctx.snapshot, stu.from_snapshot(ctx.snapshot, ctx.today), ctx.today,
+                           max(0.0, liquid(ctx.snapshot)))
+    if wb is None or wb.short_by > 0 or wb.weekly_pace <= 0:
+        return None
+    when, when_facts = day_text(wb.next_date)
+    what = PAYMENT_WORDS.get(wb.next_kind, "next payment")
+    weeks_left = round(wb.weeks_left, 1)
+    # Only the current account can move: money already in savings is not spare cash.
+    current = sum(a.balance for a in ctx.snapshot.accounts if a.kind == "current")
+    spare = max(0.0, min(current, wb.cash) - wb.bills_before - wb.weekly_pace * wb.weeks_left)
+    e1 = _ev(
+        f"You have {gbp(wb.cash)} until your {what} on {when}, in {wb.days_left} days. "
+        f"Regular bills before then: {gbp(wb.bills_before)}.",
+        {"cash": money_value(wb.cash), "days_left": float(wb.days_left), "bills": money_value(wb.bills_before),
+         **when_facts},
+        _bank_ref(ctx.snapshot),
+    )
+    if spare < MIN_SPARE:
+        spare = 0.0
+    left = f" and {gbp(spare)} in your current account is spare" if spare else ""
+    e2 = _ev(
+        f"You usually spend about {gbp(wb.weekly_pace)} a week (middle of the last {wb.weeks_seen} weeks). "
+        f"At that pace your money lasts the {weeks_left:g} weeks{left}.",
+        {"pace": money_value(wb.weekly_pace), "weeks_seen": float(wb.weeks_seen), "weeks_left": weeks_left,
+         **({"spare": money_value(spare)} if spare else {})},
+        _bank_ref(ctx.snapshot),
+    )
+    within = sum(1 for w in stu.weekly_spend(ctx.snapshot.transactions, ctx.today) if w <= wb.weekly_pace)
+    e3 = _ev(
+        f"You kept to that pace in {within} of the last {wb.weeks_seen} weeks.",
+        {"within": float(within), "weeks_seen": float(wb.weeks_seen)},
+    )
+    if spare:
+        action = f"Move {gbp(spare)} you will not need into savings"
+        reason = f"At your usual pace you have {gbp(spare)} spare before your {what} on {when}"
+    else:
+        action = f"Keep to about {gbp(wb.weekly_pace)} a week until {when}"
+        reason = f"At your usual pace your money lasts until your {what} on {when}"
+    conf = within / wb.weeks_seen if wb.weeks_seen else 0.0
+    return _move(
+        ctx, "weekly_budget", "weekly_budget", action, f"You are on track until {when}", 0.0, 0.0, conf,
+        f"You kept to your usual pace in {within} of the last {wb.weeks_seen} weeks",
+        [e1, e2, e3], [_bank_ref(ctx.snapshot)], _options("weekly", ["freestyle"]),
+        TestPeriod(start=ctx.year, end=ctx.year, label=f"This term ({ctx.year})"), "budgeting",
+        trade_offs.on_track(spare, wb.weekly_pace, when, when_facts), dates.iso(wb.next_date),
+        weeks=(wb.weeks_left, wb.weekly_pace), shortfall=0.0,
+        level="medium", sample_size=wb.weeks_seen, sample_unit="weeks of your spending", reason=reason,
     )
 
 
@@ -1358,8 +1463,10 @@ def _lifetime_isa(ctx: Context) -> Candidate | None:
         ctx, "lifetime_isa", "lifetime_isa", f"Put {gbp(room)} in a Lifetime ISA",
         f"Get a {gbp(bonus)} government bonus", bonus, -loss, 1.0, SURE_LABEL,
         [e1, e2, e3], [_bank_ref(ctx.snapshot), _rule("lisa_bonus_rate"), _rule("lisa_withdrawal_charge")],
-        _options("open_lisa", ["keep"]), None, "deposit",
+        _options("open", ["not_now"]), ctx.matched_test_period(), "deposit",
         trade_offs.lifetime_isa(room, bonus, loss, charge, house, free_age), deterministic=True,
+        reason=f"The government adds {rate:g}% to what you pay in, so {gbp(room)} gets a {gbp(bonus)} bonus",
+        basis="the bonus is a fixed government rule",
     )
 
 
@@ -1405,7 +1512,9 @@ def _keep_cash(ctx: Context) -> Candidate | None:
         f"Your savings earn {gbp(impact)} a year more than elsewhere",
         impact, worst, conf, f"Cash beat price rises in {beat} of the last {len(years)} years",
         [e1, e2, e3], [_bank_ref(ctx.snapshot), cpi_ref], _options("hold", []), None, "inflation",
-        trade_offs.keep_cash(sav, rate, cpi, ctx.year), sample_size=len(years), sample_unit="years",
+        trade_offs.keep_cash(sav, rate, cpi, ctx.year, invests(ctx.snapshot)), sample_size=len(years),
+        sample_unit="years",
+        reason="Your savings already earn more than the best easy-access rate",
     )
 
 
@@ -1433,7 +1542,8 @@ def _fallback(ctx: Context) -> Candidate:
         ctx, "build_emergency_fund", "build_emergency_fund", "Keep your safety net topped up",
         "Nothing urgent this month", 0.0, 0.0, 0.0, "Nothing urgent. Your money looks on track",
         evidence, [_bank_ref(ctx.snapshot)], _options("save", ["keep"]), None, "emergency-fund",
-        _emergency_trade_off(ctx, cash), cover_months=months, no_level=True,
+        trade_offs.keep_buffer(cash), cover_months=months, no_level=True,
+        reason="We found no bill, rate or debt that needs action now",
     )
 
 
@@ -1451,17 +1561,33 @@ BUILDERS: tuple[Callable[[Context], Candidate | None], ...] = (
 )
 
 
-def candidates(ctx: Context) -> list[Candidate]:
-    out = [c for c in (b(ctx) for b in BUILDERS) if c is not None and c.move.impact_per_year > 0]
+def built(ctx: Context) -> list[Candidate]:
+    """Every candidate move the engine built and scored for this user (a builder whose precondition fails builds
+    nothing). Its length is `options_compared` (ADR 0069)."""
+    return [c for c in (b(ctx) for b in BUILDERS) if c is not None]
 
-    def key(c: Candidate) -> tuple[int, float, int, int]:
+
+def candidates(ctx: Context, evaluated: Sequence[Candidate] | None = None) -> list[Candidate]:
+    out = [c for c in (built(ctx) if evaluated is None else evaluated) if c.move.impact_per_year > 0]
+
+    def key(c: Candidate) -> tuple[int, bool, float, int, int]:
         """Urgent first (F-V2-2, F-R-1): money running short before the next payment beats every yearly gain.
         Then score, nearer deadline, kind order."""
         urgent = 0 if c.move.kind == "weekly_budget" and (c.move.shortfall or 0) > 0 else 1
         days = c.move.days_left if c.move.days_left is not None else 10**6
-        return (urgent, -round(c.score, 6), days, KIND_ORDER.index(c.move.kind))
+        return (urgent, is_no_op(c.move), -round(c.score, 6), days, KIND_ORDER.index(c.move.kind))
 
     return sorted(out, key=key)
+
+
+NO_OP_KINDS: frozenset[str] = frozenset({"keep_cash"})
+
+
+def is_no_op(move: Move) -> bool:
+    """'No action needed' moves (keep your savings where they are, the nothing-urgent fallback). ADR 0070: they may
+    only be runners-up; an active move always ranks first."""
+    fallback = move.kind == "build_emergency_fund" and move.confidence_level is None and move.impact_per_year == 0
+    return move.kind in NO_OP_KINDS or fallback
 
 
 def build_context(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> Context:
@@ -1474,9 +1600,17 @@ def build_context(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.dat
 def next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0) -> NextMoveResponse:
     """ONE top move and up to 2 runners-up. `generated_at` is a placeholder: the API sets server time."""
     ctx = build_context(snapshot, macro, today, seed)
-    ranked = candidates(ctx)
-    if not ranked:
-        ranked = [_fallback(ctx)]
+    evaluated = built(ctx)
+    ranked = candidates(ctx, evaluated)
+    if not any(not is_no_op(c.move) for c in ranked):
+        # ADR 0070: no real action applies, so the top move is the on-track weekly plan when the data allows,
+        # and "nothing urgent" may follow only as a runner-up.
+        plan = _on_track(ctx)
+        if plan is not None:
+            evaluated = [*evaluated, plan]
+        ranked = [*([plan] if plan is not None else []), *ranked] or [_fallback(ctx)]
+        if plan is not None and len(ranked) < 3:
+            ranked.append(_fallback(ctx))
     top = ranked[0].move
     backtest = mortgage_backtest(macro, ctx.year) if top.kind in ("fix_mortgage", "remortgage") else None
     shown = [top, *[c.move for c in ranked[1:3]]]
@@ -1488,6 +1622,7 @@ def next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, s
         meta=finance_meta(snapshot),
         top=top,
         runners_up=[c.move for c in ranked[1:3]],
+        options_compared=max(len(evaluated), len(shown)),
         backtest=backtest,
         decision_sources=decision,
         decision_source_count=count_decision_sources(decision),
@@ -1560,9 +1695,11 @@ def option_policy(move: Move, option_id: str) -> dict[str, str]:
     tag key, so the event sets match across options. Mortgage moves also set the deal end year."""
     if option_id not in {o.id for o in move.options}:
         raise ValueError(f"unknown option {option_id} for move {move.id}")
-    if move.kind not in MOVE_TAG:
+    if move.kind not in MOVE_TAG or move.test_period is None:
         raise ValueError(f"move {move.id} cannot be tested")
     policy = {MOVE_TAG[move.kind]: option_id}
+    if move.kind in MOVE_FOCUS:
+        policy[POLICY_FOCUS] = MOVE_FOCUS[move.kind]
     if move.kind in ("fix_mortgage", "remortgage") and move.test_period is not None:
         policy[POLICY_DEAL_END] = str(move.test_period.start)
     return policy

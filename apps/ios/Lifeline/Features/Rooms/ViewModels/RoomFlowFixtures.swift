@@ -9,7 +9,7 @@ enum RoomFlowFixtures {
     /// 4-player room: you (host), Ava, Tom and Jas. Jas is not ready yet.
     static let lobbyRoom: Room = ContractExamples.decode(#"""
     {
-      "code": "LEEDS4", "mode": "group", "seed": 777042, "preset_id": "nurse-leeds", "start_year": 2021,
+      "code": "4242", "mode": "group", "seed": 777042, "preset_id": "nurse-leeds", "start_year": 2021,
       "max_players": 6,
       "players": [
         {"id": "p1", "name": "Ash", "is_host": true, "ready": true, "connected": true, "finished": false},
@@ -17,7 +17,7 @@ enum RoomFlowFixtures {
         {"id": "p3", "name": "Tom", "is_host": false, "ready": true, "connected": true, "finished": false},
         {"id": "p4", "name": "Jas", "is_host": false, "ready": false, "connected": true, "finished": false}
       ],
-      "join_url": "lifeline://join/LEEDS4", "qr_png_base64": "iVBORw0KGgo=", "status": "lobby"
+      "join_url": "lifeline://join/4242", "qr_png_base64": "iVBORw0KGgo=", "status": "lobby"
     }
     """#)
 
@@ -62,7 +62,7 @@ enum RoomFlowFixtures {
     static var life: Life {
         var life = ContractExamples.lifeReadyToAge
         life.id = "lf_room01"
-        life.roomCode = "LEEDS4"
+        life.roomCode = "4242"
         life.history += [
             YearLog(year: 2021, age: 29, text: "Fixed for 2 years at 1.28%.", eventId: "ev-2021-1", choiceId: "fix2", netWorth: 9_000, autopilotNetWorth: 9_000, index: 100),
             YearLog(year: 2023, age: 31, text: "Cut the takeaway budget by £60 a month.", eventId: "ev-2023-1", choiceId: "cut", netWorth: 14_200, autopilotNetWorth: 13_100, index: 104),
@@ -112,9 +112,9 @@ enum RoomFlowFixtures {
 
     static var entryReady: RoomEntryViewState { entry() }
     static var entryOpening: RoomEntryViewState { entry(busy: "Opening your lobby") }
-    static var entryJoining: RoomEntryViewState { entry(joinCode: "K7Q2ZP", busy: "Joining room K7Q2ZP") }
+    static var entryJoining: RoomEntryViewState { entry(joinCode: "1234", busy: "Joining room 1234") }
     static var entryError: RoomEntryViewState { entry(joinCode: "ZZZZZZ", error: "That room does not exist.") }
-    static var entryActive: RoomEntryViewState { entry(active: .init(code: "LEEDS4", detail: "Playing · Money Quiz")) }
+    static var entryActive: RoomEntryViewState { entry(active: .init(code: "4242", detail: "Playing · Money Quiz")) }
 
     /// The lobby with a picked Money Quiz.
     static var quizRoom: Room {
@@ -139,7 +139,7 @@ enum RoomFlowFixtures {
     static func picker(_ game: RoomGameKind) -> GamePickerViewState {
         var draft = GameMapping.Draft()
         draft.game = game
-        draft.pathID = "university"
+        draft.pathID = "uni"
         return GameMapping.picker(draft: draft, paths: MockPlayData.paths, pathsPhase: .ready)
     }
 

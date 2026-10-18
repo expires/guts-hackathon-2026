@@ -22,6 +22,7 @@ final class MockRoomTransport: RoomTransport {
 
     func createRoom(_ request: CreateRoomRequest) async throws -> Room {
         var room = try await client.createRoom(request)
+        room.code = await registry.freeCode(seed: room.seed)
         // Lobby first (ADR 0059): the mode follows the player count at start.
         if request.mode == nil { room.mode = .group }
         room.maxPlayers = request.mode == .duel ? 2 : 6
@@ -82,6 +83,13 @@ actor MockRoomRegistry {
     private var servers: [String: MockRoomServer] = [:]
 
     func existing(code: String) -> MockRoomServer? { servers[code] }
+
+    /// A 4-digit code no other mock room uses (ADR 0064).
+    func freeCode(seed: Int) -> String {
+        var number = abs(seed) % 10_000
+        while servers[String(format: "%04d", number)] != nil { number = (number + 1) % 10_000 }
+        return String(format: "%04d", number)
+    }
 
     func server(code: String, make: () -> MockRoomServer) -> MockRoomServer {
         if let server = servers[code] { return server }
@@ -362,7 +370,14 @@ actor MockRoomServer {
     private func finishIfDone() {
         guard room.status == .playing, room.players.allSatisfy({ $0.finished == true }) else { return }
         room.status = .finished
-        broadcast(.init(_type: .finished, room: room))
+        // Ranking by result: INDEX, then game net worth.
+        let ranked = room.players.sorted { ($0.index ?? 0, $0.netWorth ?? 0) > ($1.index ?? 0, $1.netWorth ?? 0) }
+        let ranking = ranked.enumerated().map { offset, player in
+            PlayWire.Score(playerId: player.id, name: player.name, score: Int((player.index ?? 0).rounded()), rank: offset + 1)
+        }
+        let winner = ranked.first
+        let line = winner.map { "\($0.name) wins this Same Life with INDEX \(Int(($0.index ?? 0).rounded())). Same events, better choices." }
+        broadcast(.init(_type: .finished, room: room, ranking: ranking, winnerLine: line))
         simulation?.cancel()
     }
 

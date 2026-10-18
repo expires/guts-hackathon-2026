@@ -191,7 +191,7 @@ async def test_preloaded_wrong_personal_number_rejected() -> None:
 
 
 def test_prompt_has_live_data_rule() -> None:
-    assert prompts.PENNY_PROMPT_VERSION == "penny-v5"
+    assert prompts.PENNY_PROMPT_VERSION == "penny-v7"
     assert "Never say you lack live or current rates; call boe_rates." in prompts.PENNY_SYSTEM
 
 

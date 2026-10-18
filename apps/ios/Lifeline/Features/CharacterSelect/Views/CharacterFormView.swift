@@ -22,7 +22,7 @@ struct CharacterFormView: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 ScreenHeader(title: state.title, leading: HeaderSquareButton(kind: .back, identifier: "form.back") { dismiss() }) { EmptyView() }
                 if !state.quickPicks.isEmpty {
-                    RowGroupTitle(text: "Quick pick")
+                    RowGroupTitle(text: L10n.tr("Quick pick"))
                     FlowRow(spacing: Theme.Spacing.s) {
                         ForEach(state.quickPicks) { pick in
                             Button { actions.onQuickPick(pick.id) } label: {
@@ -37,7 +37,7 @@ struct CharacterFormView: View {
                 }
                 if state.showsBankConnect {
                     Button(action: actions.onConnectBank) {
-                        ListRow(icon: .bank, title: "Fill in from my bank", subtitle: state.bankStatusText)
+                        ListRow(icon: .bank, title: L10n.tr("Fill in from my bank"), subtitle: state.bankStatusText)
                             .padding(.horizontal, Theme.Spacing.l)
                             .inkSurface(.card)
                     }
@@ -48,7 +48,7 @@ struct CharacterFormView: View {
                 LLTextField(title: "Name", text: field(\.name), identifier: "form.name")
                     .textContentType(.givenName)
                 LLStepper(
-                    title: "Born in",
+                    title: L10n.tr("Born in"),
                     valueText: String(state.fields.birthYear),
                     canDecrement: state.fields.birthYear > state.birthYearRange.lowerBound,
                     canIncrement: state.fields.birthYear < state.birthYearRange.upperBound,
@@ -56,9 +56,9 @@ struct CharacterFormView: View {
                     onDecrement: { change(\.birthYear, state.fields.birthYear - 1) },
                     onIncrement: { change(\.birthYear, state.fields.birthYear + 1) }
                 )
-                LLTextField(title: "Job, for example nurse", text: field(\.occupation), identifier: "form.occupation")
+                LLTextField(title: L10n.tr("Job, for example nurse"), text: field(\.occupation), identifier: "form.occupation")
                     .textContentType(.jobTitle)
-                RowGroupTitle(text: "Where you live")
+                RowGroupTitle(text: L10n.tr("Where you live"))
                 LLChoiceChips(
                     title: "Region",
                     options: state.regions.map { .init(id: $0.id, label: $0.label) },
@@ -74,9 +74,9 @@ struct CharacterFormView: View {
                     identifier: "form.housing"
                 ) { if let option = HousingOption(rawValue: $0) { change(\.housing, option) } }
                 RowGroupTitle(text: "Money")
-                LLMoneyField(title: "Pay before tax, per year", value: field(\.income), identifier: "form.income")
+                LLMoneyField(title: L10n.tr("Pay before tax, per year"), value: field(\.income), identifier: "form.income")
                 LLMoneyField(title: "Savings", value: field(\.savings), identifier: "form.savings")
-                LLMoneyField(title: "Debts (card, overdraft, Klarna)", value: field(\.debt), identifier: "form.debt")
+                LLMoneyField(title: L10n.tr("Debts (card, overdraft, Klarna)"), value: field(\.debt), identifier: "form.debt")
                 Text(state.footer).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
             .padding(.horizontal, Theme.Spacing.margin)
@@ -128,14 +128,3 @@ struct CharacterFormView: View {
     CharacterFormView(state: Fixtures.CharacterForm.bankFilled).previewInNavigation().previewLargeType()
 }
 
-#Preview("God Mode · light") {
-    CharacterFormView(state: Fixtures.CharacterForm.godMode).previewInNavigation()
-}
-
-#Preview("God Mode · dark") {
-    CharacterFormView(state: Fixtures.CharacterForm.godMode).previewInNavigation().previewDark()
-}
-
-#Preview("God Mode · AX3") {
-    CharacterFormView(state: Fixtures.CharacterForm.godMode).previewInNavigation().previewLargeType()
-}

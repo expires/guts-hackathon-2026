@@ -49,11 +49,13 @@ from lifeline_contracts.chat import (
     ToolStep,
 )
 from lifeline_contracts.domain import SourceRef
-from lifeline_explain import official, prompts
+from lifeline_explain import game_scene, i18n, learn_scene, official, prompts
+from lifeline_explain import safety_intl as intl
 from lifeline_explain.chat_llm import WEB_SEARCH_TOOL, AnthropicChatLLM, ChatLLM, LLMStep, ToolUse
 from lifeline_explain.chat_tools import (
     CLIENT_TOOL_NAMES,
     CONTRACT_TOOL_NAMES,
+    PERSONAL_TOOL_NAMES,
     TOOL_NAMES,
     ChatToolContext,
     ChatTurn,
@@ -240,6 +242,8 @@ def step_label(ctx: ChatToolContext, name: str, args: Any) -> str:
 
 
 def _emit(state: TurnState, type_: str, **fields: Any) -> None:
+    if type_ == "tool_step" and isinstance(fields.get("label"), str):
+        fields["label"] = i18n.step(fields["label"], state.lang)[:80]  # ADR 0063: labels in the user's language
     if state.emit is not None:
         with contextlib.suppress(Exception):  # streaming must never break the answer
             state.emit(type_, fields)
@@ -261,11 +265,15 @@ class TurnState:
     personal: list[ChatFact] = field(default_factory=list)  # the user's own money facts (general-mode block)
     committed: tuple[BubbleKind, str, ChatMode] | None = None  # bubble 1 already streamed (speed, V1)
     testable: bool = False  # the user's top move can be replayed (Test it)
+    lang: i18n.Lang = "en"  # ADR 0063: answer language
+    onboarding: bool = False  # ChatContext.screen == "onboarding": public tools only, no links
     source_tools: dict[str, set[str]] = field(default_factory=dict)  # source id -> tools that returned it
     fact_tool: dict[str, str] = field(default_factory=dict)  # fact id -> tool that returned it
+    scene: bool = False  # game screen with its GAME DATA loaded: answers are checked against the game numbers
+    guard: game_scene.Guard | None = None  # multiplayer no-pick and open-quiz checks
 
     def app_tool_used(self) -> bool:
-        return any(c.ok and c.name in CLIENT_TOOL_NAMES for c in self.calls)
+        return self.scene or any(c.ok and c.name in CLIENT_TOOL_NAMES for c in self.calls)
 
     def add_web(self, url: str, title: str, text: str = "") -> None:
         """A web page the model saw. Rules questions (ADR 0058): only official pages count, and numbers in their
@@ -387,15 +395,17 @@ class Penny:
     async def answer(self, request: ChatRequest, ctx: ChatToolContext, *, emit: Emit | None = None) -> ChatResponse:
         """One answer. `emit(type, fields)` receives progress events (tool_step, verifying, error) for streaming."""
         ids = self._ids(request, ctx)
-        state = TurnState(emit=emit)
+        state = TurnState(emit=emit, lang=i18n.lang_of(getattr(request, "language", "en")))
+        state.onboarding = is_onboarding(request, ctx)
+        state.guard = game_scene.make_guard(ctx.request_context or request.context, ctx.scene)
         reason = "llm_error"
         if distress_rule(request.message):
             # Deterministic, before any LLM call: a kind reply with support contacts (ADR 0051).
-            return self._build(ids, distress_draft(), state, verified=True, mode="general")
+            return self._build(ids, distress_draft(state.lang), state, verified=True, mode="general")
         if out_of_scope_rule(request.message):
             return self._build(ids, Draft("shrug", [], out_of_scope=True), state, verified=True, mode="general")
         try:
-            async with asyncio.timeout(2 * self.settings.timeout_seconds):
+            async with asyncio.timeout(self.settings.chat_deadline):
                 if self.llm is None:
                     return await self._template(ids, state, ctx, reason="llm_unavailable")
                 return await self._loop(request, ctx, state, ids)
@@ -405,7 +415,7 @@ class Penny:
         except Exception as exc:
             log.warning("penny: error (%s); template", type(exc).__name__)
         try:
-            return await asyncio.wait_for(self._template(ids, state, ctx, reason=reason), timeout=5)
+            return await asyncio.wait_for(self._template(ids, state, ctx, reason=reason), timeout=2)
         except Exception:
             _emit(state, "error", error_code=reason)
             return self._unavailable(ids, state)
@@ -500,13 +510,19 @@ class Penny:
         then needs one model call. The results are real tool outputs; they count as tool calls only when the
         answer uses them."""
         names = [n for n in (getattr(ctx.tools, "preload", ()) or ()) if n in CLIENT_TOOL_NAMES][:2]
+        args: dict[str, dict[str, Any]] = {}
+        rc = ctx.request_context
+        if rc is not None and rc.screen == "test_it" and "test_move" in {s.name for s in ctx.tools.specs()}:
+            # Test it: the replay of the move on screen (same seed as the card, so the same result).
+            names = [n for n in names if n != "finance_summary"][:1] + ["test_move"]
+            args["test_move"] = {"move_id": rc.next_move_id or "top"}
         if state.rules and names and "facts_table" in {s.name for s in ctx.tools.specs()}:
             names.append("facts_table")  # ADR 0058: official rules first, without a tool round trip
         if not names:
             return None
         try:
             got = await asyncio.wait_for(
-                asyncio.gather(*(self._call_tool(ctx, n, {}) for n in names)), timeout=PRELOAD_SECONDS
+                asyncio.gather(*(self._call_tool(ctx, n, args.get(n, {})) for n in names)), timeout=PRELOAD_SECONDS
             )
         except TimeoutError:
             log.info("penny: preload timed out")
@@ -527,20 +543,58 @@ class Penny:
         )
         return intro + json.dumps(payload, ensure_ascii=False)
 
+    def _scene(self, ctx: ChatToolContext, state: TurnState, intro: str | None = None) -> str | None:
+        """Game screens: the event or round the user looks at (loaded server-side by W4) goes with the question as
+        GAME DATA. Its facts are the game numbers, the only numbers the answer may use. No user money is sent."""
+        scene = ctx.scene
+        if scene is None:
+            return None
+        before = {f.id for f in state.facts}
+        payload = self._register(scene.tool, scene.output, state)
+        call_ = ToolCall.model_construct(name=cast(Any, scene.tool), ok=True, duration_ms=0)
+        state.preloaded.append((scene.tool, scene.output, call_))
+        state.preloaded_ids = {f.id for f in state.facts} - before
+        state.scene = True
+        if intro is None:
+            intro = "GAME DATA (the screen the user is looking at; game numbers from the engine, never real money): "
+        return intro + json.dumps({scene.tool: payload}, ensure_ascii=False)
+
     async def _loop(
         self, request: ChatRequest, ctx: ChatToolContext, state: TurnState, ids: dict[str, str]
     ) -> ChatResponse:
         assert self.llm is not None
         state.rules = official.is_rules_question(request.message)
         challenged = is_challenge(request.message)
-        app_data, state.personal = await asyncio.gather(self._preload(ctx, state), self._personal_facts(ctx))
+        state.onboarding = is_onboarding(request, ctx)
+        game = game_scene.is_game_screen(ctx.request_context or request.context)
+        lesson = learn_scene.is_learn_screen(ctx.request_context or request.context)
+        lesson_no_money = lesson and not learn_scene.asks_own_money(request.message)
+        if state.onboarding:
+            # Onboarding "Meet Penny" chat: public tools only, general answers, no APP DATA (even with user data).
+            app_data, state.personal = None, await self._personal_facts(ctx)
+        elif game:
+            # Life event or room round: the game data only, never the user's own money (speed: no personal preload).
+            app_data, state.personal = self._scene(ctx, state), await self._personal_facts(ctx)
+        elif lesson_no_money:
+            # Learn lesson: the lesson only (no personal preload, speed). Asked about their own money: normal path.
+            app_data, state.personal = self._scene(ctx, state, LESSON_INTRO), await self._personal_facts(ctx)
+        else:
+            app_data, state.personal = await asyncio.gather(self._preload(ctx, state), self._personal_facts(ctx))
+            if lesson:
+                # Learn lesson and a question about the user's own money: APP DATA and the lesson both go in.
+                preloaded = set(state.preloaded_ids)
+                lesson_data = self._scene(ctx, state, LESSON_INTRO)
+                state.preloaded_ids = set(state.preloaded_ids) | preloaded
+                app_data = "\n".join(p for p in (app_data, lesson_data) if p) or None
         # Speed (V1): a preloaded tool is not offered again (its result is in APP DATA), except after a challenge.
         skip = set() if challenged else {name for name, _, _ in state.preloaded}
+        if state.onboarding or game or lesson_no_money:
+            skip |= PERSONAL_TOOL_NAMES
         tools = [{"name": s.name, "description": s.description, "input_schema": s.input_schema}
                  for s in ctx.tools.specs() if s.name not in skip]  # fmt: skip
         tools.append(web_search_tool(state.rules))
         messages = build_messages(request, ctx, app_data)
-        nudged = rewritten = personal_retried = official_retried = fx_retried = False
+        nudged = rewritten = personal_retried = official_retried = fx_retried = weekly_retried = False
         reason = "max_steps"
         streams = bool(getattr(self.llm, "supports_stream", False)) and state.emit is not None and not challenged
         for _ in range(MAX_STEPS):
@@ -575,10 +629,13 @@ class Penny:
                 messages.append({"role": "assistant", "content": _content(step)})
                 messages.append({"role": "user", "content": prompts.PENNY_CHALLENGE_NUDGE})
                 continue
-            fixed = fixed_reply(draft)
+            fixed = fixed_reply(draft, state.lang)
             if fixed is not None:
                 return self._build(ids, fixed[0], state, verified=True, fixed_text=fixed[1], mode="general")
             draft = apply_rules(draft, challenged)
+            if state.guard is not None:
+                # Before the checks: a dropped pick or quiz answer never causes a rewrite round trip (speed).
+                draft = replace(draft, bubbles=game_scene.guard_bubbles(draft.bubbles, state.guard, state.lang))
             chk = check_draft(draft, state)
             if chk.kind is not None and len(draft.bubbles) > 1:
                 # Speed (V1): keep a good first bubble and drop a failing second one instead of a rewrite.
@@ -602,6 +659,12 @@ class Penny:
                     break
                 rewritten = True
                 retry = prompts.PENNY_REWRITE.format(bad=", ".join(chk.bad))
+            elif chk.kind == "no_weekly":
+                self._promote(ctx, state, draft)
+                if weekly_retried:
+                    return self._build(ids, weekly_draft(draft, state), state, verified=True)  # V5: facts exist
+                weekly_retried = True
+                retry = prompts.PENNY_WEEKLY_RETRY
             elif chk.kind == "fx_rate":
                 self._promote(ctx, state, draft)
                 if fx_retried:
@@ -666,11 +729,16 @@ class Penny:
             if not body:
                 return
             draft = Draft("eyes", [(cast(BubbleKind, kind), body)])
-            if fixed_reply(draft) is not None:
+            if fixed_reply(draft, state.lang) is not None:
                 return
+            if state.guard is not None and state.guard.changes(body):
+                return  # a pick or a quiz answer: never streamed; the final answer is guarded
             chk = check_draft(draft, state)
             if chk.kind is not None:
                 return
+            if not state.verifying_sent:
+                state.verifying_sent = True
+                _emit(state, "verifying")  # contract order: verifying, then bubbles (V5)
             state.committed = (cast(BubbleKind, kind), body, chk.mode)
             if chk.mode == "checked":
                 self._promote(ctx, state, draft)
@@ -689,10 +757,10 @@ class Penny:
         if draft is not None and not draft.out_of_scope:
             for k, t in draft.bubbles[1:MAX_BUBBLES]:
                 second = Draft(reaction, [(k, t)])
-                if fixed_reply(second) is None and check_draft(second, state, mode=mode).kind is None:
+                if fixed_reply(second, state.lang) is None and check_draft(second, state, mode=mode).kind is None:
                     bubbles.append((k, t))
                 if distress_rule(t):
-                    bubbles = [(kind, text), ("answer", prompts.DISTRESS_TEXT[1])]
+                    bubbles = [(kind, text), ("answer", i18n.DISTRESS[state.lang][1])]
         if reaction == "shrug":
             reaction = "eyes"
         return self._build(ids, Draft(reaction, bubbles[:MAX_BUBBLES], suggestions=suggestions), state,
@@ -712,7 +780,7 @@ class Penny:
 
         if state.attempted >= MAX_TOOL_CALLS:
             return err("Tool limit reached. Answer now with the facts you have.")
-        if tu.name not in CLIENT_TOOL_NAMES:
+        if tu.name not in CLIENT_TOOL_NAMES or (state.onboarding and tu.name in PERSONAL_TOOL_NAMES):
             return err(f"Unknown tool: {tu.name[:40]}")
         state.attempted += 1
         _emit(state, "tool_step", tool=tu.name, label=step_label(ctx, tu.name, tu.input))
@@ -785,7 +853,7 @@ class Penny:
                 _emit(state, "error", error_code=reason)
                 return self._unavailable(ids, state)
             log.info("penny: could not confirm (%s)", reason)
-            draft = Draft("question", [("answer", NOT_CONFIRMED_TEXT)], suggestions=["Next move"])
+            draft = Draft("question", [("answer", i18n.NOT_CONFIRMED[state.lang])])
             return self._build(ids, draft, state, verified=False, mode="general")
         lines: list[str] = []
         for f in state.facts:
@@ -799,7 +867,8 @@ class Penny:
         if not lines:
             _emit(state, "error", error_code=reason)
             return self._unavailable(ids, state)
-        bubbles: list[tuple[BubbleKind, str]] = [("answer", " ".join([TEMPLATE_INTRO, *lines[:2]]))]
+        intro = i18n.TEMPLATE_INTRO[state.lang]
+        bubbles: list[tuple[BubbleKind, str]] = [("answer", " ".join([intro, *lines[:2]]))]
         if lines[2:]:
             bubbles.append(("answer", " ".join(lines[2:4])))
         log.info("penny: template summary (%s)", reason)
@@ -807,7 +876,7 @@ class Penny:
         return self._build(ids, draft, state, verified=False)
 
     def _unavailable(self, ids: dict[str, str], state: TurnState) -> ChatResponse:
-        draft = Draft("question", [("answer", prompts.UNAVAILABLE_TEXT)])
+        draft = Draft("question", [("answer", i18n.UNAVAILABLE[state.lang])])
         return self._build(ids, draft, state, verified=False, mode="general")
 
     # ----- response -----
@@ -829,7 +898,13 @@ class Penny:
         mode: ChatMode = "checked",
     ) -> ChatResponse:
         if draft.out_of_scope:
-            draft = Draft("shrug", [("answer", fixed_text or prompts.OUT_OF_SCOPE_TEXT)], out_of_scope=True)
+            draft = Draft("shrug", [("answer", fixed_text or i18n.OUT_OF_SCOPE[state.lang])], out_of_scope=True)
+        elif state.guard is not None:
+            # Code rule: multiplayer never picks an option; an open quiz question never gets its answer.
+            guarded = game_scene.guard_bubbles(draft.bubbles, state.guard, state.lang)
+            if guarded != draft.bubbles:
+                log.info("penny: game guard rewrote the answer")
+                draft = replace(draft, bubbles=guarded, suggestions=[])
         bubbles = [
             ChatBubble(id=f"{ids['message_id']}-b{i + 1}", kind=kind, text=text)
             for i, (kind, text) in enumerate(draft.bubbles[:MAX_BUBBLES])
@@ -893,10 +968,16 @@ LLM_FAILURES = frozenset(
     {"llm_unavailable", "llm_error", "timeout", "refusal", "max_tokens", "unparseable", "max_steps"}
 )
 NO_ANSWER_TEXT = prompts.UNAVAILABLE_TEXT  # kept for callers of the old name
+NO_USER_DATA = (
+    "NO USER DATA: the user has not added any money data yet (onboarding). Answer in general: student money and "
+    "student life only. Never state or imply numbers about their money, balance, spending or next move. If they "
+    "ask about their own money, say you can answer once they add a statement or enter their numbers."
+)
 
 
-def distress_draft() -> Draft:
-    return Draft("eyes", [("answer", prompts.DISTRESS_TEXT[0]), ("answer", prompts.DISTRESS_TEXT[1])],
+def distress_draft(lang: i18n.Lang = "en") -> Draft:
+    text = i18n.DISTRESS[lang]
+    return Draft("eyes", [("answer", text[0]), ("answer", text[1])],
                  suggestions=["Make a budget"])  # fmt: skip
 
 
@@ -905,6 +986,17 @@ def _content(step: LLMStep) -> Any:
 
 
 # ---------- prompt building ----------
+
+
+LESSON_INTRO = (
+    "LESSON DATA (the Learn lesson the user is looking at: cards, and facts from the official facts table with "
+    "their source page and checked date; the quiz is not included): "
+)
+
+
+def is_onboarding(request: ChatRequest, ctx: ChatToolContext) -> bool:
+    rc = ctx.request_context or request.context
+    return rc is not None and rc.screen == "onboarding"
 
 
 def build_messages(request: ChatRequest, ctx: ChatToolContext, app_data: str | None = None) -> list[dict[str, Any]]:
@@ -919,6 +1011,16 @@ def build_messages(request: ChatRequest, ctx: ChatToolContext, app_data: str | N
         parts.append("CONTEXT: " + json.dumps(rc.model_dump(exclude_none=True)))
     if app_data:
         parts.append(app_data)
+    lang = i18n.lang_of(getattr(request, "language", "en"))
+    if rc is not None and game_scene.is_game_screen(rc):
+        parts.append(game_scene.rules_line(rc, lang, ctx.scene))
+    elif rc is not None and learn_scene.is_learn_screen(rc):
+        parts.append(learn_scene.rules_line(rc, ctx.scene, learn_scene.asks_own_money(request.message)))
+    elif getattr(ctx.tools, "has_user_data", True) is False or is_onboarding(request, ctx):
+        parts.append(NO_USER_DATA)
+    line = i18n.language_line(lang)
+    if line:
+        parts.append(line)
     parts.append("USER MESSAGE: " + fence(request.message, "user"))
     turns.append(("user", "\n".join(parts)))
     merged: list[dict[str, Any]] = []
@@ -1059,7 +1161,7 @@ def without_numbers(draft: Draft, bad: list[str], state: TurnState) -> Draft:
         if keep:
             bubbles.append((kind, " ".join(keep)))
     if not bubbles or not state.has_official_source():
-        bubbles = [("answer", official.NO_OFFICIAL_SOURCE_TEXT)]
+        bubbles = [("answer", i18n.NO_OFFICIAL_SOURCE[state.lang])]
     return Draft("question", bubbles, suggestions=list(draft.suggestions))
 
 
@@ -1080,7 +1182,8 @@ PERSONAL_TOLERANCE = 0.05
 
 
 def _money_number(found: Found, sentence: str) -> bool:
-    return found.kind == "gbp" or (found.kind is None and not found.is_ratio and bool(_MONEY_CONTEXT.search(sentence)))
+    context = _MONEY_CONTEXT.search(sentence) or intl.MONEY_CONTEXT.search(sentence)
+    return found.kind == "gbp" or (found.kind is None and not found.is_ratio and bool(context))
 
 
 def _near(found: Found, value: float) -> bool:
@@ -1105,7 +1208,7 @@ def personal_numbers(draft: Draft, personal: list[ChatFact]) -> list[str]:
     V6 V2-F4). '£138', '138 GBP', '138 in your account', 'about £140' and '£0.1k' all count."""
     bad: list[str] = []
     for _, text in draft.bubbles:
-        for sentence in _SENT_SPLIT.split(text):
+        for sentence in intl.SENTENCES.split(text):
             for found in extract_numbers(sentence):
                 if _money_number(found, sentence) and any(_near(found, f.value) for f in personal):
                     bad.append(found.raw)
@@ -1113,12 +1216,14 @@ def personal_numbers(draft: Draft, personal: list[ChatFact]) -> list[str]:
 
 
 def personal_claims(draft: Draft) -> list[str]:
-    """General mode: 'your balance is £X', 'you have £X' and similar statements about the user's own money.
-    With no app tool they cannot be checked, so they are blocked whatever X is (V6 V2-F5)."""
+    """General mode: 'your balance is £X', 'you have £X' and similar statements about the user's own money, in
+    all 8 app languages. With no app tool they cannot be checked, so they are blocked whatever X is (V6 V2-F5,
+    V6 final F-3)."""
     bad: list[str] = []
     for _, text in draft.bubbles:
-        for sentence in _SENT_SPLIT.split(text):
-            if not _PERSONAL_CLAIM.search(sentence) or _HYPOTHETICAL.search(sentence):
+        for sentence in intl.SENTENCES.split(text):
+            claim = _PERSONAL_CLAIM.search(sentence) or intl.PERSONAL_CLAIM.search(sentence)
+            if not claim or _HYPOTHETICAL.search(sentence) or intl.HYPOTHETICAL.search(sentence):
                 continue
             bad += [n.raw for n in extract_numbers(sentence) if _money_number(n, sentence)]
     return bad
@@ -1146,19 +1251,18 @@ def web_search_tool(official_only: bool) -> dict[str, Any]:
     return tool
 
 
-def fixed_reply(draft: Draft) -> tuple[Draft, str | None] | None:
+def fixed_reply(draft: Draft, lang: i18n.Lang = "en") -> tuple[Draft, str | None] | None:
     """Answers replaced by a fixed reply: out of scope, system prompt leak, distress signal, investment pick."""
     if draft.out_of_scope:
         return draft, None
     text = " ".join(t for _, t in draft.bubbles)
     if any(leaks_system_prompt(t) for _, t in draft.bubbles):
         log.info("penny: answer repeated the system prompt; fixed reply")
-        return Draft(
-            "shrug", [("answer", prompts.NO_INSTRUCTIONS_TEXT)], out_of_scope=True
-        ), prompts.NO_INSTRUCTIONS_TEXT
+        fixed = i18n.NO_INSTRUCTIONS[lang]
+        return Draft("shrug", [("answer", fixed)], out_of_scope=True), fixed
     if distress_rule(text):
         log.info("penny: distress signal in the answer; fixed support reply")  # V6 V2-F2 second layer
-        return distress_draft(), None
+        return distress_draft(lang), None
     if gives_pick(text):
         log.info("penny: answer named an investment pick; fixed refusal")  # V6 V2-F3
         return Draft("shrug", [], out_of_scope=True), None
@@ -1198,7 +1302,11 @@ def check_draft(draft: Draft, state: TurnState, mode: ChatMode | None = None) ->
         if asked:
             return Check("checked", "asks_public", tuple(asked))
         missing = fx_missing(draft, state)
-        return Check("checked", "fx_rate" if missing else None, tuple(missing))
+        if missing:
+            return Check("checked", "fx_rate", tuple(missing))
+        if denies_weekly(draft, state):
+            return Check("checked", "no_weekly")
+        return Check("checked")
     if state.rules:
         rule_bad = unverified_numbers(draft, _official_facts(state), gk_numbers=True)
     else:
@@ -1211,6 +1319,8 @@ def check_draft(draft: Draft, state: TurnState, mode: ChatMode | None = None) ->
         return Check("general", "personal", tuple(bad))
     if claims_no_live_data(draft):
         return Check("general", "no_live")
+    if denies_weekly(draft, state):
+        return Check("general", "no_weekly")
     asked = asks_for_public_fact(draft)
     if asked:
         return Check("general", "asks_public", tuple(asked))
@@ -1261,6 +1371,36 @@ _PUBLIC_ASK = re.compile(
 
 def _fact(state: TurnState, fid: str) -> ChatFact | None:
     return next((f for f in reversed(state.facts) if f.id == fid), None)
+
+
+_NO_WEEKLY = re.compile(
+    r"(can only (forecast|predict|give|show) (a single|one) day|one day at a time|"
+    r"(do not|don't|cannot|can't) (have|give|offer|work out|calculate) (you )?(a |any )?weekly|"
+    r"no weekly (figure|limit|budget|amount)|not (a|any) weekly (figure|limit)|not a full week)",
+    re.IGNORECASE,
+)
+
+
+def denies_weekly(draft: Draft, state: TurnState) -> bool:
+    """V5: Penny must not say she cannot give a weekly figure when the weekly budget facts exist."""
+    if _fact(state, "weekly.safe_weekly_spend") is None:
+        return False
+    return any(_NO_WEEKLY.search(t) for _, t in draft.bubbles)
+
+
+def weekly_draft(draft: Draft, state: TurnState) -> Draft:
+    """Fixed answer from the weekly budget facts (after one failed rewrite)."""
+    safe, short = _fact(state, "weekly.safe_weekly_spend"), _fact(state, "weekly.shortfall")
+    if safe is None:
+        return draft
+    until = safe.label.rsplit(" until ", 1)[-1]
+    if safe.value >= 1:
+        line = f"You can spend up to {format_fact(safe)} a week until {until}."
+    elif short is not None and short.value > 0:
+        line = f"You are {format_fact(short)} short before your next money on {until}, so keep to essentials."
+    else:
+        return draft
+    return Draft(draft.reaction, [("answer", line)], suggestions=list(draft.suggestions))
 
 
 def fx_missing(draft: Draft, state: TurnState) -> list[str]:
@@ -1379,6 +1519,8 @@ def links_for(
     """In-app destinations that work for this user. Out of scope and unverified answers point to the Next Move.
     Test it only when the answer quotes the Next Move (`used` holds a next_move fact) and that move is testable.
     A test_move answer offers Do this (plan). General answers link nowhere."""
+    if state.onboarding:
+        return []  # the onboarding chat has no Next Move yet
     if draft.out_of_scope or not verified:
         return ["next_move"]
     if mode == "general":
@@ -1460,8 +1602,11 @@ _OOS_RULES = [
 ]
 # Ticker after a buy or sell verb ("Should I buy NVDA"), checked on the original case. Not ISA-type words.
 _TICKER = re.compile(r"\b(buy|sell|short|invest in|get)\s+\$?(?P<t>[A-Z]{2,5})\b")
-_NOT_TICKERS = frozenset({"ISA", "ISAS", "LISA", "JISA", "UK", "US", "GBP", "USD", "EUR", "TV", "PC", "NHS", "BNPL",
-                          "SIM", "MOT", "CV", "ID", "OK", "IT"})  # fmt: skip
+_ANY_TICKER = re.compile(r"(?<![A-Za-z])\$?(?P<t>[A-Z]{3,5})(?![A-Za-z])")
+_NOT_TICKERS = frozenset({"ISA", "ISAS", "LISA", "JISA", "UK", "US", "GBP", "USD", "EUR", "CNY", "TV", "PC", "NHS",
+                          "BNPL", "SIM", "MOT", "CV", "ID", "OK", "IT", "GOV", "ECB", "HMRC", "ONS", "SLC", "SFE",
+                          "BOE", "CPI", "APR", "AER", "VAT", "MPC", "FCA", "UCAS", "NUS", "HESA", "TFL", "PAYE",
+                          "SAAS", "UCL", "LSE", "ATM", "PIN", "IBAN", "PDF", "CSV", "FAQ"})  # fmt: skip
 
 # Output check (V6 V2-F3): an answer that tells the user to buy or sell a named asset is a pick.
 # Output check: a pick names a specific asset, index, fund provider or ticker. Generic advice ("a tracker fund
@@ -1498,28 +1643,60 @@ def _norm(text: str) -> str:
     return out.lower().replace("’", "'").replace("‘", "'")
 
 
+def _tickers(text: str) -> bool:
+    clean = unicodedata.normalize("NFKC", text)
+    if any(m.group("t") not in _NOT_TICKERS for m in _TICKER.finditer(clean)):
+        return True
+    # Any language: a buy, sell or invest verb next to an upper-case ticker ("Achetez NVDA", "买NVDA").
+    return any(
+        intl.PICK_VERBS.search(sentence)
+        and any(m.group("t") not in _NOT_TICKERS for m in _ANY_TICKER.finditer(sentence))
+        for sentence in intl.SENTENCES.split(clean)
+    )
+
+
 def out_of_scope_rule(message: str) -> bool:
-    """Deterministic refusal (stock picks, regulated advice), before any LLM call."""
+    """Deterministic refusal (stock picks, regulated advice), before any LLM call. All 8 app languages."""
     msg = _norm(message)
     if any(r.search(msg) for r in _OOS_RULES[-1:]):
         return True  # regulated advice
     if any(r.search(msg) for r in _OOS_RULES[:-1]) and _pick_context(msg):
         return True
-    clean = unicodedata.normalize("NFKC", message)
-    return any(m.group("t") not in _NOT_TICKERS for m in _TICKER.finditer(clean))
+    for sentence in intl.SENTENCES.split(msg):
+        if intl.PICK_ASSETS.search(sentence) and intl.PICK_VERBS.search(sentence):
+            return True  # V6 final F-2: "Quelle crypto dois-je acheter ?", "我应该买哪只股票？"
+    return _tickers(message)
 
 
 def gives_pick(text: str) -> bool:
-    """True when an answer tells the user to buy or sell a named share, fund, ETF, coin or ticker."""
+    """True when an answer tells the user to buy or sell a named share, fund, ETF, coin or ticker, in any of the
+    8 app languages. Brand names and tickers are language-neutral."""
     msg = _ISA_NAMES.sub("cash savings", _norm(text))
     if _PICK_OUT.search(msg) and _pick_context(msg):
         return True
-    return any(m.group("t") not in _NOT_TICKERS for m in _TICKER.finditer(unicodedata.normalize("NFKC", text)))
+    for sentence in intl.SENTENCES.split(msg):
+        named = re.search(rf"\b({_NAMED_ASSETS})\b", sentence) or intl.NAMED_LOCAL.search(sentence)
+        if named and intl.PICK_VERBS.search(sentence):
+            return True
+    return _tickers(text)
+
+
+# ADR 0063: the same signals in the other 7 app languages (machine-written, errs on the side of care).
+_DISTRESS_INTL = re.compile(
+    r"suicid|me tuer|mettre fin à (mes jours|ma vie)|envie de mourir|veux mourir|en finir avec la vie|"
+    r"quiero morir(me)?|quitarme la vida|matarme|no quiero vivir|"
+    r"me matar|quero morrer|não quero viver|tirar minha vida|"
+    r"uccidermi|voglio morire|farla finita|non voglio vivere|"
+    r"自杀|自殺|想死|不想活|轻生|活不下去|"
+    r"आत्महत्या|मरना चाहत|जीना नहीं चाहत|ख़ुद को मार|खुद को मार|"
+    r"मर्न मन|बाँच्न मन छैन|आफूलाई मार"
+)
 
 
 def distress_rule(message: str) -> bool:
     """Deterministic distress check (ADR 0051): before the LLM on the user text, after it on the answer."""
-    return bool(_DISTRESS.search(_norm(message)))
+    msg = _norm(message)
+    return bool(_DISTRESS.search(msg) or _DISTRESS_INTL.search(msg) or intl.HARDSHIP.search(msg))
 
 
 def quick_reaction(request: ChatRequest) -> Reaction:

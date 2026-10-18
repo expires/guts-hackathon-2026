@@ -36,17 +36,6 @@ struct DesignRebuildStep5Tests {
         #expect(state.shareText.contains("I came 3 of 4"))
     }
 
-    @Test func paywallDemoPrices() {
-        let state = StoreViewModel.makeState(owned: [], purchasing: nil, message: nil)
-        #expect(state.products.map(\.priceText) == ["£0.99", "£1.99", "£2.99"])
-        #expect(state.products.map(\.title) == ["Rewind Pass", "God Mode", "Boss Mode"])
-        #expect(state.demoLabel == "Demo payment")
-        #expect(state.selectedID == "lifeline.rewindpass")
-        #expect(state.buyTitle == "Buy Rewind Pass · £0.99 · demo")
-        let owned = StoreViewModel.makeState(owned: ["lifeline.rewindpass"], purchasing: nil, message: nil)
-        #expect(owned.selectedID == "lifeline.godmode")
-    }
-
     @Test func youTabScoresDataAndCredits() {
         let credits = CreditsFile(
             event: "GUTS Hackathon 2026",

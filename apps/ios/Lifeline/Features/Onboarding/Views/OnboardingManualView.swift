@@ -10,14 +10,14 @@ struct OnboardingManualView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                ScreenHeader(title: "Your numbers", leading: HeaderSquareButton(kind: .back, identifier: "onboarding.back", action: actions.onBack))
+                ScreenHeader(title: L10n.tr("Your numbers"), leading: HeaderSquareButton(kind: .back, identifier: "onboarding.back", action: actions.onBack))
                 Text("Round numbers are fine. You can change them later.")
                     .font(.llBody)
                     .fixedSize(horizontal: false, vertical: true)
                 studentOrWorking
                 postcode
                 LLChoiceChips(
-                    title: "Your home",
+                    title: L10n.tr("Your home"),
                     options: OnboardingViewState.Manual.Housing.allCases.map { .init(id: $0.rawValue, label: $0.label) },
                     selection: manual.housing.rawValue,
                     identifier: "onboarding.manual.housing"
@@ -28,13 +28,13 @@ struct OnboardingManualView: View {
                 if manual.isStudent {
                     incomes
                     LLChoiceChips(
-                        title: "Student loan plan",
+                        title: L10n.tr("Student loan plan"),
                         options: OnboardingViewState.LoanPlan.allCases.map { .init(id: $0.rawValue, label: $0.label) },
                         selection: manual.loanPlan?.rawValue ?? "",
                         identifier: "onboarding.manual.loanPlan"
                     ) { id in change { $0.loanPlan = OnboardingViewState.LoanPlan(rawValue: id) } }
                 } else {
-                    LLMoneyField(title: "Take-home pay a month", value: binding(\.monthlyTakeHome), identifier: "onboarding.manual.takeHome")
+                    LLMoneyField(title: L10n.tr("Take-home pay a month"), value: binding(\.monthlyTakeHome), identifier: "onboarding.manual.takeHome")
                 }
                 costs
                 debts
@@ -58,7 +58,7 @@ struct OnboardingManualView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            PrimaryButton(title: "Save my numbers", isBusy: isBusy, action: actions.onSaveManual)
+            PrimaryButton(title: L10n.tr("Save my numbers"), isBusy: isBusy, action: actions.onSaveManual)
                 .disabled(isBusy)
                 .accessibilityIdentifier("onboarding.manual.save")
                 .padding(.horizontal, Theme.Spacing.margin)
@@ -76,8 +76,8 @@ struct OnboardingManualView: View {
             ) { id in change { $0.isStudent = id == "student" } }
             .accessibilityIdentifier("onboarding.manual.studentOrWorking")
             LLStepper(
-                title: "Your age",
-                valueText: manual.age.map(String.init) ?? "Not set",
+                title: L10n.tr("Your age"),
+                valueText: manual.age.map(String.init) ?? L10n.tr("Not set"),
                 canDecrement: (manual.age ?? 17) > 16,
                 canIncrement: (manual.age ?? 0) < 100,
                 identifier: "onboarding.manual.age",
@@ -102,7 +102,7 @@ struct OnboardingManualView: View {
                             actions.onToggleIncome(income.id)
                         }
                         if income.isOn {
-                            LLMoneyField(title: "Amount each time", value: incomeBinding(income.id), identifier: "onboarding.manual.income.\(income.id).amount")
+                            LLMoneyField(title: L10n.tr("Amount each time"), value: incomeBinding(income.id), identifier: "onboarding.manual.income.\(income.id).amount")
                             LLSegmented(
                                 options: OnboardingViewState.IncomeRow.Schedule.allCases.map { .init(id: $0.rawValue, label: $0.label) },
                                 selection: income.schedule.rawValue
@@ -131,7 +131,7 @@ struct OnboardingManualView: View {
                             actions.onToggleDebt(debt.id)
                         }
                         if debt.isOn {
-                            LLMoneyField(title: "You owe", value: debtBinding(debt.id), identifier: "onboarding.manual.debt.\(debt.id).balance")
+                            LLMoneyField(title: L10n.tr("You owe"), value: debtBinding(debt.id), identifier: "onboarding.manual.debt.\(debt.id).balance")
                                 .padding(.bottom, Theme.Spacing.s)
                         }
                     }
@@ -166,12 +166,12 @@ struct OnboardingManualView: View {
     private var housingFields: some View {
         switch manual.housing {
         case .rent:
-            LLMoneyField(title: "Rent a month", value: binding(\.monthlyRent), identifier: "onboarding.manual.rent")
+            LLMoneyField(title: L10n.tr("Rent a month"), value: binding(\.monthlyRent), identifier: "onboarding.manual.rent")
         case .mortgage:
-            LLMoneyField(title: "Mortgage left to pay", value: binding(\.mortgageBalance), identifier: "onboarding.manual.mortgageBalance")
+            LLMoneyField(title: L10n.tr("Mortgage left to pay"), value: binding(\.mortgageBalance), identifier: "onboarding.manual.mortgageBalance")
             PercentField(title: "Mortgage rate (%)", value: binding(\.mortgageRatePercent), identifier: "onboarding.manual.rate")
             LLStepper(
-                title: "Your deal ends",
+                title: L10n.tr("Your deal ends"),
                 valueText: manual.dealEndText,
                 canDecrement: manual.dealEndYear > manual.dealEndYears.lowerBound || manual.dealEndMonth > 1,
                 canIncrement: manual.dealEndYear < manual.dealEndYears.upperBound || manual.dealEndMonth < 12,
@@ -197,7 +197,7 @@ struct OnboardingManualView: View {
                         .frame(maxWidth: 130)
                     HeaderSquareButton(kind: .close, identifier: "onboarding.manual.cost.\(cost.id).remove") { actions.onRemoveCost(cost.id) }
                         .padding(.bottom, 4)
-                        .accessibilityLabel("Remove \(cost.name.isEmpty ? "cost" : cost.name)")
+                        .accessibilityLabel(cost.name.isEmpty ? L10n.tr("Remove cost") : L10n.tr("Remove \(cost.name)"))
                 }
             }
             if manual.costs.count < 30 {

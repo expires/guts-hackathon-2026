@@ -15,7 +15,7 @@ final class CharacterSelectViewModel {
 
     private let session: GameSession
     private(set) var characters: CharactersResponse?
-    private(set) var phase: LoadPhase = .loading(.init(message: "Loading characters"))
+    private(set) var phase: LoadPhase = .loading(.init(message: L10n.tr("Loading characters")))
     @ObservationIgnored var onRoute: @MainActor (Route) -> Void = { _ in }
 
     init(session: GameSession) {
@@ -45,7 +45,7 @@ final class CharacterSelectViewModel {
     }
 
     func load() async {
-        if characters == nil { phase = .loading(.init(message: "Loading characters")) }
+        if characters == nil { phase = .loading(.init(message: L10n.tr("Loading characters"))) }
         do {
             // Cached first (bundled or last server copy), then fresh (ADR 0060).
             try await session.client.load(CachedOps.characters) { [weak self] characters in
@@ -62,7 +62,8 @@ final class CharacterSelectViewModel {
         case "self":
             onRoute(.form(.playYourself))
         case "god":
-            onRoute(session.ownsGodMode ? .form(.godMode) : .store)
+            // God Mode is cut (ADR 0067).
+            break
         case "random":
             if let random = characters?.random {
                 onRoute(.startYear(CharacterChoice(mode: .random, character: random)))
@@ -86,8 +87,8 @@ final class CharacterSelectViewModel {
                 id: "self",
                 kind: .playYourself,
                 emoji: "🪞",
-                title: "Play yourself",
-                subtitle: "Enter your own job, pay and savings. Start here.",
+                title: L10n.tr("Play yourself"),
+                subtitle: L10n.tr("Enter your own job, pay and savings. Start here."),
                 detail: nil,
                 badge: "Recommended",
                 isLocked: false
@@ -101,7 +102,7 @@ final class CharacterSelectViewModel {
                     emoji: preset.emoji ?? "🙂",
                     title: preset.name,
                     subtitle: preset.blurb ?? "\(preset.occupation.capitalized) in \(preset.town)",
-                    detail: "\(Money.format(preset.annualIncome)) a year",
+                    detail: L10n.tr("\(Money.format(preset.annualIncome)) a year"),
                     badge: nil,
                     isLocked: false
                 )
@@ -114,28 +115,16 @@ final class CharacterSelectViewModel {
                     kind: .random,
                     emoji: "🎲",
                     title: "Random",
-                    subtitle: "\(random.name), \(random.occupation) in \(random.town). Drawn from the UK population.",
-                    detail: "\(Money.format(random.annualIncome)) a year",
+                    subtitle: L10n.tr("\(random.name), \(random.occupation) in \(random.town). Drawn from the UK population."),
+                    detail: L10n.tr("\(Money.format(random.annualIncome)) a year"),
                     badge: nil,
                     isLocked: false
                 )
             )
         }
-        cards.append(
-            .init(
-                id: "god",
-                kind: .godMode,
-                emoji: "🧙",
-                title: "God Mode",
-                subtitle: "Choose any job, pay, town and wealth.",
-                detail: nil,
-                badge: ownsGodMode ? nil : Brand.demoPaymentLabel,
-                isLocked: !ownsGodMode
-            )
-        )
         return CharacterSelectViewState(
             phase: phase,
-            intro: "Live a whole life with real UK numbers. Every year you choose what to do with your money.",
+            intro: L10n.tr("Live a whole life with real UK numbers. Every year you choose what to do with your money."),
             cards: cards,
             usesSampleData: usesSampleData,
             versionText: AppInfo.versionText

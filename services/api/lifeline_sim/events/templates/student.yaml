@@ -7,6 +7,8 @@
 #   (so earlier choices do not change which events a room meets).
 # - want: money spent on a want; counts as discretionary spending in the Quick Life habit score.
 # - want_weekly effects: change to weekly spending on wants (2024 pounds) for the rest of the life.
+# - weekly_budget, lifetime_isa: "Test it" tags for student moves (ADR 0065). In a test they fire on any
+#   student profile (`focus_student`), not only on path lives.
 # - The default choice of every quick event is neutral (no change or a small one), ADR 0061.
 # - subscription: a monthly subscription; counts in the habit score's subscription creep.
 # Fixed costs are 2024 pounds scaled by `price_level` (ONS CPI). Railcard and Lifetime ISA numbers come
@@ -137,15 +139,15 @@
 
 - id: study.term_budget
   area: study
-  tags: [quick, stage_study, want]
+  tags: [quick, stage_study, want, weekly_budget]
   emoji: "📆"
   title: Make your money last the term
   text: "Your maintenance loan instalment of £{instalment:,.0f} has landed. It has to last about 13 weeks."
   concept_id: budgeting
   eligible:
-    age: [18, 24]
-    when: is_student
-  probability: on_path * 0.15
+    age: [16, 30]
+    when: is_student or focus_student
+  probability: max(on_path, focus_student) * 0.15
   facts:
     instalment: round(10000 * price_level / 3)
     weekly: round(instalment / 13)
@@ -292,15 +294,15 @@
 
 - id: money.lifetime_isa
   area: money
-  tags: [quick, stage_any]
+  tags: [quick, stage_any, lifetime_isa]
   emoji: "🏠"
   title: A Lifetime ISA?
   text: "A Lifetime ISA adds a 25% government bonus to what you pay in, up to £4,000 a year. You could put in £{amount:,.0f}."
   concept_id: compound-interest
   eligible:
-    age: [18, 25]
+    age: [18, 39]
     years: [2017, 2200]
-  probability: on_path * 0.1
+  probability: max(on_path, focus_student) * 0.1
   facts:
     amount: round(clamp(liquid * 0.5, 200, 4000))
     bonus: round(amount * 0.25)

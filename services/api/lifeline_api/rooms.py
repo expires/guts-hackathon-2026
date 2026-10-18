@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import secrets
@@ -18,8 +19,8 @@ import struct
 import time
 import zlib
 from collections import defaultdict
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -41,9 +42,18 @@ KEY = "lifeline:room:{code}"
 CHANNEL = "lifeline:room:{code}:events"
 LOCK = "lifeline:room:{code}:lock"
 USER_ROOMS = "lifeline:user-rooms:{sub}"
+DRIVER = "lifeline:room:{code}:driver"
+ACTIVE_GAMES = "lifeline:rooms:active-games"
 
 
 def new_code() -> str:
+    """Room codes are 4 digits, easy to read aloud (ADR 0064). Uniqueness among live rooms comes from the
+    create-if-absent write; rooms expire after 24 hours."""
+    return f"{secrets.randbelow(10_000):04d}"
+
+
+def new_circle_code() -> str:
+    """Circle codes stay 6 letters and digits (contract ^[A-Z0-9]{6}$)."""
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
 
 
@@ -53,6 +63,52 @@ def join_url(code: str) -> str:
 
 class RoomBusy(Exception):
     """The room lock could not be taken in time."""
+
+
+class RoomsUnavailable(Exception):
+    """The room store (Redis) cannot be reached. REST answers 503; the WebSocket closes cleanly (V3 F2)."""
+
+
+@contextmanager
+def _redis_errors() -> Iterator[None]:
+    try:
+        yield
+    except (RoomBusy, RoomsUnavailable, asyncio.CancelledError):
+        raise
+    except Exception as exc:
+        log.warning("room store unavailable: %s", type(exc).__name__)
+        raise RoomsUnavailable() from exc
+
+
+class _GuardedRedis:
+    """Every awaited Redis call raises RoomsUnavailable instead of a driver error. pubsub() passes through."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._inner, name)
+        if name == "pubsub" or not callable(attr):
+            return attr
+
+        async def call(*args: Any, **kwargs: Any) -> Any:
+            try:
+                with _redis_errors():
+                    return await attr(*args, **kwargs)
+            except RoomsUnavailable:
+                await self._reset_pool()
+                raise
+
+        return call
+
+    async def _reset_pool(self) -> None:
+        """Drop pooled connections on the first failure, so the next call reconnects at once when Redis is
+        back instead of reusing dead sockets for 15-20 s (V3 final)."""
+        pool = getattr(self._inner, "connection_pool", None)
+        if pool is None:
+            return
+        with contextlib.suppress(Exception):
+            await pool.disconnect(inuse_connections=True)
 
 
 # ---------- QR as PNG (no image library needed) ----------
@@ -156,11 +212,13 @@ class RoomHub:
     """Redis when available (shared by all replicas), else process memory."""
 
     def __init__(self, redis: Any | None) -> None:
-        self.redis = redis
+        self.redis: Any | None = _GuardedRedis(redis) if redis is not None else None
         self._docs: dict[str, str] = {}
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._queues: defaultdict[str, set[asyncio.Queue[str]]] = defaultdict(set)
         self._user_rooms: defaultdict[str, set[str]] = defaultdict(set)
+        self._beats: dict[str, float] = {}
+        self._active: set[str] = set()
 
     async def get(self, code: str) -> RoomDoc | None:
         raw = await self.redis.get(KEY.format(code=code)) if self.redis is not None else self._docs.get(code)
@@ -225,8 +283,49 @@ class RoomHub:
             try:
                 yield
             finally:
-                if (await self.redis.get(key)) in (token, token.encode()):
-                    await self.redis.delete(key)
+                with contextlib.suppress(RoomsUnavailable):  # the lock expires by itself if Redis went away
+                    if (await self.redis.get(key)) in (token, token.encode()):
+                        await self.redis.delete(key)
+
+    # A game driver's heartbeat: present while some replica drives the room's game (V3 F3).
+
+    async def heartbeat(self, code: str, ttl_ms: int) -> None:
+        if self.redis is not None:
+            await self.redis.set(DRIVER.format(code=code), "1", px=ttl_ms)
+        else:
+            self._beats[code] = time.monotonic() + ttl_ms / 1000
+
+    async def heartbeat_alive(self, code: str) -> bool:
+        if self.redis is not None:
+            return bool(await self.redis.exists(DRIVER.format(code=code)))
+        return self._beats.get(code, 0.0) > time.monotonic()
+
+    async def set_active(self, code: str, active: bool) -> None:
+        """Index of playing quiz and decision rooms, for the watchdog on every replica."""
+        if self.redis is not None:
+            if active:
+                await self.redis.sadd(ACTIVE_GAMES, code)
+            else:
+                await self.redis.srem(ACTIVE_GAMES, code)
+        elif active:
+            self._active.add(code)
+        else:
+            self._active.discard(code)
+
+    async def active_games(self) -> set[str]:
+        if self.redis is not None:
+            raw = await self.redis.smembers(ACTIVE_GAMES)
+            return {c.decode() if isinstance(c, bytes) else str(c) for c in raw}
+        return set(self._active)
+
+    async def claim_driver(self, code: str, ttl_ms: int) -> bool:
+        """One replica wins: the heartbeat key is set only when absent."""
+        if self.redis is not None:
+            return bool(await self.redis.set(DRIVER.format(code=code), "1", px=ttl_ms, nx=True))
+        if self._beats.get(code, 0.0) > time.monotonic():
+            return False
+        self._beats[code] = time.monotonic() + ttl_ms / 1000
+        return True
 
     async def publish(self, code: str, message: dict[str, Any]) -> None:
         text = json.dumps(message)
@@ -247,7 +346,8 @@ class RoomHub:
                 self._queues[code].discard(queue)
             return
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe(CHANNEL.format(code=code))
+        with _redis_errors():
+            await pubsub.subscribe(CHANNEL.format(code=code))
 
         async def pump() -> None:
             # Poll with a short timeout: the shared Redis client has a 1 s socket timeout, so a blocking

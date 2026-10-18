@@ -11,6 +11,7 @@ Fields:
 - `focus_until`: the scenario's end year. Focus (forcing, the cap exemption and the cooldown
   bypass) applies only up to that year. After it, the life plays by the normal rules.
 - `path`: student start path id (ADR 0052, `lifeline_sim.paths`), for example `uni`.
+- `student`: premade Quick Life student id (ADR 0064, `lifeline_sim.paths.QUICK_STUDENTS`).
 - `quick`: Quick Life (ages 18 to 25 in 5 or 6 AGE taps, 2 or 3 events). Needs `path`.
 """
 
@@ -28,6 +29,7 @@ class Setup:
     focus_until: int | None = None
     path: str | None = None
     quick: bool = False
+    student: str | None = None  # premade Quick Life student id (ADR 0064)
 
     @property
     def empty(self) -> bool:
@@ -48,6 +50,8 @@ class Setup:
             parts.append(f"path={self.path}")
             if self.quick:
                 parts.append("quick=1")
+            if self.student is not None:
+                parts.append(f"student={self.student}")
         return f"{SETUP_PREFIX}?{'&'.join(parts)}"
 
     @staticmethod
@@ -59,6 +63,7 @@ class Setup:
         until: int | None = None
         path: str | None = None
         quick = False
+        student: str | None = None
         for part in text[len(SETUP_PREFIX) + 1 :].split("&"):
             key, _, value = part.partition("=")
             if key == "deal_end" and value.lstrip("-").isdigit():
@@ -71,10 +76,13 @@ class Setup:
                 path = value
             elif key == "quick":
                 quick = value == "1"
+            elif key == "student" and value:
+                student = value
         return Setup(
             deal_end_year=deal_end,
             focus=focus,
             focus_until=until if focus else None,
             path=path,
             quick=quick and path is not None,
+            student=student if path is not None else None,
         )

@@ -11,11 +11,34 @@
     "team": false
   },
   {
-    "id": "rich",
-    "title": "Rich student",
-    "description": "About £2,000 a month from parents. Rents a city flat, many subscriptions, Klarna for clothes.",
+    "id": "scottish",
+    "title": "Scottish student",
+    "description": "Edinburgh student with a monthly SAAS loan and Young Students' Bursary. Free buses, a summer Fringe job.",
     "funding": [
+      "maintenance_loan",
+      "bursary",
+      "part_time_job"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "commuter",
+    "title": "Commuter student",
+    "description": "Lives with family and takes the train in with a 16-25 Railcard. Grant plus family help. Saving for a deposit.",
+    "funding": [
+      "grant",
       "family"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "loan_england",
+    "title": "Full loan student",
+    "description": "Second year in Newcastle on the full maintenance loan in 3 payments. Tight summer, big spending on loan day.",
+    "funding": [
+      "maintenance_loan"
     ],
     "months": 3,
     "team": false
@@ -32,11 +55,54 @@
     "team": false
   },
   {
-    "id": "commuter",
-    "title": "Commuter student",
-    "description": "Lives with family and takes the train in with a 16-25 Railcard. Grant plus family help. Saving for a deposit.",
+    "id": "mature",
+    "title": "Mature student",
+    "description": "29-year-old nursing student in Birmingham. Loan, NHS support grant and bank shifts. Careful with money.",
     "funding": [
+      "maintenance_loan",
       "grant",
+      "part_time_job"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "international",
+    "title": "International student",
+    "description": "From China, studying in Coventry. Parents send money each month by Wise (yuan to pounds). Eats out a lot.",
+    "funding": [
+      "family"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "final_year",
+    "title": "Final year with internship",
+    "description": "Paid summer internship in London, saved into a Lifetime ISA, then a holiday and busy nights out in Exeter.",
+    "funding": [
+      "salary",
+      "maintenance_loan"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "rich",
+    "title": "Rich student",
+    "description": "About £2,000 a month from parents. Rents a city flat, many subscriptions, Klarna for clothes.",
+    "funding": [
+      "family"
+    ],
+    "months": 3,
+    "team": false
+  },
+  {
+    "id": "graduate",
+    "title": "Recent graduate",
+    "description": "Graduated in summer, started a London graduate job in September. First salary, first London rent.",
+    "funding": [
+      "salary",
       "family"
     ],
     "months": 3,

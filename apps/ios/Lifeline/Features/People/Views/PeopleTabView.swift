@@ -7,9 +7,9 @@ struct PeopleTabView: View {
 
     var body: some View {
         SheetContainer(title: "People", closeIdentifier: "menu.close", onClose: actions.onClose) {
-            RowGroup(title: "People close to me") {
+            RowGroup(title: L10n.tr("People close to me")) {
                 if state.people.isEmpty {
-                    ListRow(icon: .relationships, title: "No one close to you yet", showsChevron: false)
+                    ListRow(icon: .relationships, title: L10n.tr("No one close to you yet"), showsChevron: false)
                 }
                 ForEach(state.people) { person in
                     HStack(spacing: Theme.Spacing.m) {
@@ -29,8 +29,8 @@ struct PeopleTabView: View {
                     .accessibilityLabel("\(person.name), \(person.relation), closeness \(person.closeness) out of 100")
                 }
             }
-            RowGroupTitle(text: "What you can do")
-            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
+            RowGroupTitle(text: L10n.tr("What you can do"))
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: L10n.tr("Nothing to do here this year."))
         }
     }
 }

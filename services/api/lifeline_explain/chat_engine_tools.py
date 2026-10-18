@@ -21,7 +21,7 @@ from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.next_move import NextMoveResponse
 from lifeline_contracts.observation import Observation
-from lifeline_explain.chat_tools import ToolInputError, ToolOutput, ToolSpec, source_key
+from lifeline_explain.chat_tools import PERSONAL_TOOL_NAMES, ToolInputError, ToolOutput, ToolSpec, source_key
 from lifeline_explain.official import with_official_sources
 from lifeline_explain.trade_off import TRADE_OFF_TOOLS, attach_trade_offs
 
@@ -179,6 +179,16 @@ class EngineToolSet:
         if cpi is not None:
             self._inputs["inflation"] = NoInput
             self._descriptions["inflation"] = "Latest UK CPI inflation (ONS, annual rate) and its month."
+        if not self.has_user_data:
+            self._drop_personal_tools()  # onboarding: nothing personal to look up, so nothing to claim
+
+    PERSONAL_TOOLS = PERSONAL_TOOL_NAMES
+
+    @property
+    def has_user_data(self) -> bool:
+        """False during onboarding (no statement, no numbers): Penny answers in general mode only (ADR 0063)."""
+        snap = self.snapshot
+        return snap is None or not (snap.status == "unavailable" and not snap.transactions)
 
     @property
     def preload(self) -> tuple[str, ...]:
@@ -186,6 +196,10 @@ class EngineToolSet:
         if self.snapshot.status == "unavailable" and not self.snapshot.transactions:
             return ()
         return ("finance_summary", "next_move")
+
+    def _drop_personal_tools(self) -> None:
+        for name in self.PERSONAL_TOOLS:
+            self._inputs.pop(name, None)
 
     def personal_facts(self) -> list[ChatFact]:
         """The user's own money numbers (finance_summary facts). Ask Penny blocks them in general answers."""
@@ -260,6 +274,8 @@ class EngineToolSet:
         except (ValueError, KeyError) as exc:
             raise ToolInputError(str(exc)[:200] or "Invalid input") from None
         out = ToolOutput.of(result)
+        if name == "next_move":
+            out = await asyncio.to_thread(self._with_weekly_budget, out)
         if name == "facts_table":
             out = with_official_sources(out)  # ADR 0058: official page and checked date per source
         if name in TRADE_OFF_TOOLS and self.response is not None:
@@ -304,6 +320,8 @@ class EngineToolSet:
 
         assert self.life is not None and self.event_id
         rows = sim.compare_event_choices(self.life, self.event_id, self.macro, years=inp.years)
+        event = next((e for e in self.life.pending_events if e.id == self.event_id), None)
+        hints = {c.id: c.hint for c in event.choices} if event is not None else {}
         facts: list[ChatFact] = []
         sources: dict[str, SourceRef] = {}
         result = []
@@ -312,11 +330,20 @@ class EngineToolSet:
             for ref in r.sources:
                 sources.setdefault(source_key(ref), ref)
             result.append({
-                "choice_id": r.choice_id, "label": r.label, "is_default": r.is_default, "alive": r.alive,
-                "assumption": r.assumption,
+                "choice_id": r.choice_id, "label": r.label, "hint": hints.get(r.choice_id), "is_default": r.is_default,
+                "alive": r.alive, "assumption": r.assumption,
             })  # fmt: skip
-        return ToolOutput(result={"event_id": self.event_id, "choices": result}, facts=facts,
-                          sources=list(sources.values()), raw=rows)  # fmt: skip
+        out: dict[str, Any] = {"event_id": self.event_id, "choices": result, "game": "life"}
+        if event is not None:
+            # Life event screen: Penny sees the event itself, and its written numbers are facts (game numbers).
+            from lifeline_explain.game_scene import text_facts
+
+            out["event"] = {"title": event.title, "text": event.text, "year": event.year, "age": event.age,
+                            "area": event.area}  # fmt: skip
+            first = source_key(next(iter(sources.values()))) if sources else None
+            texts = {"text": event.text, **{f"choices.{i}.hint": c.hint or "" for i, c in enumerate(event.choices)}}
+            facts += text_facts(event.id, texts, first)
+        return ToolOutput(result=out, facts=facts, sources=list(sources.values()), raw=rows)
 
     async def _news(self, inp: NewsSearchInput) -> ToolOutput:
         assert self.news is not None
@@ -329,6 +356,50 @@ class EngineToolSet:
         return ToolOutput(
             result={"status": resp.status, "items": items}, facts=[], sources=[ref], raw=resp
         )  # context only
+
+    def _with_weekly_budget(self, out: ToolOutput) -> ToolOutput:
+        """V5: the weekly budget (safe weekly spend until the next money arrives) is always in next_move's output,
+        whatever the top move is, so "How much can I spend this week?" needs no extra tool call."""
+        try:
+            from lifeline_engine import preconditions as pre
+            from lifeline_engine import student as stu
+            from lifeline_engine.money.profile import liquid
+            from lifeline_engine.tools.wrappers import bank_source
+
+            if not pre.weekly_budget(self.snapshot, self.today):
+                return out
+            wb = stu.weekly_budget(self.snapshot, stu.from_snapshot(self.snapshot, self.today), self.today,
+                                   max(0.0, liquid(self.snapshot)))  # fmt: skip
+        except Exception:  # an engine gap must never break next_move
+            return out
+        if wb is None:
+            return out
+        ref = bank_source(self.snapshot)
+        sid = source_key(ref)
+        until = f"{wb.next_date.day} {wb.next_date.strftime('%B')}"
+
+        def fact(key: str, value: float, unit: Any, label: str) -> ChatFact:
+            return ChatFact(id=f"weekly.{key}", value=round(value, 2), unit=unit, label=label[:120], source_id=sid)
+
+        facts = [
+            fact("safe_weekly_spend", wb.safe_weekly, "gbp", f"Safe to spend a week until {until}"),
+            fact("shortfall", wb.short_by, "gbp", f"Short before the next money on {until}"),
+            fact("weekly_pace", wb.weekly_pace, "gbp", "Usual spending in a week"),
+            fact("bills_before", wb.bills_before, "gbp", f"Bills due before {until}"),
+            fact("cash", wb.cash, "gbp", "Cash now"),
+            fact("weeks_left", round(wb.weeks_left, 1), "count", f"Weeks until {until}"),
+            fact("next_day", wb.next_date.day, "count", "Day of the month the next money arrives"),
+            fact("next_year", wb.next_date.year, "date_year", "Year the next money arrives"),
+        ]
+        result = dict(out.result) if isinstance(out.result, dict) else {"result": out.result}
+        result["weekly_budget"] = {
+            "safe_weekly_spend": round(wb.safe_weekly, 2), "shortfall": round(wb.short_by, 2),
+            "next_money_date": wb.next_date.isoformat(), "next_money_month": wb.next_date.strftime("%B"),
+            "weekly_pace": round(wb.weekly_pace, 2), "bills_before": round(wb.bills_before, 2),
+        }  # fmt: skip
+        sources = list(out.sources) + ([ref] if all(source_key(r) != sid for r in out.sources) else [])
+        return ToolOutput(result=result, facts=[*out.facts, *facts], sources=sources, links=list(out.links),
+                          raw=out.raw)  # fmt: skip
 
     def _balance(self) -> ToolOutput:
         full = self._et.tool_finance_summary(self.snapshot, self.today)

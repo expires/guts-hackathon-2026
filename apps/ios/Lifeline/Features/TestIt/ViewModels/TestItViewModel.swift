@@ -116,11 +116,18 @@ final class TestItViewModel {
     }
 
     /// "Two of you. Same life. One choice is different." Uses the character name when it is not "You".
+    /// One full sentence per case, so each language translates the whole line (no English word fragments).
     static func intro(name: String, optionCount: Int) -> String {
-        let count = [2: "Two", 3: "Three", 4: "Four"][optionCount]
-        guard let count else { return "One life. One choice." }
-        let who = name.isEmpty || name == "You" ? "of you" : "\(name)s"
-        return "\(count) \(who). Same life. One choice is different."
+        let isYou = name.isEmpty || name == "You"
+        switch (optionCount, isYou) {
+        case (2, true): return L10n.tr("Two of you. Same life. One choice is different.")
+        case (3, true): return L10n.tr("Three of you. Same life. One choice is different.")
+        case (4, true): return L10n.tr("Four of you. Same life. One choice is different.")
+        case (2, false): return L10n.tr("Two versions of \(name). Same life. One choice is different.")
+        case (3, false): return L10n.tr("Three versions of \(name). Same life. One choice is different.")
+        case (4, false): return L10n.tr("Four versions of \(name). Same life. One choice is different.")
+        default: return L10n.tr("One life. One choice.")
+        }
     }
 
     /// Hero: total paid by the recommended option against the cheapest other option (the same pair as
@@ -147,20 +154,20 @@ final class TestItViewModel {
     static func yearRows(path: [TestItViewState.PathPoint], birthYear: Int?, presentation: Bool = false) -> [TestItViewState.YearRow] {
         let money = { (value: Double) in PresentationFormat.money(value, presentation) }
         return path.enumerated().map { offset, point -> TestItViewState.YearRow in
-            let title = birthYear.map { "\(point.year) · Age \(point.year - $0)" } ?? "\(point.year)"
+            let title = birthYear.map { L10n.tr("\(String(point.year)) · Age \(point.year - $0)") } ?? "\(point.year)"
             if offset == 0 {
-                return .init(id: point.id, title: title, text: "I start with \(money(point.netWorth)).", change: nil, isDown: false)
+                return .init(id: point.id, title: title, text: L10n.tr("I start with \(money(point.netWorth))."), change: nil, isDown: false)
             }
             let change = (point.netWorth - path[offset - 1].netWorth).rounded()
             let changeText: String? = change == 0 ? nil : (change > 0 ? "Up " : "Down ") + money(abs(change))
-            return .init(id: point.id, title: title, text: "I have \(money(point.netWorth)).", change: changeText, isDown: change < 0)
+            return .init(id: point.id, title: title, text: L10n.tr("I have \(money(point.netWorth))."), change: changeText, isDown: change < 0)
         }
     }
 
     static func periodSentence(start: Int, end: Int) -> String {
         start == end
-            ? "We played your money through \(start)."
-            : "We played your money through \(start) to \(end)."
+            ? L10n.tr("We played your money through \(String(start)).")
+            : L10n.tr("We played your money through \(String(start)) to \(String(end)).")
     }
 
     static func option(
@@ -196,17 +203,17 @@ final class TestItViewModel {
             accessibilitySummary: spoken.joined(separator: ". "),
             yearRows: yearRows(path: path, birthYear: birthYear, presentation: presentation),
             costLabel: period.map { "Paid " + periodSpan(start: $0.start, end: $0.end) } ?? "Paid",
-            indexLabel: "Index \(indexText(outcome.index))"
+            indexLabel: L10n.tr("Index \(indexText(outcome.index))")
         )
     }
 
     static func facts(for outcome: Components.Schemas.OptionOutcome, presentation: Bool = false) -> [String] {
         [
-            "Ended with \(PresentationFormat.money(outcome.endNetWorth, presentation))",
-            "Paid \(PresentationFormat.money(outcome.totalCost, presentation))",
+            L10n.tr("Ended with \(PresentationFormat.money(outcome.endNetWorth, presentation))"),
+            L10n.tr("Paid \(PresentationFormat.money(outcome.totalCost, presentation))"),
             missedPaymentsText(outcome.missedPayments),
-            "Worst year \(outcome.worstYear): \(PresentationFormat.money(outcome.worstYearChange, presentation, style: .signed))",
-            "Index \(indexText(outcome.index))",
+            L10n.tr("Worst year \(String(outcome.worstYear)): \(PresentationFormat.money(outcome.worstYearChange, presentation, style: .signed))"),
+            L10n.tr("Index \(indexText(outcome.index))"),
         ]
     }
 
@@ -221,8 +228,8 @@ final class TestItViewModel {
     static func gapSentence(_ gap: Double, presentation: Bool = false) -> String {
         switch gap.rounded() {
         case 0: "Same as the other option"
-        case let value where value > 0: "\(PresentationFormat.money(value, presentation)) ahead of the next best"
-        case let value: "\(PresentationFormat.money(-value, presentation)) behind the best"
+        case let value where value > 0: L10n.tr("\(PresentationFormat.money(value, presentation)) ahead of the next best")
+        case let value: L10n.tr("\(PresentationFormat.money(-value, presentation)) behind the best")
         }
     }
 

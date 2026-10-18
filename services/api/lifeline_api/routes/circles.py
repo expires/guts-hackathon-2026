@@ -10,19 +10,19 @@
 from __future__ import annotations
 
 import logging
-import math
 import secrets
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Path, Request, Response
 
-from lifeline_api import money
+from lifeline_api import codeguard, money
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.names import clean_name
 from lifeline_api.ratelimit import client_ip
-from lifeline_api.rooms import new_code
+from lifeline_api.rooms import new_circle_code
+from lifeline_api.routes.rooms import _display_name as display_name
 from lifeline_api.sim_bridge import call_pure
 from lifeline_api.state import AppState, get_state
 from lifeline_contracts.finance import HabitComponents, HabitScore
@@ -46,16 +46,6 @@ HABIT_LABELS = {
     "subscription_creep": "subscription control",
     "debt_pressure": "debt pressure",
 }
-
-
-async def _count_failed_join(state: AppState, request: Request) -> None:
-    """Per-IP limit on wrong codes, so codes cannot be guessed quickly (V6). 429 with Retry-After."""
-    if state.auth_limiter is None:
-        return
-    wait = await state.auth_limiter.take(f"circle-join-fail:{client_ip(request.scope)}")
-    if wait > 0:
-        raise ApiError(429, "rate_limited", "Too many wrong codes. Try again shortly.",
-                       headers={"Retry-After": str(max(1, math.ceil(wait)))})
 
 
 def _owner(circle_id: str) -> str:
@@ -131,7 +121,10 @@ async def _view(state: AppState, doc: dict[str, Any], me: str) -> Circle:
     members: list[CircleMember] = []
     for m in doc["members"]:
         score = await _habits_of(state, m["sub"])
-        members.append(CircleMember(id=m["id"], name=m["name"], habits=score,
+        name = m["name"]
+        if name.startswith("Member "):  # joined before naming: use the account or sample name if there is one now
+            name = await display_name(state, m["sub"]) or name
+        members.append(CircleMember(id=m["id"], name=name, habits=score,
                                     improvement=await _improvement(state, m["sub"], score), is_you=m["sub"] == me))
     order = sorted([m for m in members if m.improvement is not None], key=lambda m: -(m.improvement or 0))
     ranks: dict[str, int] = {}
@@ -145,8 +138,7 @@ async def _view(state: AppState, doc: dict[str, Any], me: str) -> Circle:
 
 async def _member_name(state: AppState, sub: str, doc: dict[str, Any]) -> str:
     """The account name, cleaned; else "Member N" with N unique in this circle (never reused after a leave)."""
-    acct = await state.store.get_doc(sub, "account") or {}
-    name = clean_name(acct.get("display_name"), 24)
+    name = await display_name(state, sub)
     if name:
         return name
     used = [int(m["name"].split()[-1]) for m in doc.get("members", [])
@@ -175,7 +167,7 @@ async def create_circle(body: CreateCircleRequest, request: Request, sub: Subjec
         if len(mine) >= MAX_CIRCLES_PER_USER:
             raise ApiError(422, "validation_error", f"You can be in up to {MAX_CIRCLES_PER_USER} circles")
         for _ in range(10):
-            code = new_code()
+            code = new_circle_code()
             if await state.store.get_doc(_code_owner(code), "id") is None:
                 break
         circle_name = clean_name(body.name, 40)
@@ -194,9 +186,11 @@ async def create_circle(body: CreateCircleRequest, request: Request, sub: Subjec
 @router.post("/v1/circles/join", response_model=Circle, response_model_exclude_none=True)
 async def join_circle(body: JoinCircleRequest, request: Request, sub: Subject) -> Circle:
     state = get_state(request)
+    ip = client_ip(request.scope)
+    await codeguard.guard(state, ip, sub)
     ref = await state.store.get_doc(_code_owner(body.code), "id")
     if ref is None:
-        await _count_failed_join(state, request)
+        await codeguard.record_wrong(state, ip, sub)
         raise not_found("No circle with that code")
     cid = str(ref["id"])
     async with state.subject_locks[f"circle:{cid}"]:

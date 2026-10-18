@@ -61,16 +61,18 @@ final class LifeSummaryViewModel {
         let finalIndex = summary.finalIndex
         let gap = (finalIndex - RewindViewModel.autopilotIndex).rounded()
         let indexSentence = gap == 0
-            ? "Level with your autopilot twin."
-            : "\(Int(abs(gap))) points \(gap > 0 ? "ahead of" : "behind") your autopilot twin."
-        let lifespan = summary.died.map { "\(String(summary.born)) to \(String($0)) · lived to \(summary.age)" }
-            ?? "Born \(String(summary.born)) · age \(summary.age)"
+            ? L10n.tr("Level with your autopilot twin.")
+            : (gap > 0
+                ? L10n.tr("\(Int(abs(gap))) points ahead of your autopilot twin.")
+                : L10n.tr("\(Int(abs(gap))) points behind your autopilot twin."))
+        let lifespan = summary.died.map { L10n.tr("\(String(summary.born)) to \(String($0)) · lived to \(summary.age)") }
+            ?? L10n.tr("Born \(String(summary.born)) · age \(summary.age)")
         let ribbons = summary.ribbons.map { LifeSummaryViewState.Ribbon(id: $0.id, emoji: $0.emoji, title: $0.title, reason: $0.reason) }
         let share = [
-            "\(summary.name)'s life in \(Brand.productName): \(lifespan).",
-            "INDEX \(Int(finalIndex.rounded())). \(indexSentence)",
-            "Net worth \(Money.format(summary.netWorth)) against \(Money.format(summary.autopilotNetWorth)) on autopilot.",
-            ribbons.isEmpty ? nil : "Ribbons: " + ribbons.map(\.title).joined(separator: ", ") + ".",
+            L10n.tr("\(summary.name)'s life in \(Brand.productName): \(lifespan)."),
+            L10n.tr("INDEX \(Int(finalIndex.rounded())). \(indexSentence)"),
+            L10n.tr("Net worth \(Money.format(summary.netWorth)) against \(Money.format(summary.autopilotNetWorth)) on autopilot."),
+            ribbons.isEmpty ? nil : L10n.tr("Ribbons: \(ribbons.map(\.title).joined(separator: ", "))."),
         ].compactMap { $0 }.joined(separator: " ")
         return LifeSummaryViewState(
             phase: phase,

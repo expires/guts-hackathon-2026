@@ -20,6 +20,17 @@ struct OnboardingAPI: Sendable {
     var listSamples: @Sendable (_ onUpdate: @escaping @MainActor @Sendable ([SampleStatement]) -> Void) async throws -> Void = { _ in }
     /// `POST /v1/finance/samples/{id}/import`: the sample student's statement through the real pipeline.
     var importSample: @Sendable (_ id: String) async throws -> Components.Schemas.ImportResult = { _ in throw OnboardingAPI.notYetAvailable }
+    /// "Building their profile" (ADR 0069): one call per stage. Defaults fail, and the stage shows as skipped.
+    /// `GET /v1/finance/spending?month=` (nil is this month).
+    var spending: @Sendable (_ month: String?) async throws -> SpendingResponse = { _ in throw OnboardingAPI.notYetAvailable }
+    var bills: @Sendable () async throws -> BillsResponse = { throw OnboardingAPI.notYetAvailable }
+    var subscriptions: @Sendable () async throws -> SubscriptionsResponse = { throw OnboardingAPI.notYetAvailable }
+    /// `GET /v1/finance/overview`: accounts, for debts.
+    var overview: @Sendable () async throws -> FinanceOverview = { throw OnboardingAPI.notYetAvailable }
+    /// `GET /v1/sources`: live UK data status.
+    var sources: @Sendable () async throws -> [SourceStatus] = { throw OnboardingAPI.notYetAvailable }
+    /// `GET /v1/habits`: ratios 0-100, no amounts.
+    var habits: @Sendable () async throws -> HabitScore = { throw OnboardingAPI.notYetAvailable }
     /// Trading 212 (`/v1/connections`) is not in the contract yet, so it is always unavailable.
     var hasTrading212 = false
 
@@ -34,13 +45,19 @@ struct OnboardingAPI: Sendable {
             nextMove: { try await client.nextMove() },
             financeProfile: { try await client.financeProfile() },
             listSamples: { onUpdate in try await client.load(CachedOps.samples, onUpdate: onUpdate) },
-            importSample: { id in try await client.importSample(id: id) }
+            importSample: { id in try await client.importSample(id: id) },
+            spending: { month in try await client.financeSpending(month: month) },
+            bills: { try await client.bills() },
+            subscriptions: { try await client.subscriptions() },
+            overview: { try await client.financeOverview() },
+            sources: { try await client.listSources() },
+            habits: { try await client.habits() }
         )
     }
 
-    static let notYetAvailable = APIError.server(
-        status: 501, code: "not_implemented", message: "This is not available in this build yet.", source: "app"
-    )
+    static var notYetAvailable: APIError { APIError.server(
+        status: 501, code: "not_implemented", message: L10n.tr("This is not available in this build yet."), source: "app"
+    ) }
 }
 
 /// Contract examples for the operations the mock client does not serve yet.

@@ -331,17 +331,29 @@ struct PennyViewModelTests {
 
     // MARK: Penny tab (step 2 glue)
 
-    @Test func tabAskSendsTheContextQuestionIntoOneChat() async {
+    @Test func tabAskStartsANewChatForEachContextQuestion() async {
         let tab = PennyTabModel(service: PennyFixtures.scripted(events: PennyFixtures.answerEvents, now: PennyFixtures.now))
         #expect(!tab.chat.state.showsClose)
         #expect(tab.chat.state.title == "Penny")
         tab.ask(PennyContext(screen: .nextMove, nextMoveID: "mv_1", question: "Why this move?"))
-        // A second ask while Penny works waits for the turn, then goes into the same chat.
+        #expect(tab.chat.isWorking)
+        // A second context question stops the running turn and starts a new chat with no thread id.
+        tab.ask(PennyContext(screen: .why, nextMoveID: "mv_1", question: "Explain this simply"))
+        #expect(tab.chat.threadID == nil)
+        await tab.chat.waitForTurn()
+        #expect(tab.chat.exchanges.map(\.text) == ["Explain this simply"])
+        #expect(tab.chat.context.screen == .why)
+        // Penny answered at once.
+        #expect(tab.chat.exchanges.first?.status == .done)
+        #expect(!Self.groups(tab.chat.state).isEmpty)
+    }
+
+    @Test func tabAskWithoutAQuestionKeepsTheChat() async {
+        let tab = PennyTabModel(service: PennyFixtures.scripted(events: PennyFixtures.answerEvents, now: PennyFixtures.now))
         tab.ask(PennyContext(screen: .money, question: "What is my weekly budget?"))
         await tab.chat.waitForTurn()
-        await tab.chat.waitForTurn()
-        #expect(tab.chat.exchanges.map(\.text) == ["Why this move?", "What is my weekly budget?"])
-        #expect(tab.chat.context.screen == .money)
+        tab.ask(PennyContext(screen: .money))
+        #expect(tab.chat.exchanges.map(\.text) == ["What is my weekly budget?"])
     }
 
     @Test func starterChipsNeverReturnAfterANewContext() async {
@@ -375,6 +387,43 @@ struct PennyViewModelTests {
         tab.ask(PennyContext(screen: .lifeEvent, lifeID: "lf_1", eventID: "ev_1"))
         #expect(tab.chat.exchanges.isEmpty)
         #expect(tab.chat.context.eventID == "ev_1")
+    }
+
+    // MARK: Onboarding chat (ADR 0063)
+
+    @Test func onboardingChatIsGeneralWithoutNextMoveLinks() async {
+        final class Box: @unchecked Sendable { var request: PennyAPI.Request? }
+        let box = Box()
+        var service = PennyFixtures.scripted(events: [], fallback: PennyFixtures.shrugResponse, now: PennyFixtures.now)
+        service.stream = { request in
+            box.request = request
+            return AsyncThrowingStream { $0.finish(throwing: URLError(.timedOut)) }
+        }
+        let model = PennyViewModel(service: service, context: PennyContext(screen: .onboarding))
+        await model.start()
+        #expect(model.state.chips == PennyViewModel.onboardingChips)
+        #expect(model.state.introText == PennyViewModel.onboardingIntroText)
+        #expect(model.state.pastThreads.isEmpty)
+        model.send("Which shares should I buy?")
+        await model.waitForTurn()
+        // The shrug reply links to the Next Move; in onboarding there is nothing to link to.
+        #expect(Self.groups(model.state).allSatisfy { $0.links.isEmpty })
+        #expect(box.request?.context?.screen?.rawValue == "onboarding")
+    }
+
+    @Test func requestLeavesLanguageToTheClient() async {
+        // LiveClient fills AppLanguage.current; the ViewModel never sets it.
+        final class Box: @unchecked Sendable { var request: PennyAPI.Request? }
+        let box = Box()
+        var service = PennyFixtures.scripted(events: [], fallback: PennyFixtures.answerResponse)
+        service.stream = { request in
+            box.request = request
+            return AsyncThrowingStream { $0.finish(throwing: URLError(.timedOut)) }
+        }
+        let model = PennyViewModel(service: service)
+        model.send("Hi")
+        await model.waitForTurn()
+        #expect(box.request?.language == nil)
     }
 
     // MARK: Keepalive and failure (fix 9)
@@ -479,6 +528,17 @@ struct YouBuildInfoTests {
             Issue.record("SourceStatus shape changed"); return
         }
         #expect(sources.filter { !YouViewModel.isCutSource($0) }.map(\.id) == ["boe"])
+    }
+
+    @Test @MainActor func habitCardShowsRatiosOnly() throws {
+        let json = #"{"overall":64,"components":{"savings_rate":40,"months_of_cover":75,"spend_stability":80,"discretionary_share":55,"subscription_creep":90,"debt_pressure":70}}"#
+        let score = try JSONDecoder().decode(HabitScore.self, from: Data(json.utf8))
+        let card = try #require(YouViewModel.habitCard(score))
+        #expect(card.overall == 64)
+        #expect(card.rows.map(\.name) == ["Savings rate", "Months of cover", "Spend stability", "Discretionary share", "Subscription creep", "Debt pressure"])
+        #expect(card.rows.map(\.value) == [40, 75, 80, 55, 90, 70])
+        let empty = try JSONDecoder().decode(HabitScore.self, from: Data(#"{"components":{}}"#.utf8))
+        #expect(YouViewModel.habitCard(empty) == nil)
     }
 
     @Test @MainActor func evaluationRowNeedsCases() {

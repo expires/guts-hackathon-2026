@@ -7,8 +7,8 @@ struct ActivitiesSheetView: View {
 
     var body: some View {
         SheetContainer(title: "Activities", closeIdentifier: "activities.done", onClose: actions.onClose) {
-            RowGroupTitle(text: "What you can do")
-            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: "Nothing to do here this year.")
+            RowGroupTitle(text: L10n.tr("What you can do"))
+            ActionList(actions: state.actions, isBusy: state.isBusy, onAction: actions.onAction, emptyText: L10n.tr("Nothing to do here this year."))
         }
     }
 }

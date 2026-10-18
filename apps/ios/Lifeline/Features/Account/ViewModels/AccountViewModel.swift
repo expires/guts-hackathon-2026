@@ -47,7 +47,7 @@ final class AccountViewModel {
             switch confirm {
             case .reset:
                 state.profile = Self.profile(try await api.resetDemo())
-                state.message = "Demo data cleared. Connect your money again to get a Next Move."
+                state.message = L10n.tr("Demo data cleared. Connect your money again to get a Next Move.")
             case .signOut:
                 try await api.signOut()
                 onSignedOut()
@@ -66,11 +66,11 @@ final class AccountViewModel {
         let since: String = {
             let parser = ISO8601DateFormatter()
             guard let date = parser.date(from: me.createdAt) ?? FinanceMapping.date(String(me.createdAt.prefix(10))) else { return "" }
-            return "Since " + date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(Money.locale))
+            return L10n.tr("Since \(date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(FinanceMapping.dateLocale)))")
         }()
         return .init(
             name: me.displayName.flatMap { $0.isEmpty ? nil : $0 } ?? "You",
-            signInText: me.authProvider == .apple ? "Signed in with Apple" : "Demo account on this phone",
+            signInText: me.authProvider == .apple ? L10n.tr("Signed in with Apple") : L10n.tr("Demo account on this phone"),
             sinceText: since,
             dataSources: me.financeInputs.map { input in
                 switch input {
@@ -106,7 +106,7 @@ enum AccountFixtures {
         var state = ready
         state.profile?.dataSources = []
         state.profile?.hasFinanceData = false
-        state.message = "Demo data cleared. Connect your money again to get a Next Move."
+        state.message = L10n.tr("Demo data cleared. Connect your money again to get a Next Move.")
         return state
     }
 
@@ -121,8 +121,8 @@ enum AccountFixtures {
     static var all: [(id: String, title: String, state: AccountViewState)] {
         [
             ("ready", "Account", ready),
-            ("confirmDelete", "Delete, confirm", confirmDelete),
-            ("afterReset", "After demo reset", afterReset),
+            ("confirmDelete", L10n.tr("Delete, confirm"), confirmDelete),
+            ("afterReset", L10n.tr("After demo reset"), afterReset),
             ("loading", "Loading", loading),
             ("error", "Offline", error),
         ]

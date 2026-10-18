@@ -9,21 +9,25 @@ import UIKit
 struct RoomFlowTests {
     // MARK: Links
 
-    @Test func parsesJoinLinksAndScans() throws {
-        #expect(RoomLink.code(from: try #require(URL(string: "lifeline://join/K7Q2ZP"))) == "K7Q2ZP")
-        #expect(RoomLink.code(from: try #require(URL(string: "lifeline://join/k7q2zp"))) == "K7Q2ZP")
-        #expect(RoomLink.code(from: try #require(URL(string: "https://example.app/join/LEEDS4"))) == "LEEDS4")
+    @Test func parsesFourDigitJoinLinksAndScans() throws {
+        #expect(RoomLink.code(from: try #require(URL(string: "lifeline://join/1234"))) == "1234")
+        #expect(RoomLink.code(from: try #require(URL(string: "https://example.app/join/0042"))) == "0042")
         #expect(RoomLink.code(from: try #require(URL(string: "lifeline://connected?session=1"))) == nil)
-        #expect(RoomLink.code(from: try #require(URL(string: "lifeline://join/TOOLONG1"))) == nil)
-        #expect(RoomLink.code(fromScanned: " lifeline://join/LEEDS4 ") == "LEEDS4")
-        #expect(RoomLink.code(fromScanned: "leeds4") == "LEEDS4")
+        #expect(RoomLink.code(from: try #require(URL(string: "lifeline://join/12345"))) == nil)
+        #expect(RoomLink.code(from: try #require(URL(string: "lifeline://join/K7Q2ZP"))) == nil)
+        #expect(RoomLink.code(fromScanned: " lifeline://join/4242 ") == "4242")
+        #expect(RoomLink.code(fromScanned: "4242") == "4242")
         #expect(RoomLink.code(fromScanned: "hello world") == nil)
-        #expect(RoomLink.normalise("k7-q2 zp!") == "K7Q2ZP")
+        #expect(RoomLink.normalise("12-3 4!5") == "1234")
+        #expect(RoomLink.normalise("ab12") == "12")
+        #expect(CircleCode.normalise("flat-4b") == "FLAT4B")
+        #expect(CircleCode.isValid("FLAT4B"))
+        #expect(!CircleCode.isValid("1234"))
     }
 
     @Test func qrFallsBackToLocalImage() {
         // The contract example PNG is only a header, so the app draws the QR itself.
-        let png = RoomQR.png(base64: "iVBORw0KGgo=", joinURL: "lifeline://join/K7Q2ZP")
+        let png = RoomQR.png(base64: "iVBORw0KGgo=", joinURL: "lifeline://join/1234")
         #expect(png.flatMap(UIImage.init(data:)) != nil)
     }
 
@@ -32,18 +36,19 @@ struct RoomFlowTests {
     @Test func lobbyForHostAndGuest() throws {
         let host = RoomFlowFixtures.lobbyHost
         let room = try #require(host.room)
-        #expect(room.code == "LEEDS4")
+        #expect(room.code == "4242")
         #expect(host.isHost)
         #expect(host.game?.title == "Money Quiz")
-        #expect(host.game?.detail == "6 questions · mixed topics")
+        #expect(host.game?.detail == "6 questions · Mixed")
         #expect(host.canPickGame)
-        #expect(host.startTitle == "Start with 3 players")
-        #expect(host.canStart)
+        // Jas is not ready yet: the server needs every seated player ready (audit fix).
+        #expect(host.startTitle == "Waiting for 1 to get ready")
+        #expect(!host.canStart)
         #expect(!host.canReady)
         #expect(host.playersTitle == "Players · 4 of 6")
         #expect(room.players.map(\.statusText) == ["Ready", "Ready", "Ready", "Not ready"])
         #expect(room.qrPNG != nil)
-        #expect(host.shareText.contains("lifeline://join/LEEDS4"))
+        #expect(host.shareText.contains("lifeline://join/4242"))
         #expect(host.shareText.contains(Brand.productName))
 
         let noGame = RoomFlowFixtures.lobbyHostNoGame
@@ -77,9 +82,9 @@ struct RoomFlowTests {
         let life = GameMapping.picker(draft: draft, paths: MockPlayData.paths, pathsPhase: .ready)
         #expect(!life.paths.contains { $0.id == "masters" })
         #expect(!life.canConfirm)
-        draft.pathID = "university"
+        draft.pathID = "uni"
         let options = draft.options
-        #expect(options.pathId == "university")
+        #expect(options.pathId == "uni")
         #expect(options.quick == true)
         #expect(GameMapping.picker(draft: draft, paths: MockPlayData.paths, pathsPhase: .ready).canConfirm)
     }
@@ -114,6 +119,52 @@ struct RoomFlowTests {
         #expect(over.isHost)
     }
 
+    @Test func pickerOffersQuickStudents() {
+        var draft = GameMapping.Draft()
+        draft.game = .sameLife
+        draft.quick = true
+        let none = GameMapping.picker(draft: draft, paths: MockPlayData.paths, students: MockPlayData.quickStudents, pathsPhase: .ready)
+        #expect(none.students.map(\.label) == ["Priya", "Amara", "Jordan", "Kai", "Maya"])
+        #expect(!none.canConfirm)
+        draft.quickStudentID = "qs-jordan"
+        draft.studentPathID = "apprentice"
+        let picked = GameMapping.picker(draft: draft, paths: MockPlayData.paths, students: MockPlayData.quickStudents, pathsPhase: .ready)
+        #expect(picked.canConfirm)
+        #expect(draft.options.quickStudentId == "qs-jordan")
+        #expect(draft.options.pathId == "apprentice")
+        #expect(draft.options.quick == true)
+        // Full life: path chips, no students.
+        draft.quick = false
+        let full = GameMapping.picker(draft: draft, paths: MockPlayData.paths, students: MockPlayData.quickStudents, pathsPhase: .ready)
+        #expect(full.students.isEmpty)
+        #expect(draft.options.quickStudentId == nil)
+
+        var room = RoomFlowFixtures.lobbyRoom
+        room.game = .sameLife
+        room.options = .init(pathId: "apprentice", quick: true, quickStudentId: "qs-jordan")
+        #expect(GameMapping.gameCard(room: room, paths: MockPlayData.paths, students: MockPlayData.quickStudents)?.detail
+            == "Quick Life, ages 18 to 25 · everyone plays Jordan")
+    }
+
+    @Test func resultsUseServerRankingAndWinnerLine() {
+        let room = RoomFlowFixtures.finishedRoom
+        let ranking: [PlayWire.Score] = [
+            .init(playerId: "p3", name: "Tom", score: 140, rank: 1),
+            .init(playerId: "p2", name: "Ava", score: 131, rank: 2),
+            .init(playerId: "p1", name: "Ash", score: 104, rank: 3),
+            .init(playerId: "p4", name: "Jas", score: 91, rank: 4),
+        ]
+        let server = RoomMapping.result(
+            room: room, myID: "p1", myLife: RoomFlowFixtures.life, rivalLives: [:], link: .live, isSampleData: false,
+            serverRanking: ranking, serverWinnerLine: "Tom wins: INDEX 112 and the best habit score."
+        )
+        #expect(server.rows.map(\.name) == ["Tom", "Ava", "Ash", "Jas"])
+        #expect(server.pennyLine == "Tom wins: INDEX 112 and the best habit score.")
+        let template = RoomMapping.result(room: room, myID: "p1", myLife: RoomFlowFixtures.life, rivalLives: [:], link: .live, isSampleData: false)
+        #expect(template.pennyLine == "Ava wins this Same Life with INDEX 131. Same events, better choices.")
+        #expect(RoomFlowFixtures.resultPending.pennyLine.isEmpty)
+    }
+
     @Test func quickLifeCardShowsHabitScore() throws {
         let card = try #require(RoomFlowFixtures.resultQuickLife.quickLife)
         #expect(card.habitOverall == 61)
@@ -130,11 +181,12 @@ struct RoomFlowTests {
         #expect(age.rivals.rivals.first?.isMe == true)
         #expect(age.rivals.rivals.last?.isConnected == false)
         #expect(age.event == nil)
-        #expect(age.ageTitle == "Age up to \(RoomFlowFixtures.life.age + 1)")
-        #expect(age.detail == "Age \(RoomFlowFixtures.life.age) · Room LEEDS4")
+        #expect(age.showsAgeUp)
+        #expect(age.nextAge == RoomFlowFixtures.life.age + 1)
+        #expect(age.detail == "Age \(RoomFlowFixtures.life.age) · Room 4242")
 
         let event = RoomFlowFixtures.liveEvent
-        #expect(event.ageTitle == nil)
+        #expect(!event.showsAgeUp)
         #expect(event.event?.choices.isEmpty == false)
 
         let starting = RoomFlowFixtures.liveStarting
@@ -277,7 +329,8 @@ struct RoomFlowTests {
         #expect(await eventually { session.myPlayerID != nil })
         // The name comes from the account (mock "Ash"), not from a form.
         #expect(session.me?.name == "Ash")
-        #expect(model.lobbyState?.room?.code.count == 6)
+        #expect(model.lobbyState?.room?.code.count == 4)
+        #expect(model.lobbyState?.room?.code.allSatisfy(\.isNumber) == true)
         #expect(model.lobbyState?.room?.qrPNG != nil)
         #expect(model.lobbyState?.canPickGame == true)
         #expect(model.lobbyState?.canStart == false)
@@ -338,16 +391,20 @@ struct RoomFlowTests {
         model.openGamePicker()
         model.pickerActions.onSelectGame("same_life")
         #expect(await eventually { model.pickerState.pathsPhase == .ready })
-        model.pickerActions.onPath("university")
         model.pickerActions.onQuick(true)
+        #expect(await eventually { model.pickerState.students.count == 5 })
+        model.pickerActions.onStudent("qs-jordan")
         await model.confirmGame()
         #expect(await eventually { model.lobbyState?.game?.title == "Same Life" && model.lobbyState?.canStart == true })
-        #expect(session.room?.options?.pathId == "university")
+        #expect(session.room?.options?.quickStudentId == "qs-jordan")
+        #expect(session.room?.options?.pathId == "apprentice")
 
         await session.start()
         #expect(await eventually { model.myLifeID != nil && model.stage == .live })
-        let life = try #require(game.life)
-        #expect(model.liveState?.ageTitle == "Age up to \(life.age + 1)")
+        _ = try #require(game.life)
+        // Quick Life: one tap moves 1 or 2 years by a server plan, so the button shows no number.
+        #expect(model.liveState?.showsAgeUp == true)
+        #expect(model.liveState?.nextAge == nil)
 
         await model.age()
         #expect(model.liveState?.event != nil)
@@ -361,6 +418,11 @@ struct RoomFlowTests {
         #expect(await eventually { model.resultState?.rows.allSatisfy(\.ribbonsKnown) == true })
         #expect(model.resultState?.quickLife != nil)
         #expect(model.resultState?.rows.count == 4)
+        // The final ranking from the server orders the rows; Penny announces the winner.
+        #expect(await eventually { !session.ranking.isEmpty })
+        #expect(model.resultState?.rows.map(\.id) == session.ranking.sorted { $0.rank < $1.rank }.map(\.playerId))
+        #expect(await eventually { session.winnerLine != nil })
+        #expect(model.resultState?.pennyLine == session.winnerLine)
 
         await model.leave()
         #expect(model.stage == .entry)
@@ -416,7 +478,7 @@ struct RoomFlowTests {
     /// the other does not exist for this player (404).
     @Test func liveResultsFetchRivalLivesThroughClient() async throws {
         let client = MockClient()
-        let rival = try await client.createLife(.init(mode: .preset, startYear: 2021, presetId: "nurse-leeds", roomCode: "K7Q2ZP"))
+        let rival = try await client.createLife(.init(mode: .preset, startYear: 2021, presetId: "nurse-leeds", roomCode: "1234"))
         let socket = FakeRoomConnection()
         let transport = ClientRoomTransport(client: client) { _ in socket }
         let game = GameSession(client: client)
@@ -470,10 +532,10 @@ struct RoomFlowTests {
         model.scannerActions.onTypeCode()
         #expect(!model.showsScanner)
         #expect(await eventually { model.showsCodeEntry })
-        model.codeEntryActions.onJoinCodeChange("k7q2zp")
+        model.codeEntryActions.onJoinCodeChange("1234")
         #expect(model.entryState.canJoin)
         model.codeEntryActions.onJoin()
-        #expect(await eventually { model.session.room?.code == "K7Q2ZP" && model.isPresented })
+        #expect(await eventually { model.session.room?.code == "1234" && model.isPresented })
         #expect(!model.showsCodeEntry)
         #expect(!model.showsScanner)
     }
@@ -508,9 +570,9 @@ struct RoomFlowTests {
         model.scanned("not a room")
         #expect(model.showsScanner)
         #expect(model.scannerHintText == "That QR code is not a \(Brand.productName) room.")
-        model.scanned("lifeline://join/K7Q2ZP")
+        model.scanned("lifeline://join/1234")
         #expect(!model.showsScanner)
-        #expect(await eventually { model.session.room?.code == "K7Q2ZP" })
+        #expect(await eventually { model.session.room?.code == "1234" })
         #expect(model.isPresented)
     }
 }

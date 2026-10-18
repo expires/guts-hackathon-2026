@@ -6,7 +6,8 @@ Run from the repo root:  uv run --project services/api python tools/gen_statemen
 Default output: services/api/lifeline_data/statements/samples/ (package data, read by the API) and
 demo/statements/ (copy for judges). Both copies are byte-identical.
 Output per profile: <id>.csv (Monzo CSV export columns), <id>.pdf (simple Monzo-style PDF statement with a
-running balance), plus index.json (SampleStatement fields from lifeline_contracts.account and a `hints` object).
+running balance), plus index.json (SampleStatement fields from lifeline_contracts.account and a `hints` object;
+`hints.name` is the account holder, given name first; `hints.budgets` and `hints.goals` are set up on import).
 All people, account details and amounts are synthetic. Every file says "Sample data".
 """
 
@@ -135,7 +136,6 @@ class Profile:
     hints: dict[str, object]
     habits: list[Habit] = field(default_factory=list)
     fixed: list[Tx] = field(default_factory=list)
-    team: bool = False
     overdraft_ear_pct: float | None = None
 
 
@@ -381,140 +381,405 @@ def commuter() -> Profile:
     )
 
 
-def team1() -> Profile:
+def prev_working_day(d: date) -> date:
+    """Payroll rule: a payday on a weekend or bank holiday moves to the working day before."""
+    while d.weekday() >= 5 or d in BANK_HOLIDAYS:
+        d -= timedelta(days=1)
+    return d
+
+
+def loan_england() -> Profile:
     loan_day = date(2026, 9, 28)
-    fixed = [money_in(loan_day, "Student Loans Company", 3450.00, "SLC MAINTENANCE LOAN", "Bacs (Direct Credit)")]
-    rng = random.Random(5505)
-    fridays = weekly(4)
-    for d in fridays:
-        fixed.append(money_in(d, "Bean There Cafe Ltd", rng.uniform(95, 140), "PAYROLL", "Bacs (Direct Credit)"))
-    fixed.append(card(date(2026, 10, 1), "University of York", "🏠", "Bills", 2350.00, "UOY ACCOMMODATION TERM 1",
-                      type_="Faster payment"))
-    fixed += subscription("Spotify", "🎵", 5.99, 7, "SPOTIFY STUDENT")
-    fixed += subscription("Amazon Prime", "📦", 4.49, 15, "AMAZON PRIME STUDENT", "Shopping")
+    fixed = [money_in(loan_day, "Student Loans Company", 3612.00, "SLC MAINTENANCE LOAN", "Bacs (Direct Credit)")]
+    fixed += standing_order("Jesmond Student Lets", 495.00, 1, "RENT 41 FOREST RD JESMOND")
+    fixed += [Tx(d, "19:00:00", "Faster payment", "Kieran Walsh", "", "Bills", -45.00, "bills")
+              for d in monthly(6)]
+    fixed += subscription("Spotify", "🎵", 5.99, 14, "SPOTIFY STUDENT")
+    fixed += subscription("Netflix", "🍿", 5.99, 21, "NETFLIX.COM")
+    fixed += subscription("Amazon Prime", "📦", 4.49, 9, "AMAZON PRIME STUDENT", "Shopping")
+    fixed += direct_debit("Smarty", "📱", 10.00, 12, "SMARTY MOBILE")
+    # Loan day spending spree, then a tight summer before it.
+    fixed.append(card(date(2026, 9, 28), "Apple", "💻", "Shopping", 429.00, "APPLE STORE NEWCASTLE"))
+    fixed.append(card(date(2026, 9, 29), "JD Sports", "👟", "Shopping", 119.99, "JD SPORTS NEWCASTLE"))
+    fixed.append(card(date(2026, 10, 2), "Ryanair", "✈️", "Holidays", 164.00, "RYANAIR NEWCASTLE"))
+    fixed.append(card(date(2026, 10, 3), "Digital Newcastle", "🎟️", "Entertainment", 45.00, "DIGITAL NIGHTCLUB"))
     habits = [
-        Habit("York Students' Union", "🍺", "Entertainment", "YUSU BAR YORK", 5.0, 20.0, 2.0, term_only=True),
-        Habit("Deliveroo", "🛵", "Eating out", "DELIVEROO YORK", 15.0, 26.0, 1.0),
-        Habit("Tesco", "🛒", "Groceries", "TESCO STORES YORK", 8.0, 25.0, 1.5),
-        Habit("Nando's", "🍗", "Eating out", "NANDOS YORK", 14.0, 22.0, 0.4),
-        Habit("Uber", "🚗", "Transport", "UBER *TRIP", 6.0, 12.0, 0.5),
-        Habit("Greggs", "🥐", "Eating out", "GREGGS YORK", 1.40, 4.50, 1.2),
+        Habit("Tesco", "🛒", "Groceries", "TESCO EXPRESS JESMOND", 4.0, 16.0, 1.5),
+        Habit("Greggs", "🥐", "Eating out", "GREGGS NORTHUMBERLAND ST", 1.40, 4.50, 1.5),
+        Habit("Deliveroo", "🛵", "Eating out", "DELIVEROO NEWCASTLE", 15.0, 28.0, 0.6, end=date(2026, 9, 27)),
+        Habit("Deliveroo", "🛵", "Eating out", "DELIVEROO NEWCASTLE", 15.0, 28.0, 3.0, start=date(2026, 9, 28)),
+        Habit("Newcastle University Students' Union", "🍺", "Entertainment", "NUSU BAR", 6.0, 22.0, 2.5,
+              term_only=True),
+        Habit("Go North East", "🚌", "Transport", "GO NORTH EAST", 3.00, 3.00, 1.0),
+        Habit("Uber", "🚗", "Transport", "UBER *TRIP", 6.0, 14.0, 1.0, start=date(2026, 9, 28)),
+    ]
+    income = [income_source("maintenance_loan_slc", "maintenance_loan", 3612.00, "termly",
+                            [loan_day, date(2027, 1, 18), date(2027, 4, 26)])]
+    return Profile(
+        "loan_england", "Full loan student",
+        "Second year in Newcastle on the full maintenance loan in 3 payments. Tight summer, big spending on loan day.",
+        9109, "Jordan Hughes", 1600.00, ["maintenance_loan"],
+        hints(True, 20, "rent", "plan_5", income, [], 495 + 45 + 5.99 + 5.99 + 4.49 + 10), habits, fixed,
+    )
+
+
+def scottish() -> Profile:
+    rng = random.Random(9210)
+    fringe = [d for d in weekly(4) if date(2026, 7, 24) <= d <= date(2026, 8, 28)]
+    fixed = [money_in(d, "Fringe Bars Ltd", rng.uniform(170, 260), "WAGES", "Bacs (Direct Credit)") for d in fringe]
+    saas = [date(2026, 9, 18), date(2026, 10, 16)]
+    fixed += [money_in(d, "Student Loans Company", 735.00, "SAAS LOAN INSTALMENT", "Bacs (Direct Credit)")
+              for d in saas]
+    fixed += [money_in(d, "Student Loans Company", 166.00, "SAAS YOUNG STUDENTS BURSARY", "Bacs (Direct Credit)")
+              for d in saas]
+    fixed += standing_order("Marchmont Lettings", 540.00, 1, "RENT 9F WARRENDER PARK")
+    fixed += direct_debit("giffgaff", "📱", 8.00, 4, "GIFFGAFF MOBILE")
+    fixed += subscription("Spotify", "🎵", 5.99, 20, "SPOTIFY STUDENT")
+    fixed += pot([date(2026, 8, 29), date(2026, 9, 19)], "Rainy day", 150.00)
+    habits = [
+        Habit("Lidl", "🛒", "Groceries", "LIDL GB EDINBURGH", 12.0, 26.0, 1.2),
+        Habit("Scotmid", "🛒", "Groceries", "SCOTMID MARCHMONT", 2.0, 7.0, 1.0),
+        Habit("Edinburgh University Students' Association", "☕", "Eating out", "EUSA SU CAFE", 1.80, 3.20, 0.8,
+              term_only=True),
+        Habit("Greggs", "🥐", "Eating out", "GREGGS PRINCES ST", 1.40, 4.25, 0.4),
+        Habit("Boots", "💊", "Personal care", "BOOTS EDINBURGH", 3.0, 9.0, 0.15),
+        Habit("Charity shop", "👕", "Shopping", "SHELTER SCOTLAND SHOP", 3.0, 12.0, 0.1),
+    ]
+    later = [date(2026, 11, 16), date(2026, 12, 16)]
+    income = [
+        income_source("saas_loan", "maintenance_loan", 735.00, "monthly", [*saas, *later]),
+        income_source("saas_ysb", "bursary", 166.00, "monthly", [*saas, *later]),
+        income_source("summer_fringe", "part_time_job", 215.00, "one_off", fringe, None),
+    ]
+    return Profile(
+        "scottish", "Scottish student",
+        "Edinburgh student with a monthly SAAS loan and Young Students' Bursary. Free buses, a summer Fringe job.",
+        9210, "Eilidh Fraser", 420.00, ["maintenance_loan", "bursary", "part_time_job"],
+        hints(True, 19, "rent", "plan_4", income, [], 540 + 8 + 5.99), habits, fixed,
+    )
+
+
+def mature() -> Profile:
+    rng = random.Random(9311)
+    loan_day = date(2026, 9, 28)
+    fixed = [money_in(loan_day, "Student Loans Company", 2900.00, "SLC MAINTENANCE LOAN", "Bacs (Direct Credit)")]
+    lsf = [working_day(date(2026, m, 20)) for m in (7, 8, 9)] + [working_day(date(2026, 10, 20))]
+    lsf = [d for d in lsf if START <= d <= END]
+    fixed += [money_in(d, "NHSBSA", 416.67, "NHS LEARNING SUPPORT FUND GRANT", "Bacs (Direct Credit)") for d in lsf]
+    shifts = [working_day(date(2026, m, 5)) for m in (8, 9, 10)]
+    fixed += [money_in(d, "NHS Professionals", rng.uniform(180, 320), "NHSP PAYROLL BANK SHIFTS",
+                       "Bacs (Direct Credit)") for d in shifts]
+    fixed += standing_order("Moseley Lettings", 625.00, 1, "RENT HALF SHARE 18 ALCESTER RD")
+    fixed += direct_debit("Octopus Energy", "⚡", 48.00, 12, "OCTOPUS ENERGY")
+    fixed += direct_debit("Tesco Mobile", "📱", 12.00, 17, "TESCO MOBILE")
+    fixed += subscription("Netflix", "🍿", 5.99, 24, "NETFLIX.COM")
+    fixed += pot(shifts, "Emergency fund", 120.00)
+    fixed += pot([loan_day], "Emergency fund", 600.00)
+    habits = [
+        Habit("Aldi", "🛒", "Groceries", "ALDI BIRMINGHAM", 15.0, 32.0, 1.1),
+        Habit("National Express West Midlands", "🚌", "Transport", "NXWM SWIFT", 2.00, 2.00, 4.0,
+              weekdays_only=True),
+        Habit("Costa Coffee", "☕", "Eating out", "COSTA QEHB", 2.6, 3.6, 0.6, weekdays_only=True),
+        Habit("Boots", "💊", "Personal care", "BOOTS BIRMINGHAM", 3.0, 10.0, 0.2),
+        Habit("Waterstones", "📚", "Shopping", "WATERSTONES BIRMINGHAM", 8.0, 20.0, 0.1),
     ]
     income = [
-        income_source("maintenance_loan_slc", "maintenance_loan", 3450.00, "termly",
+        income_source("maintenance_loan_slc", "maintenance_loan", 2900.00, "termly",
                       [loan_day, date(2027, 1, 18), date(2027, 4, 26)]),
-        income_source("part_time_cafe", "part_time_job", 118.00, "weekly", fridays[-4:], END + timedelta(days=7)),
+        income_source("nhs_lsf_grant", "grant", 416.67, "monthly", [*lsf, working_day(date(2026, 11, 20))]),
+        income_source("nhs_bank_shifts", "part_time_job", 250.00, "monthly", [*shifts, working_day(date(2026, 11, 5))]),
     ]
     return Profile(
-        "team1", "Fresher in halls",
-        "First year in halls. Maintenance loan and weekly cafe shifts. Freshers' spending is high.",
-        5505, "Leo Grant", 260.00, ["maintenance_loan", "part_time_job"],
-        hints(True, 18, "rent", "plan_5", income, [], 2350 / 3 + 5.99 + 4.49), habits, fixed, team=True,
+        "mature", "Mature student",
+        "29-year-old nursing student in Birmingham. Loan, NHS support grant and bank shifts. Careful with money.",
+        9311, "Grace Mensah", 980.00, ["maintenance_loan", "grant", "part_time_job"],
+        hints(True, 29, "rent", "plan_5", income, [], 625 + 48 + 12 + 5.99 + 2 * 21.7), habits, fixed,
     )
 
 
-def team2() -> Profile:
-    paydays = [last_friday(2026, m) for m in (7, 8, 9)]
-    fixed = [money_in(d, "Northwind Analytics Ltd", 2145.60, "SALARY", "Bacs (Direct Credit)") for d in paydays]
-    fixed += standing_order("Ancoats Lettings", 725.00, 1, "RENT APT 12 MURRAYS MILLS")
-    fixed += direct_debit("Manchester City Council", "🏛️", 118.00, 1, "MANCHESTER CC COUNCIL TAX")
-    fixed += direct_debit("Octopus Energy", "⚡", 64.00, 12, "OCTOPUS ENERGY")
-    fixed += direct_debit("Hyperoptic", "🌐", 25.00, 9, "HYPEROPTIC BROADBAND")
-    fixed += direct_debit("VOXI", "📱", 10.00, 20, "VOXI MOBILE")
-    fixed += subscription("Netflix", "🍿", 12.99, 6, "NETFLIX.COM")
-    fixed += subscription("Spotify", "🎵", 12.99, 16, "SPOTIFY PREMIUM")
-    fixed += direct_debit("PureGym", "🏋️", 24.99, 1, "PUREGYM MANCHESTER", "Personal care")
-    fixed += pot([d + timedelta(days=1) for d in paydays], "Emergency fund", 300.00)
+def international() -> Profile:
+    transfers = [(date(2026, 7, 20), 0.1090), (date(2026, 8, 3), 0.1103), (date(2026, 9, 3), 0.1110),
+                 (date(2026, 10, 5), 0.1121)]
+    cny = 14000.00
+    fixed = [money_in(d, "Wise", round(cny * r, 2),
+                      f"WISE CNY {cny:,.2f} > GBP AT {r:.4f} FAMILY SUPPORT FROM LI WEI") for d, r in transfers]
+    fixed += standing_order("Unite Students", 790.00, 5, "UNITE STUDENTS COVENTRY ROOM 4-12")
+    fixed += subscription("Spotify", "🎵", 12.99, 11, "SPOTIFY PREMIUM")
+    fixed += subscription("Netflix", "🍿", 12.99, 15, "NETFLIX.COM")
+    fixed += subscription("Apple", "☁️", 2.99, 2, "APPLE.COM/BILL ICLOUD 200GB")
+    fixed += subscription("Disney Plus", "🏰", 9.99, 26, "DISNEYPLUS")
+    fixed += direct_debit("Three", "📱", 20.00, 8, "THREE MOBILE")
     habits = [
-        Habit("Tesco", "🛒", "Groceries", "TESCO STORES MANCHESTER", 10.0, 35.0, 1.5),
-        Habit("Pret A Manger", "🥪", "Eating out", "PRET A MANGER MANCHESTER", 3.5, 8.0, 2.0, weekdays_only=True),
-        Habit("Bee Network", "🚌", "Transport", "BEE NETWORK BUS", 2.00, 2.00, 5.0, weekdays_only=True),
-        Habit("Dishoom", "🍛", "Eating out", "DISHOOM MANCHESTER", 18.0, 40.0, 0.5),
-        Habit("Amazon", "📦", "Shopping", "AMAZON.CO.UK", 8.0, 35.0, 0.4),
+        Habit("Deliveroo", "🛵", "Eating out", "DELIVEROO COVENTRY", 16.0, 32.0, 1.4),
+        Habit("Mooboo", "🧋", "Eating out", "MOOBOO COVENTRY", 4.95, 6.50, 2.0),
+        Habit("Wing Yip", "🛒", "Groceries", "WING YIP BIRMINGHAM", 25.0, 60.0, 0.6),
+        Habit("Tesco", "🛒", "Groceries", "TESCO EXPRESS CANLEY", 4.0, 15.0, 1.2),
+        Habit("Uniqlo", "👕", "Shopping", "UNIQLO BIRMINGHAM", 20.0, 60.0, 0.3),
+        Habit("Warwick Students' Union", "☕", "Eating out", "WARWICK SU CAFE", 2.5, 6.0, 1.0, term_only=True),
+        Habit("Uber", "🚗", "Transport", "UBER *TRIP", 7.0, 18.0, 1.0),
     ]
-    income = [income_source("salary_northwind", "salary", 2145.60, "monthly",
-                             [*paydays, last_friday(2026, 10)])]
+    income = [income_source("family_wise", "family", round(cny * 0.1121, 2), "monthly",
+                            [d for d, _ in transfers] + [date(2026, 11, 3)])]
     return Profile(
-        "team2", "Graduate, first job",
-        "Graduated last year. Monthly salary, rent and bills, saves into an emergency pot. Repaying a Plan 2 loan.",
-        6606, "Maya Collins", 1180.00, ["salary"],
-        hints(False, 23, "rent", "plan_2", income, [], 725 + 118 + 64 + 25 + 10 + 12.99 + 12.99 + 24.99),
-        habits, fixed, team=True,
+        "international", "International student",
+        "From China, studying in Coventry. Parents send money each month by Wise (yuan to pounds). Eats out a lot.",
+        9412, "Yutong Chen", 1650.00, ["family"],
+        hints(True, 21, "rent", "none", income, [], 790 + 12.99 + 12.99 + 2.99 + 9.99 + 20), habits, fixed,
     )
 
 
-def team3() -> Profile:
-    paydays = [last_working_day(2026, m) for m in (7, 8, 9)]
-    fixed = [money_in(d, "Severnside Engineering Ltd", 1640.00, "SALARY PLACEMENT", "Bacs (Direct Credit)")
+def final_year() -> Profile:
+    paydays = [last_working_day(2026, 7), last_working_day(2026, 8)]
+    fixed = [money_in(d, "Northbridge Capital Ltd", 1985.00, "SALARY SUMMER INTERN", "Bacs (Direct Credit)")
              for d in paydays]
-    bursary_day = date(2026, 10, 9)
-    fixed.append(money_in(bursary_day, "University of Bath", 500.00, "PLACEMENT BURSARY", "Bacs (Direct Credit)"))
-    fixed += standing_order("Clifton Student Lets", 650.00, 1, "RENT 3 ST PAULS RD")
-    fixed += subscription("Disney Plus", "🏰", 4.99, 10, "DISNEYPLUS")
-    fixed += subscription("Spotify", "🎵", 12.99, 22, "SPOTIFY PREMIUM")
-    fixed += subscription("Amazon Prime", "📦", 8.99, 3, "AMAZON PRIME*MEMBERSHIP", "Shopping")
-    fixed += direct_debit("EE", "📱", 18.00, 14, "EE LIMITED")
-    fixed += pot([d + timedelta(days=1) for d in paydays], "Final year fund", 150.00)
+    loan_day = date(2026, 9, 28)
+    fixed.append(money_in(loan_day, "Student Loans Company", 2350.00, "SLC MAINTENANCE LOAN", "Bacs (Direct Credit)"))
+    fixed += [Tx(d + timedelta(days=1), "08:00:00", "Faster payment", "Moneybox", "", "Savings", -750.00,
+                 "MONEYBOX LIFETIME ISA") for d in paydays]
+    fixed.append(card(date(2026, 9, 2), "Ryanair", "✈️", "Holidays", 186.00, "RYANAIR BRISTOL"))
+    fixed.append(card(date(2026, 9, 3), "Airbnb", "🏖️", "Holidays", 312.00, "AIRBNB * LISBON"))
+    fixed += [card(d, "Exeter Student Lets", "", "Bills", 280.00, "SUMMER RETAINER 7 PENNSYLVANIA RD",
+                   "07:00:00", "Faster payment") for d in monthly(1, end=date(2026, 8, 31))]
+    fixed += [card(d, "Exeter Student Lets", "", "Bills", 560.00, "RENT 7 PENNSYLVANIA RD", "07:00:00",
+                   "Faster payment") for d in monthly(1, start=date(2026, 9, 1))]
+    fixed += subscription("Spotify", "🎵", 5.99, 16, "SPOTIFY STUDENT")
+    fixed += direct_debit("VOXI", "📱", 10.00, 22, "VOXI MOBILE")
     habits = [
-        Habit("First Bus", "🚌", "Transport", "FIRST BRISTOL DAY TICKET", 4.50, 4.50, 5.0, weekdays_only=True),
-        Habit("Sainsbury's", "🛒", "Groceries", "SAINSBURYS BRISTOL", 12.0, 40.0, 1.2),
-        Habit("Pret A Manger", "🥪", "Eating out", "PRET A MANGER BRISTOL", 3.5, 7.5, 1.0, weekdays_only=True),
-        Habit("The Stag and Hounds", "🍺", "Entertainment", "STAG AND HOUNDS BRISTOL", 6.0, 24.0, 0.8),
-        Habit("Boots", "💊", "Personal care", "BOOTS BRISTOL", 3.0, 12.0, 0.2),
+        Habit("TfL", "🚇", "Transport", "TFL TRAVEL CHARGE", 5.80, 8.90, 4.6, weekdays_only=True,
+              end=date(2026, 8, 28)),
+        Habit("Pret A Manger", "🥪", "Eating out", "PRET A MANGER CANARY WHARF", 3.5, 7.0, 1.0, weekdays_only=True,
+              end=date(2026, 8, 28)),
+        Habit("Sainsbury's", "🛒", "Groceries", "SAINSBURYS", 10.0, 30.0, 1.1),
+        Habit("Exeter Students' Guild", "☕", "Eating out", "EXETER SU CAFE", 1.8, 3.5, 0.8, term_only=True),
+        Habit("Stagecoach", "🚌", "Transport", "STAGECOACH SOUTH WEST", 2.0, 2.0, 1.0, start=date(2026, 8, 31)),
+        Habit("Deliveroo", "🛵", "Eating out", "DELIVEROO EXETER", 15.0, 28.0, 2.0, start=date(2026, 9, 1)),
+        Habit("Timepiece", "🍸", "Entertainment", "TIMEPIECE NIGHTCLUB EXETER", 12.0, 35.0, 1.2, term_only=True),
     ]
     income = [
-        income_source("salary_placement", "salary", 1640.00, "monthly", [*paydays, last_working_day(2026, 10)]),
-        income_source("bursary_placement", "bursary", 500.00, "termly", [bursary_day, date(2027, 2, 5)]),
+        income_source("internship_salary", "salary", 1985.00, "one_off", paydays, None),
+        income_source("maintenance_loan_slc", "maintenance_loan", 2350.00, "termly",
+                      [loan_day, date(2027, 1, 18), date(2027, 4, 26)]),
     ]
     return Profile(
-        "team3", "Placement year",
-        "Year in industry. Monthly placement salary plus a university bursary. Saves for final year.",
-        7707, "Josh Bennett", 730.00, ["salary", "bursary"],
-        hints(True, 21, "rent", "plan_5", income, [], 650 + 4.99 + 12.99 + 8.99 + 18 + 4.5 * 21.7),
-        habits, fixed, team=True,
+        "final_year", "Final year with internship",
+        "Paid summer internship in London, saved into a Lifetime ISA, then a holiday and busy nights out in Exeter.",
+        9513, "Sam Whitfield", 640.00, ["salary", "maintenance_loan"],
+        hints(True, 21, "rent", "plan_5", income, [], 560 + 5.99 + 10), habits, fixed,
     )
 
 
-def team4() -> Profile:
-    rng = random.Random(8808)
-    mondays = weekly(0)
-    fixed = [money_in(d, "Roofoods Ltd", rng.uniform(45, 180), "DELIVEROO RIDER PAYMENT", "Bacs (Direct Credit)")
-             for d in mondays]
-    dad = monthly(28)
-    fixed += [money_in(d, "M Okafor", 300.00, "Dad - rent help") for d in dad]
-    fixed += standing_order("Nottingham Student Homes", 430.00, 1, "RENT 22 LENTON BLVD")
-    fixed += subscription("Spotify", "🎵", 5.99, 8, "SPOTIFY STUDENT")
-    fixed += subscription("Xbox", "🎮", 14.99, 12, "MICROSOFT*XBOX GAME PASS")
-    fixed += subscription("Netflix", "🍿", 5.99, 25, "NETFLIX.COM")
-    fixed += direct_debit("PureGym", "🏋️", 21.99, 1, "PUREGYM NOTTINGHAM", "Personal care")
-    plans = [(date(2026, 8, 30), "CURRYS", 83.00), (date(2026, 9, 25), "NIKE", 33.33)]
-    for first, merchant, inst in plans:
-        fixed += klarna_plan(first, merchant, inst)
-    owed, due = klarna_remaining([(f, i) for f, _, i in plans])
+def graduate() -> Profile:
+    payday = prev_working_day(date(2026, 9, 25))
+    fixed = [money_in(payday, "Halden Group Plc", 2186.40, "SALARY GRADUATE SCHEME", "Bacs (Direct Credit)")]
+    fixed.append(money_in(date(2026, 8, 21), "A Novak", 400.00, "Mum - for the deposit x"))
+    fixed.append(Tx(date(2026, 8, 24), "10:00:00", "Faster payment", "Hackney Lettings", "", "Bills", -1211.00,
+                    "TENANCY DEPOSIT 5 WEEKS"))
+    fixed += [card(d, "Hackney Lettings", "", "Bills", 1050.00, "RENT ROOM 3 MARE ST", "07:00:00", "Faster payment")
+              for d in monthly(1, start=date(2026, 9, 1))]
+    fixed += direct_debit("Octopus Energy", "⚡", 38.00, 12, "OCTOPUS ENERGY SHARE", "Bills")
+    fixed += subscription("Spotify", "🎵", 12.99, 3, "SPOTIFY PREMIUM")
+    fixed += subscription("Netflix", "🍿", 12.99, 9, "NETFLIX.COM")
+    fixed += direct_debit("PureGym", "🏋️", 34.99, 2, "PUREGYM LONDON HACKNEY", "Personal care")
+    fixed += pot([payday + timedelta(days=1)], "Emergency fund", 300.00)
     habits = [
-        Habit("McDonald's", "🍔", "Eating out", "MCDONALDS NOTTINGHAM", 4.0, 10.0, 2.0),
-        Habit("Tesco", "🛒", "Groceries", "TESCO EXPRESS LENTON", 4.0, 18.0, 1.5),
-        Habit("Co-op", "🥤", "Groceries", "CO-OP GROUP NOTTINGHAM", 1.5, 4.0, 2.0),
-        Habit("Nottingham Students' Union", "🍺", "Entertainment", "NOTTS SU BAR", 5.0, 15.0, 0.5, term_only=True),
-        Habit("Halfords", "🚲", "Transport", "HALFORDS NOTTINGHAM", 6.0, 25.0, 0.2),
+        Habit("TfL", "🚇", "Transport", "TFL TRAVEL CHARGE", 5.80, 8.90, 4.8, weekdays_only=True,
+              start=date(2026, 9, 1)),
+        Habit("Pret A Manger", "🥪", "Eating out", "PRET A MANGER LIVERPOOL ST", 3.5, 8.0, 2.5, weekdays_only=True,
+              start=date(2026, 9, 1)),
+        Habit("Tesco", "🛒", "Groceries", "TESCO EXPRESS MARE ST", 6.0, 25.0, 1.6),
+        Habit("Dishoom", "🍛", "Eating out", "DISHOOM SHOREDITCH", 20.0, 45.0, 0.4),
+        Habit("Uber", "🚗", "Transport", "UBER *TRIP", 8.0, 20.0, 0.6),
+        Habit("Lidl", "🛒", "Groceries", "LIDL GB HOMERTON", 10.0, 28.0, 0.5, end=date(2026, 8, 31)),
     ]
     income = [
-        income_source("gig_deliveroo", "part_time_job", 110.00, "weekly", mondays[-4:], END + timedelta(days=4)),
-        income_source("family_dad", "family", 300.00, "monthly", [*dad, working_day(date(2026, 10, 28))]),
+        income_source("salary_halden", "salary", 2186.40, "monthly",
+                      [payday, prev_working_day(date(2026, 10, 25)), prev_working_day(date(2026, 11, 25))]),
     ]
-    debts = [debt("bnpl_klarna", "bnpl", owed, 0.0, None, due)]
     return Profile(
-        "team4", "Delivery rider",
-        "Rides for Deliveroo with pay that changes each week, gets rent help from family, and uses Klarna.",
-        8808, "Tobi Okafor", 120.00, ["part_time_job", "family"],
-        hints(True, 20, "rent", "plan_5", income, debts, 430 + 5.99 + 14.99 + 5.99 + 21.99), habits, fixed,
-        team=True,
+        "graduate", "Recent graduate",
+        "Graduated in summer, started a London graduate job in September. First salary, first London rent.",
+        9614, "Lena Novak", 2400.00, ["salary", "family"],
+        hints(False, 22, "rent", "plan_5", income, [], 1050 + 38 + 12.99 + 12.99 + 34.99), habits, fixed,
     )
 
 
-PROFILES = [scholarship, rich, working, commuter, team1, team2, team3, team4]
+JUDGE_PROFILES = [scholarship, scottish, commuter, loan_england, working, mature, international, final_year, rich,
+                  graduate]
+PROFILES = JUDGE_PROFILES
 # Money already in savings pots on the first statement day. Pot balance at the end = this + pot transfers.
-OPENING_POTS = {"scholarship": 150.00, "commuter": 820.00, "team2": 1500.00, "team3": 600.00}
+OPENING_POTS = {"scholarship": 150.00, "commuter": 820.00, "mature": 1400.00, "graduate": 4000.00}
+
+
+# ---------- "Pick your student" cards (ADR 0069) -------------------------------------------------
+
+
+@dataclass
+class MoneyLine:
+    """One income line on the card. The amount comes from the statement rows whose description contains `match`."""
+
+    label: str
+    match: str
+    period: str  # week | month | term | year
+    dates: str
+    varies: bool = False  # pay changes: the card shows the average of the last 4 payments in the statement
+
+
+@dataclass
+class Card:
+    avatar: str  # an avatar id from the app's face set (DesignSystem/Icons.swift)
+    uni: str | None
+    city: str
+    funding_label: str
+    housing: str
+    money_in: list[MoneyLine]
+
+
+CARDS: dict[str, Card] = {
+    "scholarship": Card("face-teen-hijab", "University of Sheffield", "Sheffield", "Scholarship + bursary",
+                        "Halls, paid by the scholarship",
+                        [MoneyLine("Scholarship", "SCHOLARSHIP LIVING ALLOWANCE", "month", "1st of each month"),
+                         MoneyLine("University bursary", "SHEFFIELD BURSARY MONTHLY", "month",
+                                   "15th of each month")]),
+    "scottish": Card("face-blue-hair", "University of Edinburgh", "Edinburgh", "SAAS + bursary",
+                     "Shared flat in Marchmont, £540 a month",
+                     [MoneyLine("SAAS loan", "SAAS LOAN INSTALMENT", "month", "Mid-month (18 Sep, 16 Oct)"),
+                      MoneyLine("Young Students' Bursary", "SAAS YOUNG STUDENTS BURSARY", "month",
+                                "Same day as the SAAS loan"),
+                      MoneyLine("Fringe bar job", "WAGES", "week", "Fridays, 24 Jul to 28 Aug, pay varies", True)]),
+    "commuter": Card("face-priya", "University of Manchester", "Bolton", "Access grant + family",
+                     "Lives at home with family",
+                     [MoneyLine("Access grant", "ACCESS GRANT TERM 1", "term", "5 Oct, 1 Feb, 26 Apr"),
+                      MoneyLine("Mum", "Mum - train money", "week", "Every Friday")]),
+    "loan_england": Card("face-teen", "Newcastle University", "Newcastle", "Student Finance England",
+                         "Shared house in Jesmond, £495 a month",
+                         [MoneyLine("Maintenance loan", "SLC MAINTENANCE LOAN", "term", "28 Sep, 18 Jan, 26 Apr")]),
+    "working": Card("face-man-beard", "University of Leeds", "Leeds", "Student Finance England + bar job",
+                    "Shared house in Hyde Park, £460 a month",
+                    [MoneyLine("Maintenance loan", "SLC MAINTENANCE LOAN", "term", "28 Sep, 18 Jan, 26 Apr"),
+                     MoneyLine("Bar job", "JDW WAGES", "week", "Every Friday, pay varies", True)]),
+    "mature": Card("face-woman-puff", "University of Birmingham", "Birmingham",
+                   "Student Finance England + NHS grant",
+                   "Shared house in Moseley, £625 a month",
+                   [MoneyLine("Maintenance loan", "SLC MAINTENANCE LOAN", "term", "28 Sep, 18 Jan, 26 Apr"),
+                    MoneyLine("NHS Learning Support Fund", "NHS LEARNING SUPPORT FUND GRANT", "month",
+                              "Around the 20th each month"),
+                    MoneyLine("NHS bank shifts", "NHSP PAYROLL BANK SHIFTS", "month",
+                              "Around the 5th each month, pay varies", True)]),
+    "international": Card("face-girl", "University of Warwick", "Coventry", "Parents",
+                          "Unite Students room, £790 a month",
+                          [MoneyLine("Parents (by Wise)", "FAMILY SUPPORT FROM LI WEI", "month",
+                                     "Early each month, latest 5 Oct; moves with the yuan")]),
+    "final_year": Card("face-man-glasses", "University of Exeter", "Exeter",
+                       "Student Finance England + internship",
+                       "Shared house in Exeter, £560 a month",
+                       [MoneyLine("Summer internship", "SALARY SUMMER INTERN", "month", "31 Jul and 28 Aug only"),
+                        MoneyLine("Maintenance loan", "SLC MAINTENANCE LOAN", "term", "28 Sep, 18 Jan, 26 Apr")]),
+    "rich": Card("face-boy", "University of Leeds", "Leeds", "Parents", "City flat, £895 a month",
+                 [MoneyLine("Parents", "ALLOWANCE FROM DAD", "month", "1st of each month")]),
+    "graduate": Card("face-girl", None, "London", "Salary", "Room in Hackney, £1,050 a month",
+                     [MoneyLine("Graduate salary", "SALARY GRADUATE SCHEME", "month", "25th of each month")]),
+}
+
+# Plain names for the statement's spending categories on the card.
+HABIT_WORDS = {"Eating out": "eating out", "Groceries": "food shopping", "Entertainment": "nights out and fun",
+               "Transport": "travel", "Shopping": "shopping", "Holidays": "holidays",
+               "Personal care": "the gym and personal care"}
+NOT_HABITS = {"Bills", "Income", "Savings"}  # rent, bills and transfers to savings are not everyday habits
+
+
+def card_money_in(p: Profile, txs: list[Tx]) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for line in CARDS[p.id].money_in:
+        paid = [t.amount for t in txs if t.amount > 0 and line.match.upper() in t.description.upper()]
+        if not paid:
+            raise ValueError(f"{p.id}: no statement rows for {line.label!r}")
+        # Pay that changes: the average of the last 4 payments. Fixed pay: the latest payment exactly as shown.
+        amount = round(sum(paid[-4:]) / len(paid[-4:]), 2) if line.varies else paid[-1]
+        out.append({"label": line.label, "amount": amount, "period": line.period, "dates": line.dates})
+    return out
+
+
+def card_habit_line(txs: list[Tx]) -> str:
+    """One true sentence from the statement: the biggest everyday spending category and how the student saves."""
+    spend: dict[str, float] = {}
+    for t in txs:
+        if t.amount < 0 and t.category not in NOT_HABITS and t.type != "Pot transfer":
+            spend[t.category] = spend.get(t.category, 0.0) - t.amount
+    top = max(spend, key=lambda c: spend[c])
+    saved = -sum(t.amount for t in txs if t.amount < 0 and (t.type == "Pot transfer" or t.category == "Savings"))
+    closing = {t.day: t.balance for t in txs}  # end-of-day balance on each statement day
+    days_below = sum(1 for b in closing.values() if b < 0)
+    if days_below * 4 >= len(closing):
+        tail = "often in the overdraft"
+    elif days_below:
+        tail = "dipped into the overdraft"
+    elif saved > 0:
+        tail = f"saved £{saved:,.0f} in {MONTHS} months"
+    elif any(t.name == "Klarna" for t in txs):
+        tail = "spreads payments with Klarna"
+    else:
+        tail = "no savings yet"
+    return f"Not counting rent and bills, spends most on {HABIT_WORDS.get(top, top.lower())}; {tail}"
+
+
+def card_fields(p: Profile, txs: list[Tx]) -> dict[str, object]:
+    """SampleStatement card fields (ADR 0069). Every amount and the habit line come from the statement rows."""
+    c = CARDS[p.id]
+    return {"name": p.holder, "age": p.hints["age"], "avatar": c.avatar, "uni": c.uni, "city": c.city,
+            "funding_label": c.funding_label, "money_in": card_money_in(p, txs), "housing": c.housing,
+            "habit_line": card_habit_line(txs)}
+
+
+# ---------- budgets and savings goals set up on import (ADR 0070) ------------------------------------
+
+
+@dataclass
+class GoalSpec:
+    """A savings goal that fits the student's story. `from_pot` = the money already saved is the Monzo pot balance at
+    the statement end (the hints' savings account); otherwise nothing is saved yet."""
+
+    name: str
+    emoji: str
+    target: float
+    target_date: str
+    from_pot: bool = False
+
+
+# Monthly limits per engine category (lifeline_contracts.finance.Category). Each limit is near the student's own
+# average for a full statement month (August, September), usually a little under it: a target they can reach.
+BUDGETS: dict[str, list[tuple[str, float]]] = {
+    "scholarship": [("groceries", 100.0)],
+    "scottish": [("groceries", 130.0)],
+    "commuter": [("eating_out", 15.0)],
+    "loan_england": [("eating_out", 100.0)],
+    "working": [("eating_out", 120.0)],
+    "mature": [("groceries", 110.0)],
+    "international": [("eating_out", 180.0)],
+    "final_year": [("eating_out", 100.0)],
+    "rich": [("eating_out", 450.0), ("shopping", 120.0)],
+    "graduate": [("eating_out", 60.0)],
+}
+GOALS: dict[str, list[GoalSpec]] = {
+    "scholarship": [GoalSpec("Rainy day pot", "☔", 500.0, "2027-03-31", from_pot=True)],
+    "scottish": [GoalSpec("Rainy day pot", "☔", 600.0, "2027-05-31", from_pot=True)],
+    "commuter": [GoalSpec("Deposit for a flat near uni", "🏠", 2000.0, "2027-06-30", from_pot=True)],
+    "loan_england": [GoalSpec("Summer InterRail", "🚆", 400.0, "2027-06-01")],
+    "working": [GoalSpec("Out of the overdraft buffer", "🛟", 400.0, "2027-04-30")],
+    "mature": [GoalSpec("Emergency fund", "🛟", 3000.0, "2027-06-30", from_pot=True)],
+    "international": [GoalSpec("Flight home at Christmas", "✈️", 650.0, "2026-12-10")],
+    "final_year": [GoalSpec("Deposit for a flat after uni", "🏠", 1000.0, "2027-08-31")],
+    "rich": [GoalSpec("Ski trip with friends", "🎿", 800.0, "2027-02-01")],
+    "graduate": [GoalSpec("Emergency fund", "🛟", 5000.0, "2027-03-31", from_pot=True)],
+}
+
+
+def plan_fields(p: Profile, pots: float) -> dict[str, object]:
+    """`budgets` (BudgetLimit shape) and `goals` (CreateGoalRequest shape plus a stable id) for the hints."""
+    budgets = [{"category": c, "limit": v} for c, v in BUDGETS[p.id]]
+    goals = [{"id": f"gl_sample_{p.id}_{i + 1}", "name": g.name, "emoji": g.emoji, "target": g.target,
+              "saved": round(min(pots, g.target), 2) if g.from_pot else 0.0, "target_date": g.target_date}
+             for i, g in enumerate(GOALS[p.id])]
+    return {"budgets": budgets, "goals": goals}
 
 
 # ---------- simulation ---------------------------------------------------------------------------
@@ -699,6 +964,7 @@ def build(out_dir: Path) -> list[dict[str, object]]:
         txs = simulate(p)
         closing = txs[-1].balance
         h = dict(p.hints)
+        h["name"] = p.holder  # the account holder; rooms and circles show the first word (W4)
         debts = list(h["debts"])  # type: ignore[call-overload]
         if p.overdraft_ear_pct is not None:
             debts.append(debt("overdraft", "overdraft", max(0.0, -closing), p.overdraft_ear_pct, 0.0))
@@ -711,10 +977,11 @@ def build(out_dir: Path) -> list[dict[str, object]]:
             accounts.append({"id": "monzo_savings", "name": "Monzo Pots", "kind": "savings", "provider": "Monzo",
                              "balance": pots})
         h["accounts"] = accounts
+        h.update(plan_fields(p, pots))
         (out_dir / f"{p.id}.csv").write_bytes(to_csv(p, txs))
         (out_dir / f"{p.id}.pdf").write_bytes(to_pdf(p, txs))
         index.append({"id": p.id, "title": p.title, "description": p.description, "funding": p.funding,
-                      "months": MONTHS, "team": p.team, "hints": h})
+                      "months": MONTHS, "team": False, **card_fields(p, txs), "hints": h})
         print(f"{p.id:12s} rows={len(txs):4d} closing={closing:9.2f} min={min(t.balance for t in txs):9.2f}")
     (out_dir / "index.json").write_text(json.dumps({"samples": index}, indent=2,
                                                    ensure_ascii=False) + "\n")

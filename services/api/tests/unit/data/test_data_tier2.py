@@ -264,6 +264,8 @@ async def test_user_snapshot_round_trip_both_modes(settings, live_settings):
     live = DataHub(live_settings, env={})
     assert await live.finance_snapshot("user_x") is None
     demo = DataHub(settings, env={})
+    assert await demo.finance_snapshot(DEMO_SUBJECT) is None  # personas are never served
+    await demo.set_user_snapshot(DEMO_SUBJECT, fixture_snapshot(DEMO_SUBJECT))  # tests seed one explicitly
     assert (await demo.finance_snapshot(DEMO_SUBJECT)) == fixture_snapshot(DEMO_SUBJECT)
 
 

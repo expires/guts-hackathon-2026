@@ -9,7 +9,7 @@ struct StartYearPickerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
-                ScreenHeader(title: "When to start", leading: HeaderSquareButton(kind: .back, identifier: "startYear.back") { dismiss() }) {
+                ScreenHeader(title: L10n.tr("When to start"), leading: HeaderSquareButton(kind: .back, identifier: "startYear.back") { dismiss() }) {
                     if state.usesSampleData { DemoDataBadge() }
                 }
                 HStack(spacing: Theme.Spacing.l) {
@@ -17,7 +17,7 @@ struct StartYearPickerView: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                         Text(state.name).font(.llTitle)
                         Text("\(state.occupation), \(state.town)").font(.llBody).foregroundStyle(Theme.Palette.muted)
-                        Text("Born \(String(state.birthYear))").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                        Text(L10n.tr("Born \(String(state.birthYear))")).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                     }
                 }
                 .padding(Theme.Spacing.l)
@@ -25,7 +25,7 @@ struct StartYearPickerView: View {
                 .inkSurface(.card)
                 .accessibilityElement(children: .combine)
                 LLStepper(
-                    title: "Start year",
+                    title: L10n.tr("Start year"),
                     valueText: String(state.selectedYear),
                     canDecrement: state.selectedYear > state.years.lowerBound,
                     canIncrement: state.selectedYear < state.years.upperBound,
@@ -37,7 +37,7 @@ struct StartYearPickerView: View {
                     options: quickYears.map { .init(id: String($0), label: String($0)) },
                     selection: String(state.selectedYear)
                 ) { if let year = Int($0) { actions.onYearChange(year) } }
-                Text("\(state.name) is \(state.ageAtStart) in \(String(state.selectedYear)).")
+                Text(L10n.tr("\(state.name) is \(state.ageAtStart) in \(String(state.selectedYear))."))
                     .font(.llBody)
                     .contentTransition(.numericText(value: Double(state.selectedYear)))
                     .accessibilityIdentifier("startYear.summary")
@@ -46,9 +46,9 @@ struct StartYearPickerView: View {
             .padding(.top, Theme.Spacing.s).padding(.bottom, Theme.Spacing.m)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            PrimaryButton(title: "Start life", isBusy: state.isStarting, action: actions.onStart)
+            PrimaryButton(title: L10n.tr("Start life"), isBusy: state.isStarting, action: actions.onStart)
                 .disabled(state.isStarting)
-                .accessibilityLabel("Start life in \(String(state.selectedYear))")
+                .accessibilityLabel(L10n.tr("Start life in \(String(state.selectedYear))"))
                 .accessibilityIdentifier("startYear.start")
                 .padding(.horizontal, Theme.Spacing.margin)
                 .padding(.vertical, Theme.Spacing.m)

@@ -9,12 +9,29 @@ struct OnboardingScreen: View {
     @State private var showsPicker = false
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     private let onFinished: @MainActor () -> Void
+    private let onLanguage: @MainActor (AppLanguage) -> Void
+    /// For the open Penny chat step. Nil (tests, Playground fixtures) shows a short note instead.
+    private let client: (any LifelineClient)?
 
-    init(client: any LifelineClient, startAt: OnboardingStep = .welcome, onFinished: @escaping @MainActor () -> Void) {
-        self.init(api: .from(client: client), isSampleData: client.kind == .mock, startAt: startAt, onFinished: onFinished)
+    init(
+        client: any LifelineClient,
+        startAt: OnboardingStep = .welcome,
+        onLanguage: @escaping @MainActor (AppLanguage) -> Void = { _ in },
+        onFinished: @escaping @MainActor () -> Void
+    ) {
+        self.init(api: Self.api(for: client), isSampleData: client.kind == .mock, startAt: startAt, client: client, onLanguage: onLanguage, onFinished: onFinished)
     }
 
-    init(api: OnboardingAPI, isSampleData: Bool, startAt: OnboardingStep = .welcome, onFinished: @escaping @MainActor () -> Void) {
+    init(
+        api: OnboardingAPI,
+        isSampleData: Bool,
+        startAt: OnboardingStep = .welcome,
+        client: (any LifelineClient)? = nil,
+        onLanguage: @escaping @MainActor (AppLanguage) -> Void = { _ in },
+        onFinished: @escaping @MainActor () -> Void
+    ) {
+        self.client = client
+        self.onLanguage = onLanguage
         _model = State(initialValue: OnboardingViewModel(
             api: api,
             appleAvailable: AppleSignIn.isAvailable,
@@ -24,8 +41,23 @@ struct OnboardingScreen: View {
         self.onFinished = onFinished
     }
 
+    /// The live calls. Debug builds launched with `-onboardingRecorded` (UI tests, screenshots) answer from
+    /// recorded responses for one sample student instead.
+    private static func api(for client: any LifelineClient) -> OnboardingAPI {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains(OnboardingRecorded.launchArgument) { return OnboardingRecorded.api }
+        #endif
+        return .from(client: client)
+    }
+
     var body: some View {
-        OnboardingView(state: model.state, actions: model.actions)
+        Group {
+            if model.state.step == .penny {
+                pennyStep
+            } else {
+                OnboardingView(state: model.state, actions: model.actions)
+            }
+        }
             .onAppear(perform: wire)
             .fileImporter(
                 isPresented: $showsPicker,
@@ -41,8 +73,42 @@ struct OnboardingScreen: View {
             }
     }
 
+    /// "Try Penny" (ADR 0069): an open Penny chat (general, student and money questions, no data needed). Skip moves on.
+    private var pennyStep: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Theme.Spacing.m) {
+                HeaderSquareButton(kind: .back, identifier: "onboarding.back") { model.back() }
+                Text("Try Penny").font(.llScreenHeader).frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                Button("Skip") { model.skip() }
+                    .buttonStyle(.text)
+                    .frame(minWidth: Theme.minTarget, minHeight: Theme.minTarget)
+                    .contentShape(.rect)
+                    .accessibilityIdentifier("onboarding.penny.skip")
+            }
+            .padding(.horizontal, Theme.Spacing.margin)
+            .padding(.top, Theme.Spacing.s)
+            .padding(.bottom, Theme.Spacing.xs)
+            if let client {
+                PennyScreen(client: client, context: PennyContext(screen: .onboarding), onClose: { model.next() })
+            } else {
+                Text("Ask Penny anything about money or student life. She answers in a sentence or two.")
+                    .font(.llBody)
+                    .padding(Theme.Spacing.margin)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .paperBackground()
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
     private func wire() {
         model.onFinished = onFinished
+        // Confirm saves the app language (RootScreen switches the whole app), then tells the caller.
+        model.onLanguage = { language in
+            AppLanguage.set(language)
+            onLanguage(language)
+        }
         model.pickStatement = { showsPicker = true }
         model.appleSignIn = { try await AppleSignIn().identityToken() }
         let session = webAuthenticationSession

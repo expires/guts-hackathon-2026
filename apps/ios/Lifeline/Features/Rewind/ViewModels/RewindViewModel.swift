@@ -61,11 +61,11 @@ final class RewindViewModel {
         let pass = hasPass || life.rewind.hasPass == true
         let allowance: String
         if pass {
-            allowance = "Rewind Pass: unlimited rewinds"
+            allowance = L10n.tr("Rewind Pass: unlimited rewinds")
         } else if life.rewind.freeLeft == 1 {
-            allowance = "1 free rewind left"
+            allowance = L10n.tr("1 free rewind left")
         } else {
-            allowance = "\(life.rewind.freeLeft) free rewinds left"
+            allowance = L10n.tr("\(life.rewind.freeLeft) free rewinds left")
         }
         let selected = options.first { $0.id == selectedID } ?? options.first
         let gap = (life.index.value - autopilotIndex).rounded()
@@ -80,7 +80,7 @@ final class RewindViewModel {
             alternative: selected.map { alternative($0) },
             indexNow: life.index.value,
             autopilotIndex: autopilotIndex,
-            indexGapText: gap == 0 ? "Level" : "\(Int(abs(gap))) \(gap < 0 ? "behind" : "ahead")",
+            indexGapText: gap == 0 ? L10n.tr("Level") : (gap < 0 ? L10n.tr("\(Int(abs(gap))) behind") : L10n.tr("\(Int(abs(gap))) ahead")),
             isBehind: gap < 0,
             isSampleData: usesSampleData
         )
@@ -101,8 +101,8 @@ final class RewindViewModel {
 
     static func didLines(_ option: RewindPickerViewState.Option) -> [String] {
         [
-            "Net worth then \(Money.format(option.netWorth))",
-            "Index then \(Int(option.index.rounded()))",
+            L10n.tr("Net worth then \(Money.format(option.netWorth))"),
+            L10n.tr("Index then \(Int(option.index.rounded()))"),
         ]
     }
 
@@ -114,15 +114,16 @@ final class RewindViewModel {
         guard let choice = option.choiceID, let alt = table[choice] else {
             return .init(
                 title: "The other choice",
-                lines: ["Same start in \(option.year)", "You choose again"],
+                lines: [L10n.tr("Same start in \(String(option.year))"), "You choose again"],
                 source: nil
             )
         }
-        let rate = alt.ratePercent.formatted(.number.locale(Money.locale).precision(.fractionLength(2)))
+        // The % sign sits in the value, so the localisation key has no bare "%".
+        let rate = alt.ratePercent.formatted(.number.locale(Money.locale).precision(.fractionLength(2))) + "%"
         let lines: [String?] = [
-            "Rate \(rate)%",
-            alt.monthlyPayment.map { "\(option.year): \(Money.format($0.amount)) a month" },
-            "Next choice: \(option.year + alt.fixYears)",
+            L10n.tr("Rate \(rate)"),
+            alt.monthlyPayment.map { L10n.tr("\(String(option.year)): \(Money.format($0.amount)) a month") },
+            L10n.tr("Next choice: \(String(option.year + alt.fixYears))"),
         ]
         return .init(
             title: alt.title, lines: lines.compactMap { $0 }, source: alt.source, paymentSource: alt.monthlyPayment?.source
@@ -137,7 +138,7 @@ final class RewindViewModel {
             newIndex: result.life.index.value,
             abandonedNetWorth: result.abandonedNetWorth,
             newNetWorth: result.life.finances.netWorth,
-            message: "You are back in \(String(result.life.year)), age \(result.life.age). Choose again."
+            message: L10n.tr("You are back in \(String(result.life.year)), age \(result.life.age). Choose again.")
         )
     }
 }

@@ -54,7 +54,7 @@ struct GuessSpendView: View {
             } label: {
                 HStack {
                     if state.isSubmitting { ProgressView().tint(Theme.Palette.surface) }
-                    Text("Lock in \(Money.format(currentGuess))")
+                    Text(L10n.tr("Lock in \(Money.format(currentGuess))"))
                 }
             }
             .buttonStyle(.main)
@@ -78,7 +78,7 @@ struct GuessSpendView: View {
             // Both lines come from the guess history; without it, neither shows.
             if !state.streakText.isEmpty {
                 Label(state.streakText, icon: .streak).font(.llLabel)
-                Text("\(state.pointsTotal) points so far").font(.llLabel).foregroundStyle(Theme.Palette.muted)
+                Text(L10n.tr("\(state.pointsTotal) points so far")).font(.llLabel).foregroundStyle(Theme.Palette.muted)
             }
         }
         if !state.isToday {
@@ -121,7 +121,7 @@ struct GuessSpendView: View {
 
     private var stepper: some View {
         HStack(spacing: Theme.Spacing.m) {
-            stepButton("−", label: "Guess £1 less", shape: HandCut((16, 20, 15, 19))) { guess = max(0, currentGuess - 1) }
+            stepButton("−", label: L10n.tr("Guess £1 less"), shape: HandCut((16, 20, 15, 19))) { guess = max(0, currentGuess - 1) }
                 .accessibilityIdentifier("guess.minus")
             VStack(spacing: 2) {
                 Text("Your guess").font(.llLabel).foregroundStyle(Theme.Palette.muted)
@@ -139,7 +139,7 @@ struct GuessSpendView: View {
                 @unknown default: break
                 }
             }
-            stepButton("+", label: "Guess £1 more", shape: HandCut((20, 16, 19, 15))) { guess = currentGuess + 1 }
+            stepButton("+", label: L10n.tr("Guess £1 more"), shape: HandCut((20, 16, 19, 15))) { guess = currentGuess + 1 }
                 .accessibilityIdentifier("guess.plus")
         }
         .padding(.horizontal, Theme.Spacing.l)
@@ -210,7 +210,7 @@ private struct PennyCard: View {
                 }
             }
             .frame(height: 34)
-            Text("Penny \(reveal.predictedText). \(reveal.comparisonText)").font(.llBody)
+            Text(L10n.tr("Penny \(reveal.predictedText). \(reveal.comparisonText)")).font(.llBody)
         }
         .padding(Theme.Spacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -219,7 +219,7 @@ private struct PennyCard: View {
             PennyView(mood: .neutral, size: 56).rotationEffect(.degrees(-6)).offset(x: -16, y: -26)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Penny thinks \(reveal.rangeText). Penny \(reveal.predictedText). You \(reveal.guessText). \(reveal.comparisonText)")
+        .accessibilityLabel(L10n.tr("Penny thinks \(reveal.rangeText). Penny \(reveal.predictedText). You \(reveal.guessText). \(reveal.comparisonText)"))
     }
 }
 

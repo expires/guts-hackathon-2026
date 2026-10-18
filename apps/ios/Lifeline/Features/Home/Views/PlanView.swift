@@ -7,7 +7,7 @@ struct PlanView: View {
     var actions: PlanActions = .noop
 
     var body: some View {
-        SheetContainer(title: "Your plan", closeIdentifier: "plan.close", onClose: actions.onClose) {
+        SheetContainer(title: L10n.tr("Your plan"), closeIdentifier: "plan.close", onClose: actions.onClose) {
             switch state.phase {
             case let .loading(loading):
                 LoadingStateView(state: loading)

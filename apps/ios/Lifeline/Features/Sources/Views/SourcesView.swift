@@ -6,7 +6,7 @@ struct SourcesView: View {
     var actions: SourcesActions = .noop
 
     var body: some View {
-        SheetContainer(title: "Where our data comes from", closeIdentifier: "sources.close", onClose: actions.onClose) {
+        SheetContainer(title: L10n.tr("Where our data comes from"), closeIdentifier: "sources.close", onClose: actions.onClose) {
             switch state.phase {
             case let .loading(loading):
                 LoadingStateView(state: loading)
@@ -26,7 +26,7 @@ struct SourcesView: View {
                                     Spacer()
                                     Chip(text: row.status.label)
                                 }
-                                Text("Covers \(row.coverage)").font(.llLabel)
+                                Text(L10n.tr("Covers \(row.coverage)")).font(.llLabel)
                                 if let updated = row.updatedText {
                                     Text(updated).font(.llLabel).foregroundStyle(Theme.Palette.muted)
                                 }

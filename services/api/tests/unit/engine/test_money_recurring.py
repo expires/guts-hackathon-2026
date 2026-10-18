@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from lifeline_contracts.finance import Transaction
 from lifeline_engine.money.recurring import (
     classify_cadence,
     detect_salary,
@@ -122,3 +123,41 @@ def test_long_gap_still_rejected_for_other_payees() -> None:
     days = [f"2025-{m:02d}-01" for m in range(11, 13)] + [f"2026-{m:02d}-01" for m in (1, 4, 5, 6, 7, 8, 9, 10)]
     txs = [tx(d, -40.0, "YORKSHIRE WATER", "Yorkshire Water") for d in days]
     assert upcoming_bills(txs, TODAY) == []
+
+
+def _rent(d: str, amount: float, text: str) -> Transaction:
+    return tx(d, amount, f"Headrow Lettings - {text}", "Headrow Lettings")
+
+
+def test_rent_found_despite_one_extra_payment() -> None:
+    from lifeline_engine.money.profile import monthly_rent
+
+    txs = [
+        _rent("2026-08-03", -460.0, "RENT 14 BRUDENELL RD"),
+        _rent("2026-09-01", -460.0, "RENT 14 BRUDENELL RD"),
+        _rent("2026-09-29", -460.0, "RENT ARREARS JULY"),
+        _rent("2026-10-01", -460.0, "RENT 14 BRUDENELL RD"),
+    ]
+    assert monthly_rent(txs, TODAY) == 460.0
+
+
+def test_rent_found_with_two_payments_a_month_apart() -> None:
+    from lifeline_engine.money.profile import monthly_rent
+
+    txs = [
+        _rent("2026-08-24", -1211.0, "TENANCY DEPOSIT 5 WEEKS"),
+        _rent("2026-09-01", -1050.0, "RENT ROOM 3 MARE ST"),
+        _rent("2026-10-01", -1050.0, "RENT ROOM 3 MARE ST"),
+    ]
+    assert monthly_rent(txs, TODAY) == 1050.0
+    assert monthly_rent(txs[1:2], TODAY) is None  # one payment is not regular
+
+
+def test_sample_students_rent() -> None:
+    import pytest
+
+    from lifeline_engine.money.profile import monthly_rent
+
+    statements = pytest.importorskip("lifeline_data.statements")
+    assert monthly_rent(statements.load_sample("working").transactions, TODAY) == 460.0
+    assert monthly_rent(statements.load_sample("graduate").transactions, TODAY) == 1050.0

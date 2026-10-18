@@ -21,6 +21,8 @@ struct ConceptCollectionActions {
     var onSelect: @MainActor (String) -> Void = { _ in }
     var onRetry: @MainActor () -> Void = {}
     var onClose: @MainActor () -> Void = {}
+    /// Opens the Learn course (ADR 0068), where every concept is a lesson in order. Nil hides the button.
+    var onOpenLearn: (@MainActor () -> Void)? = nil
 
     static var noop: Self { .init() }
 }
