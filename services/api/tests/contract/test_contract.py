@@ -490,6 +490,9 @@ async def test_guess_my_spend(client: httpx.AsyncClient) -> None:
         from tests.integration.personas import seed_persona
 
         await seed_persona(device)
+    else:  # a running stack: give the account data through the public sample import (ADR 0071)
+        r = await client.post("/v1/samples/working/import", headers=auth)
+        assert r.status_code in (200, 201), r.text
     pred = (await client.get("/v1/finance/prediction", headers=auth)).json()
     assert pred.get("guess") is None
     assert len(pred["reasons"]) <= 3 and pred["low"] <= pred["predicted"] <= pred["high"]

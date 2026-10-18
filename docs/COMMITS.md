@@ -220,3 +220,19 @@ docs: README as the GUTS submission checklist
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01P5CCRiMB1AiGA5fCFcV2NP
 ```
+
+## Milestone: Penny V3 build (18 Oct, 05:00 to 09:05), verified by V7
+
+Committed on `wip/direction-v2` as small commits by feature (fdf5ca7 to 3625a48f), then fast-forwarded to `main` after the V7 final verifier passed (docs/verify/V7-final-v3.md). Suggested summary message:
+
+```
+feat: Penny V3, reseeded students and the forecast Next Move
+
+- 10 sample students rebuilt with sources (PENNY_V3_BUILD.md A), town from the card
+- forecast engine, The maths, detailed breakdown, all spending, category (B)
+- what-ifs through Penny; Try Penny general answers; one bubble per answer (C5, D)
+- onboarding C1-C9; Learn without locks; Quick Life without "I'm ready"
+- cut behind one flag; floating tab bar; no mock or sample data tags (B4, F, G)
+Checks: make up && make test (2250 passed), make test-stack, make lint, 379 iOS unit
+and 18 UI tests, V7 9 of 9 PASS, secret scan clean.
+```
