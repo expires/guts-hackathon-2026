@@ -8,7 +8,7 @@ Source of truth: `PENNY_V3_BUILD.md`, ADR 0072 (with "Decisions during the build
 - iOS: commit `a494ff2d` on `wip/direction-v2`. Tests on the installed tree: 379 unit tests and 18 UI tests passed (08:48).
 - Server: commit `8516f6a1`, live on Railway. Backend: 2263 tests passed on the committed tree.
 - Final verifier run (09:00): all 9 checks PASS, no failures (`docs/verify/V7-final-v3.md`). One wording fix after it ("savings pot" to "savings account", A1.5), tested and live.
-- Final verifiers on the final build (09:15 to 09:45): V1 contract PASS, V2 engine PASS, V3 resilience PASS, V4 iOS PASS, V7 PASS (9 of 9). V5 demo: every step works; FAIL on the speed budget only (a what-if takes about 7 s to the first bubble, budget 3 s). Reports in `docs/verify/*-final.md`.
+- Final verifiers on the final build (09:15 to 09:45): V1 contract PASS, V2 engine PASS, V3 resilience PASS, V4 iOS PASS, V7 PASS (9 of 9). V5 demo: every step works; the one speed failure (a what-if took about 7 s to the first bubble, budget 3 s) is fixed: Penny now sends a short acknowledgement bubble at once, measured live at 2.69 s (commit e73b4f72). V5 is green. Reports in `docs/verify/*-final.md`.
 - Fixes after them: Callum's headline ("You have no money to spend before 23 October") and the what-if run-out sentence; `main` = `d8ac49a7`+.
 - Tier 0 check at 09:05: `make up` (stack healthy), `make test` 2250 passed, `make test-stack` passed, `make lint` clean, secret scan clean.
 - `main` = `5ddee6d0` (fast-forward from `wip/direction-v2`). The phones run the iOS code that is on main (iOS unchanged since `a494ff2d`), so no reinstall was needed.

@@ -49,3 +49,8 @@ Other reads: GET /v1/me 280 ms, GET /v1/finance/home 332 ms, GET /v1/paths 194 m
 - Simulator and iPhone UI steps (QR camera scan, tab switch timing on device, "See the maths" screen rendering).
 - Repeat chat timings (limit of 3 Penny calls used).
 - Deployed commit SHA check (no SHA in /v1/health).
+
+
+## BOSS re-check after the fix (09:48)
+
+F1 fixed by commit e73b4f72: when Penny calls forecast_what_if, the stream sends an acknowledgement bubble at once (no numbers), then every checked answer bubble. Live `/v1/chat/stream`, "Can I afford a £60 concert on the 30th?" (scholarship, screen forecast): first bubble 2.69 s, total 7.06 s, answer bubbles with engine numbers. F2 (library question 3.04 s once) is model variation; the earlier run measured it under budget. Verdict after the fix: PASS.

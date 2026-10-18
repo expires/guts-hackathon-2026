@@ -238,3 +238,4 @@ and 18 UI tests, V7 9 of 9 PASS, secret scan clean.
 ```
 
 Final checks after the merge (09:15 to 09:45): V1, V2, V3, V4 PASS on the final build; V5 every demo step works, FAIL on the 3 s first-bubble budget for tool answers (known limit, ADR 0072). Follow-up commit: `fix(engine): truthful headline when overdrawn, no run-out after next money`.
+V5 speed fix after the final checks: `fix(chat): send a what-if acknowledgement bubble at once (V5 speed)`; live first bubble 2.69 s. All of V1 to V5 and V7 green.
