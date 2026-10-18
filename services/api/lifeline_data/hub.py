@@ -25,6 +25,7 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from lifeline_contracts.accounts import ConnectionsResponse, HistoryStatus, Provider, ProviderConnection
 from lifeline_contracts.chat import NewsItem, NewsResponse, RateDecisions
 from lifeline_contracts.domain import SourceRef
 from lifeline_contracts.finance import FinanceSnapshot
@@ -53,6 +54,7 @@ from lifeline_data.prediction_inputs import (
     mock_daily_weather,
     mock_weather_day,
 )
+from lifeline_data.providers.service import ProviderService
 from lifeline_data.settings import DataSettings
 from lifeline_data.sources import (
     DISABLED_IN_LIVE,
@@ -126,7 +128,12 @@ class DataHub:
         self.cache = ObservationCache(redis=redis, url="" if offline else self.settings.redis_url, clock=clock)
         self.snapshots = SnapshotStore(engine=db, url="" if offline else self.settings.database_url)
         strict = self.live_mode or self.settings.app_env.lower() in ("prod", "production")
-        self.user_snapshots = UserSnapshotStore(self.snapshots, Sealer(self._env, strict=strict), clock=clock)
+        sealer = Sealer(self._env, strict=strict)
+        self.user_snapshots = UserSnapshotStore(self.snapshots, sealer, clock=clock)
+        # Monzo and Trading212: credentials and imported history are encrypted with the same Sealer.
+        self.providers = ProviderService(
+            self.settings, self._http, live_enabled=lambda: self.live_enabled, clock=clock, sealer=sealer
+        )
         self._client = client
         self._owns_client = client is None
         self._adapters: dict[str, Adapter] = {}
@@ -478,6 +485,40 @@ class DataHub:
         """Account deletion and demo reset. Raises StoreUnavailable when the Postgres delete fails
         (the API answers 503 and does not revoke the account)."""
         await self.user_snapshots.delete(subject)
+        for provider in ("monzo", "trading212"):  # account delete and reset also forget the bank tokens
+            self.providers.disconnect(subject, provider)  # type: ignore[arg-type]
+
+    # --- connected accounts: Monzo and Trading212 (live personal data) ------------------------------
+
+    async def live_snapshot(self, subject: str) -> FinanceSnapshot | None:
+        """The user's live (or last good, status "cached") data from connected Monzo and/or Trading212.
+        None when nothing is connected or nothing could be read. Never mixed with sample data. Never raises."""
+        try:
+            return await self.providers.live_snapshot(subject)
+        except Exception as exc:
+            log.warning("live snapshot failed (%s)", type(exc).__name__)
+            return None
+
+    async def connections(self, subject: str) -> ConnectionsResponse:
+        return self.providers.connections(subject)
+
+    async def connect_trading212(self, subject: str, key: str, secret: str) -> ProviderConnection:
+        return await self.providers.connect_trading212(subject, key, secret)
+
+    async def connect_monzo_token(self, subject: str, token: str) -> ProviderConnection:
+        return await self.providers.connect_monzo_token(subject, token)
+
+    async def monzo_start(self, subject: str) -> str:
+        return self.providers.monzo_start(subject)
+
+    async def monzo_callback(self, state: str | None, code: str) -> str:
+        return await self.providers.monzo_callback(state, code)
+
+    async def monzo_sync(self, subject: str) -> HistoryStatus:
+        return await self.providers.monzo_sync(subject)
+
+    async def disconnect(self, subject: str, provider: Provider) -> None:
+        self.providers.disconnect(subject, provider)
 
     # --- context: news and rate decisions (ADR 0030) -----------------------------------------------
 

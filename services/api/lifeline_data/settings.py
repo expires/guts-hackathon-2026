@@ -33,6 +33,21 @@ class DataSettings(BaseSettings):
     # How long DataHub reuses a built MacroTable before it rebuilds it (online mode only).
     macro_table_ttl_seconds: float = Field(default=3600, ge=0)
 
+    # Personal accounts (Monzo OAuth, Trading212). Secrets are excluded from repr.
+    monzo_client_id: str = ""
+    monzo_client_secret: str = Field(default="", repr=False)
+    monzo_redirect_uri: str = "http://localhost:8000/v1/bank/callback"
+    monzo_auth_url: str = "https://auth.monzo.com/"
+    monzo_token_url: str = "https://api.monzo.com/oauth2/token"  # noqa: S105 - a URL, not a secret
+    monzo_base_url: str = "https://api.monzo.com"
+    monzo_initial_sync_timeout_seconds: float = Field(default=60.0, gt=0)
+    # Env fallback for Trading212 (dev only; a stored per-user credential always wins).
+    t212_api_key: str = Field(default="", repr=False)
+    t212_api_secret: str = Field(default="", repr=False)
+    t212_base_url: str = "https://live.trading212.com/api/v0"
+    # Encrypted store of connected-account tokens and imported history (gitignored).
+    credentials_dir: str = "data/private"
+
     @property
     def live_mode(self) -> bool:
         return self.data_mode == "live"

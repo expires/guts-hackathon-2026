@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "services" / "api"))
 
 from lifeline_contracts import account as AC  # noqa: E402
+from lifeline_contracts import accounts as AK  # noqa: E402
 from lifeline_contracts import api_models as A  # noqa: E402
 from lifeline_contracts import chat as CH  # noqa: E402
 from lifeline_contracts import domain as D  # noqa: E402
@@ -47,6 +48,11 @@ MODELS: list[type[BaseModel]] = [
     A.Player,
     A.BankAuthLink,
     A.BankSummary,
+    AK.ConnectionsResponse,
+    AK.ProviderConnection,
+    AK.HistoryStatus,
+    AK.Trading212ConnectRequest,
+    AK.MonzoTokenRequest,
     A.PurchaseVerifyRequest,
     A.PurchaseVerifyResponse,
     A.AppleSignInRequest,
@@ -536,6 +542,25 @@ def examples() -> dict[str, Any]:
             status="mock",
         ),
         "BankSummary": A.BankSummary(status="mock", provider="truelayer", profile=profile, accounts=2),
+        "Connections": AK.ConnectionsResponse(
+            providers=[
+                AK.ProviderConnection(
+                    provider="monzo",
+                    connected=True,
+                    data_status="live",
+                    hint="…a1b2",
+                    oauth_available=True,
+                    history=AK.HistoryStatus(synced=True, oldest="2026-01-12", count=312),
+                ),
+                AK.ProviderConnection(provider="trading212", connected=False, data_status="mock"),
+            ]
+        ),
+        "ProviderConnection": AK.ProviderConnection(
+            provider="trading212", connected=True, data_status="live", hint="…c3d4"
+        ),
+        "HistoryStatus": AK.HistoryStatus(synced=False, oldest="2026-07-20", count=48, last_error="auth"),
+        "Trading212Connect": AK.Trading212ConnectRequest(api_key="example-key", api_secret="example-secret"),  # noqa: S106
+        "MonzoToken": AK.MonzoTokenRequest(access_token="example-playground-token"),  # noqa: S106
         "PurchaseVerify": A.PurchaseVerifyRequest(product_id="lifeline.rewindpass", demo=True),
         "PurchaseVerifyResponse": A.PurchaseVerifyResponse(
             product_id="lifeline.rewindpass", entitlement="rewind_pass", active=True, demo=True, label="Demo payment"
@@ -1690,9 +1715,9 @@ def paths() -> dict[str, Any]:
         "/v1/bank/auth-link": {
             "get": op(
                 "getBankAuthLink",
-                "Backend-generated consent link (state + PKCE)",
+                "Monzo sign-in link built by the backend (single-use state). Open it in Safari.",
                 "bank",
-                {**ok("BankAuthLink", "BankAuthLink"), **errs(*STD)},
+                {**ok("BankAuthLink", "BankAuthLink"), **errs("409", *STD)},
             )
         },
         "/v1/bank/callback": {
@@ -1723,6 +1748,56 @@ def paths() -> dict[str, Any]:
                 {**ok("BankSummary", "BankSummary"), **errs("404", *STD)},
                 parameters=[
                     {"name": "session", "in": "query", "required": True, "schema": {"type": "string", "maxLength": 128}}
+                ],
+            )
+        },
+        "/v1/connections": {
+            "get": op(
+                "listConnections",
+                "Monzo and Trading212 connection status. Never returns a token, only a masked hint.",
+                "connections",
+                {**ok("ConnectionsResponse", "Connections"), **errs(*STD)},
+            )
+        },
+        "/v1/connections/trading212": {
+            "post": op(
+                "connectTrading212",
+                "Connect Trading212 with an API key and secret. Checked with Trading212 before anything is stored.",
+                "connections",
+                {**ok("ProviderConnection", "ProviderConnection"), **errs("400", *STD)},
+                requestBody=body("Trading212ConnectRequest", "Trading212Connect"),
+            )
+        },
+        "/v1/connections/monzo/token": {
+            "post": op(
+                "connectMonzoToken",
+                "Dev convenience: connect Monzo with a playground access token.",
+                "connections",
+                {**ok("ProviderConnection", "ProviderConnection"), **errs("400", *STD)},
+                requestBody=body("MonzoTokenRequest", "MonzoToken"),
+            )
+        },
+        "/v1/connections/monzo/sync": {
+            "post": op(
+                "syncMonzo",
+                "Retry the Monzo history import (it works once the user approves access in the Monzo app).",
+                "connections",
+                {**ok("HistoryStatus", "HistoryStatus"), **errs("409", *STD)},
+            )
+        },
+        "/v1/connections/{provider}": {
+            "delete": op(
+                "disconnectProvider",
+                "Forget a connection: its tokens, imported history and live data.",
+                "connections",
+                {**ok("ConnectionsResponse", "Connections"), **errs(*STD)},
+                parameters=[
+                    {
+                        "name": "provider",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "enum": ["monzo", "trading212"]},
+                    }
                 ],
             )
         },

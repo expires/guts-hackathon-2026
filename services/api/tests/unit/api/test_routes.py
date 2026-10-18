@@ -83,7 +83,6 @@ async def test_characters_without_auth_and_deterministic(client: httpx.AsyncClie
     "method,path,body",
     [
         ("POST", "/v1/purchases/verify", {"product_id": "lifeline.rewindpass", "demo": False}),
-        ("GET", "/v1/bank/auth-link", None),
     ],
 )
 async def test_later_tiers_answer_501(client: httpx.AsyncClient, method: str, path: str, body: object) -> None:
@@ -308,13 +307,13 @@ async def test_chat_stubs_validate(client: httpx.AsyncClient, method: str, path:
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
 
 
-async def test_truelayer_is_disabled_monzo_untouched(client: httpx.AsyncClient) -> None:
+async def test_truelayer_is_disabled_monzo_needs_setup(client: httpx.AsyncClient) -> None:
     auth = await _auth(client)
     assert (await client.get("/v1/bank/auth-link", params={"provider": "truelayer"})).status_code == 401
     r = await client.get("/v1/bank/auth-link", params={"provider": "truelayer"}, headers=auth)
     assert r.status_code == 409 and r.json()["error"]["code"] == "source_disabled"
     r = await client.get("/v1/bank/auth-link", headers=auth)
-    assert r.status_code == 501, "Monzo path stays as on main until the integration merge"
+    assert r.status_code == 503 and r.json()["error"]["code"] == "not_configured", "no Monzo client id in tests"
     r = await client.get("/v1/bank/auth-link", params={"provider": "barclays"}, headers=auth)
     assert r.status_code == 422
 

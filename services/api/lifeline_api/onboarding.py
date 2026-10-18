@@ -287,7 +287,7 @@ def inputs_of(snap: FinanceSnapshot | None) -> list[FinanceInput]:
         out.append("sample")
     if snap.source == "statement":
         out.append("statement")
-    if snap.source in ("truelayer", "monzo", "bank"):
+    if snap.source in ("truelayer", "bank") or any(p in snap.source for p in ("monzo", "trading212")):
         out.append("bank")
     if snap.source == "manual" and any(_is_synthetic(t) for t in snap.transactions) or any(
             a.provider == "manual" for a in snap.accounts):

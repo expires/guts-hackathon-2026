@@ -628,7 +628,7 @@ paths:
   /v1/bank/auth-link:
     get:
       operationId: getBankAuthLink
-      summary: Backend-generated consent link (state + PKCE)
+      summary: Monzo sign-in link built by the backend (single-use state). Open it in Safari.
       tags:
       - bank
       responses:
@@ -641,6 +641,8 @@ paths:
               examples:
                 BankAuthLink:
                   $ref: '#/components/examples/BankAuthLink'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -649,8 +651,6 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
-        '409':
-          $ref: '#/components/responses/Conflict'
         '501':
           $ref: '#/components/responses/NotImplemented'
       parameters:
@@ -742,6 +742,165 @@ paths:
         schema:
           type: string
           maxLength: 128
+  /v1/connections:
+    get:
+      operationId: listConnections
+      summary: Monzo and Trading212 connection status. Never returns a token, only a masked hint.
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionsResponse'
+              examples:
+                Connections:
+                  $ref: '#/components/examples/Connections'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+  /v1/connections/trading212:
+    post:
+      operationId: connectTrading212
+      summary: Connect Trading212 with an API key and secret. Checked with Trading212 before anything is stored.
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderConnection'
+              examples:
+                ProviderConnection:
+                  $ref: '#/components/examples/ProviderConnection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Trading212ConnectRequest'
+            examples:
+              Trading212Connect:
+                $ref: '#/components/examples/Trading212Connect'
+  /v1/connections/monzo/token:
+    post:
+      operationId: connectMonzoToken
+      summary: 'Dev convenience: connect Monzo with a playground access token.'
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderConnection'
+              examples:
+                ProviderConnection:
+                  $ref: '#/components/examples/ProviderConnection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonzoTokenRequest'
+            examples:
+              MonzoToken:
+                $ref: '#/components/examples/MonzoToken'
+  /v1/connections/monzo/sync:
+    post:
+      operationId: syncMonzo
+      summary: Retry the Monzo history import (it works once the user approves access in the Monzo app).
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryStatus'
+              examples:
+                HistoryStatus:
+                  $ref: '#/components/examples/HistoryStatus'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+  /v1/connections/{provider}:
+    delete:
+      operationId: disconnectProvider
+      summary: 'Forget a connection: its tokens, imported history and live data.'
+      tags:
+      - connections
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionsResponse'
+              examples:
+                Connections:
+                  $ref: '#/components/examples/Connections'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - monzo
+          - trading212
   /v1/finance/overview:
     get:
       operationId: getFinanceOverview
@@ -3700,6 +3859,16 @@ components:
       required:
       - concepts
       type: object
+    ConnectionsResponse:
+      additionalProperties: false
+      properties:
+        providers:
+          items:
+            $ref: '#/components/schemas/ProviderConnection'
+          type: array
+      required:
+      - providers
+      type: object
     CreateCircleRequest:
       additionalProperties: false
       properties:
@@ -4993,6 +5162,24 @@ components:
       - length
       - fact_id
       type: object
+    HistoryStatus:
+      additionalProperties: false
+      description: State of the imported Monzo history. No amounts, merchants or ids.
+      properties:
+        synced:
+          type: boolean
+        oldest:
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        count:
+          minimum: 0
+          type: integer
+        last_error:
+          type: string
+      required:
+      - synced
+      - count
+      type: object
     ImportResult:
       additionalProperties: false
       description: Returned by POST /v1/finance/statements (multipart file). The client animates `stages`.
@@ -5881,6 +6068,16 @@ components:
       - baseline_mae
       - interval_coverage
       type: object
+    MonzoTokenRequest:
+      additionalProperties: false
+      description: 'Dev convenience: paste a Monzo playground access token.'
+      properties:
+        access_token:
+          minLength: 1
+          type: string
+      required:
+      - access_token
+      type: object
     Move:
       additionalProperties: false
       properties:
@@ -6508,6 +6705,36 @@ components:
       - from_amount
       - to_amount
       - since
+      type: object
+    ProviderConnection:
+      additionalProperties: false
+      properties:
+        provider:
+          enum:
+          - monzo
+          - trading212
+          type: string
+        connected:
+          type: boolean
+        data_status:
+          enum:
+          - live
+          - mock
+          type: string
+        hint:
+          description: Masked credential suffix, for example '…a1b2'
+          type: string
+        oauth_available:
+          default: false
+          type: boolean
+        history:
+          $ref: '#/components/schemas/HistoryStatus'
+        last_error:
+          type: string
+      required:
+      - provider
+      - connected
+      - data_status
       type: object
     PurchaseVerifyRequest:
       additionalProperties: false
@@ -7643,6 +7870,19 @@ components:
       required:
       - summary
       - points
+      type: object
+    Trading212ConnectRequest:
+      additionalProperties: false
+      properties:
+        api_key:
+          minLength: 1
+          type: string
+        api_secret:
+          minLength: 1
+          type: string
+      required:
+      - api_key
+      - api_secret
       type: object
     Transaction:
       additionalProperties: false
@@ -9142,6 +9382,42 @@ components:
           mortgage_years_left: 25
           deal_ends_in_months: 3
         accounts: 2
+    Connections:
+      value:
+        providers:
+        - provider: monzo
+          connected: true
+          data_status: live
+          hint: …a1b2
+          oauth_available: true
+          history:
+            synced: true
+            oldest: '2026-01-12'
+            count: 312
+        - provider: trading212
+          connected: false
+          data_status: mock
+          oauth_available: false
+    ProviderConnection:
+      value:
+        provider: trading212
+        connected: true
+        data_status: live
+        hint: …c3d4
+        oauth_available: false
+    HistoryStatus:
+      value:
+        synced: false
+        oldest: '2026-07-20'
+        count: 48
+        last_error: auth
+    Trading212Connect:
+      value:
+        api_key: example-key
+        api_secret: example-secret
+    MonzoToken:
+      value:
+        access_token: example-playground-token
     PurchaseVerify:
       value:
         product_id: lifeline.rewindpass

@@ -87,7 +87,14 @@ async def maybe_snapshot(state: AppState, sub: str) -> FinanceSnapshot | None:
 
     Both modes: no data of their own means None. The demo finance personas are never served (tests only).
     """
-    return await stored_snapshot(state, sub)
+    stored = await stored_snapshot(state, sub)
+    hub: Any = state.hub
+    live_of = getattr(hub, "live_snapshot", None)
+    live: FinanceSnapshot | None = await live_of(sub) if live_of is not None else None
+    if live is not None:
+        # Connected Monzo / Trading212: live data on top of what the user entered. Never sample data.
+        return onboarding.merge_statement(stored, live)
+    return stored
 
 
 def fingerprint(snap: FinanceSnapshot) -> str:
