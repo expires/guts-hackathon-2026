@@ -236,3 +236,5 @@ feat: Penny V3, reseeded students and the forecast Next Move
 Checks: make up && make test (2250 passed), make test-stack, make lint, 379 iOS unit
 and 18 UI tests, V7 9 of 9 PASS, secret scan clean.
 ```
+
+Final checks after the merge (09:15 to 09:45): V1, V2, V3, V4 PASS on the final build; V5 every demo step works, FAIL on the 3 s first-bubble budget for tool answers (known limit, ADR 0072). Follow-up commit: `fix(engine): truthful headline when overdrawn, no run-out after next money`.
