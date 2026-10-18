@@ -1,13 +1,14 @@
 # STATUS
 
-## Penny V3 build (night of 18 Oct), updated 09:00
+## Penny V3 build (night of 18 Oct), updated 09:05: COMPLETE, merged to main
 
 Source of truth: `PENNY_V3_BUILD.md`, ADR 0072 (with "Decisions during the build"). Deadline: everything complete by 10:00.
 
 ### Installed on both phones (08:55, Demo build, talks to Railway)
 - iOS: commit `a494ff2d` on `wip/direction-v2`. Tests on the installed tree: 379 unit tests and 18 UI tests passed (08:48).
 - Server: commit `8516f6a1`, live on Railway. Backend: 2263 tests passed on the committed tree.
-- Final verifier run: started 09:00 (report: `docs/verify/V7-final-v3.md`). Merge to main follows when it passes.
+- Final verifier run (09:00): all 9 checks PASS, no failures (`docs/verify/V7-final-v3.md`). One wording fix after it ("savings pot" to "savings account", A1.5), tested and live.
+- `main` = `5ddee6d0` (fast-forward from `wip/direction-v2`). The phones run the iOS code that is on main (iOS unchanged since `a494ff2d`), so no reinstall was needed.
 
 ### Done (all of PENNY_V3_BUILD.md A to H, plus the what-if change)
 | Item | Notes |
