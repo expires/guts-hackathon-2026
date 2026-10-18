@@ -562,6 +562,6 @@ Every decision is an Architecture Decision Record (ADR) in [docs/adr/](docs/adr/
 
 | Name | Area |
 |---|---|
-| Yath | "Play yourself" layer: adapters, habit vector, backtest, scenarios, dashboard, friends |
-| Ash | Historical engine: synthetic population, twin matching, past-period replay, life loop |
+| Yath | |
+| Ash | |
 | Kevin | UI and UX |
