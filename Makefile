@@ -47,6 +47,9 @@ AI_DISCLOSURE_IOS = apps/ios/Lifeline/Features/You/Resources/AIDisclosure.json
 penny-trace: ## Demo trace of one real Penny answer on the live server: make penny-trace STUDENT=eilidh Q="..."
 	cd $(API) && uv run python ../../tools/penny_trace.py --student "$(STUDENT)" --question "$(Q)" $(if $(BASE),--base "$(BASE)",)
 
+penny-trace-live: ## Live trace of every Penny answer on the server (needs PENNY_TRACE_ENABLED=1 and PENNY_TRACE_TOKEN): make penny-trace-live BASE=https://...
+	cd $(API) && uv run python ../../tools/penny_trace_live.py $(if $(BASE),--base "$(BASE)",) $(if $(LAST),--last $(LAST),)
+
 ai-disclosure: ## Copy the "How Penny uses AI" text (W5 source) into the iOS app
 	cp $(AI_DISCLOSURE) $(AI_DISCLOSURE_IOS)
 

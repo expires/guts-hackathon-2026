@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Path, Query, Request
 from fastapi.responses import StreamingResponse
 
-from lifeline_api import account, chat_service
+from lifeline_api import account, chat_service, trace_live
 from lifeline_api.auth import Subject
 from lifeline_api.errors import ApiError, not_found
 from lifeline_api.state import get_state
@@ -58,19 +58,55 @@ async def _context(state: Any, sub: str, body: ChatRequest, thread: dict[str, An
 @router.post("/v1/chat", response_model=ChatResponse, response_model_exclude_none=True)
 async def ask_penny(body: ChatRequest, request: Request, sub: Subject) -> ChatResponse:
     state, thread, life, user_mid = await _open(request, sub, body)
+    t0 = time.monotonic()
+    rec = Recorder(t0) if trace_enabled() else None  # live trace mode only; None means no extra work
     try:
         ctx, digest = await _context(state, sub, body, thread, life, user_mid)
     except Exception as exc:
         log.warning("chat: context failed (%s)", type(exc).__name__)
         resp = chat_service.unavailable_response(thread, user_mid)
+        if rec is not None:
+            rec.rewrite("context_unavailable", fallback=True)
     else:
+        if rec is not None:
+            ctx.trace = rec
         resp = await penny.answer(body, ctx)
         try:
             await chat_service.store_tool_lives(state, sub, ctx, digest)
         except Exception as exc:
             log.warning("chat: tool lives not stored (%s)", type(exc).__name__)
     await _save(state, sub, thread, resp)
+    if rec is not None:
+        await _publish_live(state, sub, body, rec, resp, t0, None)
     return resp
+
+
+async def _publish_live(state: Any, sub: str, body: ChatRequest, rec: Recorder, resp: ChatResponse, t0: float,
+                        first_ms: int | None, screen: str | None = None) -> None:  # fmt: skip
+    """Live trace mode: add the final step and send the trace to /v1/chat/trace/live. Never fails the answer."""
+    try:
+        total = int((time.monotonic() - t0) * 1000)
+        if not any(s.kind == "final" for s in rec.steps):
+            rec.final(total, first_ms, _sources_used(resp))
+        trace_live.publish(trace_live.build(rec, body, resp, await _student(state, sub), total, screen))
+    except Exception as exc:
+        log.warning("chat: live trace not recorded (%s)", type(exc).__name__)
+
+
+async def _student(state: Any, sub: str) -> str | None:
+    """Who asked, for the live trace: the display name, else the sample persona's first name. Never an id."""
+    from lifeline_api import money
+
+    acct = await account.ensure(state, sub)
+    if acct.get("display_name"):
+        return str(acct["display_name"])
+    try:
+        snap = await money.maybe_snapshot(state, sub)
+    except Exception:
+        return None
+    if snap is not None and snap.persona and snap.holder is not None and snap.holder.name:
+        return f"{snap.holder.name.split()[0]} (sample)"  # sample personas only, never a real holder name
+    return None
 
 
 async def _save(state: Any, sub: str, thread: dict[str, Any], resp: ChatResponse) -> None:
@@ -117,6 +153,8 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
     state, thread, life, user_mid = await _open(request, sub, body)
     t0 = time.monotonic()
     seq = 0
+    rec = Recorder(t0) if trace_enabled() else None  # live trace mode only; None means no extra work
+    first_ms: int | None = None
 
     def own(type_: str, **kw: Any) -> str:
         nonlocal seq
@@ -126,9 +164,11 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
 
     async def finish(resp: ChatResponse) -> None:
         await _save(state, sub, thread, resp)
+        if rec is not None:
+            await _publish_live(state, sub, body, rec, resp, t0, first_ms)
 
     async def events() -> AsyncIterator[str]:
-        nonlocal seq
+        nonlocal seq, first_ms
         yield own("reaction", reaction=penny.quick_reaction(body))
         task = asyncio.ensure_future(_context(state, sub, body, thread, life, user_mid))
         while True:
@@ -141,10 +181,14 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
         except Exception as exc:
             log.warning("chat stream: context failed (%s)", type(exc).__name__)
             resp = chat_service.unavailable_response(thread, user_mid)
+            if rec is not None:
+                rec.rewrite("context_unavailable", fallback=True)
             yield own("error", error_code="unavailable")
             await finish(resp)
             yield own("done", response=resp)
             return
+        if rec is not None:
+            ctx.trace = rec
         ev: ChatStreamEvent
         async for ev in _with_keepalive(penny.answer_stream(body, ctx)):
             if ev is None:
@@ -152,6 +196,8 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
                 continue
             if ev.type == "reaction":
                 continue  # already sent
+            if ev.type == "bubble" and first_ms is None:
+                first_ms = int((time.monotonic() - t0) * 1000)
             if ev.type == "done" and ev.response is not None:
                 try:
                     await chat_service.store_tool_lives(state, sub, ctx, digest)
@@ -222,8 +268,30 @@ async def trace_penny(body: ChatRequest, request: Request, sub: Subject) -> Chat
         log.info("chat trace: sources unavailable (%s)", type(exc).__name__)
     rec.final(total, first_ms, _sources_used(resp))
     acct = await account.ensure(state, sub)
+    try:
+        trace_live.publish(trace_live.build(rec, body, resp, await _student(state, sub), total, "trace_tool"))
+    except Exception as exc:
+        log.warning("chat trace: live trace not recorded (%s)", type(exc).__name__)
     return ChatTrace(question=body.message, student=acct.get("display_name"), steps=rec.steps, answer=resp,
                      total_ms=total)  # fmt: skip
+
+
+@router.get("/v1/chat/trace/live", include_in_schema=False)
+async def trace_live_stream(request: Request, last: Annotated[int, Query(ge=0, le=trace_live.MAX_TRACES)] = 0,
+                            ) -> StreamingResponse:  # fmt: skip
+    """Live trace mode (judges' demo): Server-Sent Events, one `event: trace` per finished Penny answer from any
+    student. 404 unless PENNY_TRACE_ENABLED is set and PENNY_TRACE_TOKEN is not empty. 401 unless the header is
+    `Authorization: Bearer <PENNY_TRACE_TOKEN>`. `last`: how many old traces to send first (default 0).
+    Not in the OpenAPI contract: the app never calls it."""
+    if not trace_enabled() or not trace_live.token():
+        raise not_found("Not found")
+    if not trace_live.token_ok(request.headers.get("authorization")):
+        raise ApiError(401, "unauthorized", "Missing or invalid trace token", headers={"WWW-Authenticate": "Bearer"})
+    return StreamingResponse(
+        trace_live.events(last),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 @router.get("/v1/chat/threads", response_model=ChatThreadsResponse, response_model_exclude_none=True)
