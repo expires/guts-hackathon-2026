@@ -61,6 +61,8 @@ struct MoneyHomeViewState: Equatable, Sendable {
     var help: ForecastHelpState?
     /// Money now from the forecast (current accounts), for "In your account £318".
     var moneyNow: Double?
+    /// "Your habits": shown right after the forecast card. Not part of `blocks`.
+    var habits: HabitsPanelState = .loading
 
     /// Kept for older call sites. Money home never shows a "Mock data" or "Sample data" tag (B4).
     var isSampleData: Bool { false }
@@ -123,6 +125,10 @@ struct MoneyHomeActions {
     var onCategory: @MainActor (_ id: String, _ label: String) -> Void = { _, _ in }
     var onRetryForecast: @MainActor () -> Void = {}
     var onRetrySpending: @MainActor () -> Void = {}
+    /// "Your habits" card: opens the profile stats page.
+    var onOpenHabits: @MainActor () -> Void = {}
+    /// "Your habits" empty state: opens the connections editor.
+    var onConnectHabits: @MainActor () -> Void = {}
 
     static var noop: Self { .init() }
 }
@@ -146,6 +152,7 @@ final class MoneyHomeViewModel {
     private var forecastPhase: LoadPhase = .loading(.standard)
     private(set) var spending: SpendingResponse?
     private var spendingPhase: LoadPhase = .loading(.standard)
+    private var habits: HabitsPanelState = .loading
     private var hasLoaded = false
     /// Set when the user leaves to connect their money. The glue reloads on the next appearance.
     private(set) var needsReload = false
@@ -155,6 +162,8 @@ final class MoneyHomeViewModel {
     @ObservationIgnored var onSeeMaths: @MainActor () -> Void = {}
     @ObservationIgnored var onSeeAllSpending: @MainActor () -> Void = {}
     @ObservationIgnored var onCategory: @MainActor (String, String) -> Void = { _, _ in }
+    @ObservationIgnored var onOpenHabits: @MainActor () -> Void = {}
+    @ObservationIgnored var onConnectHabits: @MainActor () -> Void = {}
 
     static var connectPrompt: String { L10n.tr("Connect your money to see your next move") }
 
@@ -183,6 +192,7 @@ final class MoneyHomeViewModel {
             state.help = ForecastHelpState.make(forecast)
             state.moneyNow = forecast.moneyNow
         }
+        state.habits = habits
         state.spending = spending.map { SpendingPieState.make($0) }
         return state
     }
@@ -214,7 +224,9 @@ final class MoneyHomeViewModel {
             onSeeAllSpending: { [weak self] in self?.onSeeAllSpending() },
             onCategory: { [weak self] id, label in self?.onCategory(id, label) },
             onRetryForecast: { [weak self] in Task { await self?.loadForecast() } },
-            onRetrySpending: { [weak self] in Task { await self?.loadSpending() } }
+            onRetrySpending: { [weak self] in Task { await self?.loadSpending() } },
+            onOpenHabits: { [weak self] in self?.onOpenHabits() },
+            onConnectHabits: { [weak self] in self?.onConnectHabits() }
         )
     }
 
@@ -253,8 +265,9 @@ final class MoneyHomeViewModel {
         }
         async let forecastLoad: Void = loadForecast()
         async let spendingLoad: Void = loadSpending()
+        async let habitsLoad: Void = loadHabits()
         try? await client.load(CachedOps.financeProfile) { [weak self] profile in self?.profile = profile }
-        _ = await (forecastLoad, spendingLoad)
+        _ = await (forecastLoad, spendingLoad, habitsLoad)
     }
 
     /// Shows a home value (from disk or the network) at once.
@@ -270,6 +283,19 @@ final class MoneyHomeViewModel {
             try await client.load(CachedOps.forecast) { [weak self] value in self?.show(value) }
         } catch {
             if forecast == nil { forecastPhase = .failed(.from(APIError.map(error))) }
+        }
+    }
+
+    /// `GET /v1/habits`. No transactions (409) or any failure gives the empty state, never an error card.
+    func loadHabits() async {
+        if habits.phase != .score { habits = .loading }
+        do {
+            try await client.load(CachedOps.habits) { [weak self] score in
+                guard let self else { return }
+                habits = HabitsPanelState.make(score, meta: home?.meta)
+            }
+        } catch {
+            if habits.phase != .score { habits = .empty }
         }
     }
 

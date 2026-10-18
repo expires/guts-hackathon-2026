@@ -38,6 +38,8 @@ struct OnboardingAPI: Sendable {
     var connectTrading212: @Sendable (_ key: String, _ secret: String) async throws -> Void = { _, _ in throw OnboardingAPI.notYetAvailable }
     /// `POST /v1/connections/monzo/sync`: retries the history import until the user approves it in the Monzo app.
     var syncMonzo: @Sendable () async throws -> MonzoHistory = { throw OnboardingAPI.notYetAvailable }
+    /// Whether the backend holds a Monzo sign-in (`GET /v1/connections`). Polled while Safari is open.
+    var monzoConnected: @Sendable () async throws -> Bool = { false }
     var hasTrading212 = false
 
     static func from(client: any LifelineClient) -> OnboardingAPI {
@@ -61,6 +63,7 @@ struct OnboardingAPI: Sendable {
             habits: { try await client.habits() },
             connectTrading212: { key, secret in _ = try await client.connectTrading212(key: key, secret: secret) },
             syncMonzo: { try await client.syncMonzo() },
+            monzoConnected: { try await client.listConnections().providers.first { $0.provider == .monzo }?.connected ?? false },
             hasTrading212: true
         )
     }

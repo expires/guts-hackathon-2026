@@ -24,6 +24,12 @@ struct PlayView: View {
                     activeRoom(active)
                 }
                 PlayChoiceCard(
+                    icon: .tabYou, title: L10n.tr("Play as yourself"),
+                    detail: L10n.tr("Start from your own money. Connect Monzo or Trading 212, or try a sample student."),
+                    fill: Theme.Palette.money, shape: .hero, hero: true, identifier: "play.yourself",
+                    action: actions.onPlayAsYourself
+                )
+                PlayChoiceCard(
                     icon: .family, title: L10n.tr("Play with friends"),
                     detail: L10n.tr("Quick Life, Money Quiz and more. Friends join with a QR code or a short code."),
                     fill: Theme.Palette.family, shape: .hero, hero: true, identifier: "play.friends",

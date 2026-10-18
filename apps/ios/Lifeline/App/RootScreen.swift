@@ -72,7 +72,9 @@ struct RootScreen: View {
         .environment(\.appDataVersion, router.dataVersion)
         .environment(\.appSelectedTab, router.selection)
         .task { await router.checkGate(client: session.client) }
-        .onOpenURL { url in router.handle(url: url) }
+        .onOpenURL { url in
+            if !router.handle(url: url) { OnboardingLink.post(url) }
+        }
         // "Ask Penny" switches to the Penny tab with the context loaded (ADR 0048), not a sheet.
         .onChange(of: router.penny) { _, route in
             guard let route else { return }
@@ -175,7 +177,7 @@ struct RootScreen: View {
         switch tab {
         case .money:
             NavigationStack {
-                MoneyHomeScreen(client: session.client) { lifeID in openLife(lifeID) }
+                MoneyHomeScreen(client: session.client, session: session) { lifeID in openLife(lifeID) }
             }
         case .penny:
             // Penny links open the right Money screen (D5): the forecast card or The maths.

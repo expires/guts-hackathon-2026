@@ -423,6 +423,10 @@ struct LiveClient: LifelineClient {
         }
     }
 
+    func profileStats() async throws -> ProfileStats {
+        try await call { try await client.getProfileStats().ok.body.json }
+    }
+
     // MARK: Store
 
     func verifyPurchase(product: PurchaseProduct) async throws -> PurchaseVerifyResponse {

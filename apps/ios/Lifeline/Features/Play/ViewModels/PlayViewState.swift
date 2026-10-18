@@ -73,6 +73,8 @@ struct PlayActions {
     var onStartChallenge: @MainActor (String) -> Void = { _ in }
     /// "Play solo": pushes the Life entry.
     var onPlaySolo: @MainActor () -> Void = {}
+    /// "Play as yourself": who you are playing as, connect your money, your profile, then the game.
+    var onPlayAsYourself: @MainActor () -> Void = {}
     /// "Play with friends": opens the room flow.
     var onPlayWithFriends: @MainActor () -> Void = {}
     /// "Join a game": opens the scanner.

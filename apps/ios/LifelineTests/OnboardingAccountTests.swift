@@ -155,34 +155,95 @@ struct OnboardingAccountTests {
         #expect(model.state.step == .connect)
     }
 
-    @Test func monzoWaitsForApprovalThenBuilds() async {
+    /// A model with Safari recorded, fast polls and a Monzo that reports connected after `connectedAfter` checks.
+    private func monzoModel(connectedAfter: Int = 2, syncedAfter: Int = 2, limit: Int = 60) -> (OnboardingViewModel, Box<[URL]>, Box<Int>) {
         var api = api()
-        let calls = Box(0)
+        let checks = Box(0)
+        let syncs = Box(0)
+        api.monzoConnected = { checks.value += 1; return checks.value >= connectedAfter }
         api.syncMonzo = {
-            calls.value += 1
-            return ContractExamples.decode(calls.value < 3
+            syncs.value += 1
+            return ContractExamples.decode(syncs.value < syncedAfter
                 ? #"{"synced": false, "count": 0, "last_error": "auth"}"#
                 : #"{"synced": true, "oldest": "2026-07-20", "count": 48}"#)
         }
         let model = model(api)
+        model.monzoConnectInterval = .milliseconds(1)
         model.monzoPollInterval = .milliseconds(1)
+        model.monzoPollLimit = limit
+        let opened = Box<[URL]>([])
+        model.openInSafari = { opened.value.append($0) }
         model.go(.connect)
-        await model.bankCallback(URL(string: "lifeline://connected?status=ok&provider=monzo&session=abc")!)
-        #expect(calls.value == 3)
-        #expect(model.state.monzoNotice == nil)
-        #expect(model.state.step == .building)
+        return (model, opened, checks)
     }
 
-    @Test func monzoNeverApprovedStaysOnConnectWithAMessage() async {
+    @Test func monzoOpensSafariThenPollsThenApprovesThenBuilds() async {
+        let (model, opened, checks) = monzoModel()
+        await model.connect(.monzo)
+        #expect(opened.value == [URL(string: "https://auth.example.test/?state=abc")!])
+        #expect(model.state.monzoWait == .signingIn)
+        await model.monzoTask?.value
+        #expect(checks.value == 2)
+        #expect(model.state.step == .building)
+        #expect(model.state.building.isFinished)
+        #expect(model.state.monzoWait == nil)
+    }
+
+    @Test func monzoDeepLinkErrorFails() async {
         var api = api()
-        api.syncMonzo = { ContractExamples.decode(#"{"synced": false, "count": 0, "last_error": "auth"}"#) }
+        api.monzoConnected = { false }
         let model = model(api)
-        model.monzoPollInterval = .milliseconds(1)
-        model.monzoPollLimit = 3
+        model.monzoConnectInterval = .seconds(5)
+        model.openInSafari = { _ in }
         model.go(.connect)
-        await model.bankCallback(URL(string: "lifeline://connected?status=ok&provider=monzo&session=abc")!)
+        await model.connect(.monzo)
+        model.handleConnectedURL(URL(string: "lifeline://connected?status=error&code=access_denied")!)
+        #expect(model.state.monzoWait == .failed("You cancelled the Monzo sign-in."))
+        model.cancelMonzo()
+        #expect(model.state.monzoWait == nil)
+    }
+
+    @Test func monzoCancelStopsPolling() async {
+        let (model, _, checks) = monzoModel(connectedAfter: 1_000_000)
+        await model.connect(.monzo)
+        model.cancelMonzo()
+        let seen = checks.value
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(checks.value <= seen + 1)
+        #expect(model.state.monzoWait == nil)
         #expect(model.state.step == .connect)
-        #expect(model.state.errorMessage?.contains("Approve the request in your Monzo app") == true)
+    }
+
+    @Test func monzoSignInTimeoutFails() async {
+        let (model, _, _) = monzoModel(connectedAfter: 1_000_000)
+        model.monzoConnectLimit = 3
+        await model.connect(.monzo)
+        await model.monzoTask?.value
+        #expect(model.state.monzoWait == .failed("Monzo sign-in took too long. Try again."))
+    }
+
+    @Test func monzoNeverApprovedFailsAndRetryRepeatsOnlyTheApprovalWait() async {
+        let (model, opened, _) = monzoModel(connectedAfter: 1, syncedAfter: 1_000_000, limit: 3)
+        await model.connect(.monzo)
+        await model.monzoTask?.value
+        #expect(model.state.step == .connect)
+        guard case let .failed(message) = model.state.monzoWait else { Issue.record("expected failed"); return }
+        #expect(message.contains("Approve the request in your Monzo app"))
+        model.retryMonzo()
+        #expect(model.state.monzoWait == .approving)
+        #expect(opened.value.count == 1)
+        model.cancelMonzo()
+    }
+
+    @Test func monzoRecheckAndReopen() async {
+        let (model, opened, _) = monzoModel(connectedAfter: 1_000_000)
+        model.monzoConnectInterval = .seconds(5)
+        await model.connect(.monzo)
+        model.reopenMonzoSafari()
+        #expect(opened.value.count == 2)
+        model.handleConnectedURL(URL(string: "lifeline://connected?status=ok")!)
+        #expect(model.state.monzoWait == .signingIn)
+        model.cancelMonzo()
     }
 
     @Test func sampleStudentsShowAndImport() async {
@@ -223,15 +284,6 @@ struct OnboardingAccountTests {
         let problems = OnboardingViewModel.problems(manual)
         #expect(problems.contains("Turn on at least one way money arrives and enter the amount."))
         #expect(problems.contains("Enter your age."))
-    }
-
-    @Test func bankCallbackOkReveals() async {
-        let model = model(api())
-        await model.bankCallback(URL(string: "lifeline://connected?status=ok&session=s1")!)
-        #expect(model.state.step == .building)
-        #expect(model.state.building.isFinished)
-        await model.bankCallback(URL(string: "lifeline://connected?status=error")!)
-        #expect(model.state.errorMessage != nil)
     }
 
     @Test func manualValidationAndInput() async {

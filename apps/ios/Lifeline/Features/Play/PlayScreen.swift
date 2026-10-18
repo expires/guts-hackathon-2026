@@ -6,6 +6,8 @@ enum PlaySheet: String, Identifiable {
     case solo
     /// The Learn course path (ADR 0068).
     case learn
+    /// "Play as yourself" (profile picker, connect your money, profile stats, game).
+    case yourself
     var id: String { rawValue }
 }
 
@@ -48,6 +50,7 @@ struct PlayScreen: View {
         actions.rooms = rooms.entryActions
         actions.circles = circles.actions
         actions.onPlaySolo = { sheet = .solo }
+        actions.onPlayAsYourself = { sheet = .yourself }
         actions.onPlayWithFriends = { Task { await rooms.openLobby() } }
         actions.onJoin = { rooms.openScanner() }
         actions.onOpenLearn = { sheet = .learn }
@@ -118,6 +121,8 @@ struct PlayScreen: View {
                     PlaySoloScreen(session: session) { self.sheet = nil }
                 case .learn:
                     LearnPathScreen(model: learn, client: session.client) { self.sheet = nil }
+                case .yourself:
+                    PlayAsYourselfFlowScreen(session: session, start: .picker) { self.sheet = nil }
                 }
             }
             .background {

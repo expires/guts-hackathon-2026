@@ -349,8 +349,8 @@ struct OnboardingViewState: Equatable, Sendable {
     /// "Their Next Move": the forecast card (B3.1).
     var forecastCard: ForecastCardState?
     var isBusy = false
-    /// Monzo is connected but waits for the user to approve access in the Monzo app (ADR 0046 amendment).
-    var monzoNotice: String?
+    /// The Monzo pop-up (sign-in in Safari, approval in the Monzo app, import). Nil: no pop-up.
+    var monzoWait: MonzoWait?
     /// The Trading 212 key and secret sheet.
     var trading212 = Trading212Sheet()
     /// Error for the current step, in plain English.
@@ -382,6 +382,8 @@ struct OnboardingViewState: Equatable, Sendable {
 enum OnboardingStep: String, Hashable, Sendable {
     case welcome
     case connect
+    /// Only "Enter your numbers", from the connections screen. Saving closes it.
+    case manual
 }
 
 /// What the onboarding View can ask for.
@@ -390,6 +392,11 @@ struct Trading212Sheet: Equatable, Sendable {
     var isPresented = false
     var isBusy = false
     var errorMessage: String?
+}
+
+enum MonzoWait: Equatable, Sendable {
+    case signingIn, approving, importing
+    case failed(String)
 }
 
 struct OnboardingActions {
@@ -421,6 +428,10 @@ struct OnboardingActions {
     /// Trading 212 sheet: submit the key and secret, or close it.
     var onSubmitTrading212: (_ key: String, _ secret: String) -> Void = { _, _ in }
     var onCloseTrading212: () -> Void = {}
+    /// Monzo pop-up: open Safari again, cancel or close, try again.
+    var onMonzoReopen: () -> Void = {}
+    var onMonzoCancel: () -> Void = {}
+    var onMonzoRetry: () -> Void = {}
 
     static var noop: OnboardingActions { OnboardingActions() }
 }

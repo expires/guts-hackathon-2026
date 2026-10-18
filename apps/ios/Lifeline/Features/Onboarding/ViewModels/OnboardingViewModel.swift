@@ -10,6 +10,8 @@ final class OnboardingViewModel {
     static let maxStatementBytes = 5 * 1024 * 1024
 
     private let api: OnboardingAPI
+    /// Monzo sign-in in Safari, approval and import: shared with the connections screen.
+    @ObservationIgnored private let monzo: MonzoConnectFlow
     /// Shortest time a build stage stays on screen, for readability (ADR 0069: at most 400 ms). Tests use zero.
     private let stageMinimum: Duration
     private(set) var state: OnboardingViewState
@@ -17,8 +19,10 @@ final class OnboardingViewModel {
     // Platform hooks, set by the glue.
     /// Runs Sign in with Apple and returns the identity token.
     @ObservationIgnored var appleSignIn: (@MainActor () async throws -> String)?
-    /// Opens the bank consent page and returns the callback URL (`lifeline://connected?...`).
-    @ObservationIgnored var openBank: (@MainActor (URL) async throws -> URL)?
+    /// Opens the Monzo sign-in link in Safari (Monzo's emailed link must open outside an in-app browser).
+    @ObservationIgnored var openInSafari: (@MainActor (URL) -> Void)? {
+        didSet { monzo.openInSafari = openInSafari }
+    }
     /// Shows the file picker. The glue calls `importStatement(data:fileName:)` with the file.
     @ObservationIgnored var pickStatement: @MainActor () -> Void = {}
     /// Current location (latitude, longitude). Nil: location is not set up in this build.
@@ -63,6 +67,9 @@ final class OnboardingViewModel {
         stageMinimum: Duration = .milliseconds(350)
     ) {
         self.api = api
+        self.monzo = MonzoConnectFlow(api: .init(
+            bankAuthLink: api.bankAuthLink, monzoConnected: api.monzoConnected, syncMonzo: api.syncMonzo
+        ))
         self.startAt = startAt
         self.stageMinimum = min(stageMinimum, .milliseconds(400))
         let year = Calendar(identifier: .gregorian).component(.year, from: now)
@@ -73,7 +80,24 @@ final class OnboardingViewModel {
             isSampleData: isSampleData
         )
         state.language = AppLanguage.current
+        wireMonzo()
         if startAt == .connect { go(.connect) }
+        if startAt == .manual { go(.manual) }
+    }
+
+    private func wireMonzo() {
+        monzo.onWaitChange = { [weak self] wait in self?.state.monzoWait = wait }
+        monzo.shouldContinue = { [weak self] in self?.state.step == .connect }
+        monzo.onUnavailable = { [weak self] in self?.monzoUnavailable() }
+        monzo.onError = { [weak self] message in self?.state.errorMessage = message }
+        monzo.onApproved = { [weak self] session in
+            guard let self else { return }
+            pickedSample = nil
+            await build(firstLabel: L10n.tr("Reading the statement")) { [api] in
+                _ = try await api.bankSummary(session)
+                return nil
+            }
+        }
     }
 
     var actions: OnboardingActions {
@@ -100,7 +124,10 @@ final class OnboardingViewModel {
             onAskPenny: { [weak self] in self?.askPenny() },
             onDismissError: { [weak self] in self?.state.errorMessage = nil },
             onSubmitTrading212: { [weak self] key, secret in Task { await self?.connectTrading212(key: key, secret: secret) } },
-            onCloseTrading212: { [weak self] in self?.state.trading212 = .init() }
+            onCloseTrading212: { [weak self] in self?.state.trading212 = .init() },
+            onMonzoReopen: { [weak self] in self?.reopenMonzoSafari() },
+            onMonzoCancel: { [weak self] in self?.cancelMonzo() },
+            onMonzoRetry: { [weak self] in self?.retryMonzo() }
         )
     }
 
@@ -130,7 +157,7 @@ final class OnboardingViewModel {
         case .penny: go(.features)
         case .signIn: go(.penny)
         case .connect: if startAt == .connect { finish() } else { go(.penny) }
-        case .manual: go(.connect)
+        case .manual: if startAt == .manual { finish() } else { go(.connect) }
         case .building:
             // Stop the running build; its late results are dropped.
             buildGeneration += 1
@@ -168,6 +195,7 @@ final class OnboardingViewModel {
     func go(_ step: OnboardingViewState.Step) {
         state.errorMessage = nil
         state.step = step
+        if step == .building, state.monzoWait == .importing { state.monzoWait = nil }
         // "Pick your student" shows the sample students first.
         if step == .connect, state.samples.isEmpty, !state.samplesLoading {
             Task { await loadSamples() }
@@ -245,24 +273,7 @@ final class OnboardingViewModel {
     private func connectMonzo() async {
         state.isBusy = true
         defer { state.isBusy = false }
-        do {
-            let link = try await api.bankAuthLink("monzo")
-            guard link.status != .unavailable, let url = URL(string: link.url) else {
-                return monzoUnavailable()
-            }
-            guard let openBank else { return monzoUnavailable() }
-            let callback = try await openBank(url)
-            await bankCallback(callback)
-        } catch let error as APIError {
-            if case let .server(status, _, _, _) = error, status == 409 || status == 501 || status == 503 {
-                monzoUnavailable()
-            } else {
-                state.errorMessage = error.userMessage
-            }
-        } catch {
-            // The user closed the consent page.
-            state.errorMessage = L10n.tr("Monzo was not connected. Try again, or use another way.")
-        }
+        await monzo.start()
     }
 
     /// Trading 212: the server checks the key with Trading 212 before it stores anything.
@@ -293,56 +304,38 @@ final class OnboardingViewModel {
         }
     }
 
-    /// Monzo only shares data after the user approves access in the Monzo app (it answers 403 until then).
-    /// Retry the import every `monzoPollInterval` for up to five minutes. Back stops the wait.
-    @ObservationIgnored var monzoPollInterval: Duration = .seconds(5)
-    @ObservationIgnored var monzoPollLimit = 60
+    // MARK: Monzo sign-in in Safari (MonzoConnectFlow)
 
-    private func waitForMonzoApproval() async -> Bool {
-        let generation = buildGeneration
-        state.monzoNotice = L10n.tr("Approve the request in your Monzo app. We keep checking.")
-        defer { state.monzoNotice = nil }
-        for attempt in 0..<monzoPollLimit {
-            do {
-                if try await api.syncMonzo().synced { return true }
-            } catch {
-                // A server without connections (501) has nothing to wait for. Other errors: keep trying.
-                if case let .server(status, _, _, _) = APIError.map(error), status == 501 { return true }
-            }
-            guard attempt + 1 < monzoPollLimit else { break }
-            try? await Task.sleep(for: monzoPollInterval)
-            if generation != buildGeneration || state.step != .connect { return false }
-        }
-        return false
+    var monzoConnectInterval: Duration {
+        get { monzo.connectInterval } set { monzo.connectInterval = newValue }
     }
+    var monzoConnectLimit: Int {
+        get { monzo.connectLimit } set { monzo.connectLimit = newValue }
+    }
+    var monzoPollInterval: Duration {
+        get { monzo.pollInterval } set { monzo.pollInterval = newValue }
+    }
+    var monzoPollLimit: Int {
+        get { monzo.pollLimit } set { monzo.pollLimit = newValue }
+    }
+    var monzoTask: Task<Void, Never>? { monzo.task }
+
+    /// Cancel or Close on the pop-up: stops every wait.
+    func cancelMonzo() { monzo.cancel() }
+    /// "Open Safari again" while signing in.
+    func reopenMonzoSafari() { monzo.reopenSafari() }
+    /// "Try again" after a failure.
+    func retryMonzo() { monzo.retry() }
+    /// The app came back to the front: check for a connection at once.
+    func recheckMonzo() { monzo.recheck() }
+    /// `lifeline://connected?status=ok|error&code=...`
+    func handleConnectedURL(_ url: URL) { monzo.handleConnectedURL(url) }
+
+    static func monzoErrorMessage(code: String?) -> String { MonzoConnectFlow.errorMessage(code: code) }
 
     private func monzoUnavailable() {
         markUnavailable(.monzo)
         state.errorMessage = L10n.tr("Monzo is unavailable right now. Upload a statement or enter your numbers.")
-    }
-
-    /// `lifeline://connected?status=ok|error&session=...`
-    func bankCallback(_ url: URL) async {
-        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        let status = items.first { $0.name == "status" }?.value
-        guard status == "ok", let session = items.first(where: { $0.name == "session" })?.value else {
-            state.errorMessage = L10n.tr("Monzo was not connected. Try again, or use another way.")
-            return
-        }
-        pickedSample = nil
-        state.isBusy = true
-        let approved = await waitForMonzoApproval()
-        state.isBusy = false
-        guard approved else {
-            if state.step == .connect {
-                state.errorMessage = L10n.tr("Monzo has not shared your history yet. Approve the request in your Monzo app, then try again.")
-            }
-            return
-        }
-        await build(firstLabel: L10n.tr("Reading the statement")) { [api] in
-            _ = try await api.bankSummary(session)
-            return nil
-        }
     }
 
     /// The student cards, exactly as the server lists them, in its order. Cached first (ADR 0060).
@@ -570,6 +563,18 @@ final class OnboardingViewModel {
         state.manual.problems = problems
         guard problems.isEmpty, let input = Self.input(state.manual) else { return }
         pickedSample = nil
+        if startAt == .manual {
+            // From the connections screen: save the numbers and close, without the profile walk-through.
+            state.isBusy = true
+            defer { state.isBusy = false }
+            do {
+                _ = try await api.setManualFinance(input)
+                finish()
+            } catch {
+                state.errorMessage = APIError.map(error).userMessage
+            }
+            return
+        }
         await build(firstLabel: L10n.tr("Saving your numbers")) { [api] in
             _ = try await api.setManualFinance(input)
             return nil

@@ -117,6 +117,8 @@ struct HabitCard: Equatable, Sendable {
 struct YouActions {
     /// "Connect your money" (router `openConnectMoney()`).
     var onConnectMoney: @MainActor () -> Void = {}
+    /// "Your profile": the stats page.
+    var onOpenProfile: @MainActor () -> Void = {}
     /// Profile row: opens Account (sign out, reset, delete).
     var onOpenAccount: @MainActor () -> Void = {}
     /// "Ask Penny" row.

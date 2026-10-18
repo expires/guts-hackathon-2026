@@ -27,6 +27,9 @@ struct PlaygroundScreen: View {
                 LLSheetFrame { PennyChatView(state: entry.state) }
             }
         case let rooms where rooms.hasPrefix("w9rooms."): RoomsPlayground.view(rooms)
+        case "money.habits.score": HabitsPanelView(state: HabitsPanelFixtures.score).padding().paperBackground()
+        case "money.habits.sample": HabitsPanelView(state: HabitsPanelFixtures.sample).padding().paperBackground()
+        case "money.habits.empty": HabitsPanelView(state: .empty).padding().paperBackground()
         case "money.ready": MoneyHomeView(state: Fixtures.MoneyHome.ready).previewInNavigation()
         case "money.noData": MoneyHomeView(state: Fixtures.MoneyHome.noData).previewInNavigation()
         case "money.rateLimited": MoneyHomeView(state: Fixtures.MoneyHome.rateLimited).previewInNavigation()
@@ -131,6 +134,18 @@ struct PlaygroundScreen: View {
         case "accuracy.loading": SpendAccuracyView(state: Fixtures.SpendAccuracy.loading)
         case "accuracy.error": SpendAccuracyView(state: Fixtures.SpendAccuracy.error)
         // Play and You tabs
+        case "profile.picker.none": ProfilePickerView(state: ProfilePickerPreviews.nothingActive)
+        case "profile.picker.sample": ProfilePickerView(state: ProfilePickerPreviews.sampleActive)
+        case "profile.picker.you": ProfilePickerView(state: ProfilePickerPreviews.youActive)
+        case "profile.connect.none": ConnectionsView(state: ConnectionsPreviews.nothing)
+        case "profile.connect.both": ConnectionsView(state: ConnectionsPreviews.connected)
+        case "profile.connect.continue": ConnectionsView(state: ConnectionsPreviews.withContinue)
+        case "profile.connect.confirm": ConnectionsView(state: ConnectionsPreviews.confirming)
+        case "profile.stats.none": ProfileStatsView(state: ProfileStatsPreviews.nothing)
+        case "profile.stats.t212": ProfileStatsView(state: ProfileStatsPreviews.t212Only)
+        case "profile.stats.full": ProfileStatsView(state: ProfileStatsPreviews.full)
+        case "profile.stats.sample": ProfileStatsView(state: ProfileStatsPreviews.sample)
+        case "profile.flow": PlayAsYourselfFlowScreen(session: appSession, start: .picker) {}
         case "play.ready": PlayView(state: Fixtures.Play.ready).previewInNavigation()
         case "play.noLives": PlayView(state: Fixtures.Play.noLives).previewInNavigation()
         case "play.loading": PlayView(state: Fixtures.Play.loading).previewInNavigation()

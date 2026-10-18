@@ -154,6 +154,8 @@ struct YouView: View {
             }
             VStack(spacing: 0) {
                 connectMoneyRow
+                RuleDivider()
+                row(icon: .tabYou, title: "Your profile", id: "you.profile", action: actions.onOpenProfile)
                 ForEach(state.dataRows) { row in
                     RuleDivider()
                     HStack(spacing: Theme.Spacing.s) {

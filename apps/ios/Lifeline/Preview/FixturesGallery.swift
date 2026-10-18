@@ -30,6 +30,9 @@ extension Fixtures {
                     .init(id: "money.noData", title: "Money home", detail: "No data: connect your money"),
                     .init(id: "money.rateLimited", title: "Money home", detail: "Rate limited: pull to refresh"),
                     .init(id: "money.offline", title: "Money home", detail: "Offline"),
+                    .init(id: "money.habits.score", title: "Your habits", detail: "Score and factors"),
+                    .init(id: "money.habits.sample", title: "Your habits", detail: "Sample data"),
+                    .init(id: "money.habits.empty", title: "Your habits", detail: "No transactions: connect"),
                 ]),
                 .init(id: "select", title: "Choose a life", entries: [
                     .init(id: "select.ready", title: "Character select", detail: "Play yourself, presets, Random"),
@@ -153,6 +156,20 @@ extension Fixtures {
                 .init(id: "testit", title: "Test it (W7)", entries: TestItFixtures.all.map {
                     .init(id: $0.id, title: "Test it", detail: $0.title)
                 }),
+                .init(id: "profile", title: "Play as yourself and Your profile", entries: [
+                    .init(id: "profile.picker.none", title: "Who are you playing as?", detail: "Nobody active"),
+                    .init(id: "profile.picker.sample", title: "Who are you playing as?", detail: "Sample student active"),
+                    .init(id: "profile.picker.you", title: "Who are you playing as?", detail: "You active"),
+                    .init(id: "profile.connect.none", title: "Connect your money", detail: "Nothing connected"),
+                    .init(id: "profile.connect.both", title: "Connect your money", detail: "Monzo and Trading 212"),
+                    .init(id: "profile.connect.continue", title: "Connect your money", detail: "With Continue, Monzo highlighted"),
+                    .init(id: "profile.connect.confirm", title: "Connect your money", detail: "Disconnect confirmation"),
+                    .init(id: "profile.stats.none", title: "Your profile", detail: "Nothing connected"),
+                    .init(id: "profile.stats.t212", title: "Your profile", detail: "Trading 212 only"),
+                    .init(id: "profile.stats.full", title: "Your profile", detail: "Monzo and Trading 212"),
+                    .init(id: "profile.stats.sample", title: "Your profile", detail: "Sample student"),
+                    .init(id: "profile.flow", title: "Play as yourself", detail: "Full flow on the mock client"),
+                ]),
                 .init(id: "playYou", title: "Play and You tabs", entries: [
                     .init(id: "play.ready", title: "Play tab", detail: "Lives, challenges, concepts"),
                     .init(id: "play.noLives", title: "Play tab", detail: "No lives yet"),

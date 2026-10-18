@@ -40,6 +40,9 @@ typealias BankSummary = Components.Schemas.BankSummary
 typealias ConnectionsResponse = Components.Schemas.ConnectionsResponse
 typealias ProviderConnection = Components.Schemas.ProviderConnection
 typealias MonzoHistory = Components.Schemas.HistoryStatus
+typealias ProfileStats = Components.Schemas.ProfileStats
+typealias ProfileConnection = Components.Schemas.ProfileConnection
+typealias ProfileSection = Components.Schemas.ProfileSection
 typealias PurchaseProduct = Components.Schemas.PurchaseVerifyRequest.ProductIdPayload
 typealias PurchaseVerifyResponse = Components.Schemas.PurchaseVerifyResponse
 typealias LivesResponse = Components.Schemas.LivesResponse
@@ -231,6 +234,8 @@ protocol LifelineClient: Sendable {
     /// Retries the Monzo history import. It works after the user approves access in the Monzo app.
     func syncMonzo() async throws -> MonzoHistory
     func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse
+    /// `GET /v1/profile/stats`: what each source gave us and the stats built from it. Never 409.
+    func profileStats() async throws -> ProfileStats
 
     // Store (demo only)
     func verifyPurchase(product: PurchaseProduct) async throws -> PurchaseVerifyResponse
@@ -244,6 +249,7 @@ extension LifelineClient {
     func connectTrading212(key: String, secret: String) async throws -> ProviderConnection { throw APIError.connectionsUnavailable }
     func syncMonzo() async throws -> MonzoHistory { throw APIError.connectionsUnavailable }
     func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse { throw APIError.connectionsUnavailable }
+    func profileStats() async throws -> ProfileStats { throw APIError.connectionsUnavailable }
 
     /// Paths only. Kept so older call sites with an explicit `[StudentPath]` type still compile.
     @available(*, deprecated, message: "listPaths() returns PathsResponse; use .paths and .quickStudents")

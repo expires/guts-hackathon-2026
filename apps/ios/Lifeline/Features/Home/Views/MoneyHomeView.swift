@@ -24,6 +24,9 @@ struct MoneyHomeView: View {
                         self.block(block)
                             .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("money.block.\(block.rawValue)")
+                        if block == .forecast {
+                            HabitsPanelView(state: state.habits, onOpen: actions.onOpenHabits, onConnect: actions.onConnectHabits)
+                        }
                     }
                 }
             }

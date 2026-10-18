@@ -3,13 +3,14 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Glue for onboarding (ADR 0029, 0037). Owns `OnboardingViewModel` and the platform parts:
-/// Sign in with Apple, the Monzo consent page (`ASWebAuthenticationSession`) and the statement picker.
+/// Sign in with Apple, the Monzo sign-in (opened in Safari) and the statement picker.
 struct OnboardingScreen: View {
     @State private var model: OnboardingViewModel
     @State private var showsPicker = false
     /// "Ask Penny" on the forecast card ("Their Next Move").
     @State private var showsPenny = false
-    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     private let onFinished: @MainActor () -> Void
     private let onLanguage: @MainActor (AppLanguage) -> Void
     /// For the open Penny chat step. Nil (tests, Playground fixtures) shows a short note instead.
@@ -61,6 +62,14 @@ struct OnboardingScreen: View {
             }
         }
             .onAppear(perform: wire)
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { model.recheckMonzo() }
+            }
+            // `lifeline://connected?...` reaches us through RootScreen (see `OnboardingLink`).
+            .onReceive(NotificationCenter.default.publisher(for: OnboardingLink.notification)) { note in
+                if let url = note.object as? URL { model.handleConnectedURL(url) }
+            }
+            .onOpenURL { url in model.handleConnectedURL(url) }
             .sheet(isPresented: $showsPenny) {
                 if let client {
                     // A new chat with the forecast loaded and "Explain my weekly budget" sent (B3.7).
@@ -124,10 +133,9 @@ struct OnboardingScreen: View {
         model.pickStatement = { showsPicker = true }
         model.onAskPenny = { if client != nil { showsPenny = true } }
         model.appleSignIn = { try await AppleSignIn().identityToken() }
-        let session = webAuthenticationSession
-        model.openBank = { url in
-            try await session.authenticate(using: url, callbackURLScheme: "lifeline", preferredBrowserSession: .ephemeral)
-        }
+        // Monzo signs in with an emailed link, so the page opens in Safari (not an in-app browser).
+        let open = openURL
+        model.openInSafari = { url in open(url) }
         // Location is not set up in this build (no location permission yet): the view says so.
         model.locate = nil
     }
@@ -185,5 +193,15 @@ final class AppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthoriz
                 .flatMap(\.windows)
                 .first { $0.isKeyWindow } ?? ASPresentationAnchor()
         }
+    }
+}
+
+/// How `lifeline://connected?...` gets from `RootScreen.onOpenURL` to onboarding, which is shown over it.
+enum OnboardingLink {
+    static let notification = Notification.Name("lifeline.onboarding.connected")
+
+    @MainActor static func post(_ url: URL) {
+        guard url.scheme == "lifeline", url.host() == "connected" else { return }
+        NotificationCenter.default.post(name: notification, object: url)
     }
 }

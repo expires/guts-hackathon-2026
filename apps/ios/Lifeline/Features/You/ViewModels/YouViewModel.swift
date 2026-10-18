@@ -6,7 +6,7 @@ import Observation
 @Observable
 final class YouViewModel {
     enum Route: Equatable {
-        case bank, plan, sources, evaluation, spendAccuracy, debug, connectMoney, askPenny, aiDisclosure, newPlayer, resetDemo, account, changeLanguage, learn
+        case bank, plan, sources, evaluation, spendAccuracy, debug, connectMoney, askPenny, aiDisclosure, newPlayer, resetDemo, account, changeLanguage, learn, profile
     }
 
     static var loadingMessage: String { L10n.tr("Loading your profile") }
@@ -58,6 +58,7 @@ final class YouViewModel {
     var actions: YouActions {
         var actions = YouActions()
         actions.onConnectMoney = { [weak self] in self?.onRoute(.connectMoney) }
+        actions.onOpenProfile = { [weak self] in self?.onRoute(.profile) }
         actions.onOpenAccount = { [weak self] in self?.onRoute(.account) }
         actions.onAskPenny = { [weak self] in self?.onRoute(.askPenny) }
         actions.onNewPlayer = { [weak self] in self?.onRoute(.newPlayer) }

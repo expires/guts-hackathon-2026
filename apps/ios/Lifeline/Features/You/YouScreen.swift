@@ -14,6 +14,9 @@ struct YouScreen: View {
     /// Learn progress for the "Lessons X/48" tile; the same model opens the path (PENNY_V3_BUILD E5).
     @State private var learn: LearnPathViewModel
     @State private var showsLearn = false
+    /// You > Connect your money: the connections editor, and You > Your profile: the stats page.
+    @State private var showsConnections = false
+    @State private var showsProfile = false
     @Environment(\.appRoutes) private var routes
     /// Judge mode action waiting for confirmation.
     @State private var judgeConfirm: YouViewModel.Route?
@@ -54,11 +57,12 @@ struct YouScreen: View {
                     case .spendAccuracy: .spendAccuracy
                     case .debug: .debug
                     case .connectMoney: nil
-                    case .askPenny, .newPlayer, .resetDemo, .account, .changeLanguage, .learn: nil
+                    case .askPenny, .newPlayer, .resetDemo, .account, .changeLanguage, .learn, .profile: nil
                     case .aiDisclosure: .aiDisclosure
                     }
-                    // Opens onboarding at "Connect your money", not at the welcome pages.
-                    if route == .connectMoney { routes.openConnectMoney() }
+                    // The connections editor: Monzo, Trading 212, a statement, your numbers. No student picker.
+                    if route == .connectMoney { showsConnections = true }
+                    if route == .profile { showsProfile = true }
                     if route == .account { routes.openAccount() }
                     if route == .changeLanguage { onChangeLanguage() }
                     if route == .learn { showsLearn = true }
@@ -90,6 +94,16 @@ struct YouScreen: View {
             .task { await learn.load() }
             .onChange(of: learn.entry, initial: true) { _, entry in
                 model.lessons = entry.isLoading ? nil : (entry.done, entry.total)
+            }
+            .llCover(isPresented: $showsConnections) {
+                ConnectionsScreen(
+                    client: session.client,
+                    onChanged: { Task { await model.load() } },
+                    onClose: { showsConnections = false }
+                )
+            }
+            .llCover(isPresented: $showsProfile) {
+                PlayAsYourselfFlowScreen(session: session, start: .stats) { showsProfile = false }
             }
             .llCover(isPresented: $showsLearn) {
                 LearnPathScreen(model: learn, client: session.client) { showsLearn = false }

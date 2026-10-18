@@ -26,6 +26,16 @@ actor MockClient: LifelineClient {
     private var chatThreads: [String: ChatThread] = [:]
     private var nextChatNumber = 1
     private var me: Me = MockExamples.me
+    /// Which connections the mock profile shows. Connecting Trading 212 or importing a sample changes it.
+    private var profileScenario: ProfileFixtures.Scenario = {
+        #if DEBUG
+        // `-mockProfile monzoAndT212` (UI tests and screenshots) starts on another fixture.
+        if let name = UserDefaults.standard.string(forKey: "mockProfile"), let scenario = ProfileFixtures.Scenario(rawValue: name) {
+            return scenario
+        }
+        #endif
+        return .sampleStudent
+    }()
     private let data: MockData
     /// Gap between streamed chat events. Tests can set it to zero.
     let streamGap: Duration
@@ -567,6 +577,7 @@ actor MockClient: LifelineClient {
             throw APIError.server(status: 404, code: "not_found", message: "That sample does not exist.", source: "mock")
         }
         markFinanceInput(.statement)
+        profileScenario = .sampleStudent
         return MockExamples.importResult
     }
 
@@ -661,17 +672,22 @@ actor MockClient: LifelineClient {
     func bankSummary(session: String) async throws -> BankSummary { ContractExamples.bankSummary }
 
     func listConnections() async throws -> ConnectionsResponse {
-        ContractExamples.decode("""
-        {"providers": [{"provider": "monzo", "connected": false, "data_status": "mock", "oauth_available": true},
-                       {"provider": "trading212", "connected": false, "data_status": "mock", "oauth_available": false}]}
+        let monzo = profileScenario == .monzoAndT212
+        let t212 = profileScenario == .t212Only || profileScenario == .monzoAndT212
+        return ContractExamples.decode("""
+        {"providers": [{"provider": "monzo", "connected": \(monzo), "data_status": "\(monzo ? "live" : "mock")", "oauth_available": true},
+                       {"provider": "trading212", "connected": \(t212), "data_status": "\(t212 ? "live" : "mock")", "oauth_available": false}]}
         """)
     }
 
     func connectTrading212(key: String, secret: String) async throws -> ProviderConnection {
-        ContractExamples.decode("""
-        {"provider": "trading212", "connected": true, "data_status": "mock", "hint": "…c3d4", "oauth_available": false}
+        profileScenario = profileScenario == .monzoAndT212 ? .monzoAndT212 : .t212Only
+        return ContractExamples.decode("""
+        {"provider": "trading212", "connected": true, "data_status": "live", "hint": "…c3d4", "oauth_available": false}
         """)
     }
+
+    func profileStats() async throws -> ProfileStats { ProfileFixtures.stats(profileScenario) }
 
     func syncMonzo() async throws -> MonzoHistory {
         ContractExamples.decode("""
@@ -679,7 +695,13 @@ actor MockClient: LifelineClient {
         """)
     }
 
-    func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse { try await listConnections() }
+    func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse {
+        switch (provider, profileScenario) {
+        case ("trading212", .t212Only), ("monzo", .monzoAndT212), ("trading212", .monzoAndT212): profileScenario = .nothing
+        default: break
+        }
+        return try await listConnections()
+    }
 
     // MARK: Store
 

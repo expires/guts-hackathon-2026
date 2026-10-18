@@ -19,17 +19,22 @@ enum MoneyRoute: Hashable, Identifiable {
 /// category. Ask Penny opens the Penny tab with the forecast loaded.
 struct MoneyHomeScreen: View {
     let client: any LifelineClient
+    /// Needed to open the profile stats page from the habits card.
+    var session: GameSession?
     /// Opens a stored life in the Life tab. Kept for the root's call site; Money home no longer links to Life.
     let onOpenLife: @MainActor (String) -> Void
     @State private var model: MoneyHomeViewModel
     @State private var route: MoneyRoute?
+    @State private var showsConnections = false
+    @State private var showsProfile = false
     @State private var navigation = MoneyNavigation.shared
     @Environment(\.appRoutes) private var routes
     /// Bumped by the root after onboarding, sign-out or account deletion.
     @Environment(\.appDataVersion) private var dataVersion
 
-    init(client: any LifelineClient, onOpenLife: @escaping @MainActor (String) -> Void) {
+    init(client: any LifelineClient, session: GameSession? = nil, onOpenLife: @escaping @MainActor (String) -> Void) {
         self.client = client
+        self.session = session
         self.onOpenLife = onOpenLife
         _model = State(initialValue: MoneyHomeViewModel(client: client))
     }
@@ -44,6 +49,18 @@ struct MoneyHomeScreen: View {
             .task { await model.loadIfNeeded() }
             .onChange(of: dataVersion) { Task { await model.load() } }
             .onChange(of: navigation.request?.id) { handleNavigation() }
+            .llCover(isPresented: $showsConnections) {
+                ConnectionsScreen(
+                    client: client,
+                    onChanged: { Task { await model.refresh() } },
+                    onClose: { showsConnections = false }
+                )
+            }
+            .llCover(isPresented: $showsProfile) {
+                if let session {
+                    PlayAsYourselfFlowScreen(session: session, start: .stats) { showsProfile = false }
+                }
+            }
             .navigationDestination(item: $route) { route in
                 switch route {
                 case .maths:
@@ -63,6 +80,8 @@ struct MoneyHomeScreen: View {
         model.onAskPennyForecast = { routes.askPenny(.weeklyBudget) }
         model.onSeeMaths = { route = .maths }
         model.onSeeAllSpending = { route = .allSpending }
+        model.onOpenHabits = { if session != nil { showsProfile = true } else { showsConnections = true } }
+        model.onConnectHabits = { showsConnections = true }
         model.onCategory = { id, label in route = .category(id: id, label: label) }
     }
 
