@@ -329,7 +329,7 @@ def emergency_fund(
     if not invests:
         points += [
             point("While you build it, nights out and treats get less of each week's money.", {}),
-            point("Keep it in a separate savings pot, so it does not get spent by mistake.", {}),
+            point("Keep it in a separate savings account, so it does not get spent by mistake.", {}),
         ]
         return make(f"{gbp(amount)} less to spend while you build it", points)
     if stock_return is not None and first_year is not None and last_year is not None:
