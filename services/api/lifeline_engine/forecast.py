@@ -653,7 +653,7 @@ def _steps(snap: FinanceSnapshot, m: _Maths, bills: Sequence[ForecastBill], buff
     else:
         t2 = f"No bills or subscriptions are due before {before} in your statement."
     s2 = ForecastStep(id="bills", title=f"Bills before {short_day(next_date)}" if nm else "Bills in the next 4 weeks",
-                      amount=-_f(m.bills_total), text=t2, sources=[SRC_STATEMENT])
+                      amount=0.0 - _f(m.bills_total), text=t2, sources=[SRC_STATEMENT])
 
     if m.left <= 0:
         t3 = f"Nothing is left after bills ({gbp(m.left)}), so there is no buffer."
@@ -665,7 +665,7 @@ def _steps(snap: FinanceSnapshot, m: _Maths, bills: Sequence[ForecastBill], buff
     extra = m.buffer - m.target_buffer
     if extra > 0:
         t3 += f" It includes {int(extra * 100)}p so the days add up exactly."
-    s3 = ForecastStep(id="buffer", title=f"Safety buffer, {buffer_pct}%", amount=-_f(m.buffer), text=t3,
+    s3 = ForecastStep(id="buffer", title=f"Safety buffer, {buffer_pct}%", amount=0.0 - _f(m.buffer), text=t3,
                       sources=[SRC_SETTING])
 
     spend = m.left - m.buffer
