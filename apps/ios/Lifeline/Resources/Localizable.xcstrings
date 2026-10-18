@@ -32915,6 +32915,9 @@
     "Not connected" : {
 
     },
+    "Not connected. The Money tab shows a sample statement." : {
+
+    },
     "Not connected. The Money tab shows sample data." : {
       "extractionState" : "manual",
       "localizations" : {
