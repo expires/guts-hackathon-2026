@@ -298,7 +298,7 @@ final class RoomFlowViewModel {
             onOpenLife: { [weak self] in self?.openLife() },
             onReconnect: { [weak self] in Task { await self?.session.reconnect() } },
             onRetryStart: { [weak self] in Task { await self?.retryStartMyLife() } },
-            onAskPenny: { [weak self] in self?.askPennyAboutEvent() }
+            onAskPenny: nil  // hidden in room games until the sheet double-bubble bug is fixed (user, 18 Oct)
         )
     }
 
