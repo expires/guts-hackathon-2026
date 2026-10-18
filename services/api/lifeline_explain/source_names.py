@@ -33,6 +33,8 @@ ORGS: dict[str, str] = {
     "postcodes": "postcodes.io",
     "sim": "Penny game",
     "engine": "Penny engine",
+    "trading212": "Trading 212",
+    "illustrative": "Illustrative past returns, not a forecast",
 }
 
 SERIES: dict[str, str] = {

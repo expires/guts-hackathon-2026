@@ -36,6 +36,8 @@ ToolName = Literal[
     "fx_convert",
     "forecast",
     "forecast_what_if",
+    "my_investments",
+    "mix_history",
 ]
 TOOL_NAMES: frozenset[str] = frozenset(get_args(ToolName))
 # Names the ChatResponse contract accepts in `tool_calls` (BOSS adds the ADR 0060 names; until then the extra tools
@@ -48,7 +50,7 @@ CLIENT_TOOL_NAMES: frozenset[str] = TOOL_NAMES - SERVER_TOOL_NAMES
 # Tools that read the user's own money. Not offered without user data or on the onboarding chat (ADR 0063).
 PERSONAL_TOOL_NAMES: frozenset[str] = frozenset({
     "next_move", "test_move", "finance_summary", "spend_prediction", "cash_flow_projection", "life_replay",
-    "user_balance", "habit_score", "forecast", "forecast_what_if",
+    "user_balance", "habit_score", "forecast", "forecast_what_if", "my_investments", "mix_history",
 })  # fmt: skip
 
 

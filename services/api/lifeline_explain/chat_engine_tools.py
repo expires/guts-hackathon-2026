@@ -22,6 +22,7 @@ from lifeline_contracts.forecast import Forecast, WhatIfChange, WhatIfResult
 from lifeline_contracts.macro import MacroTable
 from lifeline_contracts.next_move import NextMoveResponse
 from lifeline_contracts.observation import Observation
+from lifeline_engine import portfolio
 from lifeline_explain import forecast_tool
 from lifeline_explain.chat_tools import PERSONAL_TOOL_NAMES, ToolInputError, ToolOutput, ToolSpec, source_key
 from lifeline_explain.official import with_official_sources
@@ -112,6 +113,16 @@ BOE_RATES_DESCRIPTION = (
     "Live Bank of England rates: Bank Rate, average savings rate, average mortgage rates (2-year and 5-year fixed, "
     "tracker, standard variable) and the average credit card rate. Returns each latest value and month as facts."
 )
+MY_INVESTMENTS_DESCRIPTION = (
+    "The user's own Trading 212 investments, to describe and explain, never to recommend: total and invested value, "
+    "every holding with its value and share of the investments, the mix by asset class and by region, and how "
+    "concentrated it is (biggest holding, top 3). Use it for 'what am I invested in', 'am I diversified'."
+)
+MIX_HISTORY_DESCRIPTION = (
+    "Education: how the user's current mix of shares, bonds and cash compares with all shares, 80/20 and 60/40 in "
+    "the 2008 crisis, the 2020 Covid crash and the 2022 rate rises: biggest fall and months to recover. Illustrative "
+    "past returns, not a forecast: always say so."
+)
 EVENT_CHOICES_DESCRIPTION = (
     "For the open Life event the user is looking at: project each choice a few years ahead with the same seed. "
     "Returns end net worth, net worth change, cost, missed payments and Index per choice."
@@ -145,6 +156,7 @@ class EngineToolSet:
         life_id_prefix: str = "chat",
         forecast: ForecastFn | None = None,
         what_if: WhatIfFn | None = None,
+        returns: portfolio.ReturnSeries | None = None,
     ) -> None:
         from lifeline_engine import tools as et
 
@@ -203,6 +215,13 @@ class EngineToolSet:
         if what_if is not None:
             self._inputs["forecast_what_if"] = WhatIfInput
             self._descriptions["forecast_what_if"] = forecast_tool.WHAT_IF_DESCRIPTION
+        if snapshot is not None and any(h.value > 0 for h in snapshot.holdings):
+            self._inputs["my_investments"] = NoInput
+            self._descriptions["my_investments"] = MY_INVESTMENTS_DESCRIPTION
+            if returns is not None:
+                self._inputs["mix_history"] = NoInput
+                self._descriptions["mix_history"] = MIX_HISTORY_DESCRIPTION
+        self.returns = returns
         if not self.has_user_data:
             self._drop_personal_tools()  # onboarding: nothing personal to look up, so nothing to claim
 
@@ -247,7 +266,9 @@ class EngineToolSet:
         labels = {"boe_rates": "Checking Bank of England rates\u2026", "user_balance": "Checking your balance\u2026",
                   "habit_score": "Checking your habits\u2026", "inflation": "Checking inflation\u2026",
                   "fx_convert": "Checking exchange rates\u2026", "forecast": forecast_tool.STEP_LABEL,
-                  "forecast_what_if": forecast_tool.WHAT_IF_STEP_LABEL}  # fmt: skip
+                  "forecast_what_if": forecast_tool.WHAT_IF_STEP_LABEL,
+                  "my_investments": "Reading your investments\u2026",
+                  "mix_history": "Replaying past periods\u2026"}  # fmt: skip
         if name in labels:
             return labels[name]
         if name == "life_replay":
@@ -307,6 +328,10 @@ class EngineToolSet:
             return await asyncio.to_thread(self._balance)
         if name == "habit_score":
             return await asyncio.to_thread(self._habits)
+        if name == "my_investments":
+            return await asyncio.to_thread(self._my_investments)
+        if name == "mix_history":
+            return await asyncio.to_thread(self._mix_history)
         try:
             result = await asyncio.to_thread(self._run_sync, name, inp)
         except (ValueError, KeyError) as exc:
@@ -469,6 +494,76 @@ class EngineToolSet:
             facts.append(ChatFact(id="habit.overall", value=float(hs.overall), unit="count",
                                   label="Habit score: overall (0 to 100)", source_id=sid))  # fmt: skip
         return ToolOutput(result=hs.model_dump(), facts=facts, sources=[ref], raw=hs)
+
+    def _my_investments(self) -> ToolOutput:
+        desc = portfolio.describe(self.snapshot.holdings)
+        if desc is None:
+            raise ToolInputError("No investments to describe")
+        ref = SourceRef(source="trading212", series_id="holdings", status="live")
+        sid = source_key(ref)
+        facts: list[ChatFact] = []
+
+        def add(key: str, value: float, unit: Any, label: str) -> None:
+            facts.append(ChatFact(id=f"invest.{key}", value=round(value, 2), unit=unit, label=label[:120],
+                                  source_id=sid))  # fmt: skip
+
+        add("total", desc.total, "gbp", "Total value of your investments")
+        add("count", desc.count, "count", "Number of holdings")
+        add("top1_pct", desc.top1_pct, "percent", "Biggest holding, share of investments")
+        if desc.top3_pct is not None:
+            add("top3_pct", desc.top3_pct, "percent", "Top 3 holdings, share of investments")
+            add("top3_n", 3, "count", "Holdings in the top group")
+        for i, h in enumerate(desc.holdings, 1):
+            add(f"h{i}.value", h.value, "gbp", f"{h.name}: value")
+            add(f"h{i}.pct", h.share_pct, "percent", f"{h.name}: share of investments")
+        for cls, pct in desc.by_class:
+            add(f"class.{cls}", pct, "percent", f"{portfolio.ASSET_LABELS.get(cls, cls).capitalize()}: share")
+        for region, pct in desc.by_region:
+            add(f"region.{region.lower().replace(' ', '_')}", pct, "percent", f"{region}: share of investments")
+        result = {
+            "total_value": desc.total,
+            "holdings_count": desc.count,
+            "holdings": [{"name": h.name, "value": h.value, "share_pct": h.share_pct} for h in desc.holdings],
+            "mix_by_asset_class": [
+                {"asset_class": portfolio.ASSET_LABELS.get(c, c), "share_pct": p} for c, p in desc.by_class
+            ],
+            "mix_by_region": [{"region": r, "share_pct": p} for r, p in desc.by_region],
+            "concentration": desc.note,
+            "note": "Describe only. Never say to buy, sell or hold anything or to reach a target mix.",
+        }
+        return ToolOutput(result=result, facts=facts, sources=[ref], raw=desc)
+
+    def _mix_history(self) -> ToolOutput:
+        if self.returns is None:
+            raise ToolInputError("History is not available")
+        periods = portfolio.mix_history(self.snapshot.holdings, self.returns)
+        if not periods:
+            raise ToolInputError("No investments to replay")
+        ref = SourceRef(source="illustrative", series_id="returns_monthly", status="mock", note=portfolio.HISTORY_LABEL)
+        sid = source_key(ref)
+        facts: list[ChatFact] = []
+        rows: list[dict[str, Any]] = []
+        for p in periods:
+            facts.append(ChatFact(id=f"mixhist.{p.key}.year", value=p.year, unit="date_year",
+                                  label=f"Year: {p.label}"[:120], source_id=sid))  # fmt: skip
+            for m in p.mixes:
+                base = f"mixhist.{p.key}.{m.key}"
+                facts.append(ChatFact(id=f"{base}.drop", value=m.biggest_drop_pct, unit="percent",
+                                      label=f"{m.label}: biggest fall in {p.label}"[:120], source_id=sid))  # fmt: skip
+                if m.recovery_months is not None:
+                    facts.append(ChatFact(id=f"{base}.recovery", value=m.recovery_months, unit="months",
+                                          label=f"{m.label}: months to recover in {p.label}"[:120],
+                                          source_id=sid))  # fmt: skip
+                rows.append({
+                    "period": p.label, "mix": m.label, "biggest_fall_pct": m.biggest_drop_pct,
+                    "months_to_recover": m.recovery_months, "recovered": m.recovery_months is not None,
+                })  # fmt: skip
+        result = {
+            "label": portfolio.HISTORY_LABEL,
+            "results": rows,
+            "note": "Say 'illustrative past returns, not a forecast'. Describe only; never recommend a mix.",
+        }
+        return ToolOutput(result=result, facts=facts, sources=[ref], raw=periods)
 
     async def _fx(self, inp: FxConvertInput) -> ToolOutput:
         assert self.fx is not None

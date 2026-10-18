@@ -227,6 +227,8 @@ STEP_LABELS: dict[str, str] = {
     "web_search": "Searching the web\u2026",
     "forecast": "Checking your forecast\u2026",
     "forecast_what_if": "Trying your what-if\u2026",
+    "my_investments": "Reading your investments\u2026",
+    "mix_history": "Replaying past periods\u2026",
 }
 
 
@@ -344,7 +346,7 @@ def source_group(tool: str, ref: SourceRef) -> SourceGroup:
     src = ref.source.lower()
     if tool == "facts_table" or src in {"facts_table", "gov.uk", "govuk"}:
         return "general_knowledge"
-    if src.startswith(("bank", "user", "statement", "profile", "finance", "sim", "store")):
+    if src.startswith(("bank", "user", "statement", "profile", "finance", "sim", "store", "trading212")):
         return "your_data"
     return "live_sources"
 
@@ -1811,11 +1813,42 @@ def _tickers(text: str) -> bool:
     )
 
 
+# Questions about the user's OWN portfolio (describe, explain, history): let them through to the LLM and its
+# investment tools. Anything that asks what to buy, sell or hold still gets the fixed refusal.
+_OWN_PORTFOLIO = re.compile(
+    r"\b(do i (hold|own|have)|am i (invested|holding|diversified|exposed)|i(?:'m| am) (invested|holding)|"
+    r"my (portfolio|holdings?|allocation|mix|investments?|stocks?|shares|funds?|trading ?212|split|"
+    r"diversification|exposure)|how (diversified|concentrated))\b"
+)
+_ADVICE_ASK = re.compile(
+    r"\b(should|shall|best|recommend\w*|advise|advice|worth buying|to buy|to sell|to invest|buy|sell|short|"
+    r"put (more )?(in|into)|top up|which .{0,20} (get|pick|choose))\b"
+)
+_COMPANIES = r"tesla|nvidia|microsoft|alphabet|gamestop|amazon|apple|meta|google|bitcoin|btc|ethereum"
+_ADVICE_ASKS = [
+    re.compile(rf"\bshould i (buy|sell|short|dump|hold|keep|top up|add to)\b[^.?]*\b({_COMPANIES})\b"),
+    re.compile(rf"\bhow much (should|do) i (put|invest|add|move|hold|allocate)\b[^.?]*\b({_COMPANIES})\b"),
+    re.compile(r"\b(what|where) should i invest\b"),
+    re.compile(
+        r"\bshould i (buy|sell|short|hold|keep|dump|top up|add to|trim|reduce|increase)\b[^.?]*"
+        r"\b(holdings?|positions?|biggest|largest|more of)\b"
+    ),
+    re.compile(
+        r"\bhow much (should|do) i (put|invest|add|move|hold|allocate)\b[^.?]*\b(in|into|on)\b[^.?]*"
+        r"\b(shares?|stocks?|equit(y|ies)|bonds?|funds?|etfs?|crypto\w*)\b"
+    ),
+]
+
+
 def out_of_scope_rule(message: str) -> bool:
     """Deterministic refusal (stock picks, regulated advice), before any LLM call. All 8 app languages."""
     msg = _norm(message)
     if any(r.search(msg) for r in _OOS_RULES[-1:]):
         return True  # regulated advice
+    if any(r.search(msg) for r in _ADVICE_ASKS):
+        return True  # what to buy, sell or hold, or how much to put in
+    if _OWN_PORTFOLIO.search(msg) and not _ADVICE_ASK.search(msg):
+        return _tickers(message)  # describing their own portfolio is allowed (Penny's investment tools)
     if any(r.search(msg) for r in _OOS_RULES[:-1]) and _pick_context(msg):
         return True
     for sentence in intl.SENTENCES.split(msg):
@@ -1824,12 +1857,35 @@ def out_of_scope_rule(message: str) -> bool:
     return _tickers(message)
 
 
+# Output check: advice to hold, keep or move to a target mix, or to hold a named asset.
+_PRESCRIBES = re.compile(
+    r"\b(you should|you ought to|you need to|i('d| would) (suggest|recommend|advise)|aim for|aim to|target|"
+    r"better off|best to|try to|consider)\b[^.]*\b(hold|keep|move|shift|switch|put|have|own|rebalance|allocate|"
+    r"increase|reduce|cut|trim|add)\b[^.]*\d+ ?(%|percent|per cent)|"
+    r"\b(rebalance|reallocate|shift|move|moving|shifting|switch|switching)\b[^.]*"
+    r"\b(to|towards|into) (a )?\d+ ?(/|%|percent|per cent)|"
+    r"\b(suggest|recommend|advise)\w*\b[^.]*\d+ ?(%|percent|per cent)[^.]*\b(shares?|bonds?|equit\w+|stocks?|cash|mix|"
+    r"allocation|portfolio)\b|"
+    r"\b(a|an|the) \d+ ?/ ?\d+ (split|mix|portfolio|allocation)\b[^.]*\b(is|would be|will be) (best|right|ideal|"
+    r"better|what you should)"
+)
+_SELL_NAMED = re.compile(
+    r"\b(buy|sell|short|dump)\b[^.]*\b(tesla|nvidia|microsoft|alphabet|gamestop|bitcoin|btc|ethereum|dogecoin|solana|xrp)\b"
+)
+_HOLD_NAMED = re.compile(
+    rf"\b(you should|i('d| would) (suggest|recommend)|best to|hold on to|stick with|keep holding)\b"
+    rf"[^.]*\b(your |the |more |some )?({_NAMED_ASSETS})\b"
+)
+
+
 def gives_pick(text: str) -> bool:
     """True when an answer tells the user to buy or sell a named share, fund, ETF, coin or ticker, in any of the
     8 app languages. Brand names and tickers are language-neutral."""
     msg = _ISA_NAMES.sub("cash savings", _norm(text))
     if _PICK_OUT.search(msg) and _pick_context(msg):
         return True
+    if _SELL_NAMED.search(msg) or _PRESCRIBES.search(msg) or (_HOLD_NAMED.search(msg) and _pick_context(msg)):
+        return True  # a target allocation ("you should hold 60% bonds") or "keep your Tesla"
     for sentence in intl.SENTENCES.split(msg):
         named = re.search(rf"\b({_NAMED_ASSETS})\b", sentence) or intl.NAMED_LOCAL.search(sentence)
         if named and intl.PICK_VERBS.search(sentence):
