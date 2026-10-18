@@ -262,6 +262,7 @@ final class AppRouter {
                 group.addTask { await client.refresh(CachedOps.subscriptions) }
                 group.addTask { await client.refresh(CachedOps.budgets) }
                 group.addTask { await client.refresh(CachedOps.goals) }
+                group.addTask { await client.refresh(CachedOps.forecast) }  // the Money card (ADR 0072)
             }
         }
     }

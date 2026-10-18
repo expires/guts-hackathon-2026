@@ -15,7 +15,9 @@ struct MoneyWidgetsView: View {
             case .accounts:
                 section(state.overview, id: "accounts") { AccountsCard(overview: $0) }
             case .netWorth:
-                section(state.overview, id: "overview") { NetWorthCard(overview: $0) }
+                if state.overview.value?.showsNetWorth != false {
+                    section(state.overview, id: "overview") { NetWorthCard(overview: $0) }
+                }
                 section(state.overview, id: "accounts") { AccountsCard(overview: $0) }
             case .all:
                 section(state.spending, id: "spending") { SpendingSummary(spending: $0) }

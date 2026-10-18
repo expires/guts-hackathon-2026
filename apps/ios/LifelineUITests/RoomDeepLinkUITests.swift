@@ -65,4 +65,44 @@ final class RoomDeepLinkUITests: XCTestCase {
         attachScreenshot("Deep link, cold start")
         XCTAssertTrue(opened, "The join link must open the room cover from a cold start")
     }
+
+    /// Host: Play with friends, then Pick a game. Quick Life is first; one tap on a student picks it and
+    /// returns to the lobby. With 2 or more players the Start button turns on without any "ready".
+    @MainActor
+    func testHostPicksQuickLifeStudentInOneTap() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestingMock"]
+        app.launch()
+        let play = app.buttons["tab.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        play.tap()
+        let friends = app.buttons["play.friends"]
+        XCTAssertTrue(friends.waitForExistence(timeout: 10))
+        friends.tap()
+
+        let pick = app.buttons["room.pickGame"]
+        XCTAssertTrue(pick.waitForExistence(timeout: 15))
+        pick.tap()
+        let quick = app.buttons["picker.game.quick_life"]
+        let quiz = app.buttons["picker.game.quiz"]
+        XCTAssertTrue(quick.waitForExistence(timeout: 10))
+        XCTAssertLessThan(quick.frame.minY, quiz.frame.minY, "Quick Life must be first")
+        XCTAssertFalse(app.buttons["picker.game.same_decision"].exists, "Same Decision is cut")
+        attachScreenshot("Picker: games")
+
+        quick.tap()
+        let jordan = app.buttons["picker.student.qs-jordan"]
+        XCTAssertTrue(jordan.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["picker.year"].exists, "Quick Life has no year step")
+        attachScreenshot("Picker: Quick Life students")
+        jordan.tap()
+
+        let start = app.buttons["room.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        let enabled = NSPredicate(format: "isEnabled == true")
+        expectation(for: enabled, evaluatedWith: start)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(app.descendants(matching: .any)["room.game"].label.contains("Quick Life"))
+        attachScreenshot("Lobby: host, Quick Life")
+    }
 }

@@ -184,7 +184,7 @@ final class YouViewModel {
             profile: mapped,
             personalFacts: profile?.personalFacts.map(\.text) ?? [],
             bankText: isSample
-                ? L10n.tr("Not connected. The Money tab shows sample data.")
+                ? L10n.tr("Not connected. The Money tab shows a sample statement.")
                 : L10n.tr("Connected. The Money tab uses your bank data."),
             clientText: clientKind.rawValue,
             versionText: versionText,

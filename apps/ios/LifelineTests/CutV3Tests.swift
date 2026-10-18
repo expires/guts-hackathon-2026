@@ -88,4 +88,68 @@ struct CutV3Tests {
         await model.setBuffer(7)
         #expect(model.state.buffer?.selected == target, "Only 0, 5, 10, 15 or 20")
     }
+
+    // MARK: No "Mock data" or "Sample data" text (PENNY_V3_BUILD B4, G4, G5)
+
+    /// Files that may still hold the phrase: cut screens behind `FeatureFlags.showsCutFeatures`, debug-only
+    /// screens, previews and fixtures, and code that only reads the server's `meta.label`.
+    static let allowedPaths = [
+        "/Features/Debug/", "/Features/Playground/", "/Preview/", "Fixtures.swift", "/Mock/", "Recorded.swift",
+        // Cut (F1, B4): Guess my spend, its accuracy check and the old Why? screen.
+        "/Features/Home/Views/GuessSpendView.swift", "/Features/Home/Views/SpendAccuracyView.swift",
+        "/Features/Home/ViewModels/NextMoveWhyViewModel.swift",
+        // Reads `meta.label` from the server; returns a Bool to callers, never shown.
+        "/Features/Home/ViewModels/FinanceMapping.swift",
+    ]
+
+    static var phrase: Regex<AnyRegexOutput> { try! Regex("(?i)(mock|sample) data") }
+
+    static func appRoot(file: StaticString = #filePath) -> URL {
+        URL(fileURLWithPath: "\(file)").deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Lifeline")
+    }
+
+    /// Every string literal in app Swift code outside comments and allowed paths, with "file:line".
+    static func literals() -> [(place: String, literal: String)] {
+        let root = appRoot()
+        guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [] }
+        var found: [(String, String)] = []
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let path = url.path
+            if allowedPaths.contains(where: { path.contains($0) }) { continue }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            for (number, line) in text.components(separatedBy: "\n").enumerated() {
+                let code = line.trimmingCharacters(in: .whitespaces)
+                if code.hasPrefix("//") { continue }
+                let beforeComment = code.components(separatedBy: " //").first ?? code
+                for literal in beforeComment.matches(of: /"[^"]*"/) {
+                    found.append(("\(path.replacingOccurrences(of: root.path, with: "")):\(number + 1)", String(literal.output)))
+                }
+            }
+        }
+        return found
+    }
+
+    static func phraseHits() -> [String] {
+        literals().filter { $0.literal.contains(phrase) }.map { "\($0.place) \($0.literal)" }
+    }
+
+    @Test func noMockOrSampleDataTextInTheApp() {
+        #expect(Self.literals().count > 1000, "The test reads the app source tree on the host")
+        let hits = Self.phraseHits()
+        #expect(hits.isEmpty, "User-facing \"Mock data\" or \"Sample data\": \(hits.joined(separator: "; "))")
+    }
+
+    /// String catalog keys with the phrase must not be used by app code. The honesty line ("sample students",
+    /// "sample statements") does not match.
+    @Test func noCatalogKeyWithMockOrSampleDataIsUsed() throws {
+        let catalog = Self.appRoot().appendingPathComponent("Resources/Localizable.xcstrings")
+        let data = try Data(contentsOf: catalog)
+        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try #require(json["strings"] as? [String: Any])
+        let keys = strings.keys.filter { $0.contains(Self.phrase) }
+        #expect(!YouViewModel.honestyLine.contains(Self.phrase))
+        let keySet = Set(keys.map { "\"\($0)\"" })
+        let used = Self.literals().filter { keySet.contains($0.literal) }.map { "\($0.place) \($0.literal)" }
+        #expect(used.isEmpty, "Catalog keys still used: \(used.joined(separator: "; "))")
+    }
 }

@@ -116,7 +116,6 @@
 		51D6B92DB32210EAE92180D9 /* RoomLobbyViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D270B112CC4B17310C9A4A3 /* RoomLobbyViewModel.swift */; };
 		52D3888BEA7695AE8448B7B7 /* LifeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5EC4078CF171241AAEEF859 /* LifeScreen.swift */; };
 		534CC36DE321ED2CD92E7CB6 /* NextMoveViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A3D1B9D23009F5742EE43A /* NextMoveViewState.swift */; };
-		549E8D11D18286791E3AA68C /* ZZRoomShotsTemp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45930C8F3160C1C08794D141 /* ZZRoomShotsTemp.swift */; };
 		54A98B083019CE2F0423672F /* PeopleTabViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8492C82BDE5A0B8216EC585C /* PeopleTabViewState.swift */; };
 		54F2CCF6E8A3197882891F6F /* PlanViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7147C3403FF87EA391B5C043 /* PlanViewState.swift */; };
 		55F13DDB9192064D1A5E4792 /* LifeViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F9C4CDDECDFE7AD16AABDA /* LifeViewState.swift */; };
@@ -173,6 +172,7 @@
 		781C8F9F7440F2D25B203FFF /* listSources.json in Resources */ = {isa = PBXBuildFile; fileRef = EE7E5AA8DA8ACADED06AAD2B /* listSources.json */; };
 		787C6ECE4AC88EBBC2AF3466 /* LiveDataStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00FFC5C318E889BA61E47F74 /* LiveDataStateTests.swift */; };
 		7894E38E251840E8C211B1AE /* CharacterSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17FF1359CC9F87C43E9AED4E /* CharacterSelectView.swift */; };
+		79843A90FA1E847BC3BCD376 /* NoMockTextUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF691ADD08195CFCFCD71E9 /* NoMockTextUITests.swift */; };
 		7A359719F4CEF1E8705E94E9 /* MockRoomTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511E099FF17B1B5C73F2CB2C /* MockRoomTransport.swift */; };
 		7A5A05EB980455B0A52B15BA /* LLTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48533C77F4CD2815B0330A3 /* LLTabBar.swift */; };
 		7AA99007FEC8BBA92487EA8C /* ForecastMathsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9E76E49EAE524DE56AD7A6 /* ForecastMathsViewModel.swift */; };
@@ -483,7 +483,6 @@
 		419D8B60DA1503F3EE06B794 /* OFL-AtkinsonHyperlegible.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-AtkinsonHyperlegible.txt"; sourceTree = "<group>"; };
 		4393519D6D1C111338362753 /* RoomsChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomsChrome.swift; sourceTree = "<group>"; };
 		44D3E0A5B8535EF2572BAE21 /* MoneyHomeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyHomeUITests.swift; sourceTree = "<group>"; };
-		45930C8F3160C1C08794D141 /* ZZRoomShotsTemp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZZRoomShotsTemp.swift; sourceTree = "<group>"; };
 		463877DC01A33D92EE915B3D /* PennyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PennyService.swift; sourceTree = "<group>"; };
 		46FEB6EDB96092FC563117BC /* RoomSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSessionTests.swift; sourceTree = "<group>"; };
 		477DBF8AF70A5D6621298CCA /* PennyContextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PennyContextTests.swift; sourceTree = "<group>"; };
@@ -532,6 +531,7 @@
 		5EEDEDE75F1A26DEE88F0B5E /* ActionTabSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionTabSupport.swift; sourceTree = "<group>"; };
 		5F909E37AFAF35510113E114 /* RewindFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewindFixtures.swift; sourceTree = "<group>"; };
 		5FD1135E7975F1E0BDB00E56 /* GalleryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryViewModel.swift; sourceTree = "<group>"; };
+		5FF691ADD08195CFCFCD71E9 /* NoMockTextUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoMockTextUITests.swift; sourceTree = "<group>"; };
 		60B405D3263A4E007D47A575 /* Brand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brand.swift; sourceTree = "<group>"; };
 		61048391A3DA557BA4FF735A /* RoomFlowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomFlowViewModel.swift; sourceTree = "<group>"; };
 		61681E0C85C5BBED391877E5 /* NextMoveWhyScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextMoveWhyScreen.swift; sourceTree = "<group>"; };
@@ -1038,7 +1038,6 @@
 				6563BEB816308822C7DB14EF /* RoomFlowTests.swift */,
 				46FEB6EDB96092FC563117BC /* RoomSessionTests.swift */,
 				8596103A0B88ADB7E1358FC6 /* RoomTestSupport.swift */,
-				45930C8F3160C1C08794D141 /* ZZRoomShotsTemp.swift */,
 			);
 			path = Rooms;
 			sourceTree = "<group>";
@@ -1348,6 +1347,7 @@
 			children = (
 				BA85791431FABDB748EE4008 /* CoreFlowUITests.swift */,
 				44D3E0A5B8535EF2572BAE21 /* MoneyHomeUITests.swift */,
+				5FF691ADD08195CFCFCD71E9 /* NoMockTextUITests.swift */,
 				DDF9AC3ECEE719EA99F73E4A /* OnboardingUITests.swift */,
 				A96BAE2878D117339C4D9665 /* PennyUITests.swift */,
 				21CF4BF50683B00A308216D7 /* PlayCutUITests.swift */,
@@ -2448,7 +2448,6 @@
 				F3B4E3A73219B7D6E557BA24 /* TestItViewModelTests.swift in Sources */,
 				737B00EBCBA8357B84A98BED /* TradeOffTests.swift in Sources */,
 				9190A07DD6995EA0BD754337 /* WeeklyBudgetTests.swift in Sources */,
-				549E8D11D18286791E3AA68C /* ZZRoomShotsTemp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2458,6 +2457,7 @@
 			files = (
 				B9ABA383B0022EDFC24EF59E /* CoreFlowUITests.swift in Sources */,
 				C7980962832F76C3203CB1FA /* MoneyHomeUITests.swift in Sources */,
+				79843A90FA1E847BC3BCD376 /* NoMockTextUITests.swift in Sources */,
 				9F9402775EC417CD89C92E7B /* OnboardingUITests.swift in Sources */,
 				76C52FA7B79A4594AC5839D3 /* PennyUITests.swift in Sources */,
 				F1C60B7F483B6058B7DA5715 /* PlayCutUITests.swift in Sources */,

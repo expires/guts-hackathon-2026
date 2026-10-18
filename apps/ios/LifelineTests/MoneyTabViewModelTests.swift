@@ -349,7 +349,7 @@ struct MoneyTabViewModelTests {
         #expect(profile.detail == "Age 34 · Working · Renting")
         #expect(profile.housingText == "Renting")
         #expect(model.state.personalFacts == ["You spend £47 a month on 6 subscriptions."])
-        #expect(model.state.bankText == "Not connected. The Money tab shows sample data.")
+        #expect(model.state.bankText == "Not connected. The Money tab shows a sample statement.")
         var route: YouViewModel.Route?
         model.onRoute = { route = $0 }
         model.actions.onConnectBank()
