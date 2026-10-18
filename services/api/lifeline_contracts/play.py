@@ -20,7 +20,7 @@ class _M(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-RoomGame = Literal["quiz", "same_decision", "same_life"]
+RoomGame = Literal["quiz", "same_decision", "same_life", "quick_life"]
 
 
 # ---------- student paths and Quick Life ----------
@@ -59,6 +59,47 @@ class GameOptions(_M):
     start_year: int | None = Field(default=None, ge=1990, le=2026, description="Same Life / Same Decision history year")
     questions: int = Field(default=8, ge=3, le=15, description="Money Quiz length")
     topic: Literal["mixed", "student_finance", "saving", "debt", "tax"] = "mixed"
+
+
+# ---------- Quick Life (ADR 0074) ----------
+
+
+class QuickChoice(_M):
+    id: ShortId
+    label: str = Field(max_length=80)
+
+
+class QuickQuestion(_M):
+    """One preset question at one age; the same 5 for everyone in the room. Choices are shuffled per question."""
+
+    id: ShortId
+    index: int = Field(ge=0, le=4)
+    total: int = Field(default=5, ge=1, le=5)
+    age: int = Field(ge=18, le=25)
+    title: str = Field(max_length=80)
+    text: str = Field(max_length=300)
+    choices: list[QuickChoice] = Field(min_length=3, max_length=3)
+
+
+class QuickFeedback(_M):
+    """Sent to the player who answered, right after the answer: points and one sentence with the real number."""
+
+    question_id: ShortId
+    choice_id: ShortId
+    points: Literal[0, 10, 20]
+    line: str = Field(max_length=160, description="e.g. '+20. A Railcard saves about £65 a year.'")
+    score: int = Field(ge=0, le=100, description="Score so far")
+
+
+class QuickPlayerResult(_M):
+    player_id: str
+    name: str
+    score: int = Field(ge=0, le=100, description="Finance skill score out of 100")
+    game_money: float = Field(description="Game money at 25; only the tiebreak")
+    rank: int = Field(ge=1)
+    best_line: str | None = Field(default=None, max_length=160)
+    worst_line: str | None = Field(default=None, max_length=160)
+    left: bool = False
 
 
 # ---------- Money Quiz ----------

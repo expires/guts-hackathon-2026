@@ -299,3 +299,87 @@ WHAT_IF_ACK: dict[Lang, str] = {
     "hi": "मैं इस बदलाव के साथ आपका पूर्वानुमान फिर से निकालती हूँ।",
     "ne": "म यो परिवर्तनसहित तपाईंको पूर्वानुमान फेरि निकाल्छु।",
 }
+
+
+# ADR 0073: one friendly line for a question outside money and student life. Two money chips follow it.
+OFF_TOPIC: dict[Lang, str] = {
+    "en": "I only help with money and student life, so I will leave that one. Here are two things I can help with.",
+    "fr": "Je n'aide que pour l'argent et la vie étudiante, je laisse donc cette question. Voici deux choses pour "
+    "lesquelles je peux aider.",
+    "es": "Solo ayudo con el dinero y la vida de estudiante, así que dejo esa pregunta. Aquí tienes dos cosas en "
+    "las que puedo ayudar.",
+    "pt": "Só ajudo com dinheiro e vida de estudante, por isso deixo essa pergunta. Aqui estão duas coisas em que "
+    "posso ajudar.",
+    "it": "Aiuto solo con i soldi e la vita da studente, quindi lascio questa domanda. Ecco due cose in cui posso "
+    "aiutarti.",
+    "zh-Hans": "我只帮忙解答钱和学生生活的问题，所以这个问题我先不回答。下面两件事我可以帮你。",
+    "hi": "मैं सिर्फ़ पैसे और छात्र जीवन में मदद करती हूँ, इसलिए यह सवाल छोड़ती हूँ। ये दो चीज़ें हैं जिनमें मैं मदद कर "
+    "सकती हूँ।",
+    "ne": "म पैसा र विद्यार्थी जीवनमा मात्र मद्दत गर्छु, त्यसैले यो प्रश्न छोड्छु। म मद्दत गर्न सक्ने दुई कुरा यी हुन्।",
+}
+
+# ADR 0073: 2 related money questions per off-topic subject (scope.Topic), in the 8 languages.
+OFF_TOPIC_CHIPS: dict[str, dict[Lang, tuple[str, str]]] = {
+    "homework": {
+        "en": ("How much should I budget for books?", "Can I get help with study costs?"),
+        "fr": ("Quel budget prévoir pour les livres ?", "Puis-je être aidé pour mes frais d'études ?"),
+        "es": ("¿Cuánto presupuesto para libros?", "¿Hay ayudas para gastos de estudio?"),
+        "pt": ("Quanto devo reservar para livros?", "Há ajuda para custos de estudo?"),
+        "it": ("Quanto mettere a budget per i libri?", "Ci sono aiuti per i costi di studio?"),
+        "zh-Hans": ("买书应该预算多少？", "学习费用能得到资助吗？"),
+        "hi": ("किताबों के लिए कितना बजट रखूँ?", "क्या पढ़ाई के ख़र्च में मदद मिल सकती है?"),
+        "ne": ("किताबका लागि कति बजेट राखूँ?", "पढाइ खर्चमा सहयोग पाइन्छ?"),
+    },
+    "code": {
+        "en": ("Can I get a student laptop discount?", "How do I budget for tech?"),
+        "fr": ("Y a-t-il des réductions étudiantes sur les ordinateurs ?", "Comment budgéter mon matériel ?"),
+        "es": ("¿Hay descuentos de estudiante en portátiles?", "¿Cómo presupuesto la tecnología?"),
+        "pt": ("Há desconto de estudante em portáteis?", "Como faço orçamento para tecnologia?"),
+        "it": ("Ci sono sconti studenti sui portatili?", "Come metto a budget la tecnologia?"),
+        "zh-Hans": ("买笔记本电脑有学生折扣吗？", "电子产品应该怎么做预算？"),
+        "hi": ("क्या लैपटॉप पर छात्र छूट मिलती है?", "टेक के लिए बजट कैसे बनाऊँ?"),
+        "ne": ("ल्यापटपमा विद्यार्थी छुट पाइन्छ?", "प्रविधिका लागि बजेट कसरी बनाउने?"),
+    },
+    "celebrity": {
+        "en": ("How much should I spend on going out?", "How can I save on subscriptions?"),
+        "fr": ("Combien dépenser pour les sorties ?", "Comment économiser sur les abonnements ?"),
+        "es": ("¿Cuánto debería gastar en salir?", "¿Cómo ahorro en suscripciones?"),
+        "pt": ("Quanto devo gastar em saídas?", "Como poupar em assinaturas?"),
+        "it": ("Quanto spendere per uscire?", "Come risparmio sugli abbonamenti?"),
+        "zh-Hans": ("出去玩应该花多少钱？", "怎样在订阅上省钱？"),
+        "hi": ("बाहर घूमने पर कितना ख़र्च करूँ?", "सब्सक्रिप्शन पर पैसे कैसे बचाऊँ?"),
+        "ne": ("घुमफिरमा कति खर्च गर्ने?", "सदस्यतामा पैसा कसरी बचाउने?"),
+    },
+    "food": {
+        "en": ("How can I spend less on food?", "How do I budget for groceries?"),
+        "fr": ("Comment dépenser moins pour manger ?", "Comment budgéter mes courses ?"),
+        "es": ("¿Cómo gasto menos en comida?", "¿Cómo presupuesto la compra?"),
+        "pt": ("Como gastar menos com comida?", "Como faço orçamento para compras?"),
+        "it": ("Come spendo meno per il cibo?", "Come metto a budget la spesa?"),
+        "zh-Hans": ("怎样在吃饭上少花钱？", "买菜应该怎么做预算？"),
+        "hi": ("खाने पर कम ख़र्च कैसे करूँ?", "राशन का बजट कैसे बनाऊँ?"),
+        "ne": ("खानामा कम खर्च कसरी गर्ने?", "किराना सामानको बजेट कसरी बनाउने?"),
+    },
+    "general": {
+        "en": ("How much can I spend this week?", "How does my student loan work?"),
+        "fr": ("Combien puis-je dépenser cette semaine ?", "Comment marche mon prêt étudiant ?"),
+        "es": ("¿Cuánto puedo gastar esta semana?", "¿Cómo funciona mi préstamo estudiantil?"),
+        "pt": ("Quanto posso gastar esta semana?", "Como funciona o meu empréstimo estudantil?"),
+        "it": ("Quanto posso spendere questa settimana?", "Come funziona il mio prestito studentesco?"),
+        "zh-Hans": ("这周我能花多少钱？", "我的学生贷款是怎么运作的？"),
+        "hi": ("इस हफ़्ते मैं कितना ख़र्च कर सकता हूँ?", "मेरा स्टूडेंट लोन कैसे काम करता है?"),
+        "ne": ("यो हप्ता म कति खर्च गर्न सक्छु?", "मेरो विद्यार्थी ऋण कसरी काम गर्छ?"),
+    },
+}
+
+# ADR 0074: the fallback when every sentence of an answer named the engine's internal index.
+NO_INDEX: dict[Lang, str] = {
+    "en": "Ask me about the game money or the choices, and I will explain them.",
+    "fr": "Demandez-moi l'argent du jeu ou les choix, et je vous les explique.",
+    "es": "Pregúntame por el dinero del juego o las opciones, y te las explico.",
+    "pt": "Pergunte-me sobre o dinheiro do jogo ou as escolhas, e eu explico.",
+    "it": "Chiedimi dei soldi del gioco o delle scelte, e te li spiego.",
+    "zh-Hans": "可以问我游戏金钱或各个选择，我来解释。",
+    "hi": "गेम मनी या विकल्पों के बारे में पूछें, मैं समझाऊँगी।",
+    "ne": "खेलको पैसा वा विकल्पबारे सोध्नुहोस्, म बुझाउँछु।",
+}

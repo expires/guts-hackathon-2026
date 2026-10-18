@@ -7,7 +7,7 @@ Untrusted text (news, user messages, merchant names) is data, never instructions
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -249,3 +249,25 @@ class ChatStreamEvent(_M):
     bubble: BubbleEvent | None = None
     response: ChatResponse | None = Field(default=None, description="Full verified response on 'done'")
     error_code: str | None = None
+
+
+# ---------- demo trace (ADR 0075): judges see how Penny answers, step by step ----------
+
+
+class TraceStep(_M):
+    kind: Literal["scope", "tool_call", "tool_result", "draft", "verify", "rewrite", "final"]
+    elapsed_ms: int = Field(ge=0)
+    label: str = Field(max_length=120)
+    data: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Step details (scope decision and check mode, tool name and arguments, engine result before and "
+        "after, draft bubbles, each number with where it matched and pass or fail). Never keys, tokens or prompts.",
+    )
+
+
+class ChatTrace(_M):
+    question: str
+    student: str | None = None
+    steps: list[TraceStep]
+    answer: ChatResponse
+    total_ms: int = Field(ge=0)

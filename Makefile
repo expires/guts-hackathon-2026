@@ -44,6 +44,9 @@ lint: ## ruff + mypy strict + AI disclosure copy in sync
 AI_DISCLOSURE = $(API)/lifeline_explain/ai_disclosure.json
 AI_DISCLOSURE_IOS = apps/ios/Lifeline/Features/You/Resources/AIDisclosure.json
 
+penny-trace: ## Demo trace of one real Penny answer on the live server: make penny-trace STUDENT=eilidh Q="..."
+	cd $(API) && uv run python ../../tools/penny_trace.py --student "$(STUDENT)" --question "$(Q)" $(if $(BASE),--base "$(BASE)",)
+
 ai-disclosure: ## Copy the "How Penny uses AI" text (W5 source) into the iOS app
 	cp $(AI_DISCLOSURE) $(AI_DISCLOSURE_IOS)
 

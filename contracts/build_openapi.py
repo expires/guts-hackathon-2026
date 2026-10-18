@@ -28,6 +28,7 @@ from lifeline_contracts import forecast as FC  # noqa: E402
 from lifeline_contracts import learn as LN  # noqa: E402
 from lifeline_contracts import next_move as N  # noqa: E402
 from lifeline_contracts import play as PL  # noqa: E402
+from lifeline_contracts import sources_hub as SH  # noqa: E402
 from lifeline_contracts.observation import Observation, SourceStatus  # noqa: E402
 
 MODELS: list[type[BaseModel]] = [
@@ -93,6 +94,8 @@ MODELS: list[type[BaseModel]] = [
     FC.Forecast,
     FC.ForecastSettings,
     FC.CategoryDetail,
+    SH.SourcesHub,
+    CH.ChatTrace,
     LN.LearnPath,
     LN.LearnLesson,
     LN.LessonAttemptRequest,
@@ -102,6 +105,9 @@ MODELS: list[type[BaseModel]] = [
     PL.CreateCircleRequest,
     PL.JoinCircleRequest,
     PL.QuizQuestion,
+    PL.QuickQuestion,
+    PL.QuickFeedback,
+    PL.QuickPlayerResult,
     PL.QuizReveal,
     PL.DecisionPrompt,
     PL.DecisionReveal,
@@ -745,6 +751,29 @@ def play_examples() -> dict[str, Any]:
             ]
         ),
         "LearnPath": learn_path,
+        "ChatTrace": CH.ChatTrace(
+            question="Can I afford a £60 concert on the 30th?",
+            student="scottish",
+            steps=[CH.TraceStep(kind="scope", elapsed_ms=3, label="Scope: money", data={"check": "strict"})],
+            answer=CH.ChatResponse.model_validate(chat_examples()["ChatAnswer"].model_dump()),
+            total_ms=2690,
+        ),
+        "SourcesHub": SH.SourcesHub(
+            summary="Penny uses your statement plus 7 live UK sources. Here is what each one does.",
+            live_count=7,
+            sources=[
+                SH.HubSource(
+                    id="boe",
+                    name="Bank of England",
+                    kind="live",
+                    status="live",
+                    gives="Interest rates for saving and borrowing.",
+                    used_in=["One thing that helps", "The maths"],
+                    latest=[SH.HubValue(label="Easy-access savings rate", value="2.06%", as_of="Sep 2026")],
+                    url="https://www.bankofengland.co.uk/boeapps/database",
+                )
+            ],
+        ),
         "Forecast": forecast_example(),
         "ForecastSettings": FC.ForecastSettings(buffer_pct=10),
         "CategoryDetail": FC.CategoryDetail(
@@ -1424,6 +1453,8 @@ def errs(*codes: str) -> dict[str, Any]:
 # True while some Tier 2 endpoints may still answer 501 not_implemented. Set False when Tier 2 is built.
 STUBS_DECLARED = True
 TIER2_OPS = {
+    "tracePenny",
+    "getSourcesHub",
     "getForecast",
     "setForecastSettings",
     "getCategoryDetail",
@@ -1946,6 +1977,36 @@ def account_paths() -> dict[str, Any]:
                         "schema": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$"},
                     },
                 ],
+            )
+        },
+        "/v1/sources/hub": {
+            "get": op(
+                "getSourcesHub",
+                "Where Penny's data comes from: one card per student-facing source (ADR 0073)",
+                "meta",
+                {**ok("SourcesHub", "SourcesHub"), **errs("401", "429")},
+                parameters=[
+                    {
+                        "name": "language",
+                        "in": "query",
+                        "required": False,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["en", "fr", "es", "pt", "it", "zh-Hans", "hi", "ne"],
+                            "default": "en",
+                        },
+                    }
+                ],
+            )
+        },
+        "/v1/chat/trace": {
+            "post": op(
+                "tracePenny",
+                "Demo trace (ADR 0075): one real Penny answer with each step, tool call, engine result and check. "
+                "Off unless PENNY_TRACE_ENABLED is set on the server",
+                "chat",
+                {**ok("ChatTrace", "ChatTrace"), **errs("401", "404", "422", "429", "503")},
+                requestBody=body("ChatRequest", "ChatAsk"),
             )
         },
         "/v1/learn": {

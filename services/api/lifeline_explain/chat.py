@@ -49,7 +49,7 @@ from lifeline_contracts.chat import (
     ToolStep,
 )
 from lifeline_contracts.domain import SourceRef
-from lifeline_explain import game_scene, i18n, learn_scene, official, prompts
+from lifeline_explain import game_scene, i18n, learn_scene, official, prompts, scope
 from lifeline_explain import safety_intl as intl
 from lifeline_explain.chat_llm import WEB_SEARCH_TOOL, AnthropicChatLLM, ChatLLM, LLMStep, ToolUse
 from lifeline_explain.chat_tools import (
@@ -66,6 +66,7 @@ from lifeline_explain.chat_tools import (
 )
 from lifeline_explain.config import ExplainSettings, has_api_key, load_settings
 from lifeline_explain.source_names import source_label
+from lifeline_explain.trace import Recorder
 from lifeline_explain.trade_off import TRADE_OFF_TOOLS, find_trade_offs, trade_off_facts, trade_off_sources
 from lifeline_explain.verifier import Found, extract_numbers, fact_matches
 
@@ -274,6 +275,7 @@ class TurnState:
     fact_tool: dict[str, str] = field(default_factory=dict)  # fact id -> tool that returned it
     scene: bool = False  # game screen with its GAME DATA loaded: answers are checked against the game numbers
     guard: game_scene.Guard | None = None  # multiplayer no-pick and open-quiz checks
+    trace: Recorder | None = None  # demo trace (ADR 0075)
 
     def app_tool_used(self) -> bool:
         return self.scene or any(c.ok and c.name in CLIENT_TOOL_NAMES for c in self.calls)
@@ -377,6 +379,7 @@ class Draft:
     summary_available: bool = False
     out_of_scope: bool = False
     suggestions: list[str] = field(default_factory=list)
+    off_topic: bool = False  # ADR 0073: outside money and student life; one fixed line and 2 money chips
 
 
 class Penny:
@@ -401,12 +404,23 @@ class Penny:
         state = TurnState(emit=emit, lang=i18n.lang_of(getattr(request, "language", "en")))
         state.onboarding = is_onboarding(request, ctx)
         state.guard = game_scene.make_guard(ctx.request_context or request.context, ctx.scene)
+        state.trace = ctx.trace if isinstance(ctx.trace, Recorder) else None
+        if state.trace is not None:
+            state.trace.message = request.message
         reason = "llm_error"
         if distress_rule(request.message):
             # Deterministic, before any LLM call: a kind reply with support contacts (ADR 0051).
+            _trace_scope(state, "support", "none", "distress rule (before the model)")
             return self._build(ids, distress_draft(state.lang), state, verified=True, mode="general")
         if out_of_scope_rule(request.message):
+            _trace_scope(state, "declined", "none", "picks or regulated advice (rule, before the model)")
             return self._build(ids, Draft("shrug", [], out_of_scope=True), state, verified=True, mode="general")
+        if scope.off_topic_rule(request.message):
+            # ADR 0073: a clear off-topic request (coding, homework answers, celebrities, recipes). No model call.
+            _trace_scope(state, "declined", "none", f"outside money and student life ({scope.topic_of(request.message)}"
+                         ", rule, before the model)")  # fmt: skip
+            return self._build(ids, off_topic_draft(request.message, state.lang), state, verified=True,
+                               mode="general")  # fmt: skip
         try:
             async with asyncio.timeout(self.settings.chat_deadline):
                 if self.llm is None:
@@ -528,7 +542,8 @@ class Penny:
             return None
         try:
             got = await asyncio.wait_for(
-                asyncio.gather(*(self._call_tool(ctx, n, args.get(n, {})) for n in names)), timeout=PRELOAD_SECONDS
+                asyncio.gather(*(self._call_tool(ctx, n, args.get(n, {}), True) for n in names)),
+                timeout=PRELOAD_SECONDS,
             )
         except TimeoutError:
             log.info("penny: preload timed out")
@@ -642,6 +657,13 @@ class Penny:
                 log.info("penny: unparseable final answer; template")
                 reason = "unparseable"
                 break
+            if state.trace is not None:
+                state.trace.draft(draft.bubbles, "off_topic" if draft.off_topic else "draft")
+            if draft.off_topic and not draft.out_of_scope:
+                # ADR 0073: the model says it is outside money and student life. No retry, no web search.
+                _trace_scope(state, "declined", "none", "outside money and student life (the model's flag)")
+                return self._build(ids, off_topic_draft(request.message, state.lang), state, verified=True,
+                                   mode="general")  # fmt: skip
             if challenged and not state.app_tool_used() and len(tools) > 1 and not nudged and not draft.out_of_scope:
                 nudged = True
                 messages.append({"role": "assistant", "content": _content(step)})
@@ -682,6 +704,10 @@ class Penny:
                         _emit(state, "verifying")
                 return self._build(ids, draft, state, verified=True, mode=chk.mode)
             log.info("penny: answer blocked (%s %s)", chk.kind, chk.bad)
+            if state.trace is not None:
+                state.trace.verify(draft.bubbles, state.facts, {**state.sources, **state.web_sources}, chk.mode,
+                                   False, chk.bad)  # fmt: skip
+                state.trace.rewrite(chk.kind or "check", chk.bad)
             if chk.kind == "unverified":
                 self._promote(ctx, state, draft)
                 if rewritten:
@@ -748,7 +774,7 @@ class Penny:
             if state.committed is not None or state.emit is None:
                 return
             m = _FIRST_BUBBLE.search(text)
-            if m is None or re.search(r'"out_of_scope"\s*:\s*true', text):
+            if m is None or re.search(r'"(out_of_scope|off_topic)"\s*:\s*true', text):
                 return
             try:
                 raw = json.loads(f'"{m.group("text")}"')
@@ -767,6 +793,8 @@ class Penny:
             kind = draft.bubbles[0][0]
             if state.guard is not None and state.guard.changes(body):
                 return  # a pick or a quiz answer: never streamed; the final answer is guarded
+            if says_index(body):
+                return  # ADR 0074: never streamed; the final answer drops the sentence
             chk = check_draft(draft, state)
             if chk.kind is not None:
                 return
@@ -811,6 +839,8 @@ class Penny:
     def _record_web(self, step: LLMStep, state: TurnState, ms: int) -> None:
         """Server web searches ran inside the model call: record them as real tool calls, after the fact."""
         for _ in range(min(step.web_searches, MAX_TOOL_CALLS)):
+            if state.trace is not None:
+                state.trace.tool_call("web_search", {"official_only": state.rules})
             _emit(state, "tool_step", tool="web_search", label=STEP_LABELS["web_search"])
             state.calls.append(ToolCall(name="web_search", ok=True, duration_ms=max(0, ms)))
         for r in step.web_results:
@@ -834,7 +864,16 @@ class Penny:
         payload = self._register(tu.name, out, state)
         return {"type": "tool_result", "tool_use_id": tu.id, "content": json.dumps(payload, ensure_ascii=False)}
 
-    async def _call_tool(self, ctx: ChatToolContext, name: str, args: Any) -> tuple[ToolOutput | None, bool, str, int]:
+    async def _call_tool(self, ctx: ChatToolContext, name: str, args: Any, preload: bool = False
+                         ) -> tuple[ToolOutput | None, bool, str, int]:  # fmt: skip
+        got = await self._call_tool_raw(ctx, name, args)
+        if isinstance(ctx.trace, Recorder):
+            ctx.trace.tool_call(name, args, preload)
+            ctx.trace.tool_result(name, got[0], got[1], got[3])
+        return got
+
+    async def _call_tool_raw(self, ctx: ChatToolContext, name: str, args: Any
+                             ) -> tuple[ToolOutput | None, bool, str, int]:  # fmt: skip
         start = time.monotonic()
         try:
             if not isinstance(args, dict) or len(json.dumps(args, default=str)) > 2000:
@@ -868,6 +907,8 @@ class Penny:
         # Drop earlier text facts that a later result shows came from untrusted text.
         state.facts = [x for x in state.facts if not is_untrusted_text_fact(x.id, state.tainted, x.value)]
         for f in out_facts:
+            if is_index_fact(f):
+                continue  # ADR 0074: the engine's internal index never reaches an answer
             if is_untrusted_text_fact(f.id, state.tainted, f.value):
                 log.info("penny: dropped fact %s (number from untrusted text)", f.id[:80])
                 continue
@@ -890,6 +931,8 @@ class Penny:
         - LLM down, timeout or error before any app tool ran: "Penny is unavailable".
         - No app tool ran but the answer failed a check: general mode, "I could not confirm that number" (V6 V2-R1).
         - Never lists web citation numbers ('web.' facts) or app data the answer did not use."""
+        if state.trace is not None:
+            state.trace.rewrite(reason, fallback=True)
         if not state.app_tool_used():
             if reason in LLM_FAILURES:
                 _emit(state, "error", error_code=reason)
@@ -923,6 +966,14 @@ class Penny:
 
     # ----- response -----
 
+    def _off_topic(self, ids: dict[str, str], draft: Draft, state: TurnState) -> ChatResponse:
+        """ADR 0073: one fixed friendly line and exactly 2 related money chips. No sources, no links."""
+        return ChatResponse(
+            thread_id=ids["thread_id"], message_id=ids["message_id"], reply_to=ids["reply_to"], reaction="shrug",
+            mode="general", bubbles=[ChatBubble(id=f"{ids['message_id']}-b1", kind="answer", text=draft.bubbles[0][1])],
+            suggestions=list(draft.suggestions)[:MAX_SUGGESTIONS], confidence=1.0, verified=True,
+        )
+
     def _ids(self, request: ChatRequest, ctx: ChatToolContext) -> dict[str, str]:
         return {
             "thread_id": ctx.thread_id or request.thread_id or f"t_{uuid.uuid4().hex[:16]}",
@@ -939,14 +990,18 @@ class Penny:
         fixed_text: str | None = None,
         mode: ChatMode = "checked",
     ) -> ChatResponse:
+        if draft.off_topic:
+            return self._off_topic(ids, draft, state)
         if draft.out_of_scope:
             draft = Draft("shrug", [("answer", fixed_text or i18n.OUT_OF_SCOPE[state.lang])], out_of_scope=True)
-        elif state.guard is not None:
-            # Code rule: multiplayer never picks an option; an open quiz question never gets its answer.
-            guarded = game_scene.guard_bubbles(draft.bubbles, state.guard, state.lang)
-            if guarded != draft.bubbles:
-                log.info("penny: game guard rewrote the answer")
-                draft = replace(draft, bubbles=guarded, suggestions=[])
+        else:
+            draft = without_index(draft, state.lang)
+            if state.guard is not None:
+                # Code rule: multiplayer never picks an option; an open quiz question never gets its answer.
+                guarded = game_scene.guard_bubbles(draft.bubbles, state.guard, state.lang)
+                if guarded != draft.bubbles:
+                    log.info("penny: game guard rewrote the answer")
+                    draft = replace(draft, bubbles=guarded, suggestions=[])
         bubbles = [
             ChatBubble(id=f"{ids['message_id']}-b{i + 1}", kind=kind, text=text)
             for i, (kind, text) in enumerate(draft.bubbles[:MAX_BUBBLES])
@@ -971,6 +1026,7 @@ class Penny:
             sources = list(state.web_sources.values())
         if any(b.kind == "general_knowledge" for b in bubbles) and checked:
             sources.append(ChatSource(id="gk", group="general_knowledge", label="General knowledge"))
+        _trace_answer(state, draft, bubbles, mode, verified)
         question = next((b.text for b in bubbles if b.kind == "question"), None)
         reaction: Reaction = draft.reaction
         if draft.out_of_scope:
@@ -1018,6 +1074,69 @@ NO_USER_DATA = (
     "they ask about their own money, explain how it works for a typical student; you may end with one short "
     "sentence that once they pick a student you will use that student's numbers."
 )
+
+
+# ADR 0074: no player ever sees the word INDEX or an index number. "Index fund" and "tracker" stay (finance terms).
+_INDEX_WORD = re.compile(
+    r"\b(index|indexes|indices)\b(?!\s*-?\s*(funds?|trackers?|linked))|\bINDICE\b|\bIndice\b|\b[ÍI]ndices?\b|"
+    r"指数|सूचकांक",
+    re.IGNORECASE,
+)
+_INDEX_KEEP = re.compile(r"\bindice\b")  # fr/it "indice" in lower case also means "hint": only the name is blocked
+
+
+def says_index(text: str) -> bool:
+    """True when the text names the game Index (any case, any of the 8 languages)."""
+    return any(not _INDEX_KEEP.fullmatch(m.group(0)) for m in _INDEX_WORD.finditer(text))
+
+
+def is_index_fact(f: ChatFact) -> bool:
+    """An engine fact about the internal index (e.g. "Index in 2031"). Never offered to Penny (ADR 0074)."""
+    return f.id.endswith(".index") or ".index." in f.id or says_index(f.label)
+
+
+def without_index(draft: Draft, lang: i18n.Lang = "en") -> Draft:
+    """ADR 0074 post-check: drop every sentence that names the Index. With nothing left, a fixed line."""
+    if not any(says_index(t) for _, t in draft.bubbles):
+        return draft
+    log.info("penny: dropped a sentence that named the Index")
+    bubbles: list[tuple[BubbleKind, str]] = []
+    for kind, text in draft.bubbles:
+        keep = [x for x in intl.SENTENCES.split(text) if x.strip() and not says_index(x)]
+        body = clean_bubble(" ".join(keep))
+        if body:
+            bubbles.append((kind, body))
+    return replace(draft, bubbles=bubbles or [("answer", i18n.NO_INDEX[lang])],
+                   suggestions=[x for x in draft.suggestions if not says_index(x)])  # fmt: skip
+
+
+def _trace_scope(state: TurnState, decision: str, check: str, reason: str) -> None:
+    if state.trace is not None:
+        state.trace.scope(decision, check, reason)
+
+
+def _trace_answer(state: TurnState, draft: Draft, bubbles: list[ChatBubble], mode: ChatMode, verified: bool) -> None:
+    """Demo trace: the scope of an answered question (if no rule decided it) and the check of the final bubbles."""
+    rec = state.trace
+    if rec is None or draft.out_of_scope:
+        return
+    if not rec.scope_data():
+        if state.scene:
+            decision, check, why = "money", "strict", "game or lesson screen: its own numbers only"
+        elif mode == "checked":
+            decision, check, why = "money", "strict", "about the user's money: every number must match a fact"
+        elif any(b.kind == "general_knowledge" for b in bubbles):
+            decision, check, why = "student_life", "relaxed", "student life: general numbers pass"
+        else:
+            decision, check, why = "money", "strict", "general money question: no personal or unsourced numbers"
+        rec.scope(decision, check, why)
+    pairs = [(b.kind, b.text) for b in bubbles]
+    rec.verify(pairs, state.facts, {**state.sources, **state.web_sources}, mode, verified)
+
+
+def off_topic_draft(message: str, lang: i18n.Lang = "en") -> Draft:
+    """ADR 0073: the fixed line for a question outside money and student life, with 2 related money chips."""
+    return Draft("shrug", [("answer", i18n.OFF_TOPIC[lang])], suggestions=scope.chips(message, lang), off_topic=True)
 
 
 def distress_draft(lang: i18n.Lang = "en") -> Draft:
@@ -1129,7 +1248,8 @@ def parse_draft(text: str) -> Draft | None:
         if text_:
             bubbles.append((cast(BubbleKind, kind), text_))
     out_of_scope = bool(data.get("out_of_scope"))
-    if not bubbles and not out_of_scope:
+    off_topic = data.get("off_topic") is True
+    if not bubbles and not out_of_scope and not off_topic:
         return None
     raw_suggestions = data.get("suggestions")
     return Draft(
@@ -1138,6 +1258,7 @@ def parse_draft(text: str) -> Draft | None:
         summary_available=bool(data.get("summary_available")),
         out_of_scope=out_of_scope,
         suggestions=[str(x) for x in raw_suggestions] if isinstance(raw_suggestions, list) else [],
+        off_topic=off_topic,
     )
 
 
@@ -1859,7 +1980,7 @@ def quick_reaction(request: ChatRequest) -> Reaction:
     """A cheap first reaction for the UI before the answer arrives (ADR 0031: within 1 s). Heuristic only."""
     if distress_rule(request.message):
         return "eyes"
-    if out_of_scope_rule(request.message):
+    if out_of_scope_rule(request.message) or scope.off_topic_rule(request.message):
         return "shrug"
     msg = request.message.lower()
     if re.search(r"\b(what if|replay|test|project|forecast|lose my job|next move|should i|budget)\b", msg):

@@ -164,6 +164,8 @@ class ChatToolContext:
     personal_facts: Sequence[ChatFact] | None = None
     # Game screens (life_event, room_round): the event or round the user looks at, loaded server-side.
     scene: GameScene | None = None
+    # Demo trace (ADR 0075): a lifeline_explain.trace.Recorder; None outside POST /v1/chat/trace.
+    trace: Any = None
 
 
 # ---------- adapter ----------

@@ -23,6 +23,9 @@ from lifeline_contracts.play import (
     DecisionReveal,
     GameOptions,
     PlayerScore,
+    QuickFeedback,
+    QuickPlayerResult,
+    QuickQuestion,
     QuizQuestion,
     QuizReveal,
     RoomGame,
@@ -196,7 +199,19 @@ class Token(_M):
 
 
 class WsClientMessage(_M):
-    type: Literal["join", "ready", "progress", "finish", "start", "leave", "ping", "pick_game", "answer"]
+    type: Literal[
+        "join",
+        "ready",
+        "progress",
+        "finish",
+        "start",
+        "leave",
+        "ping",
+        "pick_game",
+        "answer",
+        "end_round",
+        "play_again",
+    ]
     player_id: str | None = Field(default=None, max_length=64, description="Resume token after a reconnect")
     name: str | None = Field(default=None, max_length=24)
     life_id: str | None = None
@@ -225,6 +240,9 @@ class WsServerMessage(_M):
         "decision",
         "decision_reveal",
         "ranking",
+        "ql_question",
+        "ql_feedback",
+        "ql_results",
     ]
     you: Player | None = Field(default=None, description="Sent with 'welcome': your player id for reconnects")
     room: Room | None = None
@@ -235,6 +253,11 @@ class WsServerMessage(_M):
     decision: DecisionPrompt | None = None
     decision_reveal: DecisionReveal | None = None
     ranking: list[PlayerScore] | None = None
+    ql_question: QuickQuestion | None = Field(default=None, description="Quick Life: your next question (ADR 0074)")
+    ql_feedback: QuickFeedback | None = Field(default=None, description="Quick Life: points for your last answer")
+    ql_results: list[QuickPlayerResult] | None = Field(
+        default=None, description="Quick Life: final results, sent with 'finished' once everyone is done"
+    )
     winner_line: str | None = Field(
         default=None,
         max_length=200,

@@ -47,6 +47,8 @@ TIER1 = {
     "addPlanItem",
 }
 TIER2 = {
+    "tracePenny",
+    "getSourcesHub",
     "getForecast",
     "setForecastSettings",
     "getCategoryDetail",

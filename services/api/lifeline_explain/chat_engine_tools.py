@@ -114,7 +114,7 @@ BOE_RATES_DESCRIPTION = (
 )
 EVENT_CHOICES_DESCRIPTION = (
     "For the open Life event the user is looking at: project each choice a few years ahead with the same seed. "
-    "Returns end net worth, net worth change, cost, missed payments and Index per choice."
+    "Returns end net worth, net worth change, cost and missed payments per choice, in game money."
 )
 
 

@@ -117,8 +117,8 @@ def test_find_trade_offs_in_next_move_and_test_move_results() -> None:
 
 
 def test_prompt_states_trade_off() -> None:
-    assert prompts.PENNY_PROMPT_VERSION == "penny-v8"
-    assert prompts.PENNY_SYSTEM.startswith("[penny-v8]")
+    assert prompts.PENNY_PROMPT_VERSION == "penny-v9"
+    assert prompts.PENNY_SYSTEM.startswith("[penny-v9]")
     assert '"What you give up:"' in prompts.PENNY_SYSTEM
     assert "do not make one up" in prompts.PENNY_SYSTEM
 

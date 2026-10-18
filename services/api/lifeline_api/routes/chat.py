@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import AsyncIterator
 from datetime import date
@@ -22,10 +23,12 @@ from lifeline_contracts.chat import (
     ChatStreamEvent,
     ChatThread,
     ChatThreadsResponse,
+    ChatTrace,
     NewsResponse,
     RateDecisions,
 )
 from lifeline_explain import chat as penny
+from lifeline_explain.trace import Recorder
 
 log = logging.getLogger(__name__)
 
@@ -164,6 +167,63 @@ async def ask_penny_stream(body: ChatRequest, request: Request, sub: Subject) ->
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
+
+
+TRACE_ENV = "PENNY_TRACE_ENABLED"
+
+
+def trace_enabled() -> bool:
+    return os.environ.get(TRACE_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _sources_used(resp: ChatResponse) -> list[str]:
+    """Every source this answer depended on: the sources behind its numbers and the tools that ran."""
+    used = [s.label for s in resp.sources]
+    return list(dict.fromkeys(used))
+
+
+@router.post("/v1/chat/trace", response_model=ChatTrace, response_model_exclude_none=True)
+async def trace_penny(body: ChatRequest, request: Request, sub: Subject) -> ChatTrace:
+    """Demo trace (ADR 0075): one real answer through the streaming path, with each step. 404 unless
+    PENNY_TRACE_ENABLED is set. The caller's own data only; never keys, tokens, headers or prompts."""
+    if not trace_enabled():
+        raise not_found("Not found")
+    from lifeline_api.routes.sources_hub import build_hub
+
+    state, thread, life, user_mid = await _open(request, sub, body)
+    t0 = time.monotonic()
+    rec = Recorder(t0)
+    first_ms: int | None = None
+    resp: ChatResponse | None = None
+    try:
+        ctx, digest = await _context(state, sub, body, thread, life, user_mid)
+    except Exception as exc:
+        log.warning("chat trace: context failed (%s)", type(exc).__name__)
+        rec.rewrite("context_unavailable", fallback=True)
+    else:
+        ctx.trace = rec
+        async for ev in penny.answer_stream(body, ctx):
+            if ev.type == "bubble" and first_ms is None:
+                first_ms = int((time.monotonic() - t0) * 1000)
+            if ev.type == "done" and ev.response is not None:
+                resp = ev.response
+        try:
+            await chat_service.store_tool_lives(state, sub, ctx, digest)
+        except Exception as exc:
+            log.warning("chat trace: tool lives not stored (%s)", type(exc).__name__)
+    if resp is None:
+        resp = chat_service.unavailable_response(thread, user_mid)
+    total = int((time.monotonic() - t0) * 1000)
+    await _save(state, sub, thread, resp)
+    try:
+        hub = await build_hub(state, sub, body.language)
+        rec.scope_data()["sources"] = hub.model_dump(mode="json", exclude_none=True)
+    except Exception as exc:
+        log.info("chat trace: sources unavailable (%s)", type(exc).__name__)
+    rec.final(total, first_ms, _sources_used(resp))
+    acct = await account.ensure(state, sub)
+    return ChatTrace(question=body.message, student=acct.get("display_name"), steps=rec.steps, answer=resp,
+                     total_ms=total)  # fmt: skip
 
 
 @router.get("/v1/chat/threads", response_model=ChatThreadsResponse, response_model_exclude_none=True)
