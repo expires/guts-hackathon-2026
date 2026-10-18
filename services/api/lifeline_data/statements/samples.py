@@ -23,10 +23,25 @@ from pathlib import Path
 from typing import Any, Literal
 
 from lifeline_contracts.account import SampleStatement
-from lifeline_contracts.finance import Account, DebtItem, FinanceSnapshot, IncomeSource
+from lifeline_contracts.finance import Account, AccountHolder, DebtItem, FinanceSnapshot, IncomeSource
 from lifeline_data.statements.parse import parse_statement, to_snapshot
 
 SNAPSHOT_FIELDS = ("is_student", "age", "student_loan_plan", "monthly_costs", "housing")
+
+# Card city -> region slug (lifeline_contracts.observation.REGIONS). The card is the source of the student's place:
+# without it the profile fell back to Manchester / north-west for every sample (SEED_AUDIT location bug).
+CITY_REGION: dict[str, str] = {
+    "sheffield": "yorkshire-and-the-humber",
+    "leeds": "yorkshire-and-the-humber",
+    "edinburgh": "scotland",
+    "bolton": "north-west",
+    "manchester": "north-west",
+    "newcastle": "north-east",
+    "birmingham": "west-midlands",
+    "coventry": "west-midlands",
+    "exeter": "south-west",
+    "london": "london",
+}
 
 
 def samples_dir() -> Path:
@@ -56,6 +71,32 @@ def sample_hints(sample_id: str, directory: Path | None = None) -> dict[str, Any
         if entry.get("id") == sample_id:
             return dict(entry.get("hints") or {})
     raise KeyError(sample_id)
+
+
+def sample_entry(sample_id: str, directory: Path | None = None) -> dict[str, Any]:
+    for entry in _index(directory):
+        if entry.get("id") == sample_id:
+            return dict(entry)
+    raise KeyError(sample_id)
+
+
+def place(entry: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(region slug, town) from the card: `hints.region`/`hints.town` when set, else the card city."""
+    hints = entry.get("hints") or {}
+    town = hints.get("town") or entry.get("city")
+    region = hints.get("region") or (CITY_REGION.get(str(town).lower()) if town else None)
+    return region, (str(town) if town else None)
+
+
+def _holder(entry: dict[str, Any], snap: FinanceSnapshot) -> AccountHolder | None:
+    region, town = place(entry)
+    hints = entry.get("hints") or {}
+    name = str(hints.get("name") or entry.get("name") or "")[:40]
+    age = hints.get("age") or entry.get("age")
+    if not name or not isinstance(age, int) or region is None:
+        return None
+    last = max((t.date for t in snap.transactions), default=snap.as_of)
+    return AccountHolder(name=name, birth_year=int(last[:4]) - age, region=region, town=town)
 
 
 def _merge_income(found: list[IncomeSource], hinted: list[IncomeSource]) -> list[IncomeSource]:
@@ -103,7 +144,8 @@ def _merge_debts(found: list[DebtItem], hinted: list[DebtItem]) -> list[DebtItem
 
 
 def load_sample(sample_id: str, fmt: Literal["pdf", "csv"] = "pdf", directory: Path | None = None) -> FinanceSnapshot:
-    hints = sample_hints(sample_id, directory)
+    entry = sample_entry(sample_id, directory)
+    hints = dict(entry.get("hints") or {})
     path = (directory or samples_dir()) / f"{sample_id}.{fmt}"
     parsed = parse_statement(path.read_bytes(), path.name)
     if parsed.status == "failed":
@@ -117,5 +159,9 @@ def load_sample(sample_id: str, fmt: Literal["pdf", "csv"] = "pdf", directory: P
         snap.income_sources, [IncomeSource.model_validate(s) for s in hints.get("income_sources", [])])
     update["accounts"] = _merge_accounts(snap.accounts,
                                          [Account.model_validate(a) for a in hints.get("accounts", [])])
+    holder = snap.holder or _holder(entry, snap)
+    if holder is not None:
+        update["holder"] = holder
+        update["region"] = snap.region or holder.region
     update["debts"] = _merge_debts(snap.debts, [DebtItem.model_validate(d) for d in hints.get("debts", [])])
     return FinanceSnapshot.model_validate(snap.model_copy(update=update).model_dump())
