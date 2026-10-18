@@ -575,7 +575,9 @@ def _card_text(state: ForecastState, m: _Maths, usual: Decimal, spare: Decimal |
         return headline, budget, habit
     assert run_out is not None
     if m.left <= 0:
-        headline = f"Your bills take all your money before {when}"
+        # Overdrawn with no bills due (Callum) is not a bills problem: say what is true (V5 F3).
+        headline = (f"Your bills take all your money before {when}" if m.bills_total > 0
+                    else f"You have no money to spend before {when}")
     elif run_out < next_date:
         headline = f"At this pace, you run out on {day_text(run_out)}"
     else:  # the money lasts, but only by using the safety buffer
@@ -820,7 +822,10 @@ def _summary(before: Forecast, after: Forecast, notes: Sequence[str]) -> str:
            else f"{gbp0(before.to_spend)} in total")
     changed = before.budget_line != after.budget_line
     text = f"With this change {lead}. {after.budget_line}" + (f" (was {was})" if changed else "") + "."
-    if after.state == "running_short" and after.run_out_date and after.run_out_date != after.today:
+    next_money_date = after.next_money.date if after.next_money is not None else None
+    runs_out_first = next_money_date is None or after.run_out_date is None or after.run_out_date < next_money_date
+    if (after.state == "running_short" and after.run_out_date and after.run_out_date != after.today
+            and runs_out_first):  # never a run-out date after the next money arrives (V2 warning)
         text += f" At this pace you run out on {day_text(dates.parse(after.run_out_date))}."
     for n in notes:
         if len(text) + len(n) + 1 <= 240:
