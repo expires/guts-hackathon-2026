@@ -118,9 +118,21 @@ def is_cash_savings(account: Account) -> bool:
     return not any(w in name for w in ("stocks", "shares", "invest", "s&s"))
 
 
-def savings_total(snapshot: FinanceSnapshot) -> float:
-    """Cash savings: savings accounts and cash ISAs."""
+def cash_savings_total(snapshot: FinanceSnapshot) -> float:
+    """Cash savings only: savings accounts and cash ISAs. Use this for anything about interest rates
+    (move to a better rate, keep as cash): invested money must never be compared with savings rates."""
     return max(0.0, round(sum(a.balance for a in snapshot.accounts if is_cash_savings(a)), 2))
+
+
+def investments_total(snapshot: FinanceSnapshot) -> float:
+    """Stocks and shares ISAs (e.g. Trading 212)."""
+    return max(0.0, round(sum(a.balance for a in snapshot.accounts if a.kind == "isa" and not is_cash_savings(a)), 2))
+
+
+def savings_total(snapshot: FinanceSnapshot) -> float:
+    """Everything put aside: cash savings plus stocks and shares ISAs (product decision: a Trading 212
+    ISA counts as savings). Rate-based logic uses cash_savings_total instead."""
+    return round(cash_savings_total(snapshot) + investments_total(snapshot), 2)
 
 
 def debt_total(snapshot: FinanceSnapshot) -> float:
@@ -207,8 +219,11 @@ def full_data_months(s: FinanceSnapshot, months: Sequence[str]) -> list[str]:
 def monthly_spend(snapshot: FinanceSnapshot, today: dates.date, months: int = 3) -> float:
     """Average spending over the last `months` complete months that the data covers in full (full_data_months)
     and that have transactions."""
-    ms = [m for m in full_data_months(snapshot, full_months_before(today, months))
-          if any(t.date[:7] == m for t in snapshot.transactions)]
+    ms = [
+        m
+        for m in full_data_months(snapshot, full_months_before(today, months))
+        if any(t.date[:7] == m for t in snapshot.transactions)
+    ]
     if not ms:
         return 0.0
     totals = monthly_totals(snapshot.transactions, ms)
@@ -408,8 +423,9 @@ def personal_facts(snapshot: FinanceSnapshot) -> list[PersonalFact]:
         # Signed cash: an overdrawn account is negative cash and covers 0 months, never "+£371 liquid".
         signed = {"months": months, "liquid": float(round(cash)), "monthly_spend": money_value(spend)}
         if cash < 0:
-            text = (f"You are {gbp(cash)} in your overdraft, so your cash covers 0 months of "
-                    f"{costs_word(snapshot, today)}.")
+            text = (
+                f"You are {gbp(cash)} in your overdraft, so your cash covers 0 months of {costs_word(snapshot, today)}."
+            )
             signed["months"] = 0.0
         else:
             text = f"Your cash and savings cover {months:g} months of {costs_word(snapshot, today)}."
@@ -460,8 +476,11 @@ def _top_category_fact(snapshot: FinanceSnapshot, today: dates.date, _debt: floa
     if not months:
         return None
     month = months[-1]
-    spend = {c: v for c, (v, _) in by_category(snapshot.transactions, month).items()
-             if c not in NOT_HABIT_CATEGORIES and v > 0}
+    spend = {
+        c: v
+        for c, (v, _) in by_category(snapshot.transactions, month).items()
+        if c not in NOT_HABIT_CATEGORIES and v > 0
+    }
     if not spend:
         return None
     top = max(spend, key=lambda c: (spend[c], c))
@@ -476,8 +495,11 @@ def _top_category_fact(snapshot: FinanceSnapshot, today: dates.date, _debt: floa
 
 def _next_money_fact(snapshot: FinanceSnapshot, today: dates.date, _debt: float) -> PersonalFact | None:
     """The next payment in from the income sources (statement dates and known schedules)."""
-    upcoming = [(dates.parse(s.next_date), s) for s in snapshot.income_sources
-                if s.next_date is not None and dates.parse(s.next_date) > today and s.amount > 0]
+    upcoming = [
+        (dates.parse(s.next_date), s)
+        for s in snapshot.income_sources
+        if s.next_date is not None and dates.parse(s.next_date) > today and s.amount > 0
+    ]
     if not upcoming:
         return None
     day, src = min(upcoming, key=lambda x: (x[0], -x[1].amount))

@@ -12,6 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lifeline_contracts.accounts import Holding
 from lifeline_contracts.domain import CharacterSpec, DecisionProfile, IsoDate, IsoMonth
 from lifeline_contracts.domain import HabitComponents as HabitComponents  # re-export (ADR 0059)
 from lifeline_contracts.domain import HabitScore as HabitScore  # re-export
@@ -147,6 +148,10 @@ class FinanceSnapshot(_M):
     debts: list[DebtItem] = Field(default_factory=list, max_length=20)
     monthly_costs: float | None = Field(default=None, ge=0, description="Entered regular costs per month")
     savings_rate_pct: float | None = Field(default=None, ge=0, le=20, description="Entered rate, so interest is known")
+    holdings: list[Holding] = Field(
+        default_factory=list, max_length=500,
+        description="Investment positions from a connected Trading 212 account, valued in GBP. Not cash savings",
+    )
 
 
 # ---------- API responses ----------

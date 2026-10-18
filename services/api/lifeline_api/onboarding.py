@@ -215,9 +215,34 @@ def _is_bank(t: Transaction) -> bool:
     return not _is_synthetic(t) and not _is_logged(t)
 
 
+T212 = "trading212"
+
+
+def investment_only(snap: FinanceSnapshot) -> bool:
+    """Live data from Trading 212 alone: one investment account, no transactions."""
+    return not snap.transactions and bool(snap.accounts) and all(a.provider == T212 for a in snap.accounts)
+
+
+def without_trading212(snap: FinanceSnapshot) -> FinanceSnapshot:
+    return snap.model_copy(update={"accounts": [a for a in snap.accounts if a.provider != T212], "holdings": []})
+
+
 def merge_statement(prev: FinanceSnapshot | None, stmt: FinanceSnapshot) -> FinanceSnapshot:
     if prev is None:
         return stmt
+    if investment_only(stmt) and prev.source in ("statement", "manual"):
+        # Trading 212 on top of a statement or entered numbers: the user's own rows stay (bank rows would be
+        # replaced by their own live rows, but Trading 212 has no transactions).
+        return prev.model_copy(update={
+            "accounts": [*(a for a in prev.accounts if a.provider != T212), *stmt.accounts],
+            "holdings": stmt.holdings,
+            "status": stmt.status if stmt.status == "cached" else prev.status,
+        })
+    if stmt.source == "statement" and not stmt.holdings:
+        # a new statement keeps the Trading 212 account and positions already connected
+        t212_accounts = [a for a in prev.accounts if a.provider == T212 and a.id not in {x.id for x in stmt.accounts}]
+        if t212_accounts or prev.holdings:
+            stmt = stmt.model_copy(update={"accounts": [*stmt.accounts, *t212_accounts], "holdings": prev.holdings})
     last = max((t.date for t in stmt.transactions), default=stmt.as_of)
     kept_logs = [t for t in prev.transactions if _is_logged(t) and t.date > last]
     ids = {a.id for a in stmt.accounts}

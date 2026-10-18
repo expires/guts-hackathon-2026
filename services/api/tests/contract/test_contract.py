@@ -58,6 +58,7 @@ TIER2 = {
     "connectMonzoToken",
     "syncMonzo",
     "disconnectProvider",
+    "getProfileStats",
     "askPennyStream",
     "getFinanceHome",
     "askPenny",

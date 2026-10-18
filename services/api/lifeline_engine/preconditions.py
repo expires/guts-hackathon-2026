@@ -33,6 +33,7 @@ from lifeline_contracts.finance import FinanceSnapshot
 from lifeline_contracts.next_move import MoveKind
 from lifeline_engine.money import dates
 from lifeline_engine.money.profile import (
+    cash_savings_total,
     full_data_months,
     full_months_before,
     known_monthly_costs,
@@ -81,7 +82,7 @@ def remortgage(s: FinanceSnapshot, today: date) -> bool:
 
 
 def move_savings(s: FinanceSnapshot, today: date) -> bool:
-    return savings_total(s) >= MIN_SAVINGS
+    return cash_savings_total(s) >= MIN_SAVINGS
 
 
 def cancel_subscription(s: FinanceSnapshot, today: date) -> bool:
@@ -130,8 +131,12 @@ def build_emergency_fund(s: FinanceSnapshot, today: date) -> bool:
 def cut_budget(s: FinanceSnapshot, today: date) -> bool:
     months = full_data_months(s, full_months_before(today, 4))
     seen = {t.date[:7] for t in s.transactions if t.amount < 0}
-    return bool(months) and months[-1] == full_months_before(today, 1)[0] and months[-1] in seen and any(
-        m in seen for m in months[:-1])
+    return (
+        bool(months)
+        and months[-1] == full_months_before(today, 1)[0]
+        and months[-1] in seen
+        and any(m in seen for m in months[:-1])
+    )
 
 
 def weekly_budget(s: FinanceSnapshot, today: date) -> bool:
@@ -152,13 +157,15 @@ def lisa_room(s: FinanceSnapshot, today: date) -> float:
 def lifetime_isa(s: FinanceSnapshot, today: date) -> bool:
     has_home = s.mortgage is not None or any(a.kind == "mortgage" for a in s.accounts)
     return (
-        lisa_age_ok(from_snapshot(s, today)) and not has_home and expensive_debt(s, today) == 0
+        lisa_age_ok(from_snapshot(s, today))
+        and not has_home
+        and expensive_debt(s, today) == 0
         and lisa_room(s, today) > 0
     )
 
 
 def keep_cash(s: FinanceSnapshot, today: date) -> bool:
-    return savings_total(s) >= MIN_CASH and savings_rate_pct(s, today) is not None
+    return cash_savings_total(s) >= MIN_CASH and savings_rate_pct(s, today) is not None
 
 
 PRECONDITIONS: dict[MoveKind, Callable[[FinanceSnapshot, date], bool]] = {

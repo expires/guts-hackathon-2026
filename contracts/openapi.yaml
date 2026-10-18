@@ -766,6 +766,28 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/StoreUnavailable'
+  /v1/profile/stats:
+    get:
+      operationId: getProfileStats
+      summary: 'Your profile: connections per source and the stats each supports. Unavailable sections say what to connect.'
+      tags:
+      - profile
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileStats'
+              examples:
+                ProfileStats:
+                  $ref: '#/components/examples/ProfileStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/StoreUnavailable'
   /v1/connections/trading212:
     post:
       operationId: connectTrading212
@@ -5180,6 +5202,38 @@ components:
       - synced
       - count
       type: object
+    Holding:
+      additionalProperties: false
+      description: One investment position, valued in GBP (the account currency, never the instrument currency).
+      properties:
+        instrument_id:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: number
+        value:
+          description: gbp
+          minimum: 0
+          type: number
+        asset_class:
+          enum:
+          - equity
+          - bond
+          - cash
+          - property
+          - commodity
+          - other
+          type: string
+        region:
+          type: string
+      required:
+      - instrument_id
+      - name
+      - quantity
+      - value
+      - asset_class
+      type: object
     ImportResult:
       additionalProperties: false
       description: Returned by POST /v1/finance/statements (multipart file). The client animates `stages`.
@@ -5317,6 +5371,37 @@ components:
       - r_autopilot
       - missed_payments
       - max_drawdown
+      type: object
+    InvestmentSummary:
+      additionalProperties: false
+      properties:
+        total_value:
+          description: Whole Trading 212 account, including uninvested cash
+          type: number
+        invested_value:
+          description: Sum of positions; None without positions
+          minimum: 0
+          type: number
+        holdings_count:
+          minimum: 0
+          type: integer
+        mix:
+          description: Share of invested value by asset class
+          items:
+            $ref: '#/components/schemas/MixSlice'
+          type: array
+        top_holdings:
+          description: Every holding, biggest first
+          items:
+            $ref: '#/components/schemas/Holding'
+          maxItems: 200
+          type: array
+        note:
+          description: Plain words when positions could not be read
+          type: string
+      required:
+      - total_value
+      - holdings_count
       type: object
     Job:
       additionalProperties: false
@@ -6039,6 +6124,33 @@ components:
       - has_finance_data
       - finance_inputs
       type: object
+    MixSlice:
+      additionalProperties: false
+      properties:
+        asset_class:
+          enum:
+          - equity
+          - bond
+          - cash
+          - property
+          - commodity
+          - other
+          type: string
+        label:
+          type: string
+        value:
+          minimum: 0
+          type: number
+        share_pct:
+          maximum: 100
+          minimum: 0
+          type: number
+      required:
+      - asset_class
+      - label
+      - value
+      - share_pct
+      type: object
     ModelInfo:
       additionalProperties: false
       properties:
@@ -6221,6 +6333,33 @@ components:
       required:
       - id
       - label
+      type: object
+    NetWorthSummary:
+      additionalProperties: false
+      properties:
+        net_worth:
+          type: number
+        cash:
+          description: Current accounts and cash savings
+          type: number
+        investments:
+          description: Stocks and shares accounts, never counted as cash
+          minimum: 0
+          type: number
+        other:
+          description: Everything else (debts, property); 0 when nothing
+          type: number
+        parts:
+          description: 'The calculation: each account that adds up to net worth'
+          items:
+            $ref: '#/components/schemas/AmountPart'
+          type: array
+      required:
+      - net_worth
+      - cash
+      - investments
+      - other
+      - parts
       type: object
     NewsItem:
       additionalProperties: false
@@ -6705,6 +6844,109 @@ components:
       - from_amount
       - to_amount
       - since
+      type: object
+    ProfileConnection:
+      additionalProperties: false
+      description: One way the user can give us data, and what it gave us.
+      properties:
+        id:
+          enum:
+          - monzo
+          - trading212
+          - statement
+          - manual
+          - sample
+          type: string
+        title:
+          description: e.g. 'Monzo'
+          maxLength: 40
+          type: string
+        connected:
+          type: boolean
+        data_status:
+          description: None when not connected. 'mock' is sample data
+          enum:
+          - live
+          - cached
+          - mock
+          type: string
+        label:
+          description: '''Sample data'' for the sample connection'
+          type: string
+        last_synced:
+          description: Day of the newest data from this source
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          type: string
+        sample_id:
+          description: Which sample student is loaded (sample connection only)
+          type: string
+        provides:
+          description: Plain words, e.g. 'Transactions since 21 Jul 2026 (151)'
+          maxLength: 120
+          type: string
+      required:
+      - id
+      - title
+      - connected
+      type: object
+    ProfileSection:
+      additionalProperties: false
+      properties:
+        id:
+          enum:
+          - habits
+          - spending
+          - net_worth
+          - investments
+          type: string
+        title:
+          maxLength: 40
+          type: string
+        available:
+          type: boolean
+        sources:
+          description: Where the data comes from
+          items:
+            enum:
+            - monzo
+            - trading212
+            - statement
+            - manual
+            - sample
+            type: string
+          type: array
+        missing_hint:
+          description: Why it is unavailable and what to connect
+          type: string
+        habits:
+          $ref: '#/components/schemas/HabitScore'
+        spending:
+          $ref: '#/components/schemas/SpendingSummary'
+        net_worth:
+          $ref: '#/components/schemas/NetWorthSummary'
+        investments:
+          $ref: '#/components/schemas/InvestmentSummary'
+      required:
+      - id
+      - title
+      - available
+      type: object
+    ProfileStats:
+      additionalProperties: false
+      properties:
+        connections:
+          description: Always monzo, trading212, statement, manual, sample
+          items:
+            $ref: '#/components/schemas/ProfileConnection'
+          type: array
+        sections:
+          description: Always habits, spending, net_worth, investments
+          items:
+            $ref: '#/components/schemas/ProfileSection'
+          type: array
+      required:
+      - connections
+      - sections
       type: object
     ProviderConnection:
       additionalProperties: false
@@ -7480,6 +7722,48 @@ components:
       - month
       - total
       - categories
+      type: object
+    SpendingSummary:
+      additionalProperties: false
+      properties:
+        month:
+          description: The month the top categories are for
+          pattern: ^\d{4}-\d{2}$
+          type: string
+        partial:
+          description: True when the month is not over or not fully covered by the data
+          type: boolean
+        months_used:
+          description: Full months behind the monthly averages (0 when partial)
+          minimum: 0
+          type: integer
+        monthly_in:
+          description: Average money in per month; None if unknown
+          minimum: 0
+          type: number
+        monthly_out:
+          description: Average spending per month (month so far when partial)
+          minimum: 0
+          type: number
+        top_categories:
+          items:
+            $ref: '#/components/schemas/CategorySpend'
+          maxItems: 3
+          type: array
+        subscriptions_monthly:
+          minimum: 0
+          type: number
+        subscriptions_count:
+          minimum: 0
+          type: integer
+      required:
+      - month
+      - partial
+      - months_used
+      - monthly_out
+      - top_categories
+      - subscriptions_monthly
+      - subscriptions_count
       type: object
     Stats:
       additionalProperties: false
@@ -9411,6 +9695,109 @@ components:
         oldest: '2026-07-20'
         count: 48
         last_error: auth
+    ProfileStats:
+      value:
+        connections:
+        - id: monzo
+          title: Monzo
+          connected: true
+          data_status: live
+          last_synced: '2026-10-17'
+          provides: Transactions since 21 Jul 2026 (151)
+        - id: trading212
+          title: Trading 212
+          connected: true
+          data_status: live
+          last_synced: '2026-10-17'
+          provides: 2 holdings
+        - id: statement
+          title: Statement
+          connected: false
+        - id: manual
+          title: Your numbers
+          connected: false
+        - id: sample
+          title: Sample student
+          connected: false
+        sections:
+        - id: habits
+          title: Your habits
+          available: true
+          sources:
+          - monzo
+          habits:
+            components:
+              savings_rate: 72
+              months_of_cover: 40
+              spend_stability: 81
+              discretionary_share: 63
+              subscription_creep: 90
+              debt_pressure: 100
+            overall: 74
+        - id: spending
+          title: Your spending
+          available: true
+          sources:
+          - monzo
+          spending:
+            month: 2026-09
+            partial: false
+            months_used: 2
+            monthly_in: 1250.0
+            monthly_out: 586.3
+            top_categories:
+            - category: groceries
+              label: Groceries
+              emoji: 🛒
+              amount: 182.4
+              share: 0.31
+              transactions: 19
+              change_pct: -4.2
+            - category: eating_out
+              label: Eating out
+              emoji: 🍽️
+              amount: 96.8
+              share: 0.16
+              transactions: 11
+            subscriptions_monthly: 37.98
+            subscriptions_count: 2
+        - id: net_worth
+          title: Net worth
+          available: true
+          sources:
+          - monzo
+          - trading212
+          net_worth:
+            net_worth: 2412.5
+            cash: 912.5
+            investments: 1500.0
+            other: 0.0
+            parts:
+            - label: Monzo current account
+              amount: 912.5
+            - label: Trading 212 Stocks & Shares
+              amount: 1500.0
+        - id: investments
+          title: Investments
+          available: true
+          sources:
+          - trading212
+          investments:
+            total_value: 1500.0
+            invested_value: 900.0
+            holdings_count: 1
+            mix:
+            - asset_class: equity
+              label: Shares
+              value: 900.0
+              share_pct: 100.0
+            top_holdings:
+            - instrument_id: IE00B3XXRP09
+              name: Vanguard S&P 500
+              quantity: 10.0
+              value: 900.0
+              asset_class: equity
+              region: US
     Trading212Connect:
       value:
         api_key: example-key

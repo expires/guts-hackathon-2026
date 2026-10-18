@@ -53,6 +53,8 @@ async def _drop_live(state: AppState, sub: str) -> None:
             await money.save_snapshot(state, sub, onboarding.merge_statement(prev, live))
         elif prev is not None and prev.source in ("monzo", "trading212", "monzo+trading212"):
             await money.delete_snapshot(state, sub)
+        elif prev is not None and (prev.holdings or any(a.provider == "trading212" for a in prev.accounts)):
+            await money.save_snapshot(state, sub, onboarding.without_trading212(prev))
         else:
             money.forget(state, sub)
 

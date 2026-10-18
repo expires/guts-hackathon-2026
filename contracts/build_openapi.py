@@ -29,6 +29,7 @@ from lifeline_contracts import forecast as FC  # noqa: E402
 from lifeline_contracts import learn as LN  # noqa: E402
 from lifeline_contracts import next_move as N  # noqa: E402
 from lifeline_contracts import play as PL  # noqa: E402
+from lifeline_contracts import profile as PR  # noqa: E402
 from lifeline_contracts.observation import Observation, SourceStatus  # noqa: E402
 
 MODELS: list[type[BaseModel]] = [
@@ -53,6 +54,13 @@ MODELS: list[type[BaseModel]] = [
     AK.HistoryStatus,
     AK.Trading212ConnectRequest,
     AK.MonzoTokenRequest,
+    PR.ProfileStats,
+    PR.ProfileConnection,
+    PR.ProfileSection,
+    PR.SpendingSummary,
+    PR.NetWorthSummary,
+    PR.InvestmentSummary,
+    PR.MixSlice,
     A.PurchaseVerifyRequest,
     A.PurchaseVerifyResponse,
     A.AppleSignInRequest,
@@ -559,6 +567,7 @@ def examples() -> dict[str, Any]:
             provider="trading212", connected=True, data_status="live", hint="…c3d4"
         ),
         "HistoryStatus": AK.HistoryStatus(synced=False, oldest="2026-07-20", count=48, last_error="auth"),
+        "ProfileStats": profile_stats_example(),
         "Trading212Connect": AK.Trading212ConnectRequest(api_key="example-key", api_secret="example-secret"),  # noqa: S106
         "MonzoToken": AK.MonzoTokenRequest(access_token="example-playground-token"),  # noqa: S106
         "PurchaseVerify": A.PurchaseVerifyRequest(product_id="lifeline.rewindpass", demo=True),
@@ -574,6 +583,51 @@ def examples() -> dict[str, Any]:
         **chat_examples(),
         **play_examples(),
     }
+
+
+def profile_stats_example() -> PR.ProfileStats:
+    cat = F.CategorySpend(category="groceries", label="Groceries", emoji="🛒", amount=182.4, share=0.31,
+                          transactions=19, change_pct=-4.2)
+    eat = F.CategorySpend(category="eating_out", label="Eating out", emoji="🍽️", amount=96.8, share=0.16,
+                          transactions=11)
+    holding = AK.Holding(instrument_id="IE00B3XXRP09", name="Vanguard S&P 500", quantity=10, value=900.0,
+                         asset_class="equity", region="US")
+    return PR.ProfileStats(
+        connections=[
+            PR.ProfileConnection(id="monzo", title="Monzo", connected=True, data_status="live",
+                                 last_synced="2026-10-17", provides="Transactions since 21 Jul 2026 (151)"),
+            PR.ProfileConnection(id="trading212", title="Trading 212", connected=True, data_status="live",
+                                 last_synced="2026-10-17", provides="2 holdings"),
+            PR.ProfileConnection(id="statement", title="Statement", connected=False),
+            PR.ProfileConnection(id="manual", title="Your numbers", connected=False),
+            PR.ProfileConnection(id="sample", title="Sample student", connected=False),
+        ],
+        sections=[
+            PR.ProfileSection(
+                id="habits", title="Your habits", available=True, sources=["monzo"],
+                habits=F.HabitScore(
+                    components=F.HabitComponents(savings_rate=72, months_of_cover=40, spend_stability=81,
+                                                 discretionary_share=63, subscription_creep=90, debt_pressure=100),
+                    overall=74)),
+            PR.ProfileSection(
+                id="spending", title="Your spending", available=True, sources=["monzo"],
+                spending=PR.SpendingSummary(month="2026-09", partial=False, months_used=2, monthly_in=1250.0,
+                                            monthly_out=586.3, top_categories=[cat, eat],
+                                            subscriptions_monthly=37.98, subscriptions_count=2)),
+            PR.ProfileSection(
+                id="net_worth", title="Net worth", available=True, sources=["monzo", "trading212"],
+                net_worth=PR.NetWorthSummary(
+                    net_worth=2412.5, cash=912.5, investments=1500.0, other=0,
+                    parts=[F.AmountPart(label="Monzo current account", amount=912.5),
+                           F.AmountPart(label="Trading 212 Stocks & Shares", amount=1500.0)])),
+            PR.ProfileSection(
+                id="investments", title="Investments", available=True, sources=["trading212"],
+                investments=PR.InvestmentSummary(
+                    total_value=1500.0, invested_value=900.0, holdings_count=1,
+                    mix=[PR.MixSlice(asset_class="equity", label="Shares", value=900.0, share_pct=100.0)],
+                    top_holdings=[holding])),
+        ],
+    )
 
 
 def chat_examples() -> dict[str, Any]:
@@ -1757,6 +1811,14 @@ def paths() -> dict[str, Any]:
                 "Monzo and Trading212 connection status. Never returns a token, only a masked hint.",
                 "connections",
                 {**ok("ConnectionsResponse", "Connections"), **errs(*STD)},
+            )
+        },
+        "/v1/profile/stats": {
+            "get": op(
+                "getProfileStats",
+                "Your profile: connections per source and the stats each supports. Unavailable sections say what to connect.",
+                "profile",
+                {**ok("ProfileStats", "ProfileStats"), **errs("401", "429", "503")},
             )
         },
         "/v1/connections/trading212": {

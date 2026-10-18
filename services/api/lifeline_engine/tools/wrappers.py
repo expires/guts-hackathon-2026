@@ -24,7 +24,7 @@ from lifeline_contracts.next_move import Move, NextMoveResponse
 from lifeline_engine.macro_access import source_ref
 from lifeline_engine.money import dates, overview, subscriptions_response, upcoming_bills
 from lifeline_engine.money.predict import WeatherDays, backtest, predict_day
-from lifeline_engine.money.profile import debt_total, liquid, monthly_spend, profile, savings_total
+from lifeline_engine.money.profile import cash_savings_total, debt_total, liquid, monthly_spend, profile, savings_total
 from lifeline_engine.money.recurring import detect_salary
 from lifeline_engine.next_move import next_move, option_policy, scenario_years
 from lifeline_engine.tools import facts_table
@@ -90,13 +90,32 @@ class _Facts:
         return ToolResult(result=result, facts=self.facts, sources=list(self.sources.values()), lives=list(lives))
 
 
-_SKIP_KEYS = frozenset({"id", "kind", "concept_id", "fact_prefix", "life_id", "move_id", "option_id", "date",
-                        "due_date", "as_of", "data_status", "status", "feature", "fact_id", "question", "url",
-                        "checked"})
+_SKIP_KEYS = frozenset(
+    {
+        "id",
+        "kind",
+        "concept_id",
+        "fact_prefix",
+        "life_id",
+        "move_id",
+        "option_id",
+        "date",
+        "due_date",
+        "as_of",
+        "data_status",
+        "status",
+        "feature",
+        "fact_id",
+        "question",
+        "url",
+        "checked",
+    }
+)
 # Untrusted text (ADR 0034, V6 T2-F1): never a source of facts. Engine text that embeds a payee name uses
 # money.text.clean_name, so it carries no number from the name.
-UNTRUSTED_KEYS = frozenset({"merchant", "name", "names", "description", "payee", "headline_news", "standfirst",
-                            "subscriptions", "bills"})
+UNTRUSTED_KEYS = frozenset(
+    {"merchant", "name", "names", "description", "payee", "headline_news", "standfirst", "subscriptions", "bills"}
+)
 _NUM = re.compile(r"(£)?(\d[\d,]*(?:\.\d+)?)(%)?")
 
 
@@ -220,8 +239,7 @@ class FactsTableInput(_I):
 
 def _move_facts(fx: _Facts, prefix: str, mv: Move) -> dict[str, Any]:
     fx.add(f"{prefix}.impact_per_year", mv.impact_per_year, "gbp_per_year", f"{mv.action}: expected gain a year")
-    fx.add(f"{prefix}.worst_case_per_year", mv.worst_case_per_year, "gbp_per_year",
-           f"{mv.action}: worst case a year")
+    fx.add(f"{prefix}.worst_case_per_year", mv.worst_case_per_year, "gbp_per_year", f"{mv.action}: worst case a year")
     fx.add(f"{prefix}.confidence", mv.confidence * 100, "percent", f"{mv.action}: confidence")
     if mv.sample_size is not None:
         fx.add(f"{prefix}.sample_size", mv.sample_size, "count", f"{mv.action}: cases behind the confidence")
@@ -256,8 +274,13 @@ def _move_facts(fx: _Facts, prefix: str, mv: Move) -> dict[str, Any]:
     }
 
 
-def tool_next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, seed: int = 0,
-                   response: NextMoveResponse | None = None) -> ToolResult:
+def tool_next_move(
+    snapshot: FinanceSnapshot,
+    macro: MacroTable,
+    today: dates.date,
+    seed: int = 0,
+    response: NextMoveResponse | None = None,
+) -> ToolResult:
     """Pass `response` to reuse a stored NextMoveResponse (same numbers as the card)."""
     r = response if response is not None else next_move(snapshot, macro, today, seed)
     fx = _Facts()
@@ -265,21 +288,28 @@ def tool_next_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.da
     runners = [_move_facts(fx, f"next_move.runner_{i}", m) for i, m in enumerate(r.runners_up, 1)]
     if r.backtest is not None:
         fx.add("next_move.backtest.hit_rate", r.backtest.hit_rate * 100, "percent", "Backtest: engine right")
-        fx.add("next_move.backtest.baseline_hit_rate", r.backtest.baseline_hit_rate * 100, "percent",
-               "Backtest: always fix for 2 years right")
+        fx.add(
+            "next_move.backtest.baseline_hit_rate",
+            r.backtest.baseline_hit_rate * 100,
+            "percent",
+            "Backtest: always fix for 2 years right",
+        )
         fx.add("next_move.backtest.n", r.backtest.n, "count", "Backtest: years tested")
     fx.add("next_move.decision_source_count", r.decision_source_count, "count", "Decision sources")
     fx.add("next_move.options_compared", r.options_compared, "count", "Moves Penny compared")
     for ref in r.decision_sources:
         fx.src(ref)
-    return fx.done(prefix="next_move", result={
-        "question": r.question,
-        "top": top,
-        "runners_up": runners,
-        "backtest": r.backtest.model_dump() if r.backtest else None,
-        "decision_source_count": r.decision_source_count,
-        "options_compared": r.options_compared,
-    })
+    return fx.done(
+        prefix="next_move",
+        result={
+            "question": r.question,
+            "top": top,
+            "runners_up": runners,
+            "backtest": r.backtest.model_dump() if r.backtest else None,
+            "decision_source_count": r.decision_source_count,
+            "options_compared": r.options_compared,
+        },
+    )
 
 
 # ---------- test_move ----------
@@ -291,8 +321,15 @@ def shift_character(character: CharacterSpec, this_year: int, start_year: int) -
     return character.model_copy(update={"birth_year": max(1930, min(2026, birth))})
 
 
-def tool_test_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, inp: TestMoveInput,
-                   seed: int, life_id_prefix: str = "chat", response: NextMoveResponse | None = None) -> ToolResult:
+def tool_test_move(
+    snapshot: FinanceSnapshot,
+    macro: MacroTable,
+    today: dates.date,
+    inp: TestMoveInput,
+    seed: int,
+    life_id_prefix: str = "chat",
+    response: NextMoveResponse | None = None,
+) -> ToolResult:
     """Replay each option of a move through its test period with the same seed (lifeline_sim.play_scenario)."""
     from lifeline_sim import api as sim
 
@@ -315,20 +352,23 @@ def tool_test_move(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.da
     out: list[dict[str, Any]] = []
     lives: list[Life] = []
     for o in options:
-        life = sim.play_scenario(f"{life_id_prefix}-{move.id}-{o.id}"[:64], char, start, end,
-                                 option_policy(move, o.id), seed, macro)
+        life = sim.play_scenario(
+            f"{life_id_prefix}-{move.id}-{o.id}"[:64], char, start, end, option_policy(move, o.id), seed, macro
+        )
         lives.append(life)
         cost = sim.scenario_cost(life, macro)
         p = f"test_move.{move.id}.{o.id}"
         fx.add(f"{p}.end_net_worth", life.finances.net_worth, "gbp", f"{o.label}: net worth at the end")
         fx.add(f"{p}.total_cost", cost, "gbp", f"{o.label}: total paid")
         fx.add(f"{p}.missed_payments", life.index.missed_payments, "count", f"{o.label}: missed payments")
-        out.append({"option_id": o.id, "label": o.label, "recommended": o.is_recommended, "life_id": life.id,
-                    "fact_prefix": p})
+        out.append(
+            {"option_id": o.id, "label": o.label, "recommended": o.is_recommended, "life_id": life.id, "fact_prefix": p}
+        )
     fx.add(f"test_move.{move.id}.period_start", move.test_period.start, "date_year", "Test period start")
     fx.add(f"test_move.{move.id}.period_end", move.test_period.end, "date_year", "Test period end")
-    return fx.done({"move_id": move.id, "period": move.test_period.model_dump(), "outcomes": out}, lives,
-                   prefix="test_move")
+    return fx.done(
+        {"move_id": move.id, "period": move.test_period.model_dump(), "outcomes": out}, lives, prefix="test_move"
+    )
 
 
 # ---------- finance_summary ----------
@@ -353,24 +393,39 @@ def tool_finance_summary(snapshot: FinanceSnapshot, today: dates.date | None = N
     fx.add("finance.subscriptions_count", subs.count, "count", "Number of subscriptions", ref)
     fx.add("finance.bills_next_30_days", sum(b.amount for b in bills), "gbp", "Bills due in the next 30 days", ref)
     fx.add("finance.debt", debt_total(snapshot), "gbp", "Owed on cards and loans", ref)
-    fx.add("finance.savings", savings_total(snapshot), "gbp", "Cash savings", ref)
+    fx.add("finance.savings", cash_savings_total(snapshot), "gbp", "Cash savings", ref)
+    fx.add(
+        "finance.savings_incl_investments",
+        savings_total(snapshot),
+        "gbp",
+        "Savings including stocks and shares ISAs",
+        ref,
+    )
     cover = months_of_cover(cash, spend)
     if cover is not None:
         fx.add("finance.months_of_cover", cover, "months", "Months of spending that cash covers", ref)
-    return fx.done(prefix="finance", result={
-        "as_of": snapshot.as_of,
-        "data_status": snapshot.status,
-        "subscriptions": [{"id": s.id, "merchant": s.merchant, "price_rise": s.price_rise is not None}
-                          for s in subs.items],
-        "bills": [{"id": b.id, "name": b.name, "due_date": b.due_date, "status": b.status} for b in bills],
-    })
+    return fx.done(
+        prefix="finance",
+        result={
+            "as_of": snapshot.as_of,
+            "data_status": snapshot.status,
+            "subscriptions": [
+                {"id": s.id, "merchant": s.merchant, "price_rise": s.price_rise is not None} for s in subs.items
+            ],
+            "bills": [{"id": b.id, "name": b.name, "due_date": b.due_date, "status": b.status} for b in bills],
+        },
+    )
 
 
 # ---------- spend_prediction ----------
 
 
-def tool_spend_prediction(snapshot: FinanceSnapshot, inp: SpendPredictionInput,
-                          holidays: Collection[dates.date] = (), weather: WeatherDays | None = None) -> ToolResult:
+def tool_spend_prediction(
+    snapshot: FinanceSnapshot,
+    inp: SpendPredictionInput,
+    holidays: Collection[dates.date] = (),
+    weather: WeatherDays | None = None,
+) -> ToolResult:
     day = dates.parse(inp.date) if inp.date else dates.parse(snapshot.as_of)
     p = predict_day(snapshot, day, holidays, weather)
     bt = backtest(snapshot, holidays, weather)
@@ -386,12 +441,17 @@ def tool_spend_prediction(snapshot: FinanceSnapshot, inp: SpendPredictionInput,
     fx.add("spend.baseline_mae", bt.baseline_mae, "gbp", "Weekday-average error in the backtest", ref)
     if p.actual is not None:
         fx.add("spend.actual", p.actual, "gbp", "Actual spend that day", ref)
-    return fx.done(prefix="spend", result={
-        "date": dates.iso(day),
-        "reasons": [{"feature": r.feature, "label": r.label, "fact_id": f"spend.reason_{i}"}
-                    for i, r in enumerate(p.reasons, 1)],
-        "is_bank_holiday": p.is_bank_holiday,
-    })
+    return fx.done(
+        prefix="spend",
+        result={
+            "date": dates.iso(day),
+            "reasons": [
+                {"feature": r.feature, "label": r.label, "fact_id": f"spend.reason_{i}"}
+                for i, r in enumerate(p.reasons, 1)
+            ],
+            "is_bank_holiday": p.is_bank_holiday,
+        },
+    )
 
 
 # ---------- cash_flow_projection ----------
@@ -413,23 +473,32 @@ def tool_cash_flow_projection(snapshot: FinanceSnapshot, inp: CashFlowInput) -> 
     if pr.run_out_month is not None:
         fx.add("cashflow.run_out_month", pr.run_out_month, "count", "Month the money runs out", ref)
     if pr.mortgage_extra_per_month:
-        fx.add("cashflow.mortgage_extra", pr.mortgage_extra_per_month, "gbp_per_month",
-               "Extra mortgage payment a month after the rate rise", ref)
+        fx.add(
+            "cashflow.mortgage_extra",
+            pr.mortgage_extra_per_month,
+            "gbp_per_month",
+            "Extra mortgage payment a month after the rate rise",
+            ref,
+        )
     if pr.cancelled_per_month:
         fx.add("cashflow.cancelled", pr.cancelled_per_month, "gbp_per_month", "Saved a month by cancelling", ref)
-    return fx.done(prefix="cashflow", result={
-        "what_if": [w.model_dump() for w in inp.what_if],
-        "runs_out": pr.run_out_month is not None,
-        "unknown_subscription_ids": list(pr.unknown_subscription_ids),
-        "path": [{"month": r.month, "date": r.date, "balance": r.balance} for r in pr.rows],
-    })
+    return fx.done(
+        prefix="cashflow",
+        result={
+            "what_if": [w.model_dump() for w in inp.what_if],
+            "runs_out": pr.run_out_month is not None,
+            "unknown_subscription_ids": list(pr.unknown_subscription_ids),
+            "path": [{"month": r.month, "date": r.date, "balance": r.balance} for r in pr.rows],
+        },
+    )
 
 
 # ---------- life_replay ----------
 
 
-def tool_life_replay(snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, inp: LifeReplayInput,
-                     life_id: ShortId, seed: int) -> ToolResult:
+def tool_life_replay(
+    snapshot: FinanceSnapshot, macro: MacroTable, today: dates.date, inp: LifeReplayInput, life_id: ShortId, seed: int
+) -> ToolResult:
     """A Life replay of the user (profile from the snapshot, same age at start_year as today) with default choices.
     Events run start_year + 1 .. end_year. The Life is in `lives` for the caller to store."""
     from lifeline_sim import api as sim

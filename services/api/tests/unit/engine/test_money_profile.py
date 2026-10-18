@@ -6,7 +6,7 @@ import pytest
 
 from lifeline_contracts.finance import Account
 from lifeline_engine import money
-from lifeline_engine.money.profile import gross_from_net, personal_facts, profile
+from lifeline_engine.money.profile import cash_savings_total, gross_from_net, personal_facts, profile
 from lifeline_engine.money.text import unsupported_numbers
 from lifeline_sim.concepts import concept_ids
 
@@ -57,14 +57,18 @@ def test_profile_from_homeowner() -> None:
     assert char.birth_year == TODAY.year - prof.age
 
 
-def test_stocks_isa_is_not_cash_savings() -> None:
+def test_stocks_isa_counts_as_savings_but_not_cash_savings() -> None:
     accounts = [
         Account(id="cur", name="Current", kind="current", provider="B", balance=100.0),
         Account(id="isa", name="Vanguard Stocks and Shares ISA", kind="isa", provider="V", balance=8000.0),
         Account(id="cisa", name="Cash ISA", kind="isa", provider="V", balance=2000.0),
     ]
-    prof, _ = profile(snapshot([], accounts), TODAY)
-    assert prof.savings == 2000
+    snap = snapshot([], accounts)
+    prof, _ = profile(snap, TODAY)
+    # Product decision: a stocks and shares ISA (e.g. Trading 212) is part of savings...
+    assert prof.savings == 10000
+    # ...but never compared with savings rates.
+    assert cash_savings_total(snap) == 2000
 
 
 def test_personal_facts_numbers_and_concepts() -> None:
@@ -85,7 +89,11 @@ def test_profile_uses_holder() -> None:
     snap = homeowner().model_copy(
         update={
             "holder": AccountHolder(
-                name="Priya", birth_year=1988, occupation="Marketing manager", region="london", town="Camden",
+                name="Priya",
+                birth_year=1988,
+                occupation="Marketing manager",
+                region="london",
+                town="Camden",
                 postcode="NW1 1AA",
             )
         }

@@ -173,6 +173,20 @@ async def test_t212_only_leaves_monzo_part_empty(hub):
     snap = await hub.live_snapshot(A)
     assert snap.source == "trading212" and snap.transactions == [] and [a.kind for a in snap.accounts] == ["isa"]
     assert "stocks" in snap.accounts[0].name.lower(), "an investment account is never counted as cash savings"
+    # positions come back as holdings, valued from walletImpact.currentValue, and survive the cached copy
+    assert snap.holdings and all(h.value >= 0 for h in snap.holdings)
+    assert sum(h.value for h in snap.holdings) <= snap.accounts[0].balance
+    assert sum(a.balance for a in snap.accounts) == snap.accounts[0].balance, "positions are not added to balances"
+    assert hub.providers._cached_snapshot(A).holdings == snap.holdings
+
+
+@respx.mock
+async def test_t212_positions_failure_keeps_the_total_and_invents_no_holdings(hub):
+    respx.get(T212 + "/equity/account/summary").mock(return_value=httpx.Response(200, json=SUMMARY))
+    respx.get(T212 + "/equity/positions").mock(return_value=httpx.Response(500))
+    await hub.connect_trading212(A, "kkkkkkkkkkkk1234", "ssss")
+    snap = await hub.live_snapshot(A)
+    assert snap.holdings == [] and snap.accounts[0].balance == 2000.0
 
 
 @respx.mock

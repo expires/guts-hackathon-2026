@@ -6,8 +6,9 @@ SUBJECT (the JWT `sub`): subject A's credentials are never used for subject B. T
 Live snapshot rules (see ADR 0010 for the fallback order):
 - no provider connected -> None (the hub serves the labelled fixture persona);
 - connected: live data for the connected parts only, the rest is EMPTY (sample data is never mixed
-  into live data). Monzo gives accounts + transactions, Trading212 gives one investment account (its total value; the
-  positions are not stored, so a Stocks and Shares account is never counted as cash savings);
+  into live data). Monzo gives accounts + transactions, Trading212 gives one investment account (its total value)
+  plus its positions as `holdings` (valued from walletImpact.currentValue; a Stocks and Shares account is never
+  counted as cash savings, and the positions are not added to account balances);
 - any connected provider failing -> the last good live snapshot saved on disk, status "cached";
   none saved -> None (fixture, status "mock").
 - Trading212 env fallback (T212_API_KEY/T212_API_SECRET) applies only when APP_ENV is "dev".
@@ -29,6 +30,7 @@ from pydantic import ValidationError
 from lifeline_contracts.accounts import (
     ConnectionsResponse,
     HistoryStatus,
+    Holding,
     Provider,
     ProviderConnection,
 )
@@ -212,7 +214,7 @@ class ProviderService:
         accounts = await adapter.accounts(acc)
         return accounts, await adapter.sync_recent(acc)
 
-    async def _t212_part(self, creds: dict[str, Any]) -> Account:
+    async def _t212_part(self, creds: dict[str, Any]) -> tuple[Account, list[Holding]]:
         adapter = Trading212Adapter(
             self.settings.t212_base_url,
             self._http(),
@@ -221,7 +223,13 @@ class ProviderService:
             clock=self._clock,
             wall_clock=self._clock,
         )
-        return await adapter.account()
+        account = await adapter.account()
+        try:
+            holdings = await adapter.holdings()
+        except ProviderError as exc:  # the total is still right; never invent positions
+            log.warning("trading212 positions unavailable (%s)", exc.code)
+            holdings = []
+        return account, holdings
 
     def _cached_snapshot(self, subject: str) -> FinanceSnapshot | None:
         raw = self.store.load_snapshot(subject)
@@ -262,6 +270,7 @@ class ProviderService:
         failed = False
         accounts: list[Account] = []
         transactions: list[Transaction] = []
+        holdings: list[Holding] = []
         for name, result in zip(names, results, strict=True):
             if isinstance(result, BaseException):
                 failed = True
@@ -274,7 +283,8 @@ class ProviderService:
                 accounts += result[0]
                 transactions += result[1]
             else:
-                accounts.append(result)
+                accounts.append(result[0])
+                holdings += result[1]
         if failed:
             return self._cached_snapshot(subject)
         snapshot = FinanceSnapshot(
@@ -283,6 +293,7 @@ class ProviderService:
             as_of=self._now().date().isoformat(),
             accounts=accounts,
             transactions=sorted(transactions, key=lambda t: (t.date, t.id)),
+            holdings=holdings,
         )
         try:
             self.store.save_snapshot(subject, snapshot.model_dump(mode="json"))
