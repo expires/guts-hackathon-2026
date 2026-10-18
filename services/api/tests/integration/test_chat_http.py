@@ -74,7 +74,11 @@ async def test_chat_thread_and_history(client: httpx.AsyncClient) -> None:
     other = await sign_in(client, "chat-device-0002")
     assert (await client.get(f"/v1/chat/threads/{tid}", headers=other)).status_code == 404
     r = await client.post("/v1/chat", json={"message": "hi", "thread_id": tid}, headers=other)
-    assert r.status_code == 404, "threads are per user"
+    # Threads are per user: someone else's id is unknown to them, so they get a NEW thread of their own...
+    assert r.status_code == 200 and r.json()["thread_id"] != tid, "threads are per user"
+    # ...and the owner's thread is untouched.
+    mine = (await client.get(f"/v1/chat/threads/{tid}", headers=auth)).json()
+    assert len(mine["messages"]) == 4
     r = await client.post("/v1/chat", json={"message": "hi", "thread_id": tid, "reply_to": "m_nope"}, headers=auth)
     assert r.status_code == 404
 

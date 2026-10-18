@@ -11,6 +11,7 @@ import logging
 import math
 import secrets
 from datetime import UTC, date, datetime
+from functools import lru_cache
 from typing import Any, cast
 
 from pydantic import ValidationError
@@ -37,7 +38,9 @@ from lifeline_contracts.domain import Life
 from lifeline_contracts.finance import Account, FinanceSnapshot
 from lifeline_contracts.forecast import Forecast, WhatIfChange, WhatIfResult
 from lifeline_contracts.next_move import NextMoveResponse
+from lifeline_data.returns import load_returns
 from lifeline_engine import forecast as forecast_engine
+from lifeline_engine.portfolio import ReturnSeries
 from lifeline_explain import game_scene, learn_scene
 from lifeline_explain.chat_engine_tools import EngineToolSet
 from lifeline_explain.chat_tools import ChatToolContext, ChatTurn, GameScene, ToolSet
@@ -52,6 +55,15 @@ TITLE_CHARS = 60
 SCENE_SECONDS = 1.5  # speed: the first bubble still arrives under 3 s
 
 
+@lru_cache(maxsize=1)
+def _returns() -> ReturnSeries | None:
+    """The bundled illustrative monthly returns (mix_history). None if the file cannot be read."""
+    try:
+        return load_returns()
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -62,8 +74,13 @@ async def rate_limit(state: AppState, sub: str) -> None:
     wait = await state.chat_limiter.take(f"chat:{sub}")
     if wait > 0:
         retry = str(max(1, math.ceil(wait)))
-        raise ApiError(429, "rate_limited", "Penny needs a moment. Try again shortly.", source="chat",
-                       headers={"Retry-After": retry})
+        raise ApiError(
+            429,
+            "rate_limited",
+            "Penny needs a moment. Try again shortly.",
+            source="chat",
+            headers={"Retry-After": retry},
+        )
 
 
 # ---------- threads ----------
@@ -126,32 +143,49 @@ async def list_threads(state: AppState, sub: str) -> ChatThreadsResponse:
 
 
 async def open_thread(state: AppState, sub: str, req: ChatRequest) -> dict[str, Any]:
-    """The request's thread (404 if it is not the caller's), or a new one titled from the first message."""
+    """The request's thread, or a new one titled from the first message.
+
+    An unknown thread id starts a fresh thread instead of failing: the dev server keeps threads in
+    memory, so after a restart the app would otherwise get 404 on every message. Threads are looked
+    up per caller, so another user's id is simply "unknown" and never reveals their thread."""
     if req.thread_id:
         thread = await load_thread(state, sub, req.thread_id)
-        if thread is None:
-            raise not_found("Chat thread not found")
-        if req.reply_to and not any(m["id"] == req.reply_to for m in thread["messages"]):
-            raise not_found("Message to reply to not found")
-        return thread
-    if req.reply_to:
+        if thread is not None:
+            if req.reply_to and not any(m["id"] == req.reply_to for m in thread["messages"]):
+                raise not_found("Message to reply to not found")
+            return thread
+        log.info("chat thread not found; starting a new one")
+    elif req.reply_to:
         raise not_found("Message to reply to not found")
     given = req.context.title if req.context is not None else None
     title = " ".join((given or req.message).split())[:TITLE_CHARS]
-    return {"id": f"th_{secrets.token_hex(8)}", "title": title or "Chat", "created_at": _now(),
-            "updated_at": _now(), "messages": []}
+    return {
+        "id": f"th_{secrets.token_hex(8)}",
+        "title": title or "Chat",
+        "created_at": _now(),
+        "updated_at": _now(),
+        "messages": [],
+    }
 
 
 def add_user_message(thread: dict[str, Any], req: ChatRequest) -> str:
     mid = f"m_{secrets.token_hex(8)}"
-    thread["messages"].append({"id": mid, "role": "user", "created_at": _now(), "text": req.message,
-                               "reply_to": req.reply_to})
+    thread["messages"].append(
+        {"id": mid, "role": "user", "created_at": _now(), "text": req.message, "reply_to": req.reply_to}
+    )
     return mid
 
 
 def add_penny_message(thread: dict[str, Any], resp: ChatResponse) -> None:
-    thread["messages"].append({"id": resp.message_id, "role": "penny", "created_at": _now(),
-                               "reply_to": resp.reply_to, "response": resp.model_dump(mode="json")})
+    thread["messages"].append(
+        {
+            "id": resp.message_id,
+            "role": "penny",
+            "created_at": _now(),
+            "reply_to": resp.reply_to,
+            "response": resp.model_dump(mode="json"),
+        }
+    )
 
 
 def history(thread: dict[str, Any]) -> list[ChatTurn]:
@@ -172,9 +206,13 @@ def history(thread: dict[str, Any]) -> list[ChatTurn]:
 def no_data_snapshot(today: date) -> FinanceSnapshot:
     """For a user with no money data (live mode): no accounts, no transactions, status unavailable.
     The tools then report "no data" instead of numbers."""
-    return FinanceSnapshot(status="unavailable", source="none", as_of=today.isoformat(), transactions=[],
-                           accounts=[Account(id="acc_none", name="No account connected", kind="current",
-                                             provider="none", balance=0.0)])
+    return FinanceSnapshot(
+        status="unavailable",
+        source="none",
+        as_of=today.isoformat(),
+        transactions=[],
+        accounts=[Account(id="acc_none", name="No account connected", kind="current", provider="none", balance=0.0)],
+    )
 
 
 async def _stored_next_move(state: AppState, sub: str) -> NextMoveResponse | None:
@@ -259,8 +297,15 @@ def lesson_scene(rc: ChatContext | None, message: str = "") -> GameScene | None:
         return None
 
 
-async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dict[str, Any], user_message_id: str,
-                        display_name: str | None, life: Life | None = None) -> tuple[ChatToolContext, str]:
+async def build_context(
+    state: AppState,
+    sub: str,
+    req: ChatRequest,
+    thread: dict[str, Any],
+    user_message_id: str,
+    display_name: str | None,
+    life: Life | None = None,
+) -> tuple[ChatToolContext, str]:
     """W5's ChatToolContext for this caller. Returns the context and the hash of the pinned macro table."""
     snap = await money.maybe_snapshot(state, sub)
     today = money.today(snap) if snap is not None else datetime.now(UTC).date()
@@ -290,7 +335,14 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
         day = money.today(live)
         inp = forecast_engine.macro_inputs(table, day)
         res: WhatIfResult = await call_pure(
-            forecast_engine.what_if, live, day, pct, inp.cpi, inp.inflation_2022, inp.boe_easy_access_rate, changes,
+            forecast_engine.what_if,
+            live,
+            day,
+            pct,
+            inp.cpi,
+            inp.inflation_2022,
+            inp.boe_easy_access_rate,
+            changes,
             sources=inp,
         )
         meta = money.meta(live)
@@ -316,6 +368,7 @@ async def build_context(state: AppState, sub: str, req: ChatRequest, thread: dic
         life_id_prefix="chat",
         forecast=forecast if snap is not None else None,  # no own data (onboarding): no forecast tool
         what_if=what_if if snap is not None else None,
+        returns=_returns(),
     )
     scene = (lesson_scene(req.context, req.message) or await life_event_scene(tools, req)
              or await room_round_scene(state, sub, req.context))  # fmt: skip
@@ -348,8 +401,12 @@ async def store_tool_lives(state: AppState, sub: str, ctx: ChatToolContext, dige
 def unavailable_response(thread: dict[str, Any], user_message_id: str) -> ChatResponse:
     """The answer when Penny cannot be reached or her context cannot be built (ADR 0051)."""
     return ChatResponse(
-        thread_id=thread["id"], message_id=f"pm_{secrets.token_hex(8)}", reply_to=user_message_id,
-        reaction="question", mode="general",
+        thread_id=thread["id"],
+        message_id=f"pm_{secrets.token_hex(8)}",
+        reply_to=user_message_id,
+        reaction="question",
+        mode="general",
         bubbles=[ChatBubble(id="b1", kind="answer", text=UNAVAILABLE_TEXT)],
-        confidence=0.0, verified=False,
+        confidence=0.0,
+        verified=False,
     )
