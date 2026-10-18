@@ -400,6 +400,29 @@ struct LiveClient: LifelineClient {
         try await call { try await client.getBankSummary(query: .init(session: session)).ok.body.json }
     }
 
+    // MARK: Connections
+
+    func listConnections() async throws -> ConnectionsResponse {
+        try await call { try await client.listConnections().ok.body.json }
+    }
+
+    func connectTrading212(key: String, secret: String) async throws -> ProviderConnection {
+        try await call { try await client.connectTrading212(body: .json(.init(apiKey: key, apiSecret: secret))).ok.body.json }
+    }
+
+    func syncMonzo() async throws -> MonzoHistory {
+        try await call { try await client.syncMonzo().ok.body.json }
+    }
+
+    func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse {
+        try await call {
+            guard let name = Operations.DisconnectProvider.Input.Path.ProviderPayload(rawValue: provider) else {
+                throw APIError.connectionsUnavailable
+            }
+            return try await client.disconnectProvider(path: .init(provider: name)).ok.body.json
+        }
+    }
+
     // MARK: Store
 
     func verifyPurchase(product: PurchaseProduct) async throws -> PurchaseVerifyResponse {

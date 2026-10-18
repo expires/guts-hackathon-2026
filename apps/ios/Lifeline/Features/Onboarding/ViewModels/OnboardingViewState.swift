@@ -349,6 +349,10 @@ struct OnboardingViewState: Equatable, Sendable {
     /// "Their Next Move": the forecast card (B3.1).
     var forecastCard: ForecastCardState?
     var isBusy = false
+    /// Monzo is connected but waits for the user to approve access in the Monzo app (ADR 0046 amendment).
+    var monzoNotice: String?
+    /// The Trading 212 key and secret sheet.
+    var trading212 = Trading212Sheet()
     /// Error for the current step, in plain English.
     var errorMessage: String?
     /// Sample data (mock client or a sample student). No badge in onboarding (B4): "Pick your student" shows
@@ -364,8 +368,11 @@ struct OnboardingViewState: Equatable, Sendable {
         .init(id: "friends", title: L10n.tr("Learn and play with friends"), text: L10n.tr("Short lessons and quizzes. Share habits, never amounts.")),
     ] }
 
-    /// Bank and broker connections are cut (ADR 0046): statement upload and manual entry only.
+    /// Your own money: Monzo, Trading 212, a statement, or typed numbers. Monzo and Trading 212 show
+    /// "Unavailable" when the server is not set up for them.
     static var connectOptions: [ConnectOption] { [
+        .init(kind: .monzo, title: L10n.tr("Connect Monzo"), subtitle: L10n.tr("Sign in with Monzo. We only read."), isUnavailable: false),
+        .init(kind: .trading212, title: L10n.tr("Connect Trading 212"), subtitle: L10n.tr("Add your investments with an API key."), isUnavailable: false),
         .init(kind: .statement, title: L10n.tr("Upload a statement"), subtitle: L10n.tr("Monzo or Revolut CSV, or a PDF. Max 5 MB."), isUnavailable: false),
         .init(kind: .manual, title: L10n.tr("Enter your numbers"), subtitle: L10n.tr("Takes about 2 minutes"), isUnavailable: false),
     ] }
@@ -378,6 +385,13 @@ enum OnboardingStep: String, Hashable, Sendable {
 }
 
 /// What the onboarding View can ask for.
+/// The Trading 212 sheet (key and secret). The secret is only ever held in the sheet while it is open.
+struct Trading212Sheet: Equatable, Sendable {
+    var isPresented = false
+    var isBusy = false
+    var errorMessage: String?
+}
+
 struct OnboardingActions {
     var onNext: () -> Void = {}
     var onBack: () -> Void = {}
@@ -404,6 +418,9 @@ struct OnboardingActions {
     /// "Ask Penny" on the forecast card: Penny with the forecast loaded.
     var onAskPenny: () -> Void = {}
     var onDismissError: () -> Void = {}
+    /// Trading 212 sheet: submit the key and secret, or close it.
+    var onSubmitTrading212: (_ key: String, _ secret: String) -> Void = { _, _ in }
+    var onCloseTrading212: () -> Void = {}
 
     static var noop: OnboardingActions { OnboardingActions() }
 }

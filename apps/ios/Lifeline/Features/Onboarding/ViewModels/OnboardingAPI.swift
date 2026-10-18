@@ -34,7 +34,10 @@ struct OnboardingAPI: Sendable {
     var sources: @Sendable () async throws -> [SourceStatus] = { throw OnboardingAPI.notYetAvailable }
     /// `GET /v1/habits`: ratios 0-100, no amounts.
     var habits: @Sendable () async throws -> HabitScore = { throw OnboardingAPI.notYetAvailable }
-    /// Trading 212 (`/v1/connections`) is not in the contract yet, so it is always unavailable.
+    /// `POST /v1/connections/trading212`: key and secret, checked with Trading 212 before anything is stored.
+    var connectTrading212: @Sendable (_ key: String, _ secret: String) async throws -> Void = { _, _ in throw OnboardingAPI.notYetAvailable }
+    /// `POST /v1/connections/monzo/sync`: retries the history import until the user approves it in the Monzo app.
+    var syncMonzo: @Sendable () async throws -> MonzoHistory = { throw OnboardingAPI.notYetAvailable }
     var hasTrading212 = false
 
     static func from(client: any LifelineClient) -> OnboardingAPI {
@@ -55,7 +58,10 @@ struct OnboardingAPI: Sendable {
             categoryDetail: { category, month in try await client.categoryDetail(category: category, month: month) },
             overview: { try await client.financeOverview() },
             sources: { try await client.listSources() },
-            habits: { try await client.habits() }
+            habits: { try await client.habits() },
+            connectTrading212: { key, secret in _ = try await client.connectTrading212(key: key, secret: secret) },
+            syncMonzo: { try await client.syncMonzo() },
+            hasTrading212: true
         )
     }
 

@@ -98,7 +98,9 @@ final class OnboardingViewModel {
             onFinish: { [weak self] in self?.finish() },
             onSeeMaths: { [weak self] in self?.go(.howDecides) },
             onAskPenny: { [weak self] in self?.askPenny() },
-            onDismissError: { [weak self] in self?.state.errorMessage = nil }
+            onDismissError: { [weak self] in self?.state.errorMessage = nil },
+            onSubmitTrading212: { [weak self] key, secret in Task { await self?.connectTrading212(key: key, secret: secret) } },
+            onCloseTrading212: { [weak self] in self?.state.trading212 = .init() }
         )
     }
 
@@ -223,9 +225,12 @@ final class OnboardingViewModel {
             await loadSamples()
         case .monzo: await connectMonzo()
         case .trading212:
-            if api.hasTrading212 { break }
-            markUnavailable(.trading212)
-            state.errorMessage = L10n.tr("Trading 212 is not available yet. Upload a statement or enter your numbers.")
+            guard api.hasTrading212 else {
+                markUnavailable(.trading212)
+                state.errorMessage = L10n.tr("Trading 212 is not available yet. Upload a statement or enter your numbers.")
+                return
+            }
+            state.trading212 = .init(isPresented: true)
         case .statement: pickStatement()
         case .manual: go(.manual)
         }
@@ -260,6 +265,57 @@ final class OnboardingViewModel {
         }
     }
 
+    /// Trading 212: the server checks the key with Trading 212 before it stores anything.
+    func connectTrading212(key: String, secret: String) async {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, !secret.isEmpty else {
+            state.trading212.errorMessage = L10n.tr("Enter both the key and the secret.")
+            return
+        }
+        state.trading212.isBusy = true
+        state.trading212.errorMessage = nil
+        do {
+            try await api.connectTrading212(key, secret)
+            state.trading212 = .init()
+            pickedSample = nil
+            await build(firstLabel: L10n.tr("Reading your investments")) { nil }
+        } catch {
+            state.trading212.isBusy = false
+            let mapped = APIError.map(error)
+            if case let .server(status, code, _, _) = mapped, status == 503 || status == 501 || code == "offline" {
+                state.trading212 = .init()
+                markUnavailable(.trading212)
+                state.errorMessage = L10n.tr("Trading 212 is unavailable right now. Upload a statement or enter your numbers.")
+            } else {
+                state.trading212.errorMessage = mapped.userMessage
+            }
+        }
+    }
+
+    /// Monzo only shares data after the user approves access in the Monzo app (it answers 403 until then).
+    /// Retry the import every `monzoPollInterval` for up to five minutes. Back stops the wait.
+    @ObservationIgnored var monzoPollInterval: Duration = .seconds(5)
+    @ObservationIgnored var monzoPollLimit = 60
+
+    private func waitForMonzoApproval() async -> Bool {
+        let generation = buildGeneration
+        state.monzoNotice = L10n.tr("Approve the request in your Monzo app. We keep checking.")
+        defer { state.monzoNotice = nil }
+        for attempt in 0..<monzoPollLimit {
+            do {
+                if try await api.syncMonzo().synced { return true }
+            } catch {
+                // A server without connections (501) has nothing to wait for. Other errors: keep trying.
+                if case let .server(status, _, _, _) = APIError.map(error), status == 501 { return true }
+            }
+            guard attempt + 1 < monzoPollLimit else { break }
+            try? await Task.sleep(for: monzoPollInterval)
+            if generation != buildGeneration || state.step != .connect { return false }
+        }
+        return false
+    }
+
     private func monzoUnavailable() {
         markUnavailable(.monzo)
         state.errorMessage = L10n.tr("Monzo is unavailable right now. Upload a statement or enter your numbers.")
@@ -274,6 +330,15 @@ final class OnboardingViewModel {
             return
         }
         pickedSample = nil
+        state.isBusy = true
+        let approved = await waitForMonzoApproval()
+        state.isBusy = false
+        guard approved else {
+            if state.step == .connect {
+                state.errorMessage = L10n.tr("Monzo has not shared your history yet. Approve the request in your Monzo app, then try again.")
+            }
+            return
+        }
         await build(firstLabel: L10n.tr("Reading the statement")) { [api] in
             _ = try await api.bankSummary(session)
             return nil

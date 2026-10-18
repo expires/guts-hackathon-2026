@@ -37,6 +37,9 @@ typealias Room = Components.Schemas.Room
 typealias CreateRoomRequest = Components.Schemas.CreateRoomRequest
 typealias BankAuthLink = Components.Schemas.BankAuthLink
 typealias BankSummary = Components.Schemas.BankSummary
+typealias ConnectionsResponse = Components.Schemas.ConnectionsResponse
+typealias ProviderConnection = Components.Schemas.ProviderConnection
+typealias MonzoHistory = Components.Schemas.HistoryStatus
 typealias PurchaseProduct = Components.Schemas.PurchaseVerifyRequest.ProductIdPayload
 typealias PurchaseVerifyResponse = Components.Schemas.PurchaseVerifyResponse
 typealias LivesResponse = Components.Schemas.LivesResponse
@@ -221,12 +224,26 @@ protocol LifelineClient: Sendable {
     func bankAuthLink(provider: String) async throws -> BankAuthLink
     func bankSummary(session: String) async throws -> BankSummary
 
+    // Connected accounts: Monzo and Trading 212 (`/v1/connections`). Tokens stay on the server.
+    func listConnections() async throws -> ConnectionsResponse
+    /// Checked with Trading 212 first; nothing is stored when the key or secret is wrong.
+    func connectTrading212(key: String, secret: String) async throws -> ProviderConnection
+    /// Retries the Monzo history import. It works after the user approves access in the Monzo app.
+    func syncMonzo() async throws -> MonzoHistory
+    func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse
+
     // Store (demo only)
     func verifyPurchase(product: PurchaseProduct) async throws -> PurchaseVerifyResponse
 }
 
 extension LifelineClient {
     func clearResponseCache() async {}
+
+    // Clients without connections (tests, fixtures) answer "not available" until they implement them.
+    func listConnections() async throws -> ConnectionsResponse { throw APIError.connectionsUnavailable }
+    func connectTrading212(key: String, secret: String) async throws -> ProviderConnection { throw APIError.connectionsUnavailable }
+    func syncMonzo() async throws -> MonzoHistory { throw APIError.connectionsUnavailable }
+    func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse { throw APIError.connectionsUnavailable }
 
     /// Paths only. Kept so older call sites with an explicit `[StudentPath]` type still compile.
     @available(*, deprecated, message: "listPaths() returns PathsResponse; use .paths and .quickStudents")
@@ -246,4 +263,11 @@ extension LifelineClient {
 enum ClientKind: String, Sendable {
     case live
     case mock
+}
+
+extension APIError {
+    /// Connections are not served by this client (fixtures, tests).
+    static var connectionsUnavailable: APIError {
+        .server(status: 501, code: "not_implemented", message: "This is not available in this build yet.", source: "app")
+    }
 }

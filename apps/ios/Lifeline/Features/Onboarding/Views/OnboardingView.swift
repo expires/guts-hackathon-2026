@@ -30,6 +30,13 @@ struct OnboardingView: View {
         .animation(Motion.standard(reduceMotion: reduceMotion), value: state.step)
         .paperBackground()
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: Binding(
+            get: { state.trading212.isPresented },
+            set: { if !$0 { actions.onCloseTrading212() } }
+        )) {
+            Trading212SheetView(sheet: state.trading212, onSubmit: actions.onSubmitTrading212, onClose: actions.onCloseTrading212)
+                .presentationDetents([.large])
+        }
     }
 
     // MARK: Shared layout
@@ -261,6 +268,17 @@ struct OnboardingView: View {
                 HonestyLine()
             }
             section("Or use your own money")
+            if let notice = state.monzoNotice {
+                HStack(spacing: Theme.Spacing.m) {
+                    ProgressView()
+                    Text(notice).font(.llBody).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(Theme.Spacing.l)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inkSurface(.cardAlt)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("onboarding.monzo.waiting")
+            }
             VStack(spacing: 0) {
                 ForEach(Array(state.options.enumerated()), id: \.element.id) { offset, option in
                     if offset > 0 { RuleDivider() }

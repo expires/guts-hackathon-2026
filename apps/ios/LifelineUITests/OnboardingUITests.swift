@@ -90,11 +90,11 @@ final class OnboardingUITests: XCTestCase {
         shot("\(prefix)-05-try-penny")
         pennySkip.tap()
 
-        // Pick your student: student cards, then upload and manual entry. No bank connections (ADR 0046).
+        // Pick your student: student cards, then Monzo, Trading 212, upload and manual entry.
         let student = app.buttons["onboarding.sample.scottish"]
         XCTAssertTrue(student.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["onboarding.option.statement"].exists)
-        XCTAssertFalse(app.buttons["onboarding.option.monzo"].exists)
+        XCTAssertTrue(app.buttons["onboarding.option.monzo"].exists)
         // No "Mock data" tag (B4); the honesty line sits under the list.
         XCTAssertFalse(any(app, "demoDataBadge").exists)
         shot("\(prefix)-06-pick-your-student")

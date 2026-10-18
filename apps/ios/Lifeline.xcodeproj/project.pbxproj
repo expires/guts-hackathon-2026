@@ -22,6 +22,7 @@
 		074AF252AEB08CA92534BCA9 /* OnboardingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59E794B04F61F0AD3ABBBCB /* OnboardingScreen.swift */; };
 		0803E47840F10D4D1E176E6F /* CharacterSelectViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BA5C01AD7583D8F1C528DC0 /* CharacterSelectViewState.swift */; };
 		081814C3712A4752D1122463 /* PeopleTabViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A55ABA2E56F4662ABE2B7FE /* PeopleTabViewModel.swift */; };
+		083D68D916960CCA3093A95A /* Trading212SheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C94DFBEA3546162BA01CD7 /* Trading212SheetView.swift */; };
 		08850A31270493EAB1A7EF1C /* RivalStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CEED9070ACDC9FBCC5D4A5 /* RivalStripView.swift */; };
 		09455DC87AD33E96A4B4D601 /* RoomFlowFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B3B373AD79314721978DC5 /* RoomFlowFixtures.swift */; };
 		095A6CC9B6B7D88D976D5067 /* openapi-generator-config.yaml in Resources */ = {isa = PBXBuildFile; fileRef = F80232DE421CDF1321FE7F47 /* openapi-generator-config.yaml */; };
@@ -659,6 +660,7 @@
 		B401666085C7FFA280E28E3D /* AccountViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountViewState.swift; sourceTree = "<group>"; };
 		B48533C77F4CD2815B0330A3 /* LLTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLTabBar.swift; sourceTree = "<group>"; };
 		B4B68BE51998CCCDA32DF8AA /* StartYearPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartYearPickerView.swift; sourceTree = "<group>"; };
+		B4C94DFBEA3546162BA01CD7 /* Trading212SheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212SheetView.swift; sourceTree = "<group>"; };
 		B7750EDCA57711C43845662B /* CommonViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonViewState.swift; sourceTree = "<group>"; };
 		B781BE15A75DB5208CE1EF53 /* LearnLessonViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnLessonViewModel.swift; sourceTree = "<group>"; };
 		B7FB7483AC52A6BE87B368C6 /* MoneyTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyTabView.swift; sourceTree = "<group>"; };
@@ -1573,6 +1575,7 @@
 				ADDBBC0CE91C010AB9DB6515 /* LanguagePickerView.swift */,
 				C46A150A74F3D65286B261D2 /* OnboardingManualView.swift */,
 				D556233E913F18AB76531E40 /* OnboardingView.swift */,
+				B4C94DFBEA3546162BA01CD7 /* Trading212SheetView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -2397,6 +2400,7 @@
 				CB0D326F4943966664FF4ED3 /* Theme.swift in Sources */,
 				838327C185DF13A1796DDC00 /* TokenStore.swift in Sources */,
 				9B42FF82EF0051ACE861C99C /* ToolStepLine.swift in Sources */,
+				083D68D916960CCA3093A95A /* Trading212SheetView.swift in Sources */,
 				DDFBFB44377D877204440D64 /* TypingDots.swift in Sources */,
 				DD5B2A72BBB8CBF42413E60C /* Typography.swift in Sources */,
 				4DA44CE3EC7A0FAF781A419A /* W7Chrome.swift in Sources */,

@@ -660,6 +660,27 @@ actor MockClient: LifelineClient {
     func bankAuthLink(provider: String) async throws -> BankAuthLink { ContractExamples.bankAuthLink }
     func bankSummary(session: String) async throws -> BankSummary { ContractExamples.bankSummary }
 
+    func listConnections() async throws -> ConnectionsResponse {
+        ContractExamples.decode("""
+        {"providers": [{"provider": "monzo", "connected": false, "data_status": "mock", "oauth_available": true},
+                       {"provider": "trading212", "connected": false, "data_status": "mock", "oauth_available": false}]}
+        """)
+    }
+
+    func connectTrading212(key: String, secret: String) async throws -> ProviderConnection {
+        ContractExamples.decode("""
+        {"provider": "trading212", "connected": true, "data_status": "mock", "hint": "…c3d4", "oauth_available": false}
+        """)
+    }
+
+    func syncMonzo() async throws -> MonzoHistory {
+        ContractExamples.decode("""
+        {"synced": true, "oldest": "2026-01-12", "count": 312}
+        """)
+    }
+
+    func disconnectProvider(_ provider: String) async throws -> ConnectionsResponse { try await listConnections() }
+
     // MARK: Store
 
     func verifyPurchase(product: PurchaseProduct) async throws -> PurchaseVerifyResponse {

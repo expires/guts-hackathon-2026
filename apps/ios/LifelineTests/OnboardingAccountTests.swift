@@ -118,9 +118,71 @@ struct OnboardingAccountTests {
         #expect(model.state.errorMessage?.contains("5 MB") == true)
     }
 
-    @Test func connectOffersSampleStatementAndManualOnly() {
+    @Test func connectOffersMonzoTrading212StatementAndManual() {
         let model = model(api())
-        #expect(model.state.options.map(\.kind) == [.statement, .manual])
+        #expect(model.state.options.map(\.kind) == [.monzo, .trading212, .statement, .manual])
+    }
+
+    @Test func trading212OpensTheSheetAndConnectsThenBuilds() async {
+        var api = api()
+        api.hasTrading212 = true
+        let sent = Box<[String]>([])
+        api.connectTrading212 = { key, secret in sent.value = [key, secret] }
+        let model = model(api)
+        model.go(.connect)
+        await model.connect(.trading212)
+        #expect(model.state.trading212.isPresented)
+        await model.connectTrading212(key: " ", secret: "s")
+        #expect(model.state.trading212.errorMessage != nil && sent.value.isEmpty)
+        await model.connectTrading212(key: " abc ", secret: "def")
+        #expect(sent.value == ["abc", "def"])
+        #expect(!model.state.trading212.isPresented)
+        #expect(model.state.step == .building)
+    }
+
+    @Test func trading212WrongKeyKeepsTheSheetWithAMessage() async {
+        var api = api()
+        api.hasTrading212 = true
+        api.connectTrading212 = { _, _ in
+            throw APIError.server(status: 400, code: "provider_auth", message: "Trading212 did not accept those details.", source: "trading212")
+        }
+        let model = model(api)
+        model.go(.connect)
+        await model.connect(.trading212)
+        await model.connectTrading212(key: "k", secret: "s")
+        #expect(model.state.trading212.isPresented)
+        #expect(model.state.trading212.errorMessage == "Trading212 did not accept those details.")
+        #expect(model.state.step == .connect)
+    }
+
+    @Test func monzoWaitsForApprovalThenBuilds() async {
+        var api = api()
+        let calls = Box(0)
+        api.syncMonzo = {
+            calls.value += 1
+            return ContractExamples.decode(calls.value < 3
+                ? #"{"synced": false, "count": 0, "last_error": "auth"}"#
+                : #"{"synced": true, "oldest": "2026-07-20", "count": 48}"#)
+        }
+        let model = model(api)
+        model.monzoPollInterval = .milliseconds(1)
+        model.go(.connect)
+        await model.bankCallback(URL(string: "lifeline://connected?status=ok&provider=monzo&session=abc")!)
+        #expect(calls.value == 3)
+        #expect(model.state.monzoNotice == nil)
+        #expect(model.state.step == .building)
+    }
+
+    @Test func monzoNeverApprovedStaysOnConnectWithAMessage() async {
+        var api = api()
+        api.syncMonzo = { ContractExamples.decode(#"{"synced": false, "count": 0, "last_error": "auth"}"#) }
+        let model = model(api)
+        model.monzoPollInterval = .milliseconds(1)
+        model.monzoPollLimit = 3
+        model.go(.connect)
+        await model.bankCallback(URL(string: "lifeline://connected?status=ok&provider=monzo&session=abc")!)
+        #expect(model.state.step == .connect)
+        #expect(model.state.errorMessage?.contains("Approve the request in your Monzo app") == true)
     }
 
     @Test func sampleStudentsShowAndImport() async {
@@ -245,4 +307,10 @@ struct OnboardingAccountTests {
         await model.load()
         if case .failed = model.state.phase {} else { Issue.record("Expected failed phase") }
     }
+}
+
+/// A mutable cell the `@Sendable` closures above can write to in tests.
+private final class Box<T>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
 }
